@@ -1,0 +1,236 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Forum de la communauté — BazaArt{% endblock %}
+{% block page_title %}Forum{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── Page header ── */
+    .forum-header {
+        margin-bottom: 28px;
+    }
+    .forum-header__title {
+        font-family: var(--font-heading);
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 6px;
+    }
+    .forum-header__subtitle {
+        font-size: 14px;
+        color: var(--color-text-light);
+    }
+
+    /* ── Grille des catégories ── */
+    .categories-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 16px;
+    }
+
+    /* ── Carte de catégorie ── */
+    .category-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        text-decoration: none;
+        color: var(--color-text);
+        display: flex;
+        flex-direction: column;
+        transition: box-shadow 0.18s, transform 0.12s;
+    }
+    .category-card:hover {
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        transform: translateY(-1px);
+    }
+
+    /* Bande colorée en haut de la carte (couleur personnalisée par catégorie) */
+    .category-card__stripe {
+        height: 4px;
+        background: var(--category-color, #C8503A);
+    }
+
+    .category-card__body {
+        padding: 18px 20px;
+        flex: 1;
+    }
+
+    .category-card__header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .category-card__icon {
+        font-size: 22px;
+        flex-shrink: 0;
+    }
+
+    .category-card__name {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--color-text);
+    }
+
+    .category-card__description {
+        font-size: 13px;
+        color: var(--color-text-light);
+        line-height: 1.5;
+        margin-bottom: 14px;
+    }
+
+    /* ── Aperçu des derniers threads ── */
+    .category-card__threads {
+        border-top: 1px solid var(--color-border);
+        padding-top: 12px;
+        margin-top: auto;
+    }
+
+    .category-card__thread-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 0;
+        font-size: 12px;
+        color: var(--color-text-light);
+    }
+    .category-card__thread-title {
+        color: var(--color-text);
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+    }
+    .category-card__thread-author {
+        flex-shrink: 0;
+    }
+
+    /* Pied de carte avec stats */
+    .category-card__footer {
+        padding: 10px 20px;
+        background: var(--color-bg, #f8f9fa);
+        border-top: 1px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--color-text-light);
+    }
+
+    .category-card__stat {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    /* Bouton "Nouveau thread" flottant */
+    .forum-new-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        background: var(--color-red, #C8503A);
+        color: white;
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: background 0.15s;
+    }
+    .forum-new-btn:hover {
+        background: #a84232;
+    }
+
+    /* Message "forum vide" */
+    .forum-empty {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--color-text-light);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{# ── En-tête de page ────────────────────────────────────────────────────────── #}
+<div class="forum-header">
+    <h2 class="forum-header__title">Forum de la communauté</h2>
+    <p class="forum-header__subtitle">
+        Échangez, collaborez et partagez avec les artistes de la diaspora afro-atlantique.
+    </p>
+</div>
+
+{# ── Grille des catégories ───────────────────────────────────────────────────── #}
+{% if categories is empty %}
+    <div class="forum-empty">
+        <p style="font-size: 40px; margin-bottom: 12px;">💬</p>
+        <p>Le forum n'a pas encore de catégorie. Revenez bientôt !</p>
+    </div>
+{% else %}
+    <div class="categories-grid">
+        {% for category in categories %}
+            {# Chaque carte est un lien vers la liste des threads de la catégorie #}
+            <a href="{{ path('app_forum_category', { categorySlug: category.slug }) }}"
+               class="category-card"
+               style="--category-color: {{ category.color ?? '#C8503A' }}">
+
+                {# Bande colorée en haut — couleur personnalisée par catégorie #}
+                <div class="category-card__stripe"></div>
+
+                <div class="category-card__body">
+                    {# Header : icône + nom #}
+                    <div class="category-card__header">
+                        {% if category.icon %}
+                            <span class="category-card__icon">{{ category.icon }}</span>
+                        {% endif %}
+                        <span class="category-card__name">{{ category.name }}</span>
+                    </div>
+
+                    {# Description courte #}
+                    {% if category.description %}
+                        <p class="category-card__description">{{ category.description }}</p>
+                    {% endif %}
+
+                    {# Aperçu des derniers threads — latestThreadsByCategory[id] est
+                       peuplé par le controller avec les 3 derniers threads de chaque catégorie #}
+                    {% set latestThreads = latestThreadsByCategory[category.id] ?? [] %}
+                    {% if latestThreads is not empty %}
+                        <div class="category-card__threads">
+                            {% for thread in latestThreads %}
+                                <div class="category-card__thread-item">
+                                    {# Indicateur d'épinglage #}
+                                    {% if thread.pinned %}
+                                        <span title="Épinglé">📌</span>
+                                    {% else %}
+                                        <span style="color: var(--color-text-light); font-size: 10px;">›</span>
+                                    {% endif %}
+                                    <span class="category-card__thread-title">{{ thread.title }}</span>
+                                    <span class="category-card__thread-author">{{ thread.author.email|split('@')|first }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                {# Pied de carte : statistiques #}
+                <div class="category-card__footer">
+                    <span class="category-card__stat">
+                        💬 {{ category.threadsCount }} sujet{{ category.threadsCount > 1 ? 's' : '' }}
+                    </span>
+                    {# Lien "Nouveau sujet" — affiché seulement pour les utilisateurs connectés #}
+                    {# Note : on est dans un <a>, donc on ne peut pas imbriquer un autre <a>.
+                       On affiche un indicateur textuel uniquement. #}
+                    <span style="font-size: 11px; color: var(--color-red, #C8503A); font-weight: 600;">
+                        Voir les sujets →
+                    </span>
+                </div>
+            </a>
+        {% endfor %}
+    </div>
+{% endif %}
+{% endblock %}

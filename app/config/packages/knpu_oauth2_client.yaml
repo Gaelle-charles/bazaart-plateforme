@@ -1,0 +1,11 @@
+knpu_oauth2_client:
+    clients:
+        # Client Google OAuth2
+        # Les credentials (client_id, client_secret) sont définis dans .env
+        google:
+            type: google
+            client_id: '%env(GOOGLE_CLIENT_ID)%'
+            client_secret: '%env(GOOGLE_CLIENT_SECRET)%'
+            # Route vers laquelle Google redirigera après l'authentification
+            redirect_route: app_google_callback
+            redirect_params: {}

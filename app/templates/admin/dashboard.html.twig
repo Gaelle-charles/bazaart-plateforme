@@ -1,0 +1,371 @@
+{% extends 'base_admin.html.twig' %}
+
+{% block title %}Administration — BazaArt{% endblock %}
+{% block page_title %}Vue d'ensemble{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── Intro ── */
+    .admin-intro {
+        margin-bottom: 28px;
+    }
+    .admin-intro__title {
+        font-family: var(--font-heading);
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 4px;
+    }
+    .admin-intro__sub {
+        font-size: 13px;
+        color: var(--color-text-light);
+    }
+
+    /* ── Grille de stats — 4 cartes ── */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 28px;
+    }
+
+    .stat-card {
+        background: #fff;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    /* Carte en alerte (ressources en attente) */
+    .stat-card--alert {
+        border-color: #f5c6cb;
+        background: #fff8f8;
+    }
+
+    .stat-card__icon {
+        font-size: 20px;
+        margin-bottom: 6px;
+    }
+
+    .stat-card__label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--color-text-light);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    .stat-card__value {
+        font-size: 32px;
+        font-weight: 800;
+        color: var(--color-text);
+        line-height: 1;
+        margin: 4px 0;
+    }
+
+    .stat-card--alert .stat-card__value { color: #c0392b; }
+
+    .stat-card__link {
+        font-size: 11px;
+        color: #c8503a;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .stat-card__link:hover { text-decoration: underline; }
+
+    .stat-card__note {
+        font-size: 11px;
+        color: var(--color-text-light);
+    }
+
+    /* ── Grille de raccourcis d'actions ── */
+    .actions-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-bottom: 28px;
+    }
+
+    .action-card {
+        background: #fff;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: 20px;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        transition: box-shadow 0.15s, transform 0.15s;
+        box-shadow: var(--shadow-card);
+    }
+    .action-card:hover {
+        box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+
+    .action-card__icon {
+        font-size: 24px;
+        width: 44px;
+        height: 44px;
+        background: #f4f5f7;
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .action-card__title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 2px;
+    }
+    .action-card__desc {
+        font-size: 11px;
+        color: var(--color-text-light);
+    }
+
+    /* Action en alerte (modération) */
+    .action-card--alert .action-card__icon { background: #fff0ee; }
+    .action-card--alert .action-card__title { color: #c0392b; }
+
+    /* ── Widget ressources en attente ── */
+    .section-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--color-text-light);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 12px;
+    }
+
+    .pending-widget {
+        background: #fff;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+    }
+
+    .pending-widget__header {
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .pending-widget__title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--color-text);
+    }
+
+    .pending-widget__link {
+        font-size: 11px;
+        color: #c8503a;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .pending-widget__link:hover { text-decoration: underline; }
+
+    .pending-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--color-border);
+    }
+    .pending-row:last-child { border-bottom: none; }
+
+    .pending-row__info { flex: 1; min-width: 0; }
+    .pending-row__title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-text);
+        margin-bottom: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .pending-row__meta { font-size: 11px; color: var(--color-text-light); }
+
+    .pending-row__actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    .btn-publish {
+        height: 28px; padding: 0 12px;
+        background: #d4edda; color: #155724;
+        border: 1px solid #c3e6cb; border-radius: var(--radius-sm);
+        font-size: 11px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+    }
+    .btn-publish:hover { background: #c3e6cb; }
+
+    .btn-reject {
+        height: 28px; padding: 0 12px;
+        background: #f8d7da; color: #721c24;
+        border: 1px solid #f5c6cb; border-radius: var(--radius-sm);
+        font-size: 11px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+    }
+    .btn-reject:hover { background: #f5c6cb; }
+
+    .empty-state {
+        padding: 32px;
+        text-align: center;
+        font-size: 13px;
+        color: var(--color-text-muted);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Intro ── #}
+<div class="admin-intro">
+    <h2 class="admin-intro__title">Bonjour, {{ app.user.email|split('@')|first }} ✦</h2>
+    <p class="admin-intro__sub">{{ "now"|date('d/m/Y') }} — Panneau d'administration BazaArt</p>
+</div>
+
+{# ── Statistiques clés ── #}
+<div class="stats-grid">
+
+    <div class="stat-card {{ pendingCount > 0 ? 'stat-card--alert' : '' }}">
+        <div class="stat-card__icon">📋</div>
+        <div class="stat-card__label">En attente</div>
+        <div class="stat-card__value">{{ pendingCount }}</div>
+        <a href="{{ path('app_admin_resources_pending') }}" class="stat-card__link">
+            {{ pendingCount > 0 ? 'Modérer →' : 'Tout traité ✓' }}
+        </a>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-card__icon">◈</div>
+        <div class="stat-card__label">Opportunités publiées</div>
+        <div class="stat-card__value">{{ publishedCount }}</div>
+        <a href="{{ path('app_admin_resources_all', {status: 'published'}) }}" class="stat-card__link">Voir →</a>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-card__icon">👥</div>
+        <div class="stat-card__label">Utilisateurs</div>
+        <div class="stat-card__value">{{ totalUsers }}</div>
+        <a href="{{ path('app_admin_users') }}" class="stat-card__link">Gérer →</a>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-card__icon">🏛</div>
+        <div class="stat-card__label">Organisations</div>
+        <div class="stat-card__value">{{ totalOrgs }}</div>
+        <div class="stat-card__note">{{ verifiedOrgs }} vérifiée{{ verifiedOrgs > 1 ? 's' : '' }}</div>
+    </div>
+
+</div>
+
+{# ── Accès rapides ── #}
+<p class="section-title">Accès rapides</p>
+<div class="actions-grid">
+
+    <a href="{{ path('app_admin_resources_pending') }}" class="action-card {{ pendingCount > 0 ? 'action-card--alert' : '' }}">
+        <div class="action-card__icon">📋</div>
+        <div>
+            <div class="action-card__title">
+                File de modération
+                {% if pendingCount > 0 %}({{ pendingCount }}){% endif %}
+            </div>
+            <div class="action-card__desc">Valider ou rejeter les soumissions</div>
+        </div>
+    </a>
+
+    <a href="{{ path('app_admin_users') }}" class="action-card">
+        <div class="action-card__icon">👥</div>
+        <div>
+            <div class="action-card__title">Gestion des utilisateurs</div>
+            <div class="action-card__desc">Créer, modifier, attribuer des rôles</div>
+        </div>
+    </a>
+
+    <a href="{{ path('app_article_index') }}" class="action-card">
+        <div class="action-card__icon">📝</div>
+        <div>
+            <div class="action-card__title">Articles</div>
+            <div class="action-card__desc">Consulter et gérer les publications</div>
+        </div>
+    </a>
+
+    <a href="{{ path('app_admin_resources_all') }}" class="action-card">
+        <div class="action-card__icon">◈</div>
+        <div>
+            <div class="action-card__title">Toutes les opportunités</div>
+            <div class="action-card__desc">Tous statuts — filtrage par état</div>
+        </div>
+    </a>
+
+    <a href="{{ path('app_resource_submit') }}" class="action-card">
+        <div class="action-card__icon">＋</div>
+        <div>
+            <div class="action-card__title">Ajouter une opportunité</div>
+            <div class="action-card__desc">Soumettre directement en tant qu'admin</div>
+        </div>
+    </a>
+
+    <a href="{{ path('app_artist_profile_directory') }}" class="action-card">
+        <div class="action-card__icon">◑</div>
+        <div>
+            <div class="action-card__title">Annuaire artistes</div>
+            <div class="action-card__desc">Voir tous les profils publics</div>
+        </div>
+    </a>
+
+</div>
+
+{# ── Dernières soumissions en attente ── #}
+<p class="section-title">Dernières soumissions en attente</p>
+<div class="pending-widget">
+    <div class="pending-widget__header">
+        <span class="pending-widget__title">
+            {{ pendingCount }} soumission{{ pendingCount > 1 ? 's' : '' }} en attente
+        </span>
+        {% if pendingCount > 5 %}
+            <a href="{{ path('app_admin_resources_pending') }}" class="pending-widget__link">
+                Voir toutes ({{ pendingCount }}) →
+            </a>
+        {% endif %}
+    </div>
+
+    {% if pendingResources is not empty %}
+        {% for resource in pendingResources %}
+            <div class="pending-row">
+                <div class="pending-row__info">
+                    <div class="pending-row__title">{{ resource.title }}</div>
+                    <div class="pending-row__meta">
+                        {{ resource.resourceType.name }}
+                        · par <strong>{{ resource.organization ? resource.organization.name : 'Sans organisation' }}</strong>
+                        · {{ resource.createdAt|date('d/m/Y') }}
+                    </div>
+                </div>
+                <div class="pending-row__actions">
+                    <form method="post" action="{{ path('app_admin_resource_publish', {id: resource.id}) }}" style="display:inline;">
+                        <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                        <button type="submit" class="btn-publish">✓ Publier</button>
+                    </form>
+                    <form method="post" action="{{ path('app_admin_resource_reject', {id: resource.id}) }}" style="display:inline;">
+                        <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                        <button type="submit" class="btn-reject">✗ Rejeter</button>
+                    </form>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">✅ Aucune soumission en attente de modération.</div>
+    {% endif %}
+
+</div>
+
+{% endblock %}

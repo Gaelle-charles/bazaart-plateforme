@@ -1,0 +1,283 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}{{ resource.title }} — BazaArt{% endblock %}
+{% block page_title %}Ressources{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── Lien retour ── */
+    .back-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 13px; color: var(--color-text-muted); text-decoration: none;
+        margin-bottom: 20px;
+    }
+    .back-link:hover { color: var(--color-text); }
+
+    /* ── Layout deux colonnes ── */
+    .resource-layout {
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        gap: 20px;
+        align-items: start;
+    }
+
+    /* ── Carte principale ── */
+    .resource-main {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 28px;
+    }
+
+    .resource-main__header { margin-bottom: 20px; }
+
+    .resource-main__type {
+        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
+        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
+        background: var(--color-red-light); color: var(--color-red);
+        margin-bottom: 14px;
+    }
+
+    .resource-main__title {
+        font-family: var(--font-heading); font-size: 26px; font-weight: 700;
+        color: var(--color-text); margin-bottom: 14px; line-height: 1.2;
+    }
+
+    /* Métadonnées : deadline, localisation, date */
+    .resource-meta {
+        display: flex; flex-wrap: wrap; gap: 16px;
+        font-size: 13px; color: var(--color-text-muted);
+        padding: 14px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border);
+        margin-bottom: 20px;
+    }
+    .resource-meta__item { display: flex; align-items: center; gap: 5px; }
+    .resource-meta__urgent { color: #856404; font-weight: 600; }
+    .resource-meta__expired { color: #dc3545; }
+
+    /* Description complète */
+    .resource-desc {
+        font-size: 14px; line-height: 1.8; color: var(--color-text-muted);
+    }
+
+    /* Disciplines */
+    .disciplines-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--color-border); }
+    .section-label {
+        font-size: 10px; font-weight: 700; color: var(--color-text-light);
+        text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;
+    }
+    .disciplines-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .discipline-pill {
+        display: inline-flex; align-items: center; height: 24px; padding: 0 10px;
+        border-radius: var(--radius-full); font-size: 11px; font-weight: 600;
+        background: var(--color-green-light); color: var(--color-green);
+        border: 1px solid rgba(28, 58, 47, 0.2);
+    }
+
+    /* ── Colonne latérale ── */
+    .resource-sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+    .side-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 20px;
+    }
+    .side-card__label { font-size: 10px; font-weight: 700; color: var(--color-text-light); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
+
+    /* Logo organisation */
+    .org-logo {
+        width: 44px; height: 44px; border-radius: 8px;
+        background: var(--color-green); color: white;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; font-weight: 700; flex-shrink: 0;
+    }
+
+    .org-name { font-size: 14px; font-weight: 600; color: var(--color-text); }
+
+    .verified-badge {
+        display: inline-flex; align-items: center; height: 18px; padding: 0 6px;
+        border-radius: var(--radius-full); font-size: 9px; font-weight: 700;
+        background: #d4edda; color: #155724; margin-left: 6px;
+    }
+
+    .org-location { font-size: 12px; color: var(--color-text-light); margin-top: 4px; }
+
+    /* Bouton CTA lien externe */
+    .btn-cta {
+        display: flex; align-items: center; justify-content: center;
+        width: 100%; height: 44px; border-radius: var(--radius-sm);
+        background: var(--color-red); color: white;
+        font-size: 13px; font-weight: 600; text-decoration: none;
+        transition: opacity 0.15s; margin-top: 14px;
+    }
+    .btn-cta:hover { opacity: 0.88; }
+
+    /* ── Bouton favori (coeur) ── */
+    /* Le bouton est stylé comme un bouton secondaire avec une icône coeur.
+       Deux états : coeur vide (non favori) et coeur plein rouge (favori).
+       Le compteur affiche le nombre d'utilisateurs ayant mis cette ressource en favori. */
+    .favorite-form { margin-top: 14px; }
+    .btn-favorite {
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        width: 100%; height: 40px; border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border);
+        background: var(--color-white);
+        color: var(--color-text-muted);
+        font-size: 13px; font-weight: 500; cursor: pointer;
+        font-family: var(--font-body);
+        transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-favorite:hover { border-color: var(--color-red); color: var(--color-red); }
+
+    /* État "en favori" : fond rouge clair, texte rouge */
+    .btn-favorite--active {
+        border-color: var(--color-red);
+        background: var(--color-red-light);
+        color: var(--color-red);
+        font-weight: 600;
+    }
+    .btn-favorite--active:hover { opacity: 0.88; }
+
+    .favorite-icon { font-size: 16px; line-height: 1; }
+    .favorite-count { font-size: 11px; opacity: 0.7; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<a href="{{ path('app_resource_index') }}" class="back-link">← Retour aux ressources</a>
+
+<div class="resource-layout">
+
+    {# ── Colonne principale ── #}
+    <div class="resource-main">
+        <div class="resource-main__header">
+            <div class="resource-main__type">
+                {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
+            </div>
+            <h1 class="resource-main__title">{{ resource.title }}</h1>
+        </div>
+
+        {# Métadonnées #}
+        <div class="resource-meta">
+            {% if resource.location %}
+                <span class="resource-meta__item">📍 {{ resource.location }}</span>
+            {% endif %}
+
+            {% if resource.deadline %}
+                {% set daysLeft = (resource.deadline.timestamp - "now"|date('U')) // 86400 %}
+                <span class="resource-meta__item {{ daysLeft < 0 ? 'resource-meta__expired' : (daysLeft < 14 ? 'resource-meta__urgent' : '') }}">
+                    📅 {{ resource.deadline|date('d/m/Y') }}
+                    {% if daysLeft >= 0 %}
+                        — {{ daysLeft == 0 ? "Aujourd'hui !" : daysLeft ~ ' jour' ~ (daysLeft > 1 ? 's' : '') ~ ' restant' ~ (daysLeft > 1 ? 's' : '') }}
+                    {% else %}
+                        — <span class="resource-meta__expired">Expirée</span>
+                    {% endif %}
+                </span>
+            {% endif %}
+
+            <span class="resource-meta__item">🗓️ Publiée le {{ resource.createdAt|date('d/m/Y') }}</span>
+        </div>
+
+        {# Description complète #}
+        <div class="resource-desc">{{ resource.description|nl2br }}</div>
+
+        {# Disciplines #}
+        {% if resource.disciplines|length > 0 %}
+            <div class="disciplines-section">
+                <div class="section-label">Disciplines concernées</div>
+                <div class="disciplines-list">
+                    {% for discipline in resource.disciplines %}
+                        <span class="discipline-pill">
+                            {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                        </span>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    {# ── Colonne latérale ── #}
+    <div class="resource-sidebar">
+
+        {# Carte organisation #}
+        {# ── Carte favoris ── #}
+        {#
+            Formulaire POST vers la route app_resource_favorite_toggle.
+            En version sans JavaScript, ce formulaire fonctionne comme un formulaire HTML classique
+            et recharge la page pour mettre à jour le bouton.
+            En version avec Stimulus (à brancher), on intercepte le submit et on met à jour le DOM.
+
+            Attributs data-* prévus pour Stimulus :
+              data-resource-id    : identifiant de la ressource (pour construire l'URL AJAX)
+              data-token          : token CSRF pré-calculé (évite un aller-retour serveur)
+              data-favorited      : état initial du bouton (true/false)
+              data-count          : compteur initial
+        #}
+        <div class="side-card">
+            <div class="side-card__label">Favori</div>
+            <form method="post"
+                  action="{{ path('app_resource_favorite_toggle', {id: resource.id}) }}"
+                  class="favorite-form"
+                  data-resource-id="{{ resource.id }}"
+                  data-token="{{ csrf_token('resource_favorite_' ~ resource.id) }}"
+                  data-favorited="{{ isFavorited ? 'true' : 'false' }}"
+                  data-count="{{ favoriteCount }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('resource_favorite_' ~ resource.id) }}">
+                <button type="submit"
+                        class="btn-favorite {{ isFavorited ? 'btn-favorite--active' : '' }}">
+                    <span class="favorite-icon">{{ isFavorited ? '&#10084;' : '&#9825;' }}</span>
+                    {{ isFavorited ? 'Dans mes favoris' : 'Ajouter aux favoris' }}
+                    {% if favoriteCount > 0 %}
+                        <span class="favorite-count">({{ favoriteCount }})</span>
+                    {% endif %}
+                </button>
+            </form>
+        </div>
+
+        {% if resource.organization %}
+        <div class="side-card">
+            <div class="side-card__label">Organisation</div>
+            <div style="display:flex;gap:12px;align-items:center;">
+                {% if resource.organization.logoPath %}
+                    <img src="{{ asset(resource.organization.logoPath) }}"
+                         alt="{{ resource.organization.name }}"
+                         style="width:44px;height:44px;border-radius:8px;object-fit:contain;border:1px solid var(--color-border);">
+                {% else %}
+                    <div class="org-logo">{{ resource.organization.name|first|upper }}</div>
+                {% endif %}
+                <div>
+                    <div class="org-name">
+                        {{ resource.organization.name }}
+                        {% if resource.organization.isVerified %}
+                            <span class="verified-badge">✓ Vérifiée</span>
+                        {% endif %}
+                    </div>
+                    {% if resource.organization.location %}
+                        <div class="org-location">📍 {{ resource.organization.location }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if resource.externalUrl %}
+                <a href="{{ resource.externalUrl }}" target="_blank" rel="noopener" class="btn-cta">
+                    Voir la ressource officielle →
+                </a>
+            {% endif %}
+        </div>
+
+        {# Carte soumission #}
+        <div class="side-card" style="font-size:13px;color:var(--color-text-muted);">
+            <div class="side-card__label">Source</div>
+            Soumis par <strong>{{ resource.organization.name }}</strong>
+        </div>
+        {% endif %}
+
+    </div>
+
+</div>
+
+{% endblock %}

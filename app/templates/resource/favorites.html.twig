@@ -1,0 +1,204 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Mes favoris — BazaArt{% endblock %}
+{% block page_title %}Mes favoris{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── En-tête de page avec compteur ── */
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .page-header__count {
+        font-size: 13px;
+        color: var(--color-text-muted);
+    }
+
+    /* ── Carte ressource favorite (même style que resource/index) ── */
+    .resource-list { display: flex; flex-direction: column; gap: 12px; }
+
+    .resource-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 16px 20px;
+        display: flex; flex-direction: column; gap: 8px;
+        transition: border-color 0.15s;
+        position: relative;
+    }
+    .resource-card:hover { border-color: var(--color-green); }
+
+    .resource-card__header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+
+    .resource-type-badge {
+        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
+        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
+        background: var(--color-red-light); color: var(--color-red);
+    }
+
+    .resource-card__org { font-size: 12px; color: var(--color-text-light); }
+
+    .resource-card__title {
+        font-size: 15px; font-weight: 600; color: var(--color-text); text-decoration: none;
+    }
+    .resource-card__title:hover { color: var(--color-red); }
+
+    .resource-card__desc { font-size: 13px; color: var(--color-text-muted); line-height: 1.5; }
+
+    .resource-card__footer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+    .discipline-badge {
+        display: inline-flex; align-items: center; height: 20px; padding: 0 8px;
+        border-radius: var(--radius-full); font-size: 10px;
+        background: var(--color-green-light); color: var(--color-green);
+    }
+
+    /* Date d'ajout en favori (affiché en bas à droite de la carte) */
+    .favorite-date {
+        font-size: 11px;
+        color: var(--color-text-light);
+        margin-left: auto;
+    }
+
+    /* Bouton retirer des favoris — icône coeur dans le coin de la carte */
+    .btn-unfavorite {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+        padding: 2px;
+        color: var(--color-red);
+        opacity: 0.7;
+        transition: opacity 0.15s;
+    }
+    .btn-unfavorite:hover { opacity: 1; }
+
+    /* ── État vide ── */
+    .empty-state {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: 64px 48px;
+        text-align: center;
+        color: var(--color-text-muted);
+    }
+    .empty-state__icon { font-size: 40px; margin-bottom: 16px; }
+    .empty-state__title { font-size: 17px; font-weight: 600; color: var(--color-text); margin-bottom: 8px; }
+    .empty-state__text { font-size: 13px; line-height: 1.6; }
+    .empty-state__link {
+        display: inline-block;
+        margin-top: 20px;
+        padding: 10px 20px;
+        background: var(--color-green);
+        color: white;
+        border-radius: var(--radius-sm);
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .empty-state__link:hover { opacity: 0.88; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── En-tête de page ── #}
+<div class="page-header">
+    <div>
+        {% if favorites|length > 0 %}
+            <p class="page-header__count">
+                {{ favorites|length }} ressource{{ favorites|length > 1 ? 's' : '' }} en favori
+            </p>
+        {% endif %}
+    </div>
+    <a href="{{ path('app_resource_index') }}" class="btn btn-secondary" style="font-size:13px;">
+        Voir toutes les ressources
+    </a>
+</div>
+
+{# ── Liste des favoris ── #}
+{% if favorites is empty %}
+
+    {# État vide : l'utilisateur n'a encore aucun favori #}
+    <div class="empty-state">
+        <div class="empty-state__icon">&#9825;</div>
+        <div class="empty-state__title">Aucun favori pour l'instant</div>
+        <p class="empty-state__text">
+            Cliquez sur le coeur d'une ressource pour la retrouver facilement ici.<br>
+            Vos favoris sont personnels et visibles uniquement par vous.
+        </p>
+        <a href="{{ path('app_resource_index') }}" class="empty-state__link">
+            Parcourir les ressources
+        </a>
+    </div>
+
+{% else %}
+
+    <div class="resource-list">
+        {% for favorite in favorites %}
+            {# Chaque entrée de $favorites est une ResourceFavorite, on accède à la Resource via .resource #}
+            {% set resource = favorite.resource %}
+            <div class="resource-card">
+
+                {#
+                    Bouton "retirer des favoris" — formulaire POST vers le toggle.
+                    Le coeur rouge indique que la ressource est déjà en favori.
+                    En JavaScript / Stimulus, ce bouton peut déclencher un appel AJAX.
+                    Sans JS, le formulaire HTML fonctionne en fallback.
+                #}
+                <form method="post"
+                      action="{{ path('app_resource_favorite_toggle', {id: resource.id}) }}"
+                      style="display:inline;">
+                    <input type="hidden" name="_token" value="{{ csrf_token('resource_favorite_' ~ resource.id) }}">
+                    <button type="submit" class="btn-unfavorite" title="Retirer des favoris">
+                        &#10084;
+                    </button>
+                </form>
+
+                <div class="resource-card__header">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span class="resource-type-badge">
+                            {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
+                        </span>
+                    </div>
+                    {% if resource.organization %}
+                        <span class="resource-card__org">par <strong>{{ resource.organization.name }}</strong></span>
+                    {% endif %}
+                </div>
+
+                <a href="{{ path('app_resource_show', {id: resource.id}) }}" class="resource-card__title">
+                    {{ resource.title }}
+                </a>
+
+                <p class="resource-card__desc">
+                    {{ resource.description|slice(0, 160) }}{{ resource.description|length > 160 ? '...' : '' }}
+                </p>
+
+                <div class="resource-card__footer">
+                    {% for discipline in resource.disciplines %}
+                        <span class="discipline-badge">
+                            {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                        </span>
+                    {% endfor %}
+                    {# Date d'ajout en favori — info utile pour l'utilisateur #}
+                    <span class="favorite-date">
+                        Ajouté le {{ favorite.createdAt|date('d/m/Y') }}
+                    </span>
+                </div>
+
+            </div>
+        {% endfor %}
+    </div>
+
+{% endif %}
+
+{% endblock %}

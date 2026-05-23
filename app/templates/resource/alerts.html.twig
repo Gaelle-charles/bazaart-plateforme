@@ -1,0 +1,285 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Alertes ressources — BazaArt{% endblock %}
+{% block page_title %}Alertes ressources{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── Carte formulaire principale ── */
+    .alert-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 28px;
+        max-width: 680px;
+    }
+
+    /* Bandeau d'information en haut du formulaire */
+    .alert-info {
+        background: var(--color-green-light);
+        border: 1px solid rgba(28, 58, 47, 0.15);
+        border-radius: var(--radius-sm);
+        padding: 14px 16px;
+        font-size: 13px;
+        color: var(--color-green);
+        margin-bottom: 24px;
+        line-height: 1.5;
+    }
+
+    /* ── Sections du formulaire ── */
+    .form-section {
+        margin-bottom: 24px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--color-border);
+    }
+    .form-section:last-of-type {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .form-section__title {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--color-text-light);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 14px;
+    }
+
+    /* ── Checkbox principal (activer/désactiver les alertes) ── */
+    .toggle-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        background: var(--color-input-bg);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+    }
+    .toggle-row input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: var(--color-green);
+    }
+    .toggle-row__label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--color-text);
+        cursor: pointer;
+    }
+    .toggle-row__desc {
+        font-size: 12px;
+        color: var(--color-text-muted);
+        margin-top: 2px;
+    }
+
+    /* ── Select fréquence ── */
+    .frequency-select {
+        width: 100%;
+        height: 40px;
+        padding: 0 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        font-family: var(--font-body);
+        font-size: 13px;
+        background: var(--color-input-bg);
+        color: var(--color-text);
+        outline: none;
+        max-width: 420px;
+    }
+    .frequency-select:focus { border-color: var(--color-green); }
+
+    /* ── Grille de checkboxes (disciplines / types) ── */
+    .checkboxes-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 8px;
+    }
+
+    .checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: border-color 0.12s, background 0.12s;
+    }
+    .checkbox-item:hover { border-color: var(--color-green); background: var(--color-green-light); }
+    .checkbox-item input[type="checkbox"] {
+        width: 15px;
+        height: 15px;
+        flex-shrink: 0;
+        accent-color: var(--color-green);
+    }
+    .checkbox-item__label { font-size: 13px; color: var(--color-text); cursor: pointer; }
+
+    .checkboxes-hint {
+        font-size: 12px;
+        color: var(--color-text-muted);
+        margin-bottom: 12px;
+        font-style: italic;
+    }
+
+    /* ── Bouton de soumission ── */
+    .btn-save {
+        height: 42px;
+        padding: 0 24px;
+        background: var(--color-green);
+        color: white;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: var(--font-body);
+        transition: opacity 0.15s;
+    }
+    .btn-save:hover { opacity: 0.88; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="alert-card">
+
+    {# Bandeau explicatif — contextualise l'utilité des alertes #}
+    <div class="alert-info">
+        Les alertes vous envoient un email quand de nouvelles opportunités sont publiées sur BazaArt.
+        Vous pouvez filtrer par discipline ou type pour ne recevoir que ce qui vous intéresse.
+    </div>
+
+    <form method="post" action="{{ path('app_resource_alerts') }}">
+        {# Token CSRF — sécurise le formulaire contre les attaques cross-site #}
+        <input type="hidden" name="_token" value="{{ csrf_token('resource_alerts') }}">
+
+        {# ── SECTION 1 : Activation des alertes ── #}
+        <div class="form-section">
+            <div class="form-section__title">Activation</div>
+
+            <label class="toggle-row" for="notifyOnNewResource">
+                <input type="checkbox"
+                       id="notifyOnNewResource"
+                       name="notifyOnNewResource"
+                       value="1"
+                       {{ (alert is null or alert.notifyOnNewResource) ? 'checked' : '' }}>
+                <div>
+                    <div class="toggle-row__label">Recevoir des alertes par email</div>
+                    <div class="toggle-row__desc">
+                        Vous serez notifié selon la fréquence choisie ci-dessous.
+                    </div>
+                </div>
+            </label>
+        </div>
+
+        {# ── SECTION 2 : Fréquence d'envoi ── #}
+        <div class="form-section">
+            <div class="form-section__title">Fréquence d'envoi</div>
+
+            {#
+                En Twig, on ne peut pas appeler App\Enum\AlertFrequency::cases() directement.
+                On liste manuellement les 3 valeurs de l'enum (elles changent rarement).
+                La valeur active est déterminée en comparant avec alert.frequency.value (string backed).
+                Le défaut est 'daily' si aucun profil d'alertes n'existe encore.
+            #}
+            {% set currentFrequency = alert is not null ? alert.frequency.value : 'daily' %}
+            <select name="frequency" id="frequency" class="frequency-select">
+                <option value="immediate" {{ currentFrequency == 'immediate' ? 'selected' : '' }}>
+                    Immédiate (dès qu'une opportunité est publiée)
+                </option>
+                <option value="daily" {{ currentFrequency == 'daily' ? 'selected' : '' }}>
+                    Quotidienne (résumé chaque matin)
+                </option>
+                <option value="weekly" {{ currentFrequency == 'weekly' ? 'selected' : '' }}>
+                    Hebdomadaire (résumé le lundi)
+                </option>
+            </select>
+        </div>
+
+        {# ── SECTION 3 : Filtrer par discipline ── #}
+        <div class="form-section">
+            <div class="form-section__title">Disciplines (optionnel)</div>
+            <p class="checkboxes-hint">
+                Laissez tout décoché pour recevoir des alertes toutes disciplines confondues.
+            </p>
+
+            {% if disciplines is empty %}
+                <p style="font-size:13px;color:var(--color-text-muted);">
+                    Aucune discipline disponible pour l'instant.
+                </p>
+            {% else %}
+                <div class="checkboxes-grid">
+                    {% for discipline in disciplines %}
+                        {#
+                            On vérifie si cette discipline est dans les filtres actifs.
+                            alert.filterDisciplines retourne une Collection Doctrine ;
+                            on utilise la méthode contains() pour tester la présence.
+                        #}
+                        {% set isChecked = alert is not null and alert.filterDisciplines.contains(discipline) %}
+                        <label class="checkbox-item" for="discipline_{{ discipline.id }}">
+                            <input type="checkbox"
+                                   id="discipline_{{ discipline.id }}"
+                                   name="filterDisciplines[]"
+                                   value="{{ discipline.id }}"
+                                   {{ isChecked ? 'checked' : '' }}>
+                            <span class="checkbox-item__label">
+                                {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                            </span>
+                        </label>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        {# ── SECTION 4 : Filtrer par type de ressource ── #}
+        <div class="form-section">
+            <div class="form-section__title">Types de ressources (optionnel)</div>
+            <p class="checkboxes-hint">
+                Laissez tout décoché pour être alerté de tous les types d'opportunités.
+            </p>
+
+            {% if types is empty %}
+                <p style="font-size:13px;color:var(--color-text-muted);">
+                    Aucun type de ressource disponible pour l'instant.
+                </p>
+            {% else %}
+                <div class="checkboxes-grid">
+                    {% for type in types %}
+                        {% set isChecked = alert is not null and alert.filterResourceTypes.contains(type) %}
+                        <label class="checkbox-item" for="type_{{ type.id }}">
+                            <input type="checkbox"
+                                   id="type_{{ type.id }}"
+                                   name="filterResourceTypes[]"
+                                   value="{{ type.id }}"
+                                   {{ isChecked ? 'checked' : '' }}>
+                            <span class="checkbox-item__label">
+                                {{ type.icon ? type.icon ~ ' ' : '' }}{{ type.name }}
+                            </span>
+                        </label>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        {# ── Bouton de sauvegarde ── #}
+        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--color-border);">
+            <button type="submit" class="btn-save">
+                Enregistrer mes préférences
+            </button>
+            {% if alert is not null %}
+                <span style="margin-left:12px;font-size:12px;color:var(--color-text-muted);">
+                    Dernière mise à jour : {{ alert.updatedAt|date('d/m/Y à H:i') }}
+                </span>
+            {% endif %}
+        </div>
+
+    </form>
+
+</div>
+
+{% endblock %}

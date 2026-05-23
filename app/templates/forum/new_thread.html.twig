@@ -1,0 +1,244 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Nouveau sujet — {{ category.name }} — BazaArt{% endblock %}
+{% block page_title %}Forum{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── Breadcrumb ── */
+    .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--color-text-light);
+        margin-bottom: 20px;
+    }
+    .breadcrumb a { color: var(--color-text-light); text-decoration: none; }
+    .breadcrumb a:hover { color: var(--color-red, #C8503A); }
+    .breadcrumb__separator { color: var(--color-border); }
+    .breadcrumb__current { color: var(--color-text); font-weight: 500; }
+
+    /* ── Container du formulaire ── */
+    .new-thread-container { max-width: 740px; }
+
+    /* ── Carte formulaire ── */
+    .new-thread-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+    }
+
+    .new-thread-card__header {
+        padding: 18px 24px;
+        border-bottom: 2px solid {{ category.color ?? '#C8503A' }};
+        background: var(--color-bg, #f8f9fa);
+    }
+
+    .new-thread-card__title {
+        font-family: var(--font-heading);
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 4px;
+    }
+
+    .new-thread-card__subtitle {
+        font-size: 13px;
+        color: var(--color-text-light);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .new-thread-card__body { padding: 24px; }
+
+    /* ── Champs du formulaire ── */
+    .form-group { margin-bottom: 20px; }
+
+    .form-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-text);
+        margin-bottom: 6px;
+    }
+
+    .form-label .required { color: var(--color-red, #C8503A); margin-left: 2px; }
+
+    .form-hint {
+        font-size: 11px;
+        color: var(--color-text-light);
+        margin-bottom: 6px;
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 10px 14px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        font-family: var(--font-body);
+        font-size: 14px;
+        color: var(--color-text);
+        background: var(--color-input-bg);
+        box-sizing: border-box;
+        transition: border-color 0.15s;
+    }
+    .form-input:focus {
+        outline: none;
+        border-color: var(--color-green);
+        box-shadow: 0 0 0 2px rgba(45, 106, 79, 0.12);
+    }
+
+    .form-textarea { min-height: 200px; resize: vertical; line-height: 1.6; }
+
+    .char-counter {
+        font-size: 11px;
+        color: var(--color-text-light);
+        text-align: right;
+        margin-top: 4px;
+    }
+
+    /* ── Pied du formulaire ── */
+    .new-thread-card__footer {
+        padding: 16px 24px;
+        border-top: 1px solid var(--color-border);
+        background: var(--color-bg, #f8f9fa);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .btn-submit {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 22px;
+        background: var(--color-red, #C8503A);
+        color: white;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .btn-submit:hover { background: #a84232; }
+
+    .btn-cancel {
+        font-size: 13px;
+        color: var(--color-text-light);
+        text-decoration: none;
+        padding: 8px 12px;
+    }
+    .btn-cancel:hover { color: var(--color-text); }
+</style>
+{% endblock %}
+
+{% block content %}
+{# ── Breadcrumb ──────────────────────────────────────────────────────────────── #}
+<nav class="breadcrumb">
+    <a href="{{ path('app_forum_index') }}">Forum</a>
+    <span class="breadcrumb__separator">›</span>
+    <a href="{{ path('app_forum_category', { categorySlug: category.slug }) }}">{{ category.name }}</a>
+    <span class="breadcrumb__separator">›</span>
+    <span class="breadcrumb__current">Nouveau sujet</span>
+</nav>
+
+{# ── Formulaire de création d'un thread ─────────────────────────────────────── #}
+<div class="new-thread-container">
+    <div class="new-thread-card">
+
+        {# En-tête : nom de la catégorie cible #}
+        <div class="new-thread-card__header">
+            <div class="new-thread-card__title">Créer un nouveau sujet</div>
+            <div class="new-thread-card__subtitle">
+                {% if category.icon %}<span>{{ category.icon }}</span>{% endif %}
+                dans <strong>{{ category.name }}</strong>
+            </div>
+        </div>
+
+        {#
+          Formulaire HTML natif.
+          Convention du projet : on n'utilise pas le Symfony Form Component ici,
+          les formulaires simples sont gérés directement en HTML + token CSRF manuel.
+          Le controller vérifie isCsrfTokenValid('forum_new_thread', ...).
+        #}
+        <form method="post" action="">
+            {# Token CSRF — protection contre les attaques Cross-Site Request Forgery #}
+            <input type="hidden" name="_token" value="{{ csrf_token('forum_new_thread') }}">
+
+            <div class="new-thread-card__body">
+
+                {# ── Titre du thread ── #}
+                <div class="form-group">
+                    <label for="thread-title" class="form-label">
+                        Titre du sujet <span class="required">*</span>
+                    </label>
+                    <div class="form-hint">Soyez précis et descriptif (5 à 255 caractères)</div>
+                    <input type="text"
+                           id="thread-title"
+                           name="title"
+                           class="form-input"
+                           placeholder="Ex: Recherche d'un graphiste pour une affiche de concert"
+                           minlength="5"
+                           maxlength="255"
+                           required
+                           {# Pré-rempli si le formulaire a déjà été soumis avec une erreur #}
+                           value="{{ formData.title ?? '' }}">
+                    <div class="char-counter" id="title-counter">
+                        {{ (formData.title ?? '')|length }} / 255
+                    </div>
+                </div>
+
+                {# ── Contenu du thread ── #}
+                <div class="form-group">
+                    <label for="thread-content" class="form-label">
+                        Contenu <span class="required">*</span>
+                    </label>
+                    <div class="form-hint">Développez votre sujet en détail (minimum 10 caractères)</div>
+                    <textarea id="thread-content"
+                              name="content"
+                              class="form-input form-textarea"
+                              placeholder="Décrivez votre sujet, votre question ou votre proposition..."
+                              minlength="10"
+                              required>{{ formData.content ?? '' }}</textarea>
+                </div>
+
+            </div>{# fin card__body #}
+
+            {# Pied de formulaire : Annuler + Publier #}
+            <div class="new-thread-card__footer">
+                <a href="{{ path('app_forum_category', { categorySlug: category.slug }) }}"
+                   class="btn-cancel">
+                    ← Annuler
+                </a>
+                <button type="submit" class="btn-submit">
+                    ✏ Publier le sujet
+                </button>
+            </div>
+        </form>
+
+    </div>
+</div>
+
+<script>
+/* Compteur de caractères temps réel pour le titre */
+(function () {
+    const titleInput = document.getElementById('thread-title');
+    const counter    = document.getElementById('title-counter');
+
+    if (!titleInput || !counter) { return; }
+
+    titleInput.addEventListener('input', function () {
+        const len = this.value.length;
+        counter.textContent = len + ' / 255';
+        /* Passe en rouge quand on s'approche de la limite */
+        counter.style.color = len > 220 ? 'var(--color-red, #C8503A)' : '';
+    });
+}());
+</script>
+{% endblock %}

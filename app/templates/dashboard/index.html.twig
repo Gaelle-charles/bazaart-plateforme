@@ -1,0 +1,361 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # dashboard/index.html.twig — Tableau de bord principal
+ #
+ # Hérite du layout base_app.html.twig qui fournit :
+ # - La sidebar verte (navigation)
+ # - La topbar avec le titre
+ # - La zone de contenu principale
+ #
+ # Ce template affiche :
+ # - Un message de bienvenue personnalisé
+ # - 4 cartes statistiques (ressources, membres, articles, soumissions)
+ # - 2 widgets : ressources récentes + publications communauté
+ #}
+
+{% block title %}Tableau de bord — BazaArt{% endblock %}
+
+{% block page_title %}Tableau de bord{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── Grille de statistiques — 4 cartes côte à côte ── */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    /* Chaque carte stat */
+    .stat-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 16px;
+    }
+
+    .stat-card__label {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--color-text-light);
+        margin-bottom: 8px;
+    }
+
+    .stat-card__value {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 6px;
+        line-height: 1;
+    }
+
+    /* Tendance en bas de la carte (ex: "↑ +12 cette semaine") */
+    .stat-card__trend {
+        font-size: 10px;
+        color: var(--color-red);
+    }
+
+    /* ── Grille des widgets — 2 colonnes ── */
+    .widgets-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    /* Chaque widget */
+    .widget {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+    }
+
+    /* En-tête du widget */
+    .widget__header {
+        padding: 16px 20px 12px;
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .widget__title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--color-text);
+        margin-bottom: 2px;
+    }
+
+    .widget__subtitle {
+        font-size: 11px;
+        color: var(--color-text-light);
+    }
+
+    /* Chaque ligne de contenu dans le widget */
+    .widget__row {
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--color-border);
+    }
+    .widget__row:last-child { border-bottom: none; }
+
+    /* Catégorie de la ressource (en rouge, en petites majuscules) */
+    .widget__row-category {
+        font-size: 9px;
+        font-weight: 700;
+        color: var(--color-red);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+
+    /* Titre de la ressource avec flèche à droite */
+    .widget__row-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-text);
+        text-decoration: none;
+    }
+    .widget__row-title:hover { color: var(--color-red); }
+
+    .widget__row-meta {
+        font-size: 11px;
+        color: var(--color-text-light);
+        margin-top: 2px;
+    }
+
+    /* ── Styles pour les lignes du widget Communauté ── */
+    .community-row {
+        padding: 10px 20px;
+        border-bottom: 1px solid var(--color-border);
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+    }
+    .community-row:last-child { border-bottom: none; }
+
+    /* Mini avatar avec initiales */
+    .community-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--color-orange);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 700;
+        color: white;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .community-row__content { flex: 1; min-width: 0; }
+
+    .community-row__header {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin-bottom: 2px;
+    }
+
+    .community-row__name {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-text);
+    }
+
+    .community-row__time {
+        font-size: 11px;
+        color: var(--color-text-light);
+    }
+
+    .community-row__text {
+        font-size: 12px;
+        color: var(--color-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* ── Message de bienvenue ── */
+    .welcome-title {
+        font-family: var(--font-heading);
+        font-size: 26px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 6px;
+    }
+
+    .welcome-subtitle {
+        font-size: 13px;
+        color: var(--color-text-light);
+        margin-bottom: 24px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Message de bienvenue personnalisé ── #}
+{# app.user.email contient l'email → on prend la partie avant le @ #}
+{% set username = app.user.email|split('@')|first %}
+<h2 class="welcome-title">Bonjour, {{ username }} ✦</h2>
+<p class="welcome-subtitle">Voici les dernières opportunités et actualités de la communauté.</p>
+
+{# ── GRILLE DE STATISTIQUES ──────────────────────────────────────────────── #}
+<div class="stats-grid">
+
+    {# Stat 1 : Ressources publiées #}
+    <div class="stat-card">
+        <div class="stat-card__label">Ressources publiées</div>
+        <div class="stat-card__value">247</div>
+        <div class="stat-card__trend">↑ +12 cette semaine</div>
+    </div>
+
+    {# Stat 2 : Membres actifs #}
+    <div class="stat-card">
+        <div class="stat-card__label">Membres actifs</div>
+        <div class="stat-card__value">1 842</div>
+        <div class="stat-card__trend">↑ +38 ce mois</div>
+    </div>
+
+    {# Stat 3 : Articles publiés #}
+    <div class="stat-card">
+        <div class="stat-card__label">Articles publiés</div>
+        <div class="stat-card__value">93</div>
+    </div>
+
+    {# Stat 4 : Mes soumissions (données réelles de l'utilisateur) #}
+    <div class="stat-card">
+        <div class="stat-card__label">Mes soumissions</div>
+        {#
+         # submissions est passé par le contrôleur (à implémenter dans DashboardController).
+         # Pour l'instant on affiche 0 en fallback avec le filtre "default".
+        #}
+        <div class="stat-card__value">{{ submissions|default(0) }}</div>
+    </div>
+
+</div>
+
+{# ── GRILLE DES WIDGETS ──────────────────────────────────────────────────── #}
+<div class="widgets-grid">
+
+    {# ── Widget 1 : Ressources récentes ── #}
+    <div class="widget">
+        <div class="widget__header">
+            <div class="widget__title">Ressources récentes</div>
+            <div class="widget__subtitle">Dernières opportunités validées</div>
+        </div>
+
+        {#
+         # On affiche les ressources récentes passées par le contrôleur.
+         # Si aucune ressource n'est disponible (variable vide), on affiche
+         # des exemples statiques pour que la page ne soit pas vide.
+        #}
+        {% if recent_resources is defined and recent_resources|length > 0 %}
+            {# Données réelles du serveur #}
+            {% for resource in recent_resources %}
+                <div class="widget__row">
+                    <div class="widget__row-category">{{ resource.resourceType.name|upper }}</div>
+                    <a href="{{ path('app_resource_show', {id: resource.id}) }}" class="widget__row-title">
+                        {{ resource.title }}
+                        <span style="color: var(--color-text-light);">→</span>
+                    </a>
+                    {% if resource.deadline %}
+                        <div class="widget__row-meta">Deadline : {{ resource.deadline|date('d M.') }}</div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% else %}
+            {# Données d'exemple (à remplacer quand le contrôleur passera de vraies données) #}
+            <div class="widget__row">
+                <div class="widget__row-category">Résidence</div>
+                <a href="{{ path('app_resource_index') }}" class="widget__row-title">
+                    Villa Médicis 2025 <span style="color: var(--color-text-light);">→</span>
+                </a>
+                <div class="widget__row-meta">Deadline : 15 avr.</div>
+            </div>
+            <div class="widget__row">
+                <div class="widget__row-category">Financement</div>
+                <a href="{{ path('app_resource_index') }}" class="widget__row-title">
+                    Bourse Fondation Cartier <span style="color: var(--color-text-light);">→</span>
+                </a>
+                <div class="widget__row-meta">Deadline : 30 mars</div>
+            </div>
+            <div class="widget__row">
+                <div class="widget__row-category">Appel à projets</div>
+                <a href="{{ path('app_resource_index') }}" class="widget__row-title">
+                    Festival Off Avignon <span style="color: var(--color-text-light);">→</span>
+                </a>
+                <div class="widget__row-meta">Deadline : 1 mai</div>
+            </div>
+        {% endif %}
+    </div>
+
+    {# ── Widget 2 : Communauté ── #}
+    <div class="widget">
+        <div class="widget__header">
+            <div class="widget__title">Communauté</div>
+            <div class="widget__subtitle">Publications récentes</div>
+        </div>
+
+        {# Données réelles si disponibles, sinon exemples #}
+        {% if recent_posts is defined and recent_posts|length > 0 %}
+            {% for post in recent_posts %}
+                <div class="community-row">
+                    {# Initiales de l'auteur #}
+                    <div class="community-avatar">
+                        {{ post.author.email|slice(0, 2)|upper }}
+                    </div>
+                    <div class="community-row__content">
+                        <div class="community-row__header">
+                            <span class="community-row__name">{{ post.author.email|split('@')|first }}</span>
+                            <span class="community-row__time">· {{ post.createdAt|date('d/m') }}</span>
+                        </div>
+                        <div class="community-row__text">{{ post.content|slice(0, 80) }}…</div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            {# Exemples statiques #}
+            <div class="community-row">
+                <div class="community-avatar">JT</div>
+                <div class="community-row__content">
+                    <div class="community-row__header">
+                        <span class="community-row__name">Jean Tamba</span>
+                        <span class="community-row__time">· il y a 2h</span>
+                    </div>
+                    <div class="community-row__text">Quelqu'un a de l'expérience avec les bourses DRAC ?</div>
+                </div>
+            </div>
+            <div class="community-row">
+                <div class="community-avatar">AL</div>
+                <div class="community-row__content">
+                    <div class="community-row__header">
+                        <span class="community-row__name">Amara Ly</span>
+                        <span class="community-row__time">· il y a 1j</span>
+                    </div>
+                    <div class="community-row__text">Super conférence sur la médiation culturelle ce weekend !</div>
+                </div>
+            </div>
+            <div class="community-row">
+                <div class="community-avatar">PD</div>
+                <div class="community-row__content">
+                    <div class="community-row__header">
+                        <span class="community-row__name">Paula D.</span>
+                        <span class="community-row__time">· il y a 3j</span>
+                    </div>
+                    <div class="community-row__text">J'ai publié un article sur les droits des artistes indépendants.</div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+
+{% endblock %}

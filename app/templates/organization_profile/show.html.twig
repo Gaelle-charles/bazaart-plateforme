@@ -1,0 +1,197 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}{{ profile.name }} — BazaArt{% endblock %}
+{% block page_title %}Profil organisation{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Layout deux colonnes (identique au profil artiste) */
+    .profile-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 20px;
+        align-items: start;
+    }
+
+    /* Carte profil gauche */
+    .profile-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 24px;
+        text-align: center;
+    }
+
+    /* Logo ou initiale */
+    .org-logo-display {
+        width: 80px; height: 80px; border-radius: var(--radius-sm);
+        background: var(--color-green); color: white;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 28px; font-weight: 700;
+        margin: 0 auto 14px;
+    }
+
+    .org-name {
+        font-family: var(--font-heading); font-size: 20px; font-weight: 700;
+        color: var(--color-text); margin-bottom: 6px;
+    }
+
+    .org-location { font-size: 13px; color: var(--color-text-light); margin-bottom: 14px; }
+
+    /* Badges de vérification */
+    .badge-verified {
+        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
+        background: #d4edda; color: #155724; border: 1px solid #c3e6cb;
+        border-radius: var(--radius-full); font-size: 10px; font-weight: 700;
+        margin-bottom: 14px;
+    }
+    .badge-pending {
+        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
+        background: #fff3cd; color: #856404; border: 1px solid #ffc107;
+        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
+        margin-bottom: 14px;
+    }
+
+    /* Bouton modifier (propriétaire) */
+    .btn-edit {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 100%; height: 36px; border: 1.5px solid var(--color-border);
+        border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+        color: var(--color-text-muted); text-decoration: none; transition: all 0.15s;
+    }
+    .btn-edit:hover { border-color: var(--color-green); color: var(--color-green); }
+
+    /* Colonne droite */
+    .profile-content { display: flex; flex-direction: column; gap: 16px; }
+
+    .content-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 24px;
+    }
+
+    .section-label {
+        font-size: 10px; font-weight: 700; color: var(--color-text-light);
+        text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;
+    }
+
+    .desc-text { font-size: 14px; line-height: 1.8; color: var(--color-text-muted); }
+
+    /* Liens de contact */
+    .link-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 0; border-bottom: 1px solid var(--color-border);
+        font-size: 13px;
+    }
+    .link-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .link-item__label { font-weight: 600; color: var(--color-text); min-width: 80px; }
+    .link-item a { color: var(--color-red); text-decoration: none; font-size: 13px; }
+    .link-item a:hover { text-decoration: underline; }
+
+    /* SIRET */
+    .siret-code { font-size: 12px; color: var(--color-text-light); margin-top: 4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="profile-layout">
+
+    {# ── Colonne gauche : carte profil ── #}
+    <div class="profile-card">
+
+        {# Logo ou initiale de l'organisation #}
+        {% if profile.logoPath %}
+            <img src="{{ asset(profile.logoPath) }}"
+                 alt="Logo {{ profile.name }}"
+                 style="width:80px;height:80px;border-radius:var(--radius-sm);object-fit:contain;margin:0 auto 14px;display:block;border:1px solid var(--color-border);padding:6px;">
+        {% else %}
+            <div class="org-logo-display">{{ profile.name|first|upper }}</div>
+        {% endif %}
+
+        <div class="org-name">{{ profile.name }}</div>
+
+        {% if profile.location %}
+            <div class="org-location">📍 {{ profile.location }}</div>
+        {% endif %}
+
+        {# Badge de vérification selon le statut de l'organisation #}
+        {% if profile.isVerified %}
+            <div><span class="badge-verified">✓ Vérifiée</span></div>
+        {% else %}
+            <div><span class="badge-pending">⏳ En attente de vérification</span></div>
+        {% endif %}
+
+        {# Bouton modifier — uniquement pour le propriétaire du profil #}
+        {% if app.user == profile.user %}
+            <a href="{{ path('app_org_profile_edit') }}" class="btn-edit">Modifier le profil</a>
+        {% endif %}
+
+    </div>
+
+    {# ── Colonne droite : contenu détaillé ── #}
+    <div class="profile-content">
+
+        {# Description / À propos #}
+        {% if profile.description %}
+            <div class="content-card">
+                <div class="section-label">À propos</div>
+                <p class="desc-text">{{ profile.description|nl2br }}</p>
+            </div>
+        {% else %}
+            <div class="content-card">
+                <div class="section-label">À propos</div>
+                <p style="font-size:13px;color:var(--color-text-muted);text-align:center;padding:16px 0;">
+                    Aucune description renseignée.
+                    {% if app.user == profile.user %}
+                        <br><a href="{{ path('app_org_profile_edit') }}"
+                               style="color:var(--color-red);font-weight:600;text-decoration:none;">
+                            Ajouter une description →
+                        </a>
+                    {% endif %}
+                </p>
+            </div>
+        {% endif %}
+
+        {# Contact et liens #}
+        {% if profile.contactEmail or profile.websiteUrl or profile.siret %}
+            <div class="content-card">
+                <div class="section-label">Contact & informations</div>
+
+                {% if profile.contactEmail %}
+                    <div class="link-item">
+                        <span class="link-item__label">Email</span>
+                        <a href="mailto:{{ profile.contactEmail }}">{{ profile.contactEmail }}</a>
+                    </div>
+                {% endif %}
+
+                {% if profile.websiteUrl %}
+                    <div class="link-item">
+                        <span class="link-item__label">Site web</span>
+                        <a href="{{ profile.websiteUrl }}" target="_blank" rel="noopener">
+                            {{ profile.websiteUrl }}
+                        </a>
+                    </div>
+                {% endif %}
+
+                {# SIRET formaté en groupes pour la lisibilité #}
+                {% if profile.siret %}
+                    <div class="link-item">
+                        <span class="link-item__label">SIRET</span>
+                        <span style="font-size:13px; color:var(--color-text-muted); font-family:monospace;">
+                            {{ profile.siret|slice(0,3) }} {{ profile.siret|slice(3,3) }} {{ profile.siret|slice(6,3) }} {{ profile.siret|slice(9,5) }}
+                        </span>
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
+
+    </div>
+
+</div>
+
+{% endblock %}

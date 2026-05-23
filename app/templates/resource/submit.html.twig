@@ -1,0 +1,201 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Soumettre une ressource — BazaArt{% endblock %}
+{% block page_title %}Soumettre une ressource{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Contrainte de largeur pour les formulaires */
+    .form-container { max-width: 720px; }
+
+    /* Bannière d'information (organisation active) */
+    .org-banner {
+        display: flex; align-items: center; gap: 10px;
+        background: var(--color-green-light); border: 1px solid rgba(28,58,47,0.2);
+        border-radius: var(--radius-sm); padding: 12px 16px;
+        font-size: 13px; color: var(--color-green); margin-bottom: 20px;
+    }
+
+    /* Badge "Vérifiée" dans la bannière */
+    .verified-mini {
+        background: #d4edda; color: #155724;
+        font-size: 10px; font-weight: 700;
+        padding: 1px 6px; border-radius: 10px; margin-left: 4px;
+    }
+
+    /* Section de formulaire dans une carte */
+    .form-card {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        padding: 24px; margin-bottom: 14px;
+    }
+
+    .form-card__title {
+        font-size: 13px; font-weight: 700; color: var(--color-text);
+        margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--color-border);
+    }
+
+    /* Grille de cases à cocher pour les disciplines */
+    .disciplines-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .discipline-check {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 12px; border: 1px solid var(--color-border);
+        border-radius: var(--radius-full); font-size: 12px; cursor: pointer;
+        user-select: none; transition: all 0.15s;
+        background: var(--color-white); color: var(--color-text-muted);
+    }
+    .discipline-check:hover { border-color: var(--color-green); color: var(--color-green); }
+
+    /* Case cochée → style actif */
+    .discipline-check input:checked ~ * { color: var(--color-green); }
+    .discipline-check:has(input:checked) {
+        background: var(--color-green-light);
+        border-color: rgba(28,58,47,0.3);
+        color: var(--color-green);
+    }
+
+    /* Bloc d'alerte (pas de profil organisation) */
+    .alert-warning {
+        background: #fff3cd; border: 1px solid #ffc107;
+        border-radius: var(--radius-md); padding: 32px; text-align: center;
+    }
+    .alert-warning__title { font-size: 16px; font-weight: 700; color: #856404; margin-bottom: 10px; }
+    .alert-warning__text  { font-size: 13px; color: #6b5900; margin-bottom: 16px; line-height: 1.6; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+
+    {# Sous-titre explicatif #}
+    <p style="font-size:13px; color:var(--color-text-muted); margin-bottom:20px;">
+        Votre ressource sera examinée par notre équipe avant d'être publiée.
+    </p>
+
+    {% if organization is null %}
+        {# ── Blocage : l'utilisateur n'a pas de profil organisation ── #}
+        <div class="alert-warning">
+            <div class="alert-warning__title">Profil organisation requis</div>
+            <p class="alert-warning__text">
+                Pour soumettre une ressource, vous devez d'abord créer un profil organisation.
+            </p>
+            <a href="{{ path('app_org_profile_edit') }}" class="btn btn-primary">
+                Créer mon profil organisation
+            </a>
+        </div>
+
+    {% else %}
+
+        {# Message d'erreur de validation #}
+        {% if error %}
+            <div class="flash flash-error">{{ error }}</div>
+        {% endif %}
+
+        {# ── Indicateur d'organisation active ── #}
+        <div class="org-banner">
+            🏢 Soumission au nom de :
+            <strong>{{ organization.name }}</strong>
+            {% if organization.isVerified %}
+                <span class="verified-mini">✓ Vérifiée</span>
+            {% endif %}
+        </div>
+
+        <form method="post">
+
+            {# ── Section 1 : Informations principales ── #}
+            <div class="form-card">
+                <div class="form-card__title">Informations principales</div>
+
+                <div class="form-group">
+                    <label for="title">Titre de la ressource *</label>
+                    <input type="text" id="title" name="title" required
+                           value="{{ formData['title'] ?? '' }}"
+                           placeholder="Ex: Résidence de création — Villa Médicis 2026">
+                </div>
+
+                <div class="form-group">
+                    <label for="resourceTypeId">Type de ressource *</label>
+                    {# Le select utilise les types chargés depuis la base de données #}
+                    <select id="resourceTypeId" name="resourceTypeId" required>
+                        <option value="">— Sélectionner un type —</option>
+                        {% for type in types %}
+                            <option value="{{ type.id }}"
+                                    {{ (formData['resourceTypeId'] ?? '') == type.id ? 'selected' : '' }}>
+                                {{ type.icon ? type.icon ~ ' ' : '' }}{{ type.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="description">Description *</label>
+                    <textarea id="description" name="description" rows="6" required
+                              placeholder="Décrivez la ressource, les critères d'éligibilité, les modalités de candidature...">{{ formData['description'] ?? '' }}</textarea>
+                </div>
+            </div>
+
+            {# ── Section 2 : Disciplines artistiques ── #}
+            <div class="form-card">
+                <div class="form-card__title">Disciplines artistiques</div>
+                <p style="font-size:12px; color:var(--color-text-light); margin-bottom:14px;">
+                    Cochez toutes les disciplines concernées par cette ressource.
+                </p>
+
+                {# Grille de cases à cocher stylisées comme des pills #}
+                <div class="disciplines-grid">
+                    {% for discipline in disciplines %}
+                        {# On vérifie si cette discipline était cochée lors d'une soumission précédente (en cas d'erreur).
+                           (discipline.id ~ '') convertit l'entier en chaîne pour la comparaison #}
+                        <label class="discipline-check">
+                            <input type="checkbox" name="disciplines[]" value="{{ discipline.id }}"
+                                   style="accent-color:var(--color-green);"
+                                   {{ (discipline.id ~ '') in (formData['disciplines'] ?? []) ? 'checked' : '' }}>
+                            {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# ── Section 3 : Détails pratiques ── #}
+            <div class="form-card">
+                <div class="form-card__title">Détails pratiques</div>
+
+                <div class="form-group">
+                    <label for="location">Localisation</label>
+                    <input type="text" id="location" name="location"
+                           value="{{ formData['location'] ?? '' }}"
+                           placeholder="Ex: Paris, Lyon, National, International, En ligne">
+                </div>
+
+                <div class="form-group">
+                    <label for="deadline">Date limite de candidature</label>
+                    <input type="date" id="deadline" name="deadline"
+                           value="{{ formData['deadline'] ?? '' }}">
+                    <small style="color:var(--color-text-light); display:block; margin-top:4px;">
+                        Laissez vide si la date n'est pas encore connue.
+                    </small>
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="externalUrl">Lien vers la ressource officielle</label>
+                    <input type="url" id="externalUrl" name="externalUrl"
+                           value="{{ formData['externalUrl'] ?? '' }}"
+                           placeholder="https://...">
+                    <small style="color:var(--color-text-light); display:block; margin-top:4px;">
+                        URL du site officiel de l'opportunité.
+                    </small>
+                </div>
+            </div>
+
+            {# ── Boutons de validation ── #}
+            <div style="display:flex; gap:12px; align-items:center;">
+                <button type="submit" class="btn btn-primary">Soumettre pour validation</button>
+                <a href="{{ path('app_resource_index') }}" class="btn btn-outline">Annuler</a>
+            </div>
+
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

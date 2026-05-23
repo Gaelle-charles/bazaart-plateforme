@@ -1,0 +1,199 @@
+{% extends 'base_admin.html.twig' %}
+
+{% block title %}File de modération — Admin BazaArt{% endblock %}
+{% block page_title %}File de modération{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Lien retour */
+    .back-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 13px; color: var(--color-text-muted); text-decoration: none;
+        margin-bottom: 20px;
+    }
+    .back-link:hover { color: var(--color-text); }
+
+    /* Compteur de ressources en attente */
+    .pending-count-badge {
+        display: inline-flex; align-items: center; height: 24px; padding: 0 12px;
+        background: #fff3cd; color: #856404; border-radius: var(--radius-full);
+        font-size: 11px; font-weight: 700; border: 1px solid #ffc107;
+    }
+
+    /* Carte de ressource à modérer */
+    .mod-card {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        padding: 24px; margin-bottom: 16px;
+    }
+
+    .mod-card__header {
+        display: flex; justify-content: space-between; align-items: flex-start;
+        flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+    }
+
+    /* Badge type de ressource */
+    .type-badge {
+        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
+        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
+        background: #e8f0fe; color: #1a5fb4;
+    }
+
+    .mod-card__date { font-size: 11px; color: var(--color-text-light); }
+
+    .mod-card__title {
+        font-family: var(--font-heading); font-size: 20px; font-weight: 700;
+        color: var(--color-text); margin-bottom: 10px;
+    }
+
+    .mod-card__desc {
+        font-size: 13px; line-height: 1.7; color: var(--color-text-muted); margin-bottom: 14px;
+    }
+
+    /* Disciplines */
+    .disciplines-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .discipline-pill {
+        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
+        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
+        background: var(--color-green-light); color: var(--color-green);
+        border: 1px solid rgba(28, 58, 47, 0.2);
+    }
+
+    /* Infos supplémentaires (org, deadline, etc.) */
+    .mod-card__meta {
+        display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px;
+        color: var(--color-text-muted); padding: 12px 0;
+        border-top: 1px solid var(--color-border);
+        border-bottom: 1px solid var(--color-border);
+        margin-bottom: 16px;
+    }
+    .mod-card__meta a { color: var(--color-red); text-decoration: none; }
+    .mod-card__meta a:hover { text-decoration: underline; }
+
+    /* Badge organisation vérifiée / non vérifiée */
+    .org-badge-ok   { background: #d4edda; color: #155724; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+    .org-badge-warn { background: #fff3cd; color: #856404; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+
+    /* Boutons d'action modération */
+    .mod-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .btn-publish {
+        height: 36px; padding: 0 18px; background: #d4edda; color: #155724;
+        border: 1px solid #c3e6cb; border-radius: var(--radius-sm);
+        font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+    }
+    .btn-publish:hover { background: #c3e6cb; }
+
+    .btn-reject {
+        height: 36px; padding: 0 18px; background: #f8d7da; color: #721c24;
+        border: 1px solid #f5c6cb; border-radius: var(--radius-sm);
+        font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+    }
+    .btn-reject:hover { background: #f5c6cb; }
+
+    /* État vide */
+    .empty-state {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); padding: 48px; text-align: center;
+        color: var(--color-text-muted); font-size: 14px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# Ligne d'en-tête : retour + compteur #}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+    <a href="{{ path('app_admin_dashboard') }}" class="back-link">← Tableau de bord</a>
+    <span class="pending-count-badge">{{ resources|length }} en attente</span>
+</div>
+
+{% if resources is empty %}
+    {# Aucune ressource à modérer #}
+    <div class="empty-state">
+        ✅ Toutes les soumissions ont été traitées. Rien en attente.
+    </div>
+{% else %}
+    {# Boucle sur chaque ressource en attente #}
+    {% for resource in resources %}
+        <div class="mod-card">
+
+            {# En-tête : type + date de soumission #}
+            <div class="mod-card__header">
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    {# Badge type de ressource #}
+                    <span class="type-badge">
+                        {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
+                    </span>
+                    {# Localisation si disponible #}
+                    {% if resource.location %}
+                        <span style="font-size:12px; color:var(--color-text-light);">📍 {{ resource.location }}</span>
+                    {% endif %}
+                </div>
+                <span class="mod-card__date">
+                    Soumis le {{ resource.createdAt|date('d/m/Y à H:i') }}
+                </span>
+            </div>
+
+            {# Titre #}
+            <div class="mod-card__title">{{ resource.title }}</div>
+
+            {# Description tronquée à 300 caractères #}
+            <p class="mod-card__desc">
+                {{ resource.description|slice(0, 300) }}{{ resource.description|length > 300 ? '...' : '' }}
+            </p>
+
+            {# Disciplines concernées #}
+            {% if resource.disciplines|length > 0 %}
+                <div class="disciplines-list">
+                    {% for discipline in resource.disciplines %}
+                        <span class="discipline-pill">
+                            {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                        </span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {# Métadonnées : organisation, soumetteur, deadline, lien #}
+            <div class="mod-card__meta">
+                {% if resource.organization %}
+                <span>
+                    🏢 <strong style="color:var(--color-text);">{{ resource.organization.name }}</strong>
+                    {% if resource.organization.isVerified %}
+                        <span class="org-badge-ok">✓ Vérifiée</span>
+                    {% else %}
+                        <span class="org-badge-warn">Non vérifiée</span>
+                    {% endif %}
+                </span>
+                {% endif %}
+                <span>👤 {{ resource.submittedBy.email }}</span>
+                {% if resource.deadline %}
+                    <span>📅 Deadline : {{ resource.deadline|date('d/m/Y') }}</span>
+                {% endif %}
+                {% if resource.externalUrl %}
+                    <a href="{{ resource.externalUrl }}" target="_blank" rel="noopener">
+                        🔗 Lien officiel
+                    </a>
+                {% endif %}
+            </div>
+
+            {# Boutons de modération : Publier / Rejeter #}
+            <div class="mod-actions">
+                <form method="post" action="{{ path('app_admin_resource_publish', {id: resource.id}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                    <button type="submit" class="btn-publish">✓ Publier</button>
+                </form>
+
+                <form method="post" action="{{ path('app_admin_resource_reject', {id: resource.id}) }}"
+                      onsubmit="return confirm('Rejeter cette ressource ?')">
+                    <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                    <button type="submit" class="btn-reject">✗ Rejeter</button>
+                </form>
+            </div>
+
+        </div>
+    {% endfor %}
+{% endif %}
+
+{% endblock %}

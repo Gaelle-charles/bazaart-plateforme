@@ -1,0 +1,99 @@
+# docker-compose.prod.yml — Configuration PRODUCTION
+# Utilisation : docker compose -f docker-compose.prod.yml up -d
+#
+# Différences avec le dev :
+# - Nginx écoute sur les ports 80 et 443 (pas 8080)
+# - SSL via les certs Certbot existants
+# - Pas de Mailpit (emails désactivés en prod)
+# - Pas d'Adminer (sécurité)
+# - Variables d'environnement dans .env.local (non versionné)
+
+services:
+
+  # ── Nginx : reverse proxy HTTPS ──────────────────────────────────────────
+  nginx:
+    image: nginx:stable-alpine
+    container_name: bazaart_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Config Nginx de production (HTTP→HTTPS + SSL + PHP-FPM)
+      - ./docker/nginx/prod.conf:/etc/nginx/conf.d/default.conf:ro
+      # Fichiers publics Symfony (CSS, JS, images uploadées...)
+      - ./app/public:/var/www/html/public:ro
+      # Certificats SSL Let's Encrypt
+      - ./certbot/conf:/etc/letsencrypt:ro
+      # Webroot pour le renouvellement Certbot
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - app
+    networks:
+      - bazaart_network
+
+  # ── Certbot : renouvellement SSL automatique ──────────────────────────────
+  certbot:
+    image: certbot/certbot
+    container_name: bazaart_certbot
+    restart: unless-stopped
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    # Vérifie le certificat toutes les 12h et le renouvelle si besoin
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done'"
+
+  # ── PHP-FPM : application Symfony ────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: bazaart_app
+    restart: unless-stopped
+    volumes:
+      - ./app:/var/www/html
+      # Volume séparé pour les uploads (avatars, logos, images articles)
+      - uploads_data:/var/www/html/public/uploads
+    environment:
+      APP_ENV: prod
+      APP_SECRET: ${APP_SECRET}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?serverVersion=16&charset=utf8
+      REDIS_URL: redis://redis:6379
+      # En prod, on désactive Mailpit — configure un vrai service email ici
+      MAILER_DSN: ${MAILER_DSN:-null://null}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - bazaart_network
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: bazaart_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # Les données persistent même si le container est recréé
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bazaart_network
+
+  # ── Redis : cache session ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: bazaart_redis
+    restart: unless-stopped
+    networks:
+      - bazaart_network
+
+volumes:
+  postgres_data:
+  uploads_data:
+
+networks:
+  bazaart_network:
+    driver: bridge

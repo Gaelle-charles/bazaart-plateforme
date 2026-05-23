@@ -1,0 +1,130 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Annuaire des artistes — BazaArt{% endblock %}
+{% block page_title %}Annuaire des artistes{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Grille de cartes artistes — 3 colonnes */
+    .artists-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+    }
+
+    /* Carte d'un artiste */
+    .artist-card {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        padding: 20px; text-align: center;
+        text-decoration: none; color: inherit;
+        transition: box-shadow 0.15s, border-color 0.15s;
+        display: flex; flex-direction: column; align-items: center;
+    }
+    .artist-card:hover {
+        box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+        border-color: var(--color-green);
+    }
+
+    /* Avatar de l'artiste */
+    .artist-avatar {
+        width: 64px; height: 64px; border-radius: 50%;
+        background: var(--color-orange); color: white;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 22px; font-weight: 700;
+        margin-bottom: 12px; flex-shrink: 0;
+    }
+    .artist-avatar img {
+        width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
+    }
+
+    /* Nom de l'artiste */
+    .artist-name {
+        font-family: var(--font-heading); font-size: 15px; font-weight: 700;
+        color: var(--color-text); margin-bottom: 4px;
+    }
+
+    /* Localisation */
+    .artist-location {
+        font-size: 12px; color: var(--color-text-light); margin-bottom: 10px;
+    }
+
+    /* Extrait de bio */
+    .artist-bio {
+        font-size: 12px; color: var(--color-text-muted); line-height: 1.6;
+        display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* État vide */
+    .empty-state {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); padding: 48px; text-align: center;
+        color: var(--color-text-muted);
+    }
+
+    /* Compteur */
+    .artists-count {
+        font-size: 12px; color: var(--color-text-light); margin-bottom: 16px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if profiles is empty %}
+    {# Aucun artiste n'a encore créé de profil #}
+    <div class="empty-state">
+        <p style="font-size:32px; margin-bottom:12px;">🎨</p>
+        <p style="font-weight:600; margin-bottom:8px;">Aucun profil artiste pour l'instant.</p>
+        <p style="font-size:13px; margin-bottom:16px;">Soyez le premier à créer votre profil !</p>
+        <a href="{{ path('app_artist_profile_edit') }}" class="btn btn-primary">
+            Créer mon profil artiste
+        </a>
+    </div>
+{% else %}
+    {# Compteur d'artistes #}
+    <p class="artists-count">
+        {{ profiles|length }} artiste{{ profiles|length > 1 ? 's' : '' }} inscrit{{ profiles|length > 1 ? 's' : '' }}
+    </p>
+
+    {# Grille des cartes artistes #}
+    <div class="artists-grid">
+        {% for profile in profiles %}
+            {#
+             # Chaque carte est un lien vers le profil public de l'artiste.
+             # La route app_artist_profile_public prend l'ID du profil en paramètre.
+            #}
+            <a href="{{ path('app_artist_profile_public', {id: profile.id}) }}" class="artist-card">
+
+                {# Avatar : photo ou initiale #}
+                <div class="artist-avatar">
+                    {% if profile.avatarPath %}
+                        <img src="{{ asset(profile.avatarPath) }}" alt="{{ profile.displayName }}">
+                    {% else %}
+                        {{ profile.displayName|first|upper }}
+                    {% endif %}
+                </div>
+
+                {# Nom d'affichage #}
+                <div class="artist-name">{{ profile.displayName }}</div>
+
+                {# Localisation si disponible #}
+                {% if profile.location %}
+                    <div class="artist-location">📍 {{ profile.location }}</div>
+                {% endif %}
+
+                {# Extrait de biographie #}
+                {% if profile.bio %}
+                    <p class="artist-bio">{{ profile.bio }}</p>
+                {% else %}
+                    <p class="artist-bio" style="font-style:italic;">Aucune biographie.</p>
+                {% endif %}
+
+            </a>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% endblock %}

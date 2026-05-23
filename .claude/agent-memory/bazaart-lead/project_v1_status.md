@@ -1,14 +1,14 @@
 ---
 name: project-v1-status
-description: État précis du code V1 au 22 mai 2026 — ce qui est fait, ce qui manque, par module
+description: État précis du code V1 au 23 mai 2026 — ce qui est fait, ce qui manque, par module
 metadata:
   type: project
 ---
 
-État relevé le 2026-05-22. Deadline V1 : 2026-06-15 (24 jours restants).
+État relevé le 2026-05-23. Deadline V1 : 2026-06-15 (23 jours restants).
 
-**Why:** Planning CDC V3 — 38 jours depuis le 8 mai. On est maintenant en semaine 2 du plan et la semaine 1 (Ressourcerie) n'est pas encore terminée.
-**How to apply:** Utiliser ce tableau pour prioriser les tâches, éviter de refaire ce qui est déjà là, et alerter sur les glissements de planning.
+**Why:** Planning CDC V3 — deadline Mansa immuable. Utiliser ce tableau pour prioriser, éviter les doublons, alerter sur les glissements.
+**How to apply:** Toujours vérifier ici avant de planifier une nouvelle tâche.
 
 ---
 
@@ -16,75 +16,74 @@ metadata:
 
 ### Corrections rapides (semaine du 12 mai — FAITES)
 - `updatedAt` ajouté à `OrganizationProfile` (migration Version20260511211725)
-- Enums PHP 8.1 créés : `ArticleStatus`, `ResourceStatus`, `ScrapedResourceStatus`, `SubmitterRole`
+- Enums PHP 8.1 : `ArticleStatus`, `ResourceStatus`, `ScrapedResourceStatus`, `SubmitterRole`, `AlertFrequency`
 
-### Entités existantes adaptées
-- `Resource` : champs `submitterRole`, `autoPublished`, `publishedAt`, `validatedAt`, `validatedBy`, `status` — FAIT
-- `OrganizationProfile` : champs `isStructurePartner`, `structureActivatedAt`, `structureActivationValidatedBy`, `updatedAt` — FAIT (BDD + entité)
+### MODULE RESSOURCERIE — ✅ COMPLET (23 mai 2026)
+- `ROLE_STRUCTURE` + `ROLE_MODERATOR` dans `security.yaml` (role_hierarchy OK)
+- Voters : `ResourceVoter`, `StructureVoter`, `ForumVoter` (partiel au départ, mis à jour), `LiveVoter`
+- `OrganizationProfile` étendu : `structureApplicationAt`, `isStructurePartner`, `structureActivatedAt`, `structureActivationValidatedBy`
+- `StructureController` : `/structure/register` + `/structure/dashboard`
+- `StructureService` : applyAsStructure(), activateStructure(), rejectStructureApplication()
+- `AdminController` étendu : `/admin/structures/pending`, activate/{id}, reject/{id}, publishResource (audit fields), verifyScrapedOpportunity (audit fields)
+- `ResourceFavorite` entity + toggle AJAX (`/resources/{id}/favorite`)
+- `ResourceAlert` entity + formulaire préférences (`/resources/alerts`)
+- `ResourceAlertService` + `SendResourceAlertsCommand` (--dry-run, --force-weekly, Europe/Paris timezone)
+- Templates email : `resource_alert.html.twig` + `resource_alert.txt.twig`
+- Templates : `resource/favorites.html.twig`, `resource/my.html.twig`, `resource/alerts.html.twig`
 
-### Modules existants fonctionnels
-- Authentification : login/register classique + Google OAuth (`GoogleAuthenticator`)
+### MODULE COMMUNAUTÉ — Forum ✅, Messagerie ✅, Notifications ✅ (23 mai 2026)
+- Entities : `ForumCategory`, `ForumThread`, `ForumReply` (auto-référentielle pour imbrication V2)
+- Repositories : `ForumCategoryRepository` (findAllActive, findBySlug), `ForumThreadRepository` (findByCategory avec pagination, findLatestByCategory, countByCategory), `ForumReplyRepository` (findByThread, countByThread)
+- `ForumService` : createThread (slug déduplication globale), addReply, toggleLock, togglePin, deleteThread, deleteReply, incrementViews
+- `ForumController` : 9 routes (index, category, thread, new_thread, reply, lock, pin, delete_thread, delete_reply)
+- `ForumVoter` : mis à jour avec `instanceof ForumThread/ForumReply` (plus de method_exists())
+- `SeedForumCategoriesCommand` : 4 catégories par défaut (idempotent)
+- Templates : `forum/index.html.twig`, `forum/category.html.twig`, `forum/thread.html.twig` (|nl2br XSS safe), `forum/new_thread.html.twig`
+- Migration : `Version20260523131534` (tables forum_categories, forum_threads, forum_replies)
+- Lien Forum ajouté dans `base_app.html.twig` sidebar
+- BUG FIXES post-review : XSS |nl2br sur contenus, ordre CSRF→autorisation dans actions modération, slug collision inter-catégories
+
+### Modules existants fonctionnels (avant V1)
+- Auth : login/register classique + Google OAuth
 - Hub social : posts, comments, likes, articles, annuaire artistes
-- Ressourcerie basique : catalogue `Resource`, formulaire de soumission, pages admin (pending, all resources, scraped)
-- Agent IA scraping : 7 scrapers actifs (ADAGP, CNAP, CNM, Culture.gouv, MusiquesActuelles, ProHelvetia, SAIF)
-- Admin : dashboard basique, gestion users, validation ressources scrapées
+- Ressourcerie basique (catalogue, soumission, admin)
+- Agent IA scraping : 7 scrapers actifs
 
 ---
 
 ## ❌ CE QUI MANQUE (V1)
 
-### MODULE RESSOURCERIE (reste ~5 j/h, était semaine 1)
-- `ROLE_STRUCTURE` + `ROLE_MODERATOR` non implémentés (pas dans security.yaml, pas de voter)
-- Pas de `StructureController` → routes `/structure/register` et `/structure/dashboard` inexistantes
-- Workflow d'activation admin (`/admin/structures/pending`) manquant
-- `ResourceFavorite` entity manquante (M2M User × Resource)
-- `ResourceAlert` entity manquante (préférences alertes)
-- Alertes email + job n8n quotidien non implémentés
+### MODULE COMMUNAUTÉ (reste ~2 j/h)
+- **Lives planifiés** (périmètre borné ADR-0002) :
+  - Entity `Live` (`external_url` obligatoire, `replay_url` string nullable, pas d'upload Bunny en V1)
+  - Entity `LiveAttendee`
+  - Rappel email via Symfony Messenger ScheduledTask (pas n8n)
+  - Pages : calendrier, détail, création (admin), inscription
 
-### MODULE COMMUNAUTÉ (reste ~8 j/h, était semaine 2-3)
-- Entities **Forum** manquantes : `ForumCategory`, `ForumThread`, `ForumReply`
-- Pages forum (liste catégories, liste threads, détail thread, création, réponse)
-- Modération forum (lock, pin, signalement)
-- Entities **Messagerie** manquantes : `Conversation`, `ConversationParticipant`, `Message`
-- Pages messagerie (liste conversations, fil, envoi, initier)
-- Entity `Notification` manquante + génération événements
-- API `/api/notifications/unread-count` + Stimulus polling
-- Page `/notifications` + préférences dans profil
-- Entities **Lives** manquantes : `Live`, `LiveAttendee`
-- Pages lives (calendrier, détail, création, inscription, upload replay)
-- Job n8n rappels lives (1h avant)
+### MODULE FORMATION — ⛔ RETIRÉ DU PÉRIMÈTRE V1 (ADR-0001)
+Reporté V1.5 (juillet 2026). Ne pas créer d'entités Formation.
 
-### MODULE FORMATION (0% — reste ~6 j/h, était semaine 3-4)
-- Entities manquantes : `Course`, `CourseModule`, `Lesson`, `LessonResource`, `CourseEnrollment`, `LessonProgress`
-- Migrations correspondantes
-- Catalogue formations public + détail
-- Espace apprenant + lecteur vidéo Bunny Stream
-- Suivi de progression (`LessonProgress`)
-- Interface admin : création formation, modules, leçons, upload Bunny Stream
-- Intégration Bunny Stream (API + iframe token signé)
-
-### TRANSVERSE / RGPD (à finaliser avant 15 juin)
-- `ROLE_STRUCTURE` + `ROLE_MODERATOR` dans `security.yaml` (hiérarchie des rôles)
-- Voters (pas de `if $user->getRoles()...`)
-- Rate limiting `/login` + `/register` (max 5 tentatives / 15 min / IP)
+### TRANSVERSE / RGPD (~3 j/h)
+- Rate limiting `/login` + `/register` (max 5 / 15 min / IP)
 - Pages légales : `/confidentialite`, `/cgu`, `/mentions-legales`
 - Bannière consentement cookies
 - Espace RGPD utilisateur (export JSON + demande suppression)
-- Page admin `/admin/system-health`
 
-### TESTS
-- Tests PHPUnit (cible 30% couverture)
-- 5-8 scénarios end-to-end (inscription, soumission ressource, thread forum, message privé, inscription formation)
-- Test de restauration sauvegarde sur staging
+### TESTS (~2 j/h)
+- PHPUnit 30% couverture cible
+- 5 scénarios E2E : inscription, soumission ressource, thread forum, message privé, inscription live
 
 ### INFRA
-- Environnement staging (staging.bazaart.fr) à configurer
+- Cron job quotidien pour `app:send-resource-alerts`
+- `DEFAULT_URI=https://bazaart.fr` dans `.env.local` prod
+- Staging (staging.bazaart.fr)
 - Upgrade droplet 4 GB (semaine du 9 juin)
-- Script `bin/deploy.sh` ou GitHub Actions
+- `composer require --dev phpstan/phpstan phpstan/extension-installer` (PHPStan non installé)
+- `docker compose exec app php bin/console app:forum:seed-categories` à lancer après migration Forum
 
 ---
 
 ## ALERTE PLANNING
-On est le 22 mai. Le plan CDC prévoyait la Ressourcerie finie au 18 mai, la Communauté au 25 mai.
-On a ~2 semaines de retard sur le plan initial. Il reste 24 jours pour livrer 19 j/h de travail estimé.
-Marge de sécurité quasi nulle — toute extension de scope est à refuser fermement.
+Le 23 mai, il reste 23 jours. Priorité absolue : Messagerie privée (sans elle, la Communauté est incomplète).
+Forum terminé. Lives = scope minimum. RGPD = non négociable avant le 15 juin.
+Marge quasi nulle — refuser tout ajout de scope hors CDC V3.

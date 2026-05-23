@@ -1,0 +1,138 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Mon organisation — BazaArt{% endblock %}
+{% block page_title %}{{ profile ? 'Modifier mon organisation' : 'Créer le profil de mon organisation' }}{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Contrainte de largeur pour les formulaires */
+    .form-container { max-width: 680px; }
+
+    /* Section de formulaire dans une carte */
+    .form-card {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        padding: 24px; margin-bottom: 16px;
+    }
+
+    .form-card__title {
+        font-size: 13px; font-weight: 700; color: var(--color-text);
+        margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border);
+    }
+
+    /* Aperçu du logo actuel */
+    .current-logo {
+        max-height: 80px; max-width: 200px; object-fit: contain;
+        margin-bottom: 14px; display: block;
+        border: 1px solid var(--color-border); padding: 6px;
+        border-radius: var(--radius-sm);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+
+    {# Message d'erreur éventuel (ex : SIRET invalide) #}
+    {% if error %}
+        <div class="flash flash-error">{{ error }}</div>
+    {% endif %}
+
+    {# enctype="multipart/form-data" est OBLIGATOIRE pour l'upload de fichiers #}
+    <form method="post" enctype="multipart/form-data">
+
+        {# ── Section 1 : Informations générales ── #}
+        <div class="form-card">
+            <div class="form-card__title">Informations générales</div>
+
+            {# Priorité : formData (valeurs saisies en cas d'erreur) > profile (BDD) > vide #}
+
+            <div class="form-group">
+                <label for="name">Nom de l'organisation *</label>
+                <input type="text" id="name" name="name" required
+                       value="{{ formData['name'] ?? profile.name ?? '' }}"
+                       placeholder="Ex: Association Les Arts Vivants">
+            </div>
+
+            <div class="form-group">
+                <label for="siret">
+                    Numéro SIRET
+                    <small style="font-weight:normal; color:var(--color-text-light);">
+                        (14 chiffres — optionnel pour les organisations étrangères)
+                    </small>
+                </label>
+                <input type="text" id="siret" name="siret"
+                       value="{{ formData['siret'] ?? profile.siret ?? '' }}"
+                       placeholder="12345678901234" maxlength="14">
+                {# Explication pour aider la débutante à comprendre l'utilité du SIRET #}
+                <small style="color:var(--color-text-light); display:block; margin-top:4px;">
+                    Le SIRET permet de vérifier l'existence légale de votre organisation en France.
+                    Votre profil sera marqué « Vérifié » après validation par notre équipe.
+                </small>
+            </div>
+
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" rows="5"
+                          placeholder="Mission, activités, historique de votre organisation...">{{ formData['description'] ?? profile.description ?? '' }}</textarea>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="location">Localisation</label>
+                <input type="text" id="location" name="location"
+                       value="{{ formData['location'] ?? profile.location ?? '' }}"
+                       placeholder="Ex: Lyon, France">
+            </div>
+        </div>
+
+        {# ── Section 2 : Contact & liens ── #}
+        <div class="form-card">
+            <div class="form-card__title">Contact & liens</div>
+
+            <div class="form-group">
+                <label for="contactEmail">Email de contact public</label>
+                <input type="email" id="contactEmail" name="contactEmail"
+                       value="{{ formData['contactEmail'] ?? profile.contactEmail ?? '' }}"
+                       placeholder="contact@monorganisation.fr">
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="websiteUrl">Site web</label>
+                <input type="url" id="websiteUrl" name="websiteUrl"
+                       value="{{ formData['websiteUrl'] ?? profile.websiteUrl ?? '' }}"
+                       placeholder="https://monorganisation.fr">
+            </div>
+        </div>
+
+        {# ── Section 3 : Logo ── #}
+        <div class="form-card">
+            <div class="form-card__title">Logo</div>
+
+            {# Aperçu du logo actuel s'il existe #}
+            {% if profile and profile.logoPath %}
+                <img src="{{ asset(profile.logoPath) }}"
+                     alt="Logo actuel"
+                     class="current-logo">
+            {% endif %}
+
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="logo">
+                    {{ profile and profile.logoPath ? 'Changer le logo' : 'Ajouter un logo' }}
+                    <small style="font-weight:normal; color:var(--color-text-light);">(JPG, PNG — max 10Mo)</small>
+                </label>
+                <input type="file" id="logo" name="logo" accept="image/jpeg,image/png,image/webp,image/svg+xml">
+            </div>
+        </div>
+
+        {# ── Boutons de validation ── #}
+        <div style="display:flex; gap:12px; align-items:center;">
+            <button type="submit" class="btn btn-primary">Enregistrer</button>
+            {% if profile %}
+                <a href="{{ path('app_org_profile_show') }}" class="btn btn-outline">Annuler</a>
+            {% endif %}
+        </div>
+
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+{#
+    Version texte brut de l'email d'alerte Ressourcerie.
+
+    Ce template est le fallback non-HTML pour les clients email qui bloquent
+    le rendu HTML (rare, mais certains clients corporate ou anti-spam le font).
+    Symfony envoie les deux parties (HTML + texte) dans un message multipart/alternative.
+
+    Variables identiques au template HTML :
+      - alert, resources, user, count
+#}
+{% set display_name = user.email|split('@')|first %}
+BAZAART — Alerte Ressourcerie
+{{ '=' * 50 }}
+
+Bonjour {{ display_name }},
+
+{% if count == 1 %}
+1 nouvelle opportunité correspond à votre profil sur la Ressourcerie Bazaart.
+{% else %}
+{{ count }} nouvelles opportunités correspondent à votre profil sur la Ressourcerie Bazaart.
+{% endif %}
+
+{% for resource in resources %}
+{{ loop.index }}. {{ resource.title }}
+   Type : {{ resource.resourceType ? resource.resourceType.name : 'Non précisé' }}
+{% if resource.location %}
+   Lieu : {{ resource.location }}
+{% endif %}
+{% if resource.description %}
+   {{ resource.description|slice(0, 200) }}{% if resource.description|length > 200 %}…{% endif %}
+
+{% endif %}
+   Deadline : {% if resource.deadline %}{{ resource.deadline|date('d/m/Y') }}{% else %}Non précisée{% endif %}
+
+   Voir l'opportunité :
+   {{ url('app_resource_show', {id: resource.id}) }}
+
+{{ '-' * 50 }}
+{% endfor %}
+
+Voir toutes les opportunités :
+{{ url('app_resource_index') }}
+
+---
+
+Vous recevez cet email car vous avez activé les alertes sur bazaart.fr.
+
+Gérer vos préférences ou vous désabonner :
+{{ url('app_resource_alerts') }}
+
+Bazaart — Pôle Lab
+Plateforme dédiée aux artistes de la diaspora afro-atlantique

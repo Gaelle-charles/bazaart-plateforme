@@ -1,0 +1,331 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # structure/dashboard.html.twig — Tableau de bord de la structure partenaire
+ #
+ # Variables disponibles :
+ #   - orgProfile : OrganizationProfile — profil de la structure (garanti non-null par le voter)
+ #   - resources  : Resource[]          — ressources soumises par cet utilisateur, triées par date DESC
+ #
+ # Accès : ROLE_STRUCTURE uniquement (StructureVoter::STRUCTURE_VIEW_DASHBOARD)
+ # → Un utilisateur sans isStructurePartner = true ne peut pas accéder à cette page.
+ #}
+
+{% block title %}Tableau de bord — {{ orgProfile.name }} — BazaArt{% endblock %}
+{% block page_title %}Espace Structure{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── En-tête de la structure ───────────────────────────────────────────── */
+    .structure-header {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 24px 28px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+    .structure-header__avatar {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: var(--color-green);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        font-weight: 700;
+        color: white;
+        flex-shrink: 0;
+    }
+    .structure-header__name {
+        font-family: var(--font-heading);
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--color-text);
+    }
+    .structure-header__meta {
+        font-size: 12px;
+        color: var(--color-text-muted);
+        margin-top: 4px;
+    }
+
+    /* Badge "Structure Partenaire" — affiché uniquement si isStructurePartner = true */
+    .badge-structure {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: var(--color-green-light);
+        border: 1px solid rgba(28, 58, 47, 0.25);
+        color: var(--color-green);
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 12px;
+        border-radius: var(--radius-full);
+        margin-left: auto;
+    }
+
+    /* ── Grille de statistiques ────────────────────────────────────────────── */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .stat-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 20px;
+        text-align: center;
+    }
+    .stat-card__number {
+        font-family: var(--font-heading);
+        font-size: 32px;
+        font-weight: 800;
+        color: var(--color-text);
+        line-height: 1;
+        margin-bottom: 6px;
+    }
+    .stat-card__label {
+        font-size: 11px;
+        color: var(--color-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+    }
+    /* Couleurs distinctives par statut */
+    .stat-card--published .stat-card__number { color: #155724; }
+    .stat-card--pending   .stat-card__number { color: #856404; }
+    .stat-card--rejected  .stat-card__number { color: #721c24; }
+
+    /* ── Tableau des ressources ─────────────────────────────────────────────── */
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .section-title {
+        font-family: var(--font-heading);
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--color-text);
+    }
+
+    .resources-table {
+        width: 100%;
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .resources-table th {
+        background: #f8f9fa;
+        padding: 10px 16px;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--color-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid var(--color-border);
+        text-align: left;
+    }
+    .resources-table th:first-child { border-radius: var(--radius-md) 0 0 0; }
+    .resources-table th:last-child  { border-radius: 0 var(--radius-md) 0 0; }
+
+    .resources-table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--color-border);
+        color: var(--color-text);
+        vertical-align: middle;
+    }
+    .resources-table tr:last-child td { border-bottom: none; }
+    .resources-table tr:hover td { background: #fafafa; }
+
+    /* Badges de statut des ressources */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 10px;
+        border-radius: var(--radius-full);
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .status-badge--published     { background: #d4edda; color: #155724; }
+    .status-badge--pending       { background: #fff3cd; color: #856404; }
+    .status-badge--rejected      { background: #f8d7da; color: #721c24; }
+    .status-badge--draft         { background: #e2e3e5; color: #383d41; }
+    .status-badge--archived      { background: #e2e3e5; color: #383d41; }
+
+    /* État vide */
+    .empty-state {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: 48px;
+        text-align: center;
+        color: var(--color-text-muted);
+    }
+    .empty-state__icon  { font-size: 40px; margin-bottom: 16px; }
+    .empty-state__title { font-size: 16px; font-weight: 700; color: var(--color-text); margin-bottom: 8px; }
+    .empty-state__text  { font-size: 13px; line-height: 1.6; margin-bottom: 20px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+    {# ── En-tête de la structure ─────────────────────────────────────────────── #}
+    <div class="structure-header">
+        {# Initiales dans un avatar rond (comme le profil utilisateur) #}
+        {% set initials = orgProfile.name|slice(0, 2)|upper %}
+        <div class="structure-header__avatar">{{ initials }}</div>
+
+        <div>
+            <div class="structure-header__name">{{ orgProfile.name }}</div>
+            <div class="structure-header__meta">
+                {% if orgProfile.location %}📍 {{ orgProfile.location }}  {% endif %}
+                {% if orgProfile.contactEmail %}✉ {{ orgProfile.contactEmail }}{% endif %}
+                {% if orgProfile.structureActivatedAt %}
+                    · Partenaire depuis le {{ orgProfile.structureActivatedAt|date('d/m/Y') }}
+                {% endif %}
+            </div>
+        </div>
+
+        {# Badge Structure Partenaire — affiché uniquement si activé (normalement toujours le cas ici) #}
+        {% if orgProfile.isStructurePartner() %}
+            <span class="badge-structure">✓ Structure Partenaire</span>
+        {% endif %}
+    </div>
+
+    {# ── Statistiques rapides ────────────────────────────────────────────────── #}
+    {#
+      On calcule les stats directement en Twig plutôt que de les pré-calculer
+      en PHP. Justification : le nombre de ressources par structure est faible
+      (pas de problème de performance). Si ça devient un enjeu, passer par
+      des COUNT() SQL dans le repository.
+    #}
+    {#
+      Attention : la valeur backed de PendingValidation est 'pending' (historique),
+      pas 'pending_validation'. Cf. App\Enum\ResourceStatus.
+    #}
+    {% set published_count = resources|filter(r => r.status.value == 'published')|length %}
+    {% set pending_count   = resources|filter(r => r.status.value == 'pending')|length %}
+    {% set rejected_count  = resources|filter(r => r.status.value == 'rejected')|length %}
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-card__number">{{ resources|length }}</div>
+            <div class="stat-card__label">Total soumis</div>
+        </div>
+        <div class="stat-card stat-card--published">
+            <div class="stat-card__number">{{ published_count }}</div>
+            <div class="stat-card__label">Publiées</div>
+        </div>
+        <div class="stat-card stat-card--pending">
+            <div class="stat-card__number">{{ pending_count }}</div>
+            <div class="stat-card__label">En attente</div>
+        </div>
+        <div class="stat-card stat-card--rejected">
+            <div class="stat-card__number">{{ rejected_count }}</div>
+            <div class="stat-card__label">Refusées</div>
+        </div>
+    </div>
+
+    {# ── Section Mes ressources ───────────────────────────────────────────────── #}
+    <div class="section-header">
+        <div class="section-title">Mes opportunités publiées</div>
+        {# Bouton CTA — soumettre une nouvelle opportunité #}
+        <a href="{{ path('app_resource_submit') }}" class="btn btn-primary">
+            + Publier une opportunité
+        </a>
+    </div>
+
+    {% if resources is empty %}
+        {# ── État vide : première visite ou aucune soumission ─────────────────── #}
+        <div class="empty-state">
+            <div class="empty-state__icon">◈</div>
+            <div class="empty-state__title">Aucune opportunité publiée</div>
+            <p class="empty-state__text">
+                Vous n'avez pas encore soumis d'opportunité.<br>
+                En tant que structure partenaire, vos soumissions sont publiées directement sans validation manuelle.
+            </p>
+            <a href="{{ path('app_resource_submit') }}" class="btn btn-primary">
+                Publier ma première opportunité
+            </a>
+        </div>
+
+    {% else %}
+        {# ── Tableau des ressources ────────────────────────────────────────────── #}
+        <table class="resources-table">
+            <thead>
+                <tr>
+                    <th>Titre</th>
+                    <th>Type</th>
+                    <th>Statut</th>
+                    <th>Date de soumission</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for resource in resources %}
+                    <tr>
+                        {# Titre tronqué à 60 caractères pour l'affichage tableau #}
+                        <td>
+                            <a href="{{ path('app_resource_show', {id: resource.id}) }}"
+                               style="color: var(--color-text); text-decoration: none; font-weight: 500;">
+                                {{ resource.title|slice(0, 60) }}{{ resource.title|length > 60 ? '…' : '' }}
+                            </a>
+                        </td>
+                        <td style="color: var(--color-text-muted); font-size: 12px;">
+                            {{ resource.resourceType.icon ?? '' }} {{ resource.resourceType.name }}
+                        </td>
+                        <td>
+                            {#
+                              Correspondance statut → CSS badge + libellé lisible en français.
+                              On utilise resource.status.value (la valeur string du backed enum).
+                            #}
+                            {% set status_value = resource.status.value %}
+                            {% if status_value == 'published' %}
+                                <span class="status-badge status-badge--published">✓ Publiée</span>
+                            {% elseif status_value == 'pending' %}
+                                {# 'pending' est la valeur backed de PendingValidation (cf. ResourceStatus enum) #}
+                                <span class="status-badge status-badge--pending">⏳ En attente</span>
+                            {% elseif status_value == 'rejected' %}
+                                <span class="status-badge status-badge--rejected">✗ Refusée</span>
+                            {% elseif status_value == 'draft' %}
+                                <span class="status-badge status-badge--draft">Brouillon</span>
+                            {% elseif status_value == 'archived' %}
+                                <span class="status-badge status-badge--archived">Archivée</span>
+                            {% else %}
+                                <span class="status-badge status-badge--draft">{{ status_value }}</span>
+                            {% endif %}
+                        </td>
+                        <td style="color: var(--color-text-muted); white-space: nowrap;">
+                            {{ resource.createdAt|date('d/m/Y') }}
+                        </td>
+                        <td>
+                            <a href="{{ path('app_resource_show', {id: resource.id}) }}"
+                               style="font-size: 12px; color: var(--color-green); text-decoration: none;">
+                                Voir →
+                            </a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+
+{% endblock %}

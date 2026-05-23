@@ -1,0 +1,281 @@
+{% extends 'base_admin.html.twig' %}
+
+{% block title %}Utilisateurs — Admin BazaArt{% endblock %}
+{% block page_title %}Utilisateurs & organisations{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Lien retour */
+    .back-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 13px; color: var(--color-text-muted); text-decoration: none;
+        margin-bottom: 20px;
+    }
+    .back-link:hover { color: var(--color-text); }
+
+    /* En-tête de la page (titre + bouton créer) */
+    .page-header {
+        display: flex; justify-content: space-between; align-items: center;
+        flex-wrap: wrap; gap: 12px; margin-bottom: 24px;
+    }
+
+    /* Panneau de création d'utilisateur (masqué par défaut) */
+    .create-panel {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        padding: 24px; margin-bottom: 20px;
+    }
+
+    .create-panel__title {
+        font-size: 14px; font-weight: 700; color: var(--color-text);
+        margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border);
+    }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+
+    /* Tableau des utilisateurs */
+    .users-table {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        overflow: hidden;
+    }
+
+    .users-table table { width: 100%; border-collapse: collapse; }
+
+    .users-table thead tr {
+        background: var(--color-bg); border-bottom: 2px solid var(--color-border);
+    }
+
+    .users-table th {
+        padding: 10px 16px; text-align: left;
+        font-size: 10px; font-weight: 700; color: var(--color-text-light);
+        text-transform: uppercase; letter-spacing: 0.06em;
+    }
+
+    .users-table td {
+        padding: 12px 16px; border-bottom: 1px solid var(--color-border);
+        font-size: 13px; vertical-align: middle;
+    }
+    .users-table tbody tr:last-child td { border-bottom: none; }
+    .users-table tbody tr:hover { background: var(--color-bg); }
+
+    /* Ligne mise en avant pour l'admin connecté */
+    .users-table tbody tr.self-row { background: #f0fdf4; }
+
+    /* Badges de rôles */
+    .role-badge-admin {
+        display: inline-flex; align-items: center; height: 18px; padding: 0 8px;
+        background: var(--color-green); color: white;
+        border-radius: var(--radius-full); font-size: 10px; font-weight: 700;
+    }
+    .role-badge-user {
+        display: inline-flex; align-items: center; height: 18px; padding: 0 8px;
+        background: #e8f0fe; color: #1a5fb4;
+        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
+    }
+
+    /* Badge "Vérifiée" / bouton "Vérifier" */
+    .verified-badge { background: #d4edda; color: #155724; padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+
+    .btn-verify {
+        height: 22px; padding: 0 8px; background: #e8f0fe; color: #1a5fb4;
+        border: 1px solid #a8c7fa; border-radius: 10px;
+        font-size: 10px; font-weight: 600; cursor: pointer; font-family: var(--font-body);
+    }
+    .btn-verify:hover { background: #d0e3fc; }
+
+    /* Boutons d'action */
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        height: 26px; padding: 0 10px; border: none; border-radius: var(--radius-sm);
+        font-size: 11px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+        white-space: nowrap;
+    }
+    .action-btn-promote  { background: #e8f0fe; color: #1a5fb4; }
+    .action-btn-promote:hover { background: #d0e3fc; }
+    .action-btn-demote   { background: #fff3cd; color: #856404; }
+    .action-btn-demote:hover { background: #ffe8a1; }
+    .action-btn-delete   { background: #f8d7da; color: #721c24; }
+    .action-btn-delete:hover { background: #f5c6cb; }
+
+    /* Note de bas de page */
+    .table-footnote { margin-top: 12px; font-size: 11px; color: var(--color-text-light); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# Lien retour #}
+<a href="{{ path('app_admin_dashboard') }}" class="back-link">← Tableau de bord</a>
+
+{# En-tête : titre + bouton pour ouvrir le formulaire de création #}
+<div class="page-header">
+    <div></div>
+    <button onclick="document.getElementById('create-panel').style.display = document.getElementById('create-panel').style.display === 'none' ? 'block' : 'none'"
+            class="btn btn-primary">
+        + Ajouter un utilisateur
+    </button>
+</div>
+
+{# ── Panneau de création d'utilisateur (masqué par défaut) ── #}
+{# Ce formulaire est affiché uniquement lorsque l'admin clique sur le bouton ci-dessus #}
+<div id="create-panel" style="display:none;">
+    <div class="create-panel">
+        <div class="create-panel__title">Créer un nouvel utilisateur</div>
+        <form method="post" action="{{ path('app_admin_users') }}">
+            {# Token CSRF pour sécuriser le formulaire #}
+            <input type="hidden" name="_token" value="{{ csrf_token('user_create') }}">
+
+            {# Grille email / mot de passe côte à côte #}
+            <div class="form-grid">
+                <div class="form-group" style="margin:0;">
+                    <label for="new_email">Email *</label>
+                    <input type="email" id="new_email" name="email" required placeholder="email@exemple.com">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label for="new_password">
+                        Mot de passe * <small style="font-weight:normal; color:var(--color-text-light);">(min. 8 caractères)</small>
+                    </label>
+                    <input type="password" id="new_password" name="password" required minlength="8" placeholder="••••••••">
+                </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+                {# Checkbox pour donner le rôle admin #}
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:normal;">
+                    <input type="checkbox" name="is_admin" value="1" style="accent-color:var(--color-green); width:15px; height:15px;">
+                    Donner le rôle administrateur
+                </label>
+                <div style="display:flex; gap:10px; margin-left:auto;">
+                    <button type="submit" class="btn btn-primary">Créer l'utilisateur</button>
+                    <button type="button"
+                            onclick="document.getElementById('create-panel').style.display='none'"
+                            class="btn btn-outline">
+                        Annuler
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ── Tableau des utilisateurs ── #}
+<div class="users-table">
+    <table>
+        <thead>
+            <tr>
+                <th>Email</th>
+                <th>Rôles</th>
+                <th>Profil artiste</th>
+                <th>Organisation</th>
+                <th>Inscrit le</th>
+                <th style="text-align:center;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+                {# On identifie si c'est le compte de l'admin connecté #}
+                {% set isSelf  = (app.user.id == user.id) %}
+                {% set isAdmin = 'ROLE_ADMIN' in user.roles %}
+
+                <tr class="{{ isSelf ? 'self-row' : '' }}">
+
+                    {# Email de l'utilisateur #}
+                    <td>
+                        <strong>{{ user.email }}</strong>
+                        {% if isSelf %}
+                            <span style="font-size:10px; color:var(--color-green); margin-left:4px;">(vous)</span>
+                        {% endif %}
+                    </td>
+
+                    {# Badges de rôles : Admin et/ou User #}
+                    <td>
+                        <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                            {% if isAdmin %}
+                                <span class="role-badge-admin">Admin</span>
+                            {% endif %}
+                            <span class="role-badge-user">User</span>
+                        </div>
+                    </td>
+
+                    {# Profil artiste lié (ou tiret si aucun) #}
+                    <td>
+                        {% if user.artistProfile %}
+                            <span style="color:var(--color-green); font-size:12px;">✓ {{ user.artistProfile.displayName }}</span>
+                        {% else %}
+                            <span style="color:var(--color-border);">—</span>
+                        {% endif %}
+                    </td>
+
+                    {# Organisation liée avec bouton de vérification #}
+                    <td>
+                        {% if user.organizationProfile %}
+                            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                                <span style="font-size:12px;">{{ user.organizationProfile.name }}</span>
+                                {% if user.organizationProfile.isVerified %}
+                                    <span class="verified-badge">✓ Vérifiée</span>
+                                {% else %}
+                                    {# Bouton pour valider manuellement l'organisation #}
+                                    <form method="post" action="{{ path('app_admin_org_verify', {id: user.organizationProfile.id}) }}">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('org_verify_' ~ user.organizationProfile.id) }}">
+                                        <button type="submit" class="btn-verify">Vérifier</button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <span style="color:var(--color-border);">—</span>
+                        {% endif %}
+                    </td>
+
+                    {# Date d'inscription #}
+                    <td style="color:var(--color-text-light); white-space:nowrap; font-size:12px;">
+                        {{ user.createdAt ? user.createdAt|date('d/m/Y') : '—' }}
+                    </td>
+
+                    {# Actions : Promouvoir/Rétrograder admin + Supprimer (bloqués pour son propre compte) #}
+                    <td>
+                        <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
+                            {% if not isSelf %}
+                                {# Bouton pour basculer le rôle admin #}
+                                <form method="post" action="{{ path('app_admin_user_toggle_admin', {id: user.id}) }}">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('user_toggle_' ~ user.id) }}">
+                                    <button type="submit"
+                                            class="action-btn {{ isAdmin ? 'action-btn-demote' : 'action-btn-promote' }}"
+                                            title="{{ isAdmin ? 'Retirer les droits admin' : 'Promouvoir admin' }}">
+                                        {{ isAdmin ? '↓ Admin' : '↑ Admin' }}
+                                    </button>
+                                </form>
+
+                                {# Bouton de suppression avec confirmation #}
+                                <form method="post" action="{{ path('app_admin_user_delete', {id: user.id}) }}"
+                                      onsubmit="return confirm('Supprimer « {{ user.email }} » ? Cette action est irréversible.')">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('user_delete_' ~ user.id) }}">
+                                    <button type="submit" class="action-btn action-btn-delete" title="Supprimer cet utilisateur">
+                                        Supprimer
+                                    </button>
+                                </form>
+                            {% else %}
+                                {# On bloque les actions sur son propre compte #}
+                                <span style="font-size:11px; color:var(--color-text-light);">Votre compte</span>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                </tr>
+            {% else %}
+                <tr>
+                    <td colspan="6" style="padding:32px; text-align:center; color:var(--color-text-muted);">Aucun utilisateur.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{# Note de bas de page #}
+<p class="table-footnote">
+    {{ users|length }} utilisateur{{ users|length > 1 ? 's' : '' }} au total.
+    La suppression d'un utilisateur efface également ses profils et ressources associées.
+</p>
+
+{% endblock %}

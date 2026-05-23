@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BazaArt — Hub Artistique Pluridisciplinaire</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* bazaart.fr palette */
+  --cream:    #f7f4ef;
+  --white:    #ffffff;
+  --dark:     #1a1a1a;
+  --forest:   #1c3a2f;
+  --terra:    #c8503a;
+  --terra-lt: #fee0dc;
+  --sage:     #d4e6dc;
+  --tan:      #e2ddd6;
+  --muted:    #6b6860;
+  /* PDF palette accents */
+  --yellow:   #ffe000;
+  --pdf-brown:#7a3b0a;
+  --pdf-red:  #e8200a;
+  --pdf-green:#1a8a3a;
+  --black:    #0a0a0a;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+
+body {
+  background: var(--cream);
+  color: var(--dark);
+  font-family: 'Inter', system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* ═══════════════════════════════
+   TOP BANNER — coming soon
+═══════════════════════════════ */
+.top-banner {
+  background: var(--forest);
+  color: var(--cream);
+  text-align: center;
+  padding: 0.75rem 1rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.top-banner span {
+  color: var(--yellow);
+  margin: 0 0.5rem;
+}
+
+/* ═══════════════════════════════
+   NAV
+═══════════════════════════════ */
+.nav {
+  background: var(--white);
+  border-bottom: 1px solid var(--tan);
+  padding: 0 3rem;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-logo {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: var(--forest);
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+  list-style: none;
+}
+.nav-links a {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--dark);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--terra); }
+
+.nav-actions { display:flex; gap:0.75rem; align-items:center; }
+
+.btn-outline {
+  border: 1.5px solid var(--dark);
+  border-radius: 6px;
+  padding: 0.55rem 1.2rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--dark);
+  background: transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.btn-outline:hover { background: var(--dark); color: var(--white); }
+
+.btn-primary {
+  border-radius: 6px;
+  padding: 0.55rem 1.2rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--white);
+  background: var(--terra);
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.btn-primary:hover { background: #b04432; }
+
+/* ═══════════════════════════════
+   HERO — two-col layout
+═══════════════════════════════ */
+.hero {
+  background: var(--cream);
+  min-height: calc(100vh - 104px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  padding: 5rem 3rem 4rem;
+  gap: 4rem;
+  position: relative;
+  overflow: hidden;
+}
+
+/* background grid lines like PDF */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(28,58,47,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(28,58,47,0.04) 1px, transparent 1px);
+  background-size: 80px 80px;
+  pointer-events: none;
+}
+
+.hero-left { position: relative; z-index: 2; }
+
+.hero-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--terra-lt);
+  color: var(--terra);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.5rem 1.1rem;
+  border-radius: 50px;
+  margin-bottom: 1.8rem;
+}
+.hero-pill-dot {
+  width: 6px; height: 6px;
+  background: var(--terra);
+  border-radius: 50%;
+}
+
+.hero-h1 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(3rem, 5.5vw, 5.2rem);
+  font-weight: 900;
+  line-height: 1.0;
+  color: var(--forest);
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.hero-h1 em {
+  font-style: italic;
+  color: var(--terra);
+}
+
+.hero-desc {
+  font-size: 1.05rem;
+  line-height: 1.7;
+  color: var(--muted);
+  max-width: 460px;
+  margin-bottom: 2.5rem;
+}
+
+.hero-btns { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; }
+
+.btn-hero-main {
+  background: var(--terra);
+  color: var(--white);
+  border-radius: 6px;
+  padding: 0.85rem 2rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  transition: all 0.25s;
+  letter-spacing: 0.02em;
+}
+.btn-hero-main:hover { background:#b04432; transform:translateY(-2px); box-shadow:0 8px 24px rgba(200,80,58,0.3); }
+
+.btn-hero-sec {
+  border: 1.5px solid var(--tan);
+  background: var(--white);
+  color: var(--dark);
+  border-radius: 6px;
+  padding: 0.85rem 2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.btn-hero-sec:hover { border-color: var(--dark); }
+
+/* flow tags */
+.hero-flow {
+  margin-top: 3rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.flow-chip {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--tan);
+  padding: 0.4rem 0.9rem;
+  border-radius: 50px;
+}
+
+/* right side - floating cards */
+.hero-right {
+  position: relative;
+  z-index: 2;
+  height: 520px;
+}
+
+.floating-card {
+  position: absolute;
+  background: var(--white);
+  border-radius: 16px;
+  padding: 1.4rem;
+  box-shadow: 0 8px 40px rgba(28,58,47,0.1);
+  border: 1px solid var(--tan);
+}
+
+.fc-main {
+  width: 300px;
+  top: 40px;
+  right: 20px;
+}
+
+.fc-small {
+  width: 240px;
+  bottom: 80px;
+  left: 0;
+}
+
+.fc-tiny {
+  width: 220px;
+  top: 200px;
+  right: 0;
+}
+
+.fc-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.8rem;
+  border-radius: 50px;
+  margin-bottom: 0.8rem;
+}
+.fc-badge-terra { background: var(--terra-lt); color: var(--terra); }
+.fc-badge-sage  { background: var(--sage);     color: var(--forest); }
+.fc-badge-tan   { background: var(--tan);       color: var(--muted); }
+
+.fc-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--forest);
+  margin-bottom: 0.4rem;
+  line-height: 1.3;
+}
+
+.fc-meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.fc-tags {
+  margin-top: 0.7rem;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+/* big decorative letter behind */
+.deco-letter {
+  position: absolute;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 28vw;
+  color: rgba(28,58,47,0.03);
+  right: -5%;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  line-height: 1;
+  z-index: 0;
+}
+
+/* ═══════════════════════════════
+   STATS BAR
+═══════════════════════════════ */
+.stats-bar {
+  background: var(--forest);
+  padding: 2.5rem 3rem;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2rem;
+}
+
+.stat-item { border-left: 2px solid rgba(255,224,0,0.25); padding-left: 1.5rem; }
+.stat-item:first-child { border-left: none; padding-left: 0; }
+
+.stat-n {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.8rem;
+  color: var(--yellow);
+  line-height: 1;
+  margin-bottom: 0.3rem;
+}
+
+.stat-l {
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(247,244,239,0.55);
+}
+
+/* ═══════════════════════════════
+   SECTION BASE
+═══════════════════════════════ */
+.section {
+  padding: 6rem 3rem;
+}
+
+.section-header {
+  max-width: 600px;
+  margin-bottom: 3.5rem;
+}
+
+.sec-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--terra);
+  margin-bottom: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.sec-eyebrow::before {
+  content: '';
+  display: block;
+  width: 28px;
+  height: 1.5px;
+  background: var(--terra);
+}
+
+.sec-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(2rem, 3.5vw, 3rem);
+  font-weight: 900;
+  color: var(--forest);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.sec-title em {
+  font-style: italic;
+  color: var(--terra);
+}
+
+.sec-desc {
+  margin-top: 1rem;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+/* ═══════════════════════════════
+   HUBS SECTION — green bg
+═══════════════════════════════ */
+.section-hubs {
+  background: var(--forest);
+  padding: 6rem 3rem;
+}
+
+.section-hubs .sec-title { color: var(--cream); }
+.section-hubs .sec-eyebrow { color: var(--yellow); }
+.section-hubs .sec-eyebrow::before { background: var(--yellow); }
+.section-hubs .sec-desc { color: rgba(247,244,239,0.6); }
+
+.hubs-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
+  margin-top: 3.5rem;
+}
+
+.hub-card {
+  border-radius: 16px;
+  padding: 2rem 1.8rem;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s;
+}
+.hub-card:hover { transform: translateY(-6px); }
+
+.hub-card-1 { background: var(--cream); color: var(--dark); }
+.hub-card-2 { background: #3a7bd5; color: var(--white); }
+.hub-card-3 { background: var(--terra); color: var(--white); }
+.hub-card-4 { background: #145a2e; color: var(--cream); border: 1px solid rgba(255,224,0,0.2); }
+
+.hub-num {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 3rem;
+  opacity: 0.12;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+
+.hub-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.7rem;
+}
+
+.hub-desc {
+  font-size: 0.82rem;
+  line-height: 1.6;
+  opacity: 0.8;
+  flex: 1;
+}
+
+.hub-icon {
+  font-size: 1.4rem;
+  margin-top: 1.5rem;
+}
+
+/* ═══════════════════════════════
+   DISCIPLINES — cream bg
+═══════════════════════════════ */
+.section-discs {
+  background: var(--tan);
+  padding: 5rem 3rem;
+}
+
+.disc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-top: 3rem;
+}
+
+.disc-card {
+  background: var(--white);
+  border-radius: 12px;
+  padding: 2rem;
+  border: 1px solid transparent;
+  transition: all 0.25s;
+  cursor: default;
+}
+.disc-card:hover {
+  border-color: var(--terra);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 32px rgba(200,80,58,0.1);
+}
+
+.disc-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--terra);
+  margin-bottom: 0.6rem;
+}
+
+.disc-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--forest);
+}
+
+.disc-icon {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+/* ═══════════════════════════════
+   PROJETS — white bg
+═══════════════════════════════ */
+.section-projets { background: var(--white); }
+
+.projets-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-top: 3.5rem;
+}
+
+.projet-card {
+  background: var(--cream);
+  border-radius: 16px;
+  padding: 2rem;
+  border: 1px solid var(--tan);
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  transition: all 0.25s;
+  cursor: default;
+}
+.projet-card:hover {
+  border-color: var(--terra);
+  box-shadow: 0 4px 20px rgba(200,80,58,0.08);
+}
+
+.projet-num {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.5rem;
+  color: var(--terra);
+  line-height: 1;
+  opacity: 0.4;
+}
+
+.projet-body {}
+
+.projet-tag {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.8rem;
+  border-radius: 50px;
+  background: var(--terra-lt);
+  color: var(--terra);
+  margin-bottom: 0.7rem;
+}
+
+.projet-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--forest);
+  margin-bottom: 0.4rem;
+  line-height: 1.3;
+}
+
+.projet-detail {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* featured big project */
+.projet-card-featured {
+  grid-column: 1 / -1;
+  background: var(--forest);
+  color: var(--cream);
+  border-color: transparent;
+  grid-template-columns: 80px 1fr auto;
+  align-items: center;
+}
+
+.projet-card-featured .projet-num { color: var(--yellow); opacity: 0.5; font-size: 3rem; }
+.projet-card-featured .projet-name { color: var(--cream); font-size: 1.4rem; }
+.projet-card-featured .projet-detail { color: rgba(247,244,239,0.6); }
+.projet-card-featured .projet-tag { background: rgba(255,224,0,0.15); color: var(--yellow); }
+
+.projet-card-featured .proj-count {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 5rem;
+  color: var(--yellow);
+  opacity: 0.25;
+  line-height: 1;
+}
+
+/* ═══════════════════════════════
+   PARTENAIRES
+═══════════════════════════════ */
+.section-partners {
+  background: var(--cream);
+  padding: 5rem 3rem;
+}
+
+.partners-wrap {
+  margin-top: 3rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.partner-tag {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--forest);
+  background: var(--white);
+  border: 1.5px solid var(--tan);
+  border-radius: 50px;
+  padding: 0.55rem 1.2rem;
+  transition: all 0.2s;
+}
+.partner-tag:hover { border-color: var(--forest); background: var(--sage); }
+
+/* ═══════════════════════════════
+   ÉQUIPE — terra bg
+═══════════════════════════════ */
+.section-equipe {
+  background: var(--terra);
+  padding: 6rem 3rem;
+}
+
+.section-equipe .sec-title { color: var(--white); }
+.section-equipe .sec-title em { color: var(--white); }
+.section-equipe .sec-eyebrow { color: var(--yellow); }
+.section-equipe .sec-eyebrow::before { background: var(--yellow); }
+.section-equipe .sec-desc { color: rgba(255,255,255,0.7); }
+
+.equipe-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
+  margin-top: 3.5rem;
+}
+
+.membre-card {
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 16px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  backdrop-filter: blur(4px);
+  transition: all 0.3s;
+}
+.membre-card:hover {
+  background: rgba(255,255,255,0.2);
+  transform: translateY(-6px);
+}
+
+.avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  margin: 0 auto 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Playfair Display', serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--white);
+  border: 2px solid rgba(255,255,255,0.35);
+}
+
+.membre-name {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 0.98rem;
+  color: var(--white);
+  margin-bottom: 0.4rem;
+  line-height: 1.3;
+}
+
+.membre-role {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: rgba(255,255,255,0.65);
+}
+
+/* ═══════════════════════════════
+   CONTACT / CTA
+═══════════════════════════════ */
+.section-contact {
+  background: var(--forest);
+  padding: 7rem 3rem;
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+}
+
+.section-contact::before {
+  content: 'B';
+  position: absolute;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 50vw;
+  color: rgba(255,224,0,0.025);
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  line-height: 1;
+}
+
+.contact-inner { position: relative; z-index: 2; max-width: 600px; margin: 0 auto; }
+
+.contact-pill {
+  display: inline-block;
+  background: rgba(255,224,0,0.15);
+  color: var(--yellow);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 0.5rem 1.2rem;
+  border-radius: 50px;
+  margin-bottom: 1.5rem;
+  border: 1px solid rgba(255,224,0,0.25);
+}
+
+.contact-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-weight: 900;
+  color: var(--cream);
+  line-height: 1.0;
+  margin-bottom: 1.2rem;
+  letter-spacing: -0.02em;
+}
+.contact-title em { font-style: italic; color: var(--yellow); }
+
+.contact-sub {
+  font-size: 1rem;
+  color: rgba(247,244,239,0.6);
+  margin-bottom: 2.5rem;
+  line-height: 1.6;
+}
+
+.contact-sub a {
+  color: var(--yellow);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.btn-contact {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  background: var(--yellow);
+  color: var(--black);
+  border-radius: 6px;
+  padding: 1rem 2.5rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  transition: all 0.25s;
+}
+.btn-contact:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(255,224,0,0.3); }
+
+/* ═══════════════════════════════
+   FOOTER
+═══════════════════════════════ */
+.footer {
+  background: var(--black);
+  padding: 2.5rem 3rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.footer-logo {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  font-size: 1.2rem;
+  color: var(--cream);
+  opacity: 0.6;
+}
+
+.footer-copy {
+  font-size: 0.75rem;
+  color: rgba(247,244,239,0.35);
+  letter-spacing: 0.06em;
+}
+
+.footer-site {
+  font-size: 0.75rem;
+  color: rgba(247,244,239,0.35);
+  letter-spacing: 0.06em;
+}
+
+/* ═══════════════════════════════
+   RESPONSIVE
+═══════════════════════════════ */
+@media (max-width: 1024px) {
+  .hubs-grid { grid-template-columns: 1fr 1fr; }
+  .disc-grid { grid-template-columns: 1fr 1fr; }
+  .equipe-grid { grid-template-columns: 1fr 1fr; }
+  .projets-grid { grid-template-columns: 1fr; }
+  .projet-card-featured { grid-template-columns: 80px 1fr; }
+  .projet-card-featured .proj-count { display: none; }
+}
+
+@media (max-width: 768px) {
+  .hero { grid-template-columns: 1fr; }
+  .hero-right { display: none; }
+  .stats-bar { grid-template-columns: 1fr 1fr; }
+  .nav-links { display: none; }
+  .section, .section-hubs, .section-discs, .section-projets,
+  .section-partners, .section-equipe, .section-contact { padding-left: 1.5rem; padding-right: 1.5rem; }
+}
+
+/* ═══════════════════════════════
+   ANIMATIONS
+═══════════════════════════════ */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
+}
+
+.hero-pill    { animation: fadeUp 0.6s ease forwards; }
+.hero-h1      { animation: fadeUp 0.6s 0.1s ease both; }
+.hero-desc    { animation: fadeUp 0.6s 0.2s ease both; }
+.hero-btns    { animation: fadeUp 0.6s 0.3s ease both; }
+.hero-flow    { animation: fadeUp 0.6s 0.4s ease both; }
+
+.fc-main  { animation: floatCard 5s ease-in-out infinite; }
+.fc-small { animation: floatCard 6s 1s ease-in-out infinite; }
+.fc-tiny  { animation: floatCard 4.5s 0.5s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<!-- BANNER -->
+<div class="top-banner">
+  <span>✦</span> Plateforme en cours de développement — Lancement bientôt <span>✦</span>
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <a class="nav-logo" href="#">BazaArt</a>
+  <ul class="nav-links">
+    <li><a href="#">Présentation</a></li>
+    <li><a href="#">Projets</a></li>
+    <li><a href="#">L'équipe</a></li>
+    <li><a href="#">Partenaires</a></li>
+  </ul>
+  <div class="nav-actions">
+    <a href="mailto:bonjourbazaart@gmail.com" class="btn-outline">Contact</a>
+    <a href="mailto:bonjourbazaart@gmail.com" class="btn-primary">Rejoindre</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="deco-letter">B</div>
+
+  <div class="hero-left">
+    <div class="hero-pill">
+      <span class="hero-pill-dot"></span>
+      Hub Artistique Pluridisciplinaire · Guadeloupe
+    </div>
+
+    <h1 class="hero-h1">
+      Créer,<br>
+      diffuser,<br>
+      <em>transmettre.</em>
+    </h1>
+
+    <p class="hero-desc">
+      BazaArt est un hub culturel et créatif ancré en Guadeloupe, connectant artistes, structures et territoires — de la Caraïbe vers le monde.
+    </p>
+
+    <div class="hero-btns">
+      <a href="mailto:bonjourbazaart@gmail.com" class="btn-hero-main">
+        Nous contacter →
+      </a>
+      <a href="#projets" class="btn-hero-sec">Voir nos projets</a>
+    </div>
+
+    <div class="hero-flow">
+      <span class="flow-chip">Recherche</span>
+      <span class="flow-chip">Production</span>
+      <span class="flow-chip">Création</span>
+      <span class="flow-chip">Diffusion</span>
+      <span class="flow-chip">Médiation</span>
+    </div>
+  </div>
+
+  <div class="hero-right">
+    <!-- Floating cards like bazaart.fr -->
+    <div class="floating-card fc-main">
+      <span class="fc-badge fc-badge-sage">Résidence</span>
+      <div class="fc-title">Résidence internationale — Brésil 2025</div>
+      <div class="fc-meta">Collectif Masonn · 2 mois<br>Partenaire : Arapuca Arte Cultura</div>
+      <div class="fc-tags">Arts visuels · Musique · Performance</div>
+    </div>
+
+    <div class="floating-card fc-small">
+      <span class="fc-badge fc-badge-terra">Exposition</span>
+      <div class="fc-title">Institut Français d'Abidjan</div>
+      <div class="fc-meta">Côte d'Ivoire — Avril 2025</div>
+    </div>
+
+    <div class="floating-card fc-tiny">
+      <span class="fc-badge fc-badge-tan">Nouveau projet</span>
+      <div class="fc-title">Tiers-lieu en Guadeloupe</div>
+      <div class="fc-meta">En cours de développement</div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS BAR -->
+<div class="stats-bar">
+  <div class="stat-item">
+    <div class="stat-n">+15</div>
+    <div class="stat-l">ans d'activités</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-n">4</div>
+    <div class="stat-l">Territoires d'actions</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-n">+30</div>
+    <div class="stat-l">Projets accompagnés</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-n">6</div>
+    <div class="stat-l">Expositions internationales</div>
+  </div>
+</div>
+
+<!-- NOS HUBS -->
+<section class="section-hubs">
+  <div class="section-header">
+    <div class="sec-eyebrow">Notre structure</div>
+    <h2 class="sec-title">Nos <em>hubs</em></h2>
+    <p class="sec-desc">Quatre espaces complémentaires pour accompagner les artistes à chaque étape de leur parcours.</p>
+  </div>
+  <div class="hubs-grid">
+    <div class="hub-card hub-card-1">
+      <div>
+        <div class="hub-num">01</div>
+        <div class="hub-name">Bazaart Lab</div>
+        <div class="hub-desc">Ingénierie culturelle, études et recherche. Accompagnement sur les enjeux économiques, juridiques et organisationnels via plateforme numérique.</div>
+      </div>
+      <div class="hub-icon">⚗️</div>
+    </div>
+    <div class="hub-card hub-card-2">
+      <div>
+        <div class="hub-num">02</div>
+        <div class="hub-name">Bazaart Studio</div>
+        <div class="hub-desc">Ateliers d'artistes, résidences locales et internationales, accompagnement à la production d'œuvres et de projets artistiques.</div>
+      </div>
+      <div class="hub-icon">🎨</div>
+    </div>
+    <div class="hub-card hub-card-3">
+      <div>
+        <div class="hub-num">03</div>
+        <div class="hub-name">Bazaart Club</div>
+        <div class="hub-desc">Expositions, événements culturels, programmation artistique. Un espace de rencontre entre artistes et publics.</div>
+      </div>
+      <div class="hub-icon">◐</div>
+    </div>
+    <div class="hub-card hub-card-4">
+      <div>
+        <div class="hub-num">04</div>
+        <div class="hub-name">Bazaart Design</div>
+        <div class="hub-desc">Ateliers, workshops, formations professionnelles, actions de médiation et d'éducation artistique.</div>
+      </div>
+      <div class="hub-icon">✦</div>
+    </div>
+  </div>
+</section>
+
+<!-- DISCIPLINES -->
+<section class="section section-discs">
+  <div class="section-header" style="max-width:100%; text-align:center; margin-bottom:0;">
+    <div class="sec-eyebrow" style="justify-content:center;">Champs artistiques</div>
+    <h2 class="sec-title">Pluridisciplinaire <em>par nature</em></h2>
+  </div>
+  <div class="disc-grid">
+    <div class="disc-card">
+      <div class="disc-icon">🖼️</div>
+      <div class="disc-label">01</div>
+      <div class="disc-name">Arts Visuels</div>
+    </div>
+    <div class="disc-card">
+      <div class="disc-icon">🎬</div>
+      <div class="disc-label">02</div>
+      <div class="disc-name">Cinéma</div>
+    </div>
+    <div class="disc-card">
+      <div class="disc-icon">🎵</div>
+      <div class="disc-label">03</div>
+      <div class="disc-name">Musique</div>
+    </div>
+    <div class="disc-card">
+      <div class="disc-icon">🎭</div>
+      <div class="disc-label">04</div>
+      <div class="disc-name">Performance</div>
+    </div>
+  </div>
+</section>
+
+<!-- PROJETS -->
+<section class="section section-projets" id="projets">
+  <div class="section-header">
+    <div class="sec-eyebrow">Portfolio</div>
+    <h2 class="sec-title">Nos projets <em>phares</em></h2>
+    <p class="sec-desc">Résidences, expositions, événements et médiations — une activité intense entre la Caraïbe, l'Afrique et le Brésil.</p>
+  </div>
+  <div class="projets-grid">
+    <!-- Featured -->
+    <div class="projet-card projet-card-featured">
+      <span class="projet-num">01</span>
+      <div class="projet-body">
+        <span class="projet-tag">Résidences Internationales</span>
+        <div class="projet-name">Collectif Masonn — 3 résidences de co-création</div>
+        <div class="projet-detail">Brésil (2024, 2025) · Côte d'Ivoire (2025) — Arts visuels, Musique, Performance</div>
+      </div>
+      <div class="proj-count">3</div>
+    </div>
+
+    <div class="projet-card">
+      <span class="projet-num">02</span>
+      <div class="projet-body">
+        <span class="projet-tag">Expositions</span>
+        <div class="projet-name">6 expositions internationales</div>
+        <div class="projet-detail">Brésil · Côte d'Ivoire · Gorée · Guadeloupe</div>
+      </div>
+    </div>
+
+    <div class="projet-card">
+      <span class="projet-num">03</span>
+      <div class="projet-body">
+        <span class="projet-tag">Événements culturels</span>
+        <div class="projet-name">Awe Party & Arty Afterwork</div>
+        <div class="projet-detail">Paris — 6 éditions · Artistes féminines & illustratrices</div>
+      </div>
+    </div>
+
+    <div class="projet-card">
+      <span class="projet-num">04</span>
+      <div class="projet-body">
+        <span class="projet-tag">Audiovisuel</span>
+        <div class="projet-name">Web-série Reine du Jour</div>
+        <div class="projet-detail">2 saisons · 16 épisodes · Femmes afrodescendantes</div>
+      </div>
+    </div>
+
+    <div class="projet-card">
+      <span class="projet-num">05</span>
+      <div class="projet-body">
+        <span class="projet-tag">En développement</span>
+        <div class="projet-name">Tiers-lieu culturel en Guadeloupe</div>
+        <div class="projet-detail">Espace de création, recherche et transmission — ouverture prochaine</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PARTENAIRES -->
+<section class="section section-partners">
+  <div class="section-header">
+    <div class="sec-eyebrow">Ils nous font confiance</div>
+    <h2 class="sec-title">Nos <em>partenaires</em></h2>
+  </div>
+  <div class="partners-wrap">
+    <span class="partner-tag">Institut Français</span>
+    <span class="partner-tag">Centre National de la Musique</span>
+    <span class="partner-tag">Région Guadeloupe</span>
+    <span class="partner-tag">Département Guadeloupe</span>
+    <span class="partner-tag">Consulat de France · Recife</span>
+    <span class="partner-tag">Saison France-Brésil 2025</span>
+    <span class="partner-tag">Arapuca Arte Cultura</span>
+    <span class="partner-tag">La Manzane</span>
+    <span class="partner-tag">Corsair</span>
+    <span class="partner-tag">Air Caraïbes</span>
+    <span class="partner-tag">Fondation Mémoire de l'Esclavage</span>
+    <span class="partner-tag">Maison des Mondes Africains</span>
+    <span class="partner-tag">Estação Cabo Branco</span>
+    <span class="partner-tag">Sinny & Ooko</span>
+    <span class="partner-tag">Officina Francisco Brennand</span>
+    <span class="partner-tag">Monde en Vues</span>
+  </div>
+</section>
+
+<!-- ÉQUIPE -->
+<section class="section-equipe">
+  <div class="section-header">
+    <div class="sec-eyebrow">Gouvernance collégiale</div>
+    <h2 class="sec-title">L'<em>équipe</em></h2>
+    <p class="sec-desc">Un bureau partagé où chacune porte collectivement les décisions stratégiques, artistiques et opérationnelles.</p>
+  </div>
+  <div class="equipe-grid">
+    <div class="membre-card">
+      <div class="avatar">LC</div>
+      <div class="membre-name">Laure Chanteur</div>
+      <div class="membre-role">Responsable administrative & financière · Coordinatrice</div>
+    </div>
+    <div class="membre-card">
+      <div class="avatar">LB</div>
+      <div class="membre-name">Laetitia Charles-Belamour</div>
+      <div class="membre-role">Directrice artistique · Coordinatrice</div>
+    </div>
+    <div class="membre-card">
+      <div class="avatar">GB</div>
+      <div class="membre-name">Gaelle Charles-Belamour</div>
+      <div class="membre-role">Responsable projets web · Coordinatrice</div>
+    </div>
+    <div class="membre-card">
+      <div class="avatar">WZ</div>
+      <div class="membre-name">Wendie Zahibo</div>
+      <div class="membre-role">Chargée de projets & production · Coordinatrice</div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section class="section-contact">
+  <div class="contact-inner">
+    <div class="contact-pill">✦ Plateforme en cours de développement</div>
+    <h2 class="contact-title">
+      Travaillons<br><em>ensemble.</em>
+    </h2>
+    <p class="contact-sub">
+      Pour toute demande de collaboration, partenariat ou résidence :<br>
+      <a href="mailto:bonjourbazaart@gmail.com">bonjourbazaart@gmail.com</a>
+    </p>
+    <a href="mailto:bonjourbazaart@gmail.com" class="btn-contact">
+      Envoyer un message →
+    </a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-logo">BazaArt</div>
+  <div class="footer-copy">Hub Artistique Pluridisciplinaire · Guadeloupe, Caraïbes</div>
+  <div class="footer-site">© 2025 BazaArt — Site en construction</div>
+</footer>
+
+</body>
+</html>

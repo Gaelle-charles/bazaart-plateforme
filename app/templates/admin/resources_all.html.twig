@@ -1,0 +1,214 @@
+{% extends 'base_admin.html.twig' %}
+
+{% block title %}Toutes les ressources — Admin BazaArt{% endblock %}
+{% block page_title %}Toutes les ressources{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Lien retour */
+    .back-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 13px; color: var(--color-text-muted); text-decoration: none;
+        margin-bottom: 20px;
+    }
+    .back-link:hover { color: var(--color-text); }
+
+    /* Onglets de filtre par statut */
+    .filter-tabs { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
+
+    .filter-tab {
+        display: inline-flex; align-items: center; height: 34px; padding: 0 16px;
+        border-radius: var(--radius-full); font-size: 12px; font-weight: 600;
+        text-decoration: none; border: 1px solid var(--color-border);
+        color: var(--color-text-muted); background: var(--color-white);
+        transition: all 0.15s;
+    }
+    .filter-tab:hover { border-color: var(--color-green); color: var(--color-green); }
+
+    /* Onglet actif */
+    .filter-tab--active {
+        background: var(--color-green); color: white;
+        border-color: var(--color-green);
+    }
+
+    /* Compteur de résultats */
+    .result-count { font-size: 12px; color: var(--color-text-light); margin-bottom: 14px; }
+
+    /* Tableau */
+    .resources-table {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        overflow: hidden; width: 100%;
+    }
+
+    .resources-table table { width: 100%; border-collapse: collapse; }
+
+    .resources-table thead tr {
+        background: var(--color-bg); border-bottom: 2px solid var(--color-border);
+    }
+
+    .resources-table th {
+        padding: 10px 16px; text-align: left;
+        font-size: 10px; font-weight: 700; color: var(--color-text-light);
+        text-transform: uppercase; letter-spacing: 0.06em;
+    }
+
+    .resources-table td {
+        padding: 12px 16px; border-bottom: 1px solid var(--color-border);
+        font-size: 13px; color: var(--color-text);
+    }
+
+    .resources-table tbody tr:last-child td { border-bottom: none; }
+    .resources-table tbody tr:hover { background: var(--color-bg); }
+
+    /* Badges de statut */
+    .status-badge {
+        display: inline-flex; align-items: center; height: 20px; padding: 0 8px;
+        border-radius: var(--radius-full); font-size: 10px; font-weight: 700;
+        white-space: nowrap;
+    }
+    .status-pending   { background: #fff3cd; color: #856404; }
+    .status-published { background: #d4edda; color: #155724; }
+    .status-rejected  { background: #f8d7da; color: #721c24; }
+
+    /* Boutons d'action inline dans le tableau */
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        height: 26px; padding: 0 10px; border: none; border-radius: var(--radius-sm);
+        font-size: 11px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+    }
+    .action-btn-publish { background: #d4edda; color: #155724; }
+    .action-btn-publish:hover { background: #c3e6cb; }
+    .action-btn-reject  { background: #f8d7da; color: #721c24; }
+    .action-btn-reject:hover  { background: #f5c6cb; }
+    .action-btn-reset   { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
+    .action-btn-reset:hover   { border-color: var(--color-green); color: var(--color-green); }
+
+    /* État vide */
+    .empty-state {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); padding: 48px; text-align: center;
+        color: var(--color-text-muted); font-size: 14px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# Lien retour vers le tableau de bord admin #}
+<a href="{{ path('app_admin_dashboard') }}" class="back-link">← Tableau de bord</a>
+
+{# ── Onglets de filtre par statut ── #}
+<div class="filter-tabs">
+    {% for status, label in {'all': 'Toutes', 'pending': 'En attente', 'published': 'Publiées', 'rejected': 'Rejetées'} %}
+        {# L'onglet actif est celui dont le statut correspond au filtre courant #}
+        {% set isActive = (statusFilter == status) or (statusFilter is not defined and status == 'all') %}
+        <a href="{{ path('app_admin_resources_all', status != 'all' ? {status: status} : {}) }}"
+           class="filter-tab {{ isActive ? 'filter-tab--active' : '' }}">
+            {{ label }}
+        </a>
+    {% endfor %}
+</div>
+
+{% if resources is empty %}
+    <div class="empty-state">Aucune ressource.</div>
+{% else %}
+    {# Compteur #}
+    <p class="result-count">{{ resources|length }} ressource{{ resources|length > 1 ? 's' : '' }}</p>
+
+    {# Tableau de toutes les ressources #}
+    <div class="resources-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Titre</th>
+                    <th>Type</th>
+                    <th>Organisation</th>
+                    <th>Statut</th>
+                    <th>Date</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for resource in resources %}
+                    {# Détermination du badge de statut.
+                       Depuis le passage à l'enum ResourceStatus, `resource.status`
+                       est un objet enum (pas une string) : on utilise donc les
+                       helpers `isPending/isPublished/isRejected` de l'entité. #}
+                    {% if resource.isPending %}
+                        {% set badgeClass = 'status-pending' %}
+                        {% set badgeLabel = 'En attente' %}
+                    {% elseif resource.isPublished %}
+                        {% set badgeClass = 'status-published' %}
+                        {% set badgeLabel = 'Publiée' %}
+                    {% else %}
+                        {% set badgeClass = 'status-rejected' %}
+                        {% set badgeLabel = 'Rejetée' %}
+                    {% endif %}
+
+                    <tr>
+                        {# Titre tronqué à 60 caractères #}
+                        <td style="max-width:280px;">
+                            <span style="font-weight:600;">
+                                {{ resource.title|slice(0, 60) }}{{ resource.title|length > 60 ? '...' : '' }}
+                            </span>
+                        </td>
+
+                        {# Type de ressource avec icône #}
+                        <td style="white-space:nowrap; color:var(--color-text-muted);">
+                            {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
+                        </td>
+
+                        {# Nom de l'organisation #}
+                        <td style="color:var(--color-text-muted);">{{ resource.organization ? resource.organization.name : '—' }}</td>
+
+                        {# Badge de statut coloré #}
+                        <td>
+                            <span class="status-badge {{ badgeClass }}">{{ badgeLabel }}</span>
+                        </td>
+
+                        {# Date de création #}
+                        <td style="color:var(--color-text-light); white-space:nowrap;">
+                            {{ resource.createdAt|date('d/m/Y') }}
+                        </td>
+
+                        {# Actions : Publier / Rejeter / Remettre en attente #}
+                        <td>
+                            <div style="display:flex; gap:6px; flex-wrap:nowrap;">
+
+                                {# Bouton Publier — affiché uniquement si pas déjà publiée #}
+                                {% if not resource.isPublished %}
+                                    <form method="post" action="{{ path('app_admin_resource_publish', {id: resource.id}) }}">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                                        <button type="submit" class="action-btn action-btn-publish" title="Publier">✓</button>
+                                    </form>
+                                {% endif %}
+
+                                {# Bouton Rejeter — affiché uniquement si pas déjà rejetée #}
+                                {% if not resource.isRejected %}
+                                    <form method="post" action="{{ path('app_admin_resource_reject', {id: resource.id}) }}"
+                                          onsubmit="return confirm('Rejeter cette ressource ?')">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                                        <button type="submit" class="action-btn action-btn-reject" title="Rejeter">✗</button>
+                                    </form>
+                                {% endif %}
+
+                                {# Bouton Remettre en attente — affiché si publiée ou rejetée #}
+                                {% if not resource.isPending %}
+                                    <form method="post" action="{{ path('app_admin_resource_reset', {id: resource.id}) }}">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                                        <button type="submit" class="action-btn action-btn-reset" title="Remettre en attente">↺</button>
+                                    </form>
+                                {% endif %}
+
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+
+{% endblock %}

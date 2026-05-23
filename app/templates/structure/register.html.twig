@@ -1,0 +1,280 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # structure/register.html.twig — Formulaire de candidature Structure partenaire
+ #
+ # Variables disponibles :
+ #   - orgProfile : OrganizationProfile|null — profil existant pour pré-remplissage
+ #
+ # Ce formulaire crée/met à jour l'OrganizationProfile de l'utilisateur ET
+ # renseigne structureApplicationAt = now() via StructureService::applyAsStructure().
+ #}
+
+{% block title %}Devenir Structure partenaire — BazaArt{% endblock %}
+{% block page_title %}Candidature Structure partenaire{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Contrainte largeur pour les formulaires */
+    .form-container { max-width: 720px; }
+
+    /* Bloc explicatif en haut de page — contexte et attentes */
+    .info-banner {
+        background: var(--color-green-light);
+        border: 1px solid rgba(28, 58, 47, 0.2);
+        border-radius: var(--radius-md);
+        padding: 20px 24px;
+        margin-bottom: 28px;
+    }
+    .info-banner__title {
+        font-family: var(--font-heading);
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--color-green);
+        margin-bottom: 8px;
+    }
+    .info-banner__text {
+        font-size: 13px;
+        line-height: 1.7;
+        color: var(--color-green);
+        opacity: 0.85;
+    }
+    .info-banner__points {
+        margin: 10px 0 0 0;
+        padding-left: 18px;
+        font-size: 13px;
+        color: var(--color-green);
+        opacity: 0.85;
+    }
+    .info-banner__points li { margin-bottom: 4px; }
+
+    /* Bannière "candidature en cours" — avertissement si déjà soumis */
+    .status-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px 20px;
+        border-radius: var(--radius-md);
+        margin-bottom: 24px;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+    .status-banner--pending {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        color: #856404;
+    }
+    .status-banner__icon { font-size: 20px; flex-shrink: 0; }
+
+    /* Section de formulaire dans une carte */
+    .form-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 24px;
+        margin-bottom: 14px;
+    }
+    .form-card__title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 16px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    /* Message flash personnalisé info (bleu) */
+    .flash--info {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+        padding: 12px 16px;
+        border-radius: var(--radius-sm);
+        margin-bottom: 16px;
+        font-size: 13px;
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+
+    {# ── Messages flash info (candidature déjà soumise) ─────────────────────── #}
+    {% for message in app.flashes('info') %}
+        <div class="flash flash--info">{{ message }}</div>
+    {% endfor %}
+
+    {# ── Bannière d'information — contexte et bénéfices ─────────────────────── #}
+    {#
+      Cette bannière est affichée à TOUS les visiteurs de la page,
+      même ceux qui ont déjà une candidature en cours — pour rappel du processus.
+    #}
+    <div class="info-banner">
+        <div class="info-banner__title">Rejoindre le réseau Structure partenaire de BazaArt</div>
+        <p class="info-banner__text">
+            En vous inscrivant comme structure partenaire, vous bénéficiez d'avantages exclusifs :
+        </p>
+        <ul class="info-banner__points">
+            <li><strong>Publication directe</strong> de vos opportunités sans validation manuelle</li>
+            <li><strong>Visibilité accrue</strong> dans l'annuaire des structures partenaires</li>
+            <li><strong>Accès prioritaire</strong> aux outils de mise en relation avec les artistes</li>
+        </ul>
+        <p class="info-banner__text" style="margin-top: 10px;">
+            Votre demande sera examinée par l'équipe BazaArt sous <strong>48h ouvrées</strong>.
+        </p>
+    </div>
+
+    {# ── Bannière si candidature déjà en cours ───────────────────────────────── #}
+    {#
+      On affiche une bannière distincte si l'utilisateur a déjà une candidature
+      en attente. Le formulaire reste visible pour montrer les données soumises,
+      mais le bouton de soumission est désactivé.
+    #}
+    {% if orgProfile is not null and orgProfile.hasPendingStructureApplication() %}
+        <div class="status-banner status-banner--pending">
+            <span class="status-banner__icon">⏳</span>
+            <div>
+                <strong>Votre candidature est en cours d'examen.</strong><br>
+                L'équipe BazaArt traitera votre dossier dans les 48h ouvrées.
+                Vous recevrez un email de confirmation dès qu'une décision sera prise.
+                <br>
+                <small style="opacity: 0.8;">Date de soumission : {{ orgProfile.structureApplicationAt|date('d/m/Y à H:i') }}</small>
+            </div>
+        </div>
+    {% endif %}
+
+    {# ── Formulaire de candidature ────────────────────────────────────────────── #}
+    {#
+      Le formulaire est soumis en POST vers cette même URL (register).
+      Le token CSRF est vérifié côté controller avant tout traitement.
+      Si la candidature est en cours, le bouton est désactivé pour éviter la double soumission.
+    #}
+    <form method="POST" action="{{ path('app_structure_register') }}">
+
+        {# Token CSRF — protège contre les attaques Cross-Site Request Forgery #}
+        <input type="hidden" name="_token" value="{{ csrf_token('structure_register') }}">
+
+        {# ── Section 1 : Informations de la structure (obligatoires) ─────────── #}
+        <div class="form-card">
+            <div class="form-card__title">Informations de la structure *</div>
+
+            <div class="form-group">
+                <label for="name">Nom de la structure *</label>
+                <input type="text"
+                       id="name"
+                       name="name"
+                       required
+                       maxlength="200"
+                       placeholder="Ex: Association Les Arts Vivants, Galerie Moderna..."
+                       value="{{ orgProfile is not null ? orgProfile.name : '' }}">
+                {# Aide : le nom doit être le nom officiel pour faciliter l'identification admin #}
+                <small style="color:var(--color-text-light); margin-top:4px; display:block;">
+                    Utilisez le nom officiel tel qu'il apparaît dans vos statuts.
+                </small>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="contactEmail">Email de contact public *</label>
+                <input type="email"
+                       id="contactEmail"
+                       name="contactEmail"
+                       required
+                       maxlength="180"
+                       placeholder="contact@mastructure.fr"
+                       value="{{ orgProfile is not null ? orgProfile.contactEmail : '' }}">
+                {#
+                  Différent de l'email de connexion : c'est l'email visible publiquement
+                  sur les fiches opportunités soumises par la structure.
+                #}
+                <small style="color:var(--color-text-light); margin-top:4px; display:block;">
+                    Cet email sera visible publiquement sur vos publications. Différent de votre email de connexion.
+                </small>
+            </div>
+        </div>
+
+        {# ── Section 2 : Informations légales (optionnelles) ─────────────────── #}
+        <div class="form-card">
+            <div class="form-card__title">Informations légales</div>
+
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="siret">Numéro SIRET</label>
+                <input type="text"
+                       id="siret"
+                       name="siret"
+                       maxlength="17"
+                       placeholder="123 456 789 01234"
+                       value="{{ orgProfile is not null ? orgProfile.siret : '' }}">
+                {# Le SIRET est optionnel pour les structures étrangères #}
+                <small style="color:var(--color-text-light); margin-top:4px; display:block;">
+                    14 chiffres (format SIREN + NIC). Facultatif pour les structures étrangères.
+                </small>
+            </div>
+        </div>
+
+        {# ── Section 3 : Présentation (optionnelle) ───────────────────────────── #}
+        <div class="form-card">
+            <div class="form-card__title">Présentation de votre structure</div>
+
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description"
+                          name="description"
+                          rows="5"
+                          placeholder="Décrivez la mission de votre structure, vos activités, votre lien avec les arts de la diaspora afro-atlantique...">{{ orgProfile is not null ? orgProfile.description : '' }}</textarea>
+                <small style="color:var(--color-text-light); margin-top:4px; display:block;">
+                    Cette description sera visible dans l'annuaire des structures partenaires.
+                </small>
+            </div>
+
+            <div class="form-group">
+                <label for="websiteUrl">Site web</label>
+                <input type="url"
+                       id="websiteUrl"
+                       name="websiteUrl"
+                       maxlength="255"
+                       placeholder="https://www.mastructure.fr"
+                       value="{{ orgProfile is not null ? orgProfile.websiteUrl : '' }}">
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="location">Localisation</label>
+                <input type="text"
+                       id="location"
+                       name="location"
+                       maxlength="150"
+                       placeholder="Ex: Paris, Martinique, Bruxelles..."
+                       value="{{ orgProfile is not null ? orgProfile.location : '' }}">
+            </div>
+        </div>
+
+        {# ── Bouton de soumission ─────────────────────────────────────────────── #}
+        <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
+
+            {#
+              Le bouton est désactivé si une candidature est déjà en cours.
+              Pourquoi ? Pour éviter la double soumission qui ne ferait que
+              mettre à jour le profil sans changer la date de candidature
+              (le service ne la réinitialise pas si elle est déjà renseignée).
+              L'utilisateur doit attendre la décision admin.
+            #}
+            {% if orgProfile is not null and orgProfile.hasPendingStructureApplication() %}
+                <button type="submit" class="btn btn-primary" disabled
+                        title="Votre candidature est déjà en cours d'examen">
+                    Candidature en attente d'examen
+                </button>
+            {% else %}
+                <button type="submit" class="btn btn-primary">
+                    Soumettre ma candidature
+                </button>
+            {% endif %}
+
+            <a href="{{ path('app_dashboard') }}" class="btn btn-outline">Retour au tableau de bord</a>
+        </div>
+
+    </form>
+
+</div>
+{% endblock %}

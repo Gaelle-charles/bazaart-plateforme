@@ -1,0 +1,223 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Ressources — BazaArt{% endblock %}
+{% block page_title %}Ressources{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    .page-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 20px;
+    }
+
+    /* ── Barre de filtres ── */
+    .filter-bar {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: 16px 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: flex-end;
+        margin-bottom: 20px;
+    }
+
+    .filter-group { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
+    .filter-label { font-size: 10px; font-weight: 600; color: var(--color-text-light); text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .filter-input, .filter-select {
+        height: 36px;
+        padding: 0 10px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        font-family: var(--font-body);
+        font-size: 13px;
+        background: var(--color-input-bg);
+        color: var(--color-text);
+        outline: none;
+    }
+    .filter-input:focus, .filter-select:focus { border-color: var(--color-green); }
+
+    .filter-actions { display: flex; gap: 8px; align-items: flex-end; }
+
+    .btn-filter {
+        height: 36px; padding: 0 16px;
+        background: var(--color-green); color: white;
+        border: none; border-radius: var(--radius-sm);
+        font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font-body);
+    }
+    .btn-filter:hover { opacity: 0.88; }
+
+    .btn-reset {
+        display: inline-flex; align-items: center; height: 36px; padding: 0 14px;
+        border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+        font-size: 13px; color: var(--color-text-muted); text-decoration: none; background: var(--color-white);
+    }
+    .btn-reset:hover { border-color: var(--color-text); color: var(--color-text); }
+
+    .results-count { font-size: 12px; color: var(--color-text-light); margin-bottom: 12px; }
+
+    /* ── Carte ressource ── */
+    .resource-list { display: flex; flex-direction: column; gap: 12px; }
+
+    .resource-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 16px 20px;
+        display: flex; flex-direction: column; gap: 8px;
+        transition: border-color 0.15s;
+    }
+    .resource-card:hover { border-color: var(--color-green); }
+
+    .resource-card__header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+
+    .resource-type-badge {
+        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
+        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
+        background: var(--color-red-light); color: var(--color-red);
+    }
+
+    .deadline-badge { font-size: 11px; color: var(--color-text-light); }
+    .deadline-badge--urgent { color: #856404; background: #fff3cd; padding: 2px 8px; border-radius: var(--radius-full); }
+
+    .resource-card__org { font-size: 12px; color: var(--color-text-light); }
+
+    .resource-card__title {
+        font-size: 15px; font-weight: 600; color: var(--color-text); text-decoration: none;
+    }
+    .resource-card__title:hover { color: var(--color-red); }
+
+    .resource-card__desc { font-size: 13px; color: var(--color-text-muted); line-height: 1.5; }
+
+    .resource-card__footer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+    .discipline-badge {
+        display: inline-flex; align-items: center; height: 20px; padding: 0 8px;
+        border-radius: var(--radius-full); font-size: 10px;
+        background: var(--color-green-light); color: var(--color-green);
+    }
+
+    .location-text { font-size: 12px; color: var(--color-text-light); margin-left: auto; }
+
+    .empty-state {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); padding: 48px; text-align: center; color: var(--color-text-muted);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-toolbar">
+    <a href="{{ path('app_resource_submit') }}" class="btn btn-primary">+ Soumettre une ressource</a>
+</div>
+
+{# ── Filtres ── #}
+<form method="get" class="filter-bar">
+    <div class="filter-group">
+        <label class="filter-label">Recherche</label>
+        <input class="filter-input" type="text" name="q" value="{{ currentSearch }}" placeholder="Titre, mot-clé...">
+    </div>
+    <div class="filter-group">
+        <label class="filter-label">Type</label>
+        <select class="filter-select" name="type">
+            <option value="">Tous les types</option>
+            {% for type in types %}
+                <option value="{{ type.id }}" {{ currentTypeId == type.id ? 'selected' : '' }}>
+                    {{ type.icon ? type.icon ~ ' ' : '' }}{{ type.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="filter-group">
+        <label class="filter-label">Discipline</label>
+        <select class="filter-select" name="discipline">
+            <option value="">Toutes les disciplines</option>
+            {% for discipline in disciplines %}
+                <option value="{{ discipline.id }}" {{ currentDisciplineId == discipline.id ? 'selected' : '' }}>
+                    {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="filter-actions">
+        <button type="submit" class="btn-filter">Filtrer</button>
+        {% if currentSearch or currentTypeId or currentDisciplineId %}
+            <a href="{{ path('app_resource_index') }}" class="btn-reset">Réinitialiser</a>
+        {% endif %}
+    </div>
+</form>
+
+{# ── Résultats ── #}
+{% if resources is empty %}
+    <div class="empty-state">
+        {% if currentSearch or currentTypeId or currentDisciplineId %}
+            <p>Aucune ressource ne correspond à vos critères.</p>
+            <a href="{{ path('app_resource_index') }}" style="color:var(--color-red);font-weight:600;text-decoration:none;">
+                Voir toutes les ressources
+            </a>
+        {% else %}
+            <p>Aucune ressource publiée pour l'instant.</p>
+            <p style="font-size:13px;margin-top:6px;">Soyez le premier à
+                <a href="{{ path('app_resource_submit') }}" style="color:var(--color-red);font-weight:600;text-decoration:none;">soumettre une ressource</a> !
+            </p>
+        {% endif %}
+    </div>
+{% else %}
+    <p class="results-count">
+        {{ resources|length }} ressource{{ resources|length > 1 ? 's' : '' }} trouvée{{ resources|length > 1 ? 's' : '' }}
+    </p>
+
+    <div class="resource-list">
+        {% for resource in resources %}
+            <div class="resource-card">
+
+                <div class="resource-card__header">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <span class="resource-type-badge">
+                            {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
+                        </span>
+                        {% if resource.deadline %}
+                            {% set daysLeft = (resource.deadline.timestamp - "now"|date('U')) // 86400 %}
+                            {% if daysLeft >= 0 %}
+                                <span class="deadline-badge {{ daysLeft < 14 ? 'deadline-badge--urgent' : '' }}">
+                                    📅 {{ daysLeft == 0 ? "Aujourd'hui !" : daysLeft ~ 'j restants' }}
+                                </span>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    {% if resource.organization %}
+                    <span class="resource-card__org">par <strong>{{ resource.organization.name }}</strong></span>
+                    {% endif %}
+                </div>
+
+                <a href="{{ path('app_resource_show', {id: resource.id}) }}" class="resource-card__title">
+                    {{ resource.title }}
+                </a>
+
+                <p class="resource-card__desc">
+                    {{ resource.description|slice(0, 160) }}{{ resource.description|length > 160 ? '...' : '' }}
+                </p>
+
+                <div class="resource-card__footer">
+                    {% for discipline in resource.disciplines %}
+                        <span class="discipline-badge">
+                            {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                        </span>
+                    {% endfor %}
+                    {% if resource.location %}
+                        <span class="location-text">📍 {{ resource.location }}</span>
+                    {% endif %}
+                </div>
+
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% endblock %}

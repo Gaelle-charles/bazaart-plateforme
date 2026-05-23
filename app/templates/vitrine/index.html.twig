@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BazaArt — Hub Artistique Pluridisciplinaire</title>
+
+{# Favicon #}
+<link rel="icon" type="image/svg+xml" href="{{ asset('uploads/logos/favicon.svg') }}">
+
+{# Google Fonts — Playfair Display, Bebas Neue, Inter #}
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+{# CSS vitrine — tout le design est dans ce fichier #}
+{# Le ?v=... force le navigateur à recharger le CSS quand on change la version (cache-busting) #}
+<link rel="stylesheet" href="{{ asset('css/vitrine.css') }}?v=20260508-3">
+
+{# Google Analytics #}
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-T8SSQV9S6X"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-T8SSQV9S6X');
+</script>
+</head>
+<body>
+
+{# ── BANNER ──────────────────────────────────────────── #}
+<div class="top-banner">
+  {# Version desktop — texte complet #}
+  <span class="banner-desktop">
+    <span class="banner-tag">Programmation</span>
+    DIMÉ — Transmettre, créer et faire circuler les mémoires
+    <span class="banner-sep">·</span> Mai 2026
+    <span class="banner-sep">·</span> Paris
+    <span class="banner-sep">·</span>
+    <a href="#dime-programmation" class="banner-link">Voir la programmation</a>
+  </span>
+  {# Version mobile — texte raccourci #}
+  <span class="banner-mobile">
+    <span class="banner-tag">Programmation</span>
+    DIMÉ — Mémoires afro-descendantes
+    <span class="banner-sep">·</span> Mai 2026
+    <span class="banner-sep">·</span>
+    <a href="#dime-programmation" class="banner-link">Voir le programme</a>
+  </span>
+</div>
+
+{# ── NAV ─────────────────────────────────────────────── #}
+<nav class="nav">
+  <a class="nav-logo" href="{{ path('app_home') }}">
+    <img src="{{ asset('uploads/logos/BazaArt-noir.svg') }}" alt="BazaArt" height="24">
+  </a>
+
+  <ul class="nav-links">
+    <li><a href="#presentation">Présentation</a></li>
+    <li><a href="#projets">Projets</a></li>
+    <li><a href="#equipe">L'équipe</a></li>
+    <li><a href="#partenaires">Partenaires</a></li>
+    {# Boutons CTA — visibles uniquement dans le menu mobile (cachés sur desktop via CSS) #}
+    <li class="nav-mobile-actions">
+      <button id="openHaOverlayMobile" class="btn-nav-don">❤ Faire un don</button>
+      <a href="https://www.helloasso.com/associations/bazaart" target="_blank" rel="noopener" class="btn-primary">Rejoindre</a>
+    </li>
+  </ul>
+
+  {# Bouton hamburger — visible uniquement sur mobile (via CSS) #}
+  <button class="nav-hamburger" aria-label="Ouvrir le menu">
+    <span></span>
+    <span></span>
+    <span></span>
+  </button>
+
+  <div class="nav-actions">
+    <button id="openHaOverlay" class="btn-nav-don">❤ Faire un don</button>
+    <a href="https://www.helloasso.com/associations/bazaart" target="_blank" rel="noopener" class="btn-primary">Rejoindre</a>
+  </div>
+</nav>
+
+{# ── HERO ────────────────────────────────────────────── #}
+<section class="hero" id="presentation">
+  {# Lettre décorative en arrière-plan #}
+  <div class="deco-letter">B</div>
+
+  <div class="hero-left">
+    <div class="hero-pill">
+      <span class="hero-pill-dot"></span>
+      Hub Artistique Pluridisciplinaire · Guadeloupe
+    </div>
+
+    <h1 class="hero-h1">
+      Créer,<br>
+      diffuser,<br>
+      <em>transmettre.</em>
+    </h1>
+
+    <p class="hero-desc">
+      BazaArt est un hub culturel et créatif ancré en Guadeloupe, connectant artistes, structures et territoires — de la Caraïbe vers le monde.
+    </p>
+
+    <div class="hero-btns">
+      <a href="mailto:bonjourbazaart@gmail.com" class="btn-hero-main">
+        Nous contacter →
+      </a>
+      <a href="#projets" class="btn-hero-sec">Voir nos projets</a>
+    </div>
+
+    <div class="hero-flow">
+      <span class="flow-chip">Recherche</span>
+      <span class="flow-chip">Production</span>
+      <span class="flow-chip">Création</span>
+      <span class="flow-chip">Diffusion</span>
+      <span class="flow-chip">Médiation</span>
+    </div>
+  </div>
+
+  {# Cartes flottantes — côté droit du hero #}
+  <div class="hero-right">
+
+    {# Cartes texte #}
+    <div class="floating-card fc-main">
+      <span class="fc-badge fc-badge-sage">Résidence</span>
+      <div class="fc-title">Résidence internationale — Brésil 2025</div>
+      <div class="fc-meta">Collectif Masonn · 2 mois<br>Partenaire : Arapuca Arte Cultura</div>
+      <div class="fc-tags">Arts visuels · Musique · Performance</div>
+    </div>
+
+    <div class="floating-card fc-small">
+      <span class="fc-badge fc-badge-terra">Exposition</span>
+      <div class="fc-title">Institut Français d'Abidjan</div>
+      <div class="fc-meta">Côte d'Ivoire — Avril 2025</div>
+    </div>
+
+    <div class="floating-card fc-extra">
+      <span class="fc-badge fc-badge-sage">Résidence</span>
+      <div class="fc-title">Estação Cabo Branco — Brésil</div>
+      <div class="fc-meta">Septembre 2025 – Janvier 2026<br>Saison France-Brésil</div>
+    </div>
+
+    <div class="floating-card fc-tiny">
+      <span class="fc-badge fc-badge-tan">Nouveau projet</span>
+      <div class="fc-title">Tiers-lieu en Guadeloupe</div>
+      <div class="fc-meta">En cours de développement</div>
+    </div>
+
+    {# Cartes photo — style polaroid #}
+    <div class="fc-photo-card fc-photo-1">
+      <img src="/uploads/photos/4A4A9795.jpg" alt="Résidence Brésil 2025">
+      <div class="fc-photo-label">Résidence · Brésil 2025</div>
+    </div>
+
+    <div class="fc-photo-card fc-photo-2">
+      <img src="/uploads/photos/4A4A9818.jpg" alt="Institut Français Abidjan">
+      <div class="fc-photo-label">Abidjan · Avril 2025</div>
+    </div>
+
+    <div class="fc-photo-card fc-photo-3">
+      <img src="/uploads/photos/vlcsnap-2024-08-16-11h01m17s358.png" alt="Estação Cabo Branco">
+      <div class="fc-photo-label">Estação Cabo Branco · 2025</div>
+    </div>
+
+  </div>
+</section>
+
+{# ── ÉVÉNEMENTS ──────────────────────────────────────── #}
+<div style="background: #fff;">
+  <section id="dime-programmation" style="padding: 6rem 3rem;">
+
+    {# Titre de la section #}
+    <div style="margin-bottom: 3.5rem;">
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.8rem;">
+        <div style="width: 32px; height: 1px; background: var(--terra);"></div>
+        <span style="font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--terra); font-weight: 500;">Programmation</span>
+      </div>
+      <h2 class="sec-title">Nos <em>événements</em></h2>
+    </div>
+
+    {# ═══ Grille : 3 événements côte à côte (responsive 1024px → 2 col, 768px → 1 col) ═══ #}
+    <div class="events-duo">
+
+      {# ── SPEED DATING CULTUREL — Événement en cours (Guadeloupe, 30 mai 2026) ── #}
+      <div class="event-block">
+        <span class="event-tag event-tag-live">En cours</span>
+        <span class="event-tag event-tag-location">Guadeloupe</span>
+        <div class="event-main-img">
+          <img src="{{ asset('uploads/photos/affiche_Speed_Dating_insta_fb.jpg') }}" alt="Speed Dating Culturel — affiche">
+        </div>
+
+        <h3 class="event-block-title">Speed Dating Culturel</h3>
+        <p style="font-family: 'Inter', sans-serif; font-size: 13px; color: var(--muted); margin-bottom: 12px;">
+          En partenariat avec <strong style="color: var(--dark); font-weight: 500;">Les Bonnifieurs</strong>, <strong style="color: var(--dark); font-weight: 500;">Loys</strong> et <strong style="color: var(--dark); font-weight: 500;">Annul'Impôts</strong>
+        </p>
+        <p class="event-block-desc">
+          Le <strong>30 mai 2026</strong> en Guadeloupe, une journée professionnelle dédiée aux artistes, auteurs et intermittents du spectacle, autour de la fiscalité et du networking.
+        </p>
+
+        {# Les 2 sous-events (atelier + conférence/speed dating) — même structure que les RDV DIMÉ.
+           cursor:default sur la card car elle n'est pas cliquable globalement (pas d'image à swap). #}
+        <div class="dime-rdv-list">
+          <div class="dime-rdv" style="cursor: default;">
+            <div class="dime-rdv-badge">Atelier</div>
+            <div class="dime-rdv-content">
+              <strong>14h30 à 15h30</strong> · Atelier spécialisé sur la fiscalité des artistes, auteurs et intermittents du spectacle.
+              <br><span class="dime-rdv-lieu">Les Bonnifieurs · Bd de la Pointe Jarry, Guadeloupe</span>
+              {% if date() <= date('2026-05-30 23:59:59') %}
+                <br><a href="https://www.helloasso.com/associations/bazaart/evenements/conference-et-speed-dating-culturel" target="_blank" rel="noopener" class="dime-rdv-btn">Réserver ma place →</a>
+              {% endif %}
+            </div>
+          </div>
+          <div class="dime-rdv" style="cursor: default;">
+            {# Badge plus large via inline style — width:auto pour contenir "Conf. + SD" #}
+            <div class="dime-rdv-badge" style="width: auto; min-width: 90px;">Conf. + SD</div>
+            <div class="dime-rdv-content">
+              {# Deux créneaux en bullet points : conférence puis speed dating #}
+              <ul style="margin: 0 0 0.4rem 0; padding-left: 1.1rem; list-style: disc;">
+                <li><strong>16h à 17h</strong> · Conférence professionnelle</li>
+                <li><strong>17h à 19h</strong> · Speed dating pour rencontrer de nouveaux collaborateurs et bâtir des partenariats artistiques</li>
+              </ul>
+              <span class="dime-rdv-lieu">Les Bonnifieurs · Bd de la Pointe Jarry, Guadeloupe</span>
+              {% if date() <= date('2026-05-30 23:59:59') %}
+                <br><a href="https://www.helloasso.com/associations/bazaart/evenements/conference-et-speed-dating-culturel" target="_blank" rel="noopener" class="dime-rdv-btn">Réserver ma place →</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ── DIMÉ — Événement en cours ── #}
+      <div class="event-block">
+        <span class="event-tag event-tag-live">En cours</span>
+        <span class="event-tag event-tag-location">Paris</span>
+        <div class="event-main-img">
+          <img id="dime-main-img" src="{{ asset('uploads/photos/dimè.png') }}" alt="DIMÉ — Transmettre, créer et faire circuler les mémoires">
+        </div>
+        {# 4 miniatures sous le visuel principal #}
+        <div class="event-thumbnails">
+          <button class="event-thumb active" onclick="switchDimeImg(this, '{{ asset('uploads/photos/dimè.png') }}')">
+            <img src="{{ asset('uploads/photos/dimè.png') }}" alt="Visuel DIMÉ">
+          </button>
+          <button class="event-thumb" onclick="switchDimeImg(this, '{{ asset('uploads/photos/2.png') }}')">
+            <img src="{{ asset('uploads/photos/2.png') }}" alt="Ciné/Talk — 7 mai">
+          </button>
+          <button class="event-thumb" onclick="switchDimeImg(this, '{{ asset('uploads/photos/3.png') }}')">
+            <img src="{{ asset('uploads/photos/3.png') }}" alt="Takeover Rinse — 10 mai">
+          </button>
+          <button class="event-thumb" onclick="switchDimeImg(this, '{{ asset('uploads/photos/4.png') }}')">
+            <img src="{{ asset('uploads/photos/4.png') }}" alt="Atelier — 27 mai">
+          </button>
+        </div>
+
+        {# Descriptif #}
+        <h3 class="event-block-title">DIMÉ — Transmettre, créer et faire circuler les mémoires</h3>
+        <p style="font-family: 'Inter', sans-serif; font-size: 13px; color: var(--muted); margin-bottom: 12px;">
+          <a href="https://www.instagram.com/evokproject__?igsh=MWpvamtxZmd2OGoyNA==" target="_blank" rel="noopener" style="color: var(--terra); text-decoration: underline; text-underline-offset: 3px; font-weight: 500;">Evok Project</a> × Bazaart
+        </p>
+        <p class="event-block-desc">
+          En mai 2026, Evok Project et Bazaart s'associent pour une programmation dédiée aux mémoires afro-descendantes — trois rendez-vous à Paris, avec le soutien de la <a href="https://memoire-esclavage.org/" target="_blank" rel="noopener" style="color: var(--terra); text-decoration: underline; text-underline-offset: 3px; font-weight: 500;">Fondation pour la Mémoire de l'Esclavage</a>.
+        </p>
+
+        {# Les 3 rendez-vous #}
+        <div class="dime-rdv-list">
+          <div class="dime-rdv" data-img="{{ asset('uploads/photos/2.png') }}" onclick="switchDimeFromRdv(this)">
+            <div class="dime-rdv-badge">Ciné/Talk</div>
+            <div class="dime-rdv-content">
+              <strong>7 mai — 19h30</strong> · Projection de <em>Lapo Chapé</em> de Mélissandre Monatus, suivie d'un débat public sur les identités post-esclavagistes en France, 25 ans après la loi Taubira, animé par Kévi Donat, de "Le Paris Noir".
+              <br><span class="dime-rdv-lieu"><a href="https://maisondelaconversation.org/" target="_blank" rel="noopener" style="color: var(--terra); text-decoration: underline; text-underline-offset: 3px;">Maison de la Conversation</a>, 75018 Paris — Gratuit</span>
+              <br><span class="dime-rdv-complet">Complet</span>
+            </div>
+          </div>
+          <div class="dime-rdv" data-img="{{ asset('uploads/photos/3.png') }}" onclick="switchDimeFromRdv(this)">
+            <div class="dime-rdv-badge">Radio</div>
+            <div class="dime-rdv-content">
+              <strong>10 mai — 14h à 20h</strong> · Takeover Rinse France : talks, musique et archives pour faire entendre les voix afro-descendantes. <em>Visibilité. Transmission. Inclusion.</em>
+              <br><span class="dime-rdv-lieu">En direct sur <a href="https://www.rinse.fm/channels/france" target="_blank" rel="noopener" style="color: var(--terra); text-decoration: underline; text-underline-offset: 3px;">rinse.fm</a></span>
+            </div>
+          </div>
+          <div class="dime-rdv" data-img="{{ asset('uploads/photos/4.png') }}" onclick="switchDimeFromRdv(this)">
+            <div class="dime-rdv-badge">Atelier</div>
+            <div class="dime-rdv-content">
+              <strong>27 mai — 15h à 17h</strong> · Ateliers de création artistique parents-enfants avec l'artiste <em>Shadem</em>, autour de la beauté des peaux et des couleurs. À partir de 7 ans.
+              <br><span class="dime-rdv-lieu"><a href="https://maisondelaconversation.org/" target="_blank" rel="noopener" style="color: var(--terra); text-decoration: underline; text-underline-offset: 3px;">Maison de la Conversation</a>, 75018 Paris</span>
+              {% if date() <= date('2026-05-27 23:59:59') %}
+                <br><a href="https://www.helloasso.com/associations/bazaart/evenements/dime-atelier-de-creation-artistique-de-mediation-culturelle" target="_blank" rel="noopener" class="dime-rdv-btn">Réserver ma place →</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ── MANSA × BAZAART — Événement passé (design et wording originaux conservés) ── #}
+      <div class="event-block event-block-past">
+        <span class="event-tag event-tag-past">Passé</span>
+        <span class="event-tag event-tag-location">Guadeloupe</span>
+        <div style="position: relative;">
+          <div class="event-main-img">
+            <img src="{{ asset('uploads/photos/Guadeloupe_Carre.png') }}" alt="Mansa en Guadeloupe — affiche">
+          </div>
+        </div>
+
+        <h3 style="font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; line-height: 1.2; color: var(--forest); margin-bottom: 20px;">
+          Entreprendre, innover et se structurer dans les industries culturelles et créatives en Guadeloupe
+        </h3>
+
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--terra); flex-shrink: 0;"></span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 14px; color: #444;"><strong style="font-weight: 500; color: var(--dark);">Jeudi 16 avril 2026</strong></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--terra); flex-shrink: 0;"></span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 14px; color: #444;">Mémorial ACTe · Pointe-à-Pitre</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--terra); flex-shrink: 0;"></span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 14px; color: #444;">Table ronde 19h–21h · DJ Set 21h–23h</span>
+          </div>
+        </div>
+
+        <p style="font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.75; color: #444;">
+          En partenariat avec MansA – Maison des Mondes Africains, Bazaart vous invite à une table ronde sur la structuration des filières culturelles en Guadeloupe : accès aux financements, mise en réseau régionale, et articulation avec les marchés internationaux. La soirée se prolonge avec un cocktail et DJ set pour favoriser les rencontres.
+        </p>
+      </div>
+
+    </div>
+
+  </section>
+</div>
+
+{# ── NOS HUBS ────────────────────────────────────────── #}
+<section class="section-hubs">
+  <div class="section-header">
+    <div class="sec-eyebrow">Notre structure</div>
+    <h2 class="sec-title">Nos <em>hubs</em></h2>
+    <p class="sec-desc">Trois espaces complémentaires pour accompagner les artistes à chaque étape de leur parcours.</p>
+  </div>
+  <div class="hubs-grid">
+    <div class="hub-card hub-card-1">
+      <div>
+        <div class="hub-num">01</div>
+        <div class="hub-name">Bazaart Lab</div>
+        <div class="hub-desc">Ingénierie culturelle, recherche et accompagnement. Nous outillons les artistes sur les enjeux économiques, juridiques et organisationnels.</div>
+      </div>
+      <div class="hub-icon">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M14 2L25 8.5V21.5L14 28L3 21.5V8.5L14 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          <circle cx="14" cy="15" r="3" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="14" y1="2" x2="14" y2="12" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </div>
+    </div>
+    <div class="hub-card hub-card-2">
+      <div>
+        <div class="hub-num">02</div>
+        <div class="hub-name">Bazaart Studio</div>
+        <div class="hub-desc">Ateliers d'artistes, résidences locales et internationales, accompagnement à la production d'œuvres et de projets artistiques.</div>
+      </div>
+      <div class="hub-icon">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="14" cy="14" r="11" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M9 14 Q11 10 14 14 Q17 18 20 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+          <circle cx="14" cy="6" r="1.5" fill="currentColor"/>
+        </svg>
+      </div>
+    </div>
+    <div class="hub-card hub-card-3">
+      <div>
+        <div class="hub-num">03</div>
+        <div class="hub-name">Bazaart Events</div>
+        <div class="hub-desc">Programmation artistique, expositions et événements culturels. Un espace de rencontre et de rayonnement entre artistes et publics.</div>
+      </div>
+      <div class="hub-icon">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="3" y="7" width="22" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="3" y1="12" x2="25" y2="12" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="9" y1="3" x2="9" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="19" y1="3" x2="19" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="14" cy="19" r="2" fill="currentColor"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+{# ── STATS BAR ───────────────────────────────────────── #}
+<div class="stats-bar">
+  <div class="stat-item">
+    <div class="stat-n">+15</div>
+    <div class="stat-l">ans d'activités</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-n">4</div>
+    <div class="stat-l">Territoires d'actions</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-n">+30</div>
+    <div class="stat-l">Projets accompagnés</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-n">6</div>
+    <div class="stat-l">Expositions internationales</div>
+  </div>
+</div>
+
+{# ── DISCIPLINES ─────────────────────────────────────── #}
+<section class="section section-discs">
+  <div class="section-header" style="max-width:100%; text-align:center; margin-bottom:0;">
+    <div class="sec-eyebrow" style="justify-content:center;">Champs artistiques</div>
+    <h2 class="sec-title">Pluridisciplinaire <em>par nature</em></h2>
+  </div>
+  <div class="disc-grid">
+    <div class="disc-card">
+      <div class="disc-icon">
+        {# Arts visuels — cadre avec pinceau #}
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="3" y="3" width="26" height="20" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="10" cy="11" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+          <polyline points="3,23 10,15 16,20 22,13 29,23" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+          <line x1="8" y1="29" x2="24" y2="29" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="16" y1="23" x2="16" y2="29" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="disc-label">01</div>
+      <div class="disc-name">Arts Visuels</div>
+    </div>
+    <div class="disc-card">
+      <div class="disc-icon">
+        {# Cinéma — bobine de film #}
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="16" cy="16" r="4" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="16" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="16" cy="27" r="2" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="5" cy="16" r="2" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="27" cy="16" r="2" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="8.5" cy="8.5" r="2" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="23.5" cy="23.5" r="2" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="23.5" cy="8.5" r="2" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="8.5" cy="23.5" r="2" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <div class="disc-label">02</div>
+      <div class="disc-name">Cinéma</div>
+    </div>
+    <div class="disc-card">
+      <div class="disc-icon">
+        {# Musique — onde sonore #}
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <line x1="16" y1="4" x2="16" y2="28" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="11" y1="8" x2="11" y2="24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="6" y1="12" x2="6" y2="20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="21" y1="8" x2="21" y2="24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="26" y1="12" x2="26" y2="20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="disc-label">03</div>
+      <div class="disc-name">Musique</div>
+    </div>
+    <div class="disc-card">
+      <div class="disc-icon">
+        {# Performance — silhouette en mouvement #}
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="5" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="16" y1="7.5" x2="16" y2="18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <polyline points="8,12 16,15 24,12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="16,18 11,27" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <polyline points="16,18 21,27" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="disc-label">04</div>
+      <div class="disc-name">Performance</div>
+    </div>
+  </div>
+</section>
+
+{# ── PROJETS ─────────────────────────────────────────── #}
+<section class="section section-projets" id="projets">
+  <div class="section-header">
+    <div class="sec-eyebrow">Portfolio</div>
+    <h2 class="sec-title">Nos projets <em>phares</em></h2>
+    <p class="sec-desc">Résidences, expositions, événements et médiations — une activité intense entre la Caraïbe, l'Afrique et le Brésil.</p>
+  </div>
+  <div class="projets-grid">
+
+    {# Projet mis en avant #}
+    <div class="projet-card projet-card-featured">
+      <span class="projet-num">01</span>
+      <div class="projet-body">
+        <span class="projet-tag">Résidences Internationales</span>
+        <div class="projet-name">Collectif Masonn — 3 résidences de co-création</div>
+        <div class="projet-detail">Brésil (2024, 2025) · Côte d'Ivoire (2025) — Arts visuels, Musique, Performance</div>
+      </div>
+      <div class="proj-count">3</div>
+    </div>
+
+    <div class="projet-card">
+      <span class="projet-num">02</span>
+      <div class="projet-body">
+        <span class="projet-tag">Expositions</span>
+        <div class="projet-name">6 expositions internationales</div>
+        <div class="projet-detail">Brésil · Côte d'Ivoire · Gorée · Guadeloupe</div>
+      </div>
+    </div>
+
+    <div class="projet-card">
+      <span class="projet-num">03</span>
+      <div class="projet-body">
+        <span class="projet-tag">Événements culturels</span>
+        <div class="projet-name">Awe Party & Arty Afterwork</div>
+        <div class="projet-detail">Paris — 6 éditions · Artistes féminines & illustratrices</div>
+      </div>
+    </div>
+
+    <div class="projet-card">
+      <span class="projet-num">04</span>
+      <div class="projet-body">
+        <span class="projet-tag">Audiovisuel</span>
+        <div class="projet-name">Production de contenus audiovisuels</div>
+        <div class="projet-detail">Web-série Reine du Jour · 2 saisons · 16 épisodes · Femmes afrodescendantes</div>
+        <div class="projet-detail">2 vidéos clips pour le collectif Masonn · 2024</div>
+      </div>
+    </div>
+
+    <div class="projet-card">
+      <span class="projet-num">05</span>
+      <div class="projet-body">
+        <span class="projet-tag">Médiation culturelle</span>
+        <div class="projet-name">Actions de médiation culturelle</div>
+        <div class="projet-detail">Ateliers de pratiques artistiques et interventions pédagogiques en partenariat avec des institutions culturelles et éducatives, à destination de publics variés (scolaires, étudiants, adultes et acteurs associatifs) autour de l'image, du collage, de la création contemporaine et des récits culturels afro-diasporiques — en Guadeloupe, au Brésil et en France hexagonale.</div>
+      </div>
+    </div>
+
+    <div class="projet-card">
+      <span class="projet-num">06</span>
+      <div class="projet-body">
+        <span class="projet-tag">Ateliers & Formations</span>
+        <div class="projet-name">Les RDVs FANMTECH</div>
+        <div class="projet-detail">Cycle mensuel d'ateliers et de conférences dédiés aux femmes dans la Tech · 20 éditions sur 2 saisons · Paris & Guadeloupe</div>
+      </div>
+    </div>
+
+    <div class="projet-card">
+      <span class="projet-num">07</span>
+      <div class="projet-body">
+        <span class="projet-tag">En développement</span>
+        <div class="projet-name">Tiers-lieu culturel en Guadeloupe</div>
+        <div class="projet-detail">Espace de création, recherche et transmission — ouverture prochaine</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+{# ── PARTENAIRES ─────────────────────────────────────── #}
+<section class="section section-partners" id="partenaires">
+  <div class="section-header">
+    <div class="sec-eyebrow">Ils nous font confiance</div>
+    <h2 class="sec-title">Nos <em>partenaires</em></h2>
+  </div>
+
+  {# Carrousel infini — la piste est dupliquée pour créer une boucle seamless #}
+  <div class="carousel-wrapper">
+    <div class="carousel-track">
+
+      {# ── Piste 1 (originale) ── #}
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/institut-francais.jpg') }}" alt="Institut Français">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/cnm.png') }}" alt="Centre National de la Musique">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/region-guadeloupe.png') }}" alt="Région Guadeloupe">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/departement-guadeloupe.png') }}" alt="Département Guadeloupe">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/air-caraibes.png') }}" alt="Air Caraïbes">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/maison-mondes-africains.png') }}" alt="Maison des Mondes Africains">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/estacao-cabo-branco.png') }}" alt="Estação Cabo Branco">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/monde-en-vues.png') }}" alt="Monde en Vues">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/officina-brennand.jpg') }}" alt="Officina Francisco Brennand">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/kafes-arawak.png') }}" alt="Les Kafes de l'Arawak">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/partner-1.png') }}" alt="Partenaire">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/partner-2.png') }}" alt="Partenaire">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/partner-3.png') }}" alt="Partenaire">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/partner-4.png') }}" alt="Partenaire">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/partner-5.png') }}" alt="Partenaire">
+      </div>
+      <div class="carousel-item">
+        <img src="{{ asset('images/logos/partner-6.png') }}" alt="Partenaire">
+      </div>
+
+      {# ── Piste 2 (copie — pour la boucle infinie) ── #}
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/institut-francais.jpg') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/cnm.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/region-guadeloupe.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/departement-guadeloupe.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/air-caraibes.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/maison-mondes-africains.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/estacao-cabo-branco.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/monde-en-vues.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/officina-brennand.jpg') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/kafes-arawak.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/partner-1.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/partner-2.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/partner-3.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/partner-4.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/partner-5.png') }}" alt="">
+      </div>
+      <div class="carousel-item" aria-hidden="true">
+        <img src="{{ asset('images/logos/partner-6.png') }}" alt="">
+      </div>
+
+    </div>{# fin .carousel-track #}
+  </div>{# fin .carousel-wrapper #}
+</section>
+
+{# ── ÉQUIPE ──────────────────────────────────────────── #}
+<section class="section-equipe" id="equipe">
+  <div class="section-header">
+    <div class="sec-eyebrow">Gouvernance collégiale</div>
+    <h2 class="sec-title">L'<em>équipe</em></h2>
+    <p class="sec-desc">Un bureau partagé où chacune porte collectivement les décisions stratégiques, artistiques et opérationnelles.</p>
+  </div>
+  <div class="equipe-grid">
+    <div class="membre-card">
+      <div class="avatar">LC</div>
+      <div class="membre-name">Laure Chanteur</div>
+      <div class="membre-role">Responsable administrative & financière · Coordinatrice</div>
+    </div>
+    <div class="membre-card">
+      <div class="avatar">LB</div>
+      <div class="membre-name">Laetitia Charles-Belamour</div>
+      <div class="membre-role">Directrice artistique · Coordinatrice</div>
+    </div>
+    <div class="membre-card">
+      <div class="avatar">GB</div>
+      <div class="membre-name">Gaelle Charles-Belamour</div>
+      <div class="membre-role">Responsable projets web · Coordinatrice</div>
+    </div>
+    <div class="membre-card">
+      <div class="avatar">WZ</div>
+      <div class="membre-name">Wendie Zahibo</div>
+      <div class="membre-role">Chargée de projets & production · Coordinatrice</div>
+    </div>
+  </div>
+</section>
+
+{# ── CONTACT ─────────────────────────────────────────── #}
+<section class="section-contact" id="contact">
+  <div class="contact-inner">
+    <div class="contact-pill">✦ Plateforme en cours de développement</div>
+    <h2 class="contact-title">
+      Travaillons<br><em>ensemble.</em>
+    </h2>
+    <p class="contact-sub">
+      Pour toute demande de collaboration, partenariat ou résidence.
+    </p>
+    <a href="mailto:bonjourbazaart@gmail.com" class="btn-contact">
+      bonjourbazaart@gmail.com →
+    </a>
+  </div>
+</section>
+
+{# ── FOOTER ──────────────────────────────────────────── #}
+<footer class="footer">
+  <div class="footer-logo">
+    <img src="{{ asset('uploads/logos/BazaArt-blanc.svg') }}" alt="BazaArt" height="40">
+  </div>
+  <div class="footer-copy">Hub Artistique Pluridisciplinaire · Guadeloupe, Caraïbes</div>
+  <div class="footer-site">© 2025 BazaArt</div>
+</footer>
+
+{# JS vitrine — scroll reveal, navbar, hamburger #}
+<script src="{{ asset('js/vitrine.js') }}"></script>
+
+{# ── MODAL DON HELLOASSO ──────────────────────────────────────────── #}
+{# Overlay affiché quand l'utilisateur clique sur "Faire un don" #}
+<div id="haWidgetModal" style="
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(15px) brightness(0.5);
+  z-index: 2147483647;
+">
+  {# Bouton de fermeture #}
+  <button id="closeHaWidgetBtn" style="
+    position: absolute;
+    top: 20px;
+    right: 24px;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    font-size: 1.6rem;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  " aria-label="Fermer">✕</button>
+
+  {# Iframe HelloAsso #}
+  <div style="
+    width: min(680px, 95vw);
+    height: min(750px, 90vh);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  ">
+    <iframe
+      id="haWidget"
+      src="https://www.helloasso.com/associations/bazaart/formulaires/2/widget?view=overlay"
+      style="width: 100%; height: 100%; border: none;"
+      title="Faire un don à BazaArt via HelloAsso"
+    ></iframe>
+  </div>
+</div>
+
+<script>
+  // Ouvrir le modal don HelloAsso
+  document.getElementById('openHaOverlay').addEventListener('click', function () {
+    var modal = document.getElementById('haWidgetModal');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden'; // empêche le scroll derrière
+  });
+
+  // Fermer le modal via le bouton ✕
+  document.getElementById('closeHaWidgetBtn').addEventListener('click', function () {
+    document.getElementById('haWidgetModal').style.display = 'none';
+    document.body.style.overflow = '';
+  });
+
+  // Fermer le modal en cliquant sur l'overlay (hors iframe)
+  document.getElementById('haWidgetModal').addEventListener('click', function (e) {
+    if (e.target === this) {
+      this.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+  });
+
+  // Fermer le modal avec la touche Echap
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      document.getElementById('haWidgetModal').style.display = 'none';
+      document.body.style.overflow = '';
+    }
+  });
+</script>
+
+</body>
+</html>

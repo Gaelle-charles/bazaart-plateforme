@@ -1,0 +1,205 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}{{ article.title }} — BazaArt{% endblock %}
+{% block page_title %}Articles{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    .back-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 13px; color: var(--color-text-muted); text-decoration: none; margin-bottom: 20px;
+    }
+    .back-link:hover { color: var(--color-text); }
+
+    /* ── Bannière brouillon ── */
+    .draft-banner {
+        background: #fff3cd; border: 1px solid #ffc107; border-radius: var(--radius-sm);
+        padding: 10px 16px; margin-bottom: 16px;
+        display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+        font-size: 13px; font-weight: 600; color: #856404;
+    }
+
+    /* ── Layout article ── */
+    .article-layout {
+        display: grid;
+        grid-template-columns: 1fr 260px;
+        gap: 20px;
+        align-items: start;
+    }
+
+    /* ── Article principal ── */
+    .article-main {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+    }
+
+    .article-cover {
+        width: 100%; max-height: 320px; object-fit: cover; display: block;
+    }
+
+    .article-body { padding: 28px; }
+
+    .article-title {
+        font-family: var(--font-heading); font-size: 26px; font-weight: 700;
+        color: var(--color-green); line-height: 1.2; margin-bottom: 12px;
+    }
+
+    .article-excerpt {
+        font-size: 15px; color: var(--color-text-muted); line-height: 1.6;
+        font-style: italic; margin-bottom: 16px;
+    }
+
+    /* Auteur + date */
+    .article-meta {
+        display: flex; justify-content: space-between; align-items: center;
+        flex-wrap: wrap; gap: 10px;
+        padding: 14px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border);
+        margin-bottom: 24px;
+    }
+
+    .article-author { display: flex; align-items: center; gap: 10px; }
+
+    .author-avatar {
+        width: 38px; height: 38px; border-radius: 50%;
+        background: var(--color-green); color: white;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 13px; font-weight: 700; flex-shrink: 0;
+    }
+
+    .author-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
+    .article-date { font-size: 11px; color: var(--color-text-light); margin-top: 1px; }
+
+    /* Boutons modifier/supprimer */
+    .article-actions { display: flex; gap: 6px; }
+
+    .btn-edit-sm {
+        display: inline-flex; align-items: center; height: 30px; padding: 0 12px;
+        border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+        font-size: 12px; font-weight: 600; color: var(--color-text-muted); text-decoration: none;
+    }
+    .btn-edit-sm:hover { border-color: var(--color-green); color: var(--color-green); }
+
+    .btn-delete-sm {
+        display: inline-flex; align-items: center; height: 30px; padding: 0 12px;
+        border: 1px solid #f5c6cb; border-radius: var(--radius-sm);
+        font-size: 12px; font-weight: 600; color: #721c24; background: #f8d7da; cursor: pointer;
+        font-family: var(--font-body);
+    }
+    .btn-delete-sm:hover { background: #f5c6cb; }
+
+    /* Contenu de l'article */
+    .article-content {
+        font-size: 14px; line-height: 1.85; color: var(--color-text-muted);
+    }
+
+    /* ── Sidebar ── */
+    .side-card {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        padding: 20px; margin-bottom: 16px;
+    }
+
+    .side-label {
+        font-size: 10px; font-weight: 700; color: var(--color-text-light);
+        text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# Bannière aperçu brouillon #}
+{% if isPreview %}
+    <div class="draft-banner">
+        🔒 Aperçu — Cet article est encore un brouillon (non visible par les autres)
+        <a href="{{ path('app_article_edit', {id: article.id}) }}"
+           style="color:#856404;font-size:12px;text-decoration:underline;">Modifier</a>
+    </div>
+{% endif %}
+
+<a href="{{ path('app_article_index') }}" class="back-link">← Retour aux articles</a>
+
+<div class="article-layout">
+
+    {# ── Article ── #}
+    <div class="article-main">
+        {% if article.coverImagePath %}
+            <img src="{{ asset(article.coverImagePath) }}" alt="{{ article.title }}" class="article-cover">
+        {% endif %}
+
+        <div class="article-body">
+            <h1 class="article-title">{{ article.title }}</h1>
+
+            {% if article.excerpt %}
+                <p class="article-excerpt">{{ article.excerpt }}</p>
+            {% endif %}
+
+            <div class="article-meta">
+                <div class="article-author">
+                    {% if article.author.artistProfile and article.author.artistProfile.avatarPath %}
+                        <img src="{{ asset(article.author.artistProfile.avatarPath) }}"
+                             alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover;">
+                    {% else %}
+                        <div class="author-avatar">{{ article.author.email|first|upper }}</div>
+                    {% endif %}
+                    <div>
+                        <div class="author-name">
+                            {% if article.author.artistProfile %}{{ article.author.artistProfile.displayName }}
+                            {% else %}{{ article.author.email }}{% endif %}
+                        </div>
+                        <div class="article-date">
+                            Publié le {{ (article.publishedAt ?? article.createdAt)|date('d/m/Y') }}
+                            {% if article.updatedAt > article.createdAt %}
+                                · modifié le {{ article.updatedAt|date('d/m/Y') }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if app.user == article.author or is_granted('ROLE_ADMIN') %}
+                    <div class="article-actions">
+                        <a href="{{ path('app_article_edit', {id: article.id}) }}" class="btn-edit-sm">Modifier</a>
+                        <form method="post" action="{{ path('app_article_delete', {id: article.id}) }}"
+                              onsubmit="return confirm('Supprimer définitivement cet article ?')">
+                            <input type="hidden" name="_token" value="{{ csrf_token('article_delete_' ~ article.id) }}">
+                            <button type="submit" class="btn-delete-sm">Supprimer</button>
+                        </form>
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="article-content">{{ article.content|nl2br }}</div>
+        </div>
+    </div>
+
+    {# ── Sidebar ── #}
+    <div>
+        <div class="side-card">
+            <div class="side-label">À propos de l'auteur</div>
+            <div style="display:flex;gap:10px;align-items:center;">
+                {% if article.author.artistProfile and article.author.artistProfile.avatarPath %}
+                    <img src="{{ asset(article.author.artistProfile.avatarPath) }}"
+                         alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+                {% else %}
+                    <div class="author-avatar" style="width:36px;height:36px;font-size:11px;">
+                        {{ article.author.email|first|upper }}
+                    </div>
+                {% endif %}
+                <div>
+                    <div style="font-size:13px;font-weight:600;color:var(--color-text);">
+                        {% if article.author.artistProfile %}{{ article.author.artistProfile.displayName }}
+                        {% else %}{{ article.author.email }}{% endif %}
+                    </div>
+                    <div style="font-size:11px;color:var(--color-text-light);">Artiste</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

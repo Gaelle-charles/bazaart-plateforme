@@ -1,0 +1,207 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Démarrer une conversation avec {{ otherUser.email|split('@')|first }} — BazaArt{% endblock %}
+{% block page_title %}Messages{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── En-tête de section ── */
+    .new-conv-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 28px;
+    }
+    .new-conv-header__back {
+        color: var(--color-text-light);
+        text-decoration: none;
+        font-size: 20px;
+        padding: 4px;
+        border-radius: 4px;
+        transition: background 0.12s;
+    }
+    .new-conv-header__back:hover {
+        background: #f0f0f0;
+        color: var(--color-text);
+    }
+    .new-conv-header__avatar {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: var(--color-orange, #E07A3A);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        font-weight: 700;
+        color: white;
+        flex-shrink: 0;
+    }
+    .new-conv-header__info { }
+    .new-conv-header__title {
+        font-family: var(--font-heading);
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--color-text);
+    }
+    .new-conv-header__subtitle {
+        font-size: 13px;
+        color: var(--color-text-light);
+        margin-top: 2px;
+    }
+
+    /* ── Carte formulaire ── */
+    .new-conv-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 28px;
+        max-width: 640px;
+    }
+
+    .new-conv-card__label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-text);
+        margin-bottom: 8px;
+    }
+
+    .new-conv-card__textarea {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-family: inherit;
+        color: var(--color-text);
+        resize: vertical;
+        min-height: 120px;
+        transition: border-color 0.15s;
+        box-sizing: border-box;
+    }
+    .new-conv-card__textarea:focus {
+        outline: none;
+        border-color: var(--color-red, #C8503A);
+        box-shadow: 0 0 0 3px rgba(200, 80, 58, 0.08);
+    }
+    .new-conv-card__textarea::placeholder {
+        color: var(--color-text-light);
+    }
+
+    .new-conv-card__hint {
+        font-size: 11px;
+        color: var(--color-text-light);
+        margin-top: 6px;
+    }
+
+    /* ── Actions du formulaire ── */
+    .new-conv-card__actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 20px;
+    }
+    .btn-send {
+        padding: 10px 22px;
+        background: var(--color-red, #C8503A);
+        color: white;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .btn-send:hover {
+        background: #a84232;
+    }
+    .btn-cancel {
+        font-size: 13px;
+        color: var(--color-text-light);
+        text-decoration: none;
+        padding: 10px;
+        border-radius: var(--radius-sm);
+        transition: background 0.12s;
+    }
+    .btn-cancel:hover {
+        background: #f0f0f0;
+        color: var(--color-text);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── En-tête ──────────────────────────────────────────────────────────────────── #}
+<div class="new-conv-header">
+    {# Retour vers la liste des messages (ou vers l'annuaire) #}
+    <a href="{{ path('app_messaging_index') }}" class="new-conv-header__back" title="Retour aux messages">
+        ←
+    </a>
+
+    {# Avatar de l'interlocuteur #}
+    <div class="new-conv-header__avatar">
+        {{ otherUser.email|split('@')|first|slice(0, 2)|upper }}
+    </div>
+
+    <div class="new-conv-header__info">
+        <div class="new-conv-header__title">
+            Démarrer une conversation avec {{ otherUser.email|split('@')|first }}
+        </div>
+        <div class="new-conv-header__subtitle">
+            Votre message sera privé et visible uniquement par vous deux.
+        </div>
+    </div>
+</div>
+
+{# ── Formulaire du premier message ────────────────────────────────────────────── #}
+<div class="new-conv-card">
+
+    <form method="POST"
+          action="{{ path('app_messaging_new', { userId: otherUser.id }) }}">
+
+        {#
+            Token CSRF pour la création d'une nouvelle conversation.
+            Un token unique par formulaire — valide 1 heure par défaut dans Symfony.
+        #}
+        <input type="hidden" name="_token" value="{{ csrf_token('messaging_new') }}">
+
+        <label for="message-content" class="new-conv-card__label">
+            Votre message
+        </label>
+
+        <textarea
+            id="message-content"
+            name="content"
+            class="new-conv-card__textarea"
+            placeholder="Écrivez votre premier message à {{ otherUser.email|split('@')|first }}..."
+            rows="5"
+            maxlength="5000"
+            required
+            autofocus></textarea>
+
+        <p class="new-conv-card__hint">
+            Maximum 5 000 caractères. Le contenu est en texte brut (pas de mise en forme).
+        </p>
+
+        <div class="new-conv-card__actions">
+            <button type="submit" class="btn-send">
+                Envoyer le message
+            </button>
+            <a href="{{ path('app_messaging_index') }}" class="btn-cancel">
+                Annuler
+            </a>
+        </div>
+
+    </form>
+
+</div>
+
+{% endblock %}

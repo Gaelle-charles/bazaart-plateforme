@@ -1,0 +1,486 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}{{ thread.title }} — Forum BazaArt{% endblock %}
+{% block page_title %}Forum{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── Breadcrumb ── */
+    .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--color-text-light);
+        margin-bottom: 20px;
+    }
+    .breadcrumb a { color: var(--color-text-light); text-decoration: none; }
+    .breadcrumb a:hover { color: var(--color-red, #C8503A); }
+    .breadcrumb__separator { color: var(--color-border); }
+    .breadcrumb__current {
+        color: var(--color-text);
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 280px;
+    }
+
+    /* ── Post principal (contenu du thread) ── */
+    .thread-post {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        margin-bottom: 12px;
+        overflow: hidden;
+    }
+
+    /* En-tête du post principal */
+    .thread-post__header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-bg, #f8f9fa);
+    }
+
+    .thread-post__title {
+        font-family: var(--font-heading);
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 8px;
+        line-height: 1.3;
+    }
+
+    .thread-post__meta {
+        font-size: 12px;
+        color: var(--color-text-light);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    /* Auteur avec avatar */
+    .thread-post__author {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        color: var(--color-text);
+    }
+
+    /* Badge état du thread */
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .badge--pinned { background: #fff3cd; color: #856404; }
+    .badge--locked { background: #f8d7da; color: #842029; }
+
+    /* Contenu textuel du post */
+    .thread-post__content {
+        padding: 20px;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--color-text);
+        /* Pas de white-space: pre-wrap : le filtre Twig |nl2br gère les sauts de ligne
+           en les convertissant en <br> après avoir échappé le HTML — plus sûr. */
+    }
+
+    /* Actions de modération sur le thread */
+    .thread-post__actions {
+        display: flex;
+        gap: 8px;
+        padding: 12px 20px;
+        border-top: 1px solid var(--color-border);
+        background: var(--color-bg, #f8f9fa);
+    }
+
+    /* Boutons d'action modération */
+    .btn-mod {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        background: var(--color-white);
+        color: var(--color-text);
+        font-size: 12px;
+        cursor: pointer;
+        text-decoration: none;
+        transition: border-color 0.1s, background 0.1s;
+    }
+    .btn-mod:hover { border-color: var(--color-text-light); background: var(--color-bg, #f8f9fa); }
+    .btn-mod--danger:hover { border-color: #dc3545; color: #dc3545; }
+
+    /* ── Section des réponses ── */
+    .replies-section {
+        margin-top: 24px;
+    }
+
+    .replies-section__title {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .replies-count-badge {
+        background: var(--color-border);
+        color: var(--color-text-light);
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    /* ── Bulle de réponse ── */
+    .reply-item {
+        display: flex;
+        gap: 14px;
+        margin-bottom: 12px;
+    }
+
+    /* Avatar de l'auteur de la réponse */
+    .reply-item__avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--color-orange, #E8935A);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        color: white;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .reply-item__body {
+        flex: 1;
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+    }
+
+    .reply-item__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        background: var(--color-bg, #f8f9fa);
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .reply-item__author {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-text);
+    }
+
+    .reply-item__date {
+        font-size: 11px;
+        color: var(--color-text-light);
+    }
+
+    .reply-item__content {
+        padding: 14px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--color-text);
+        /* Idem : |nl2br dans le template gère les sauts de ligne sans white-space: pre-wrap */
+    }
+
+    /* Action "supprimer" sur une réponse */
+    .reply-item__delete {
+        padding: 10px 14px;
+        border-top: 1px solid var(--color-border);
+        background: var(--color-bg, #f8f9fa);
+        text-align: right;
+    }
+
+    /* Réponse marquée comme solution */
+    .reply-item--solution {
+        border-color: #198754;
+    }
+    .reply-item--solution .reply-item__header {
+        background: #d1e7dd;
+    }
+
+    /* ── Formulaire de réponse ── */
+    .reply-form {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 20px;
+        margin-top: 24px;
+    }
+
+    .reply-form__title {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 14px;
+    }
+
+    .reply-form textarea {
+        width: 100%;
+        min-height: 120px;
+        padding: 10px 14px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        font-family: var(--font-body);
+        font-size: 13px;
+        line-height: 1.5;
+        resize: vertical;
+        background: var(--color-input-bg);
+        color: var(--color-text);
+        box-sizing: border-box;
+        transition: border-color 0.15s;
+    }
+    .reply-form textarea:focus {
+        outline: none;
+        border-color: var(--color-green);
+    }
+
+    .reply-form__footer {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 10px;
+    }
+
+    .btn-submit {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 20px;
+        background: var(--color-red, #C8503A);
+        color: white;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .btn-submit:hover { background: #a84232; }
+
+    /* Message "thread verrouillé" */
+    .thread-locked-notice {
+        margin-top: 24px;
+        padding: 16px 20px;
+        background: #f8d7da;
+        border: 1px solid #f5c2c7;
+        border-radius: var(--radius-md);
+        color: #842029;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{# ── Breadcrumb ──────────────────────────────────────────────────────────────── #}
+<nav class="breadcrumb">
+    <a href="{{ path('app_forum_index') }}">Forum</a>
+    <span class="breadcrumb__separator">›</span>
+    <a href="{{ path('app_forum_category', { categorySlug: category.slug }) }}">{{ category.name }}</a>
+    <span class="breadcrumb__separator">›</span>
+    <span class="breadcrumb__current">{{ thread.title }}</span>
+</nav>
+
+{# ── Post principal ──────────────────────────────────────────────────────────── #}
+<article class="thread-post">
+    <div class="thread-post__header">
+        <div>
+            <h2 class="thread-post__title">
+                {{ thread.title }}
+                {# Badges d'état visibles dans l'en-tête #}
+                {% if thread.pinned %}
+                    <span class="badge badge--pinned">📌 Épinglé</span>
+                {% endif %}
+                {% if thread.locked %}
+                    <span class="badge badge--locked">🔒 Verrouillé</span>
+                {% endif %}
+            </h2>
+            <div class="thread-post__meta">
+                <span class="thread-post__author">
+                    {# Initiales de l'auteur comme mini-avatar textuel #}
+                    <span style="background: var(--color-orange, #E8935A); color: white; border-radius: 50%; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700;">
+                        {{ thread.author.email|slice(0, 2)|upper }}
+                    </span>
+                    {{ thread.author.email|split('@')|first }}
+                </span>
+                <span>{{ thread.createdAt|date('d/m/Y à H:i') }}</span>
+                <span>👁 {{ thread.viewsCount }} vue{{ thread.viewsCount > 1 ? 's' : '' }}</span>
+                <span>💬 {{ thread.repliesCount }} réponse{{ thread.repliesCount > 1 ? 's' : '' }}</span>
+            </div>
+        </div>
+    </div>
+
+    {#
+        Contenu du thread.
+        Le filtre |nl2br échappe d'abord le HTML (protection XSS), PUIS convertit
+        les sauts de ligne en <br>. C'est plus sûr que white-space: pre-wrap qui
+        n'échappe rien et rendrait <script>alert(1)</script> si autoescape était désactivé.
+    #}
+    <div class="thread-post__content">{{ thread.content|nl2br }}</div>
+
+    {# ── Actions de modération (admins/modérateurs seulement) ─────────────────── #}
+    {% if canModerate %}
+        <div class="thread-post__actions">
+            {# Épingler/désépingler — réservé aux admins (ForumVoter::FORUM_PIN) #}
+            {% if is_granted('ROLE_ADMIN') %}
+                <form action="{{ path('app_forum_pin', { id: thread.id }) }}" method="post">
+                    <input type="hidden" name="_token" value="{{ csrf_token('forum_pin_' ~ thread.id) }}">
+                    <button type="submit" class="btn-mod" title="{{ thread.pinned ? 'Désépingler' : 'Épingler' }}">
+                        📌 {{ thread.pinned ? 'Désépingler' : 'Épingler' }}
+                    </button>
+                </form>
+            {% endif %}
+
+            {# Verrouiller/déverrouiller — admins et modérateurs (ForumVoter::FORUM_LOCK) #}
+            <form action="{{ path('app_forum_lock', { id: thread.id }) }}" method="post">
+                <input type="hidden" name="_token" value="{{ csrf_token('forum_lock_' ~ thread.id) }}">
+                <button type="submit" class="btn-mod" title="{{ thread.locked ? 'Déverrouiller' : 'Verrouiller' }}">
+                    🔒 {{ thread.locked ? 'Déverrouiller' : 'Verrouiller' }}
+                </button>
+            </form>
+
+            {# Supprimer le thread — admins et modérateurs (ForumVoter::FORUM_DELETE) #}
+            <form action="{{ path('app_forum_delete_thread', { id: thread.id }) }}" method="post"
+                  onsubmit="return confirm('Supprimer ce sujet et toutes ses réponses ? Cette action est irréversible.')">
+                <input type="hidden" name="_token" value="{{ csrf_token('forum_delete_thread_' ~ thread.id) }}">
+                <button type="submit" class="btn-mod btn-mod--danger">
+                    🗑 Supprimer
+                </button>
+            </form>
+        </div>
+    {% elseif is_granted(constant('App\\Security\\Voter\\ForumVoter::FORUM_DELETE'), thread) %}
+        {# L'auteur peut supprimer son propre thread (sans être modérateur) #}
+        <div class="thread-post__actions">
+            <form action="{{ path('app_forum_delete_thread', { id: thread.id }) }}" method="post"
+                  onsubmit="return confirm('Supprimer ce sujet ? Cette action est irréversible.')">
+                <input type="hidden" name="_token" value="{{ csrf_token('forum_delete_thread_' ~ thread.id) }}">
+                <button type="submit" class="btn-mod btn-mod--danger">
+                    🗑 Supprimer mon sujet
+                </button>
+            </form>
+        </div>
+    {% endif %}
+</article>
+
+{# ── Section des réponses ────────────────────────────────────────────────────── #}
+<section class="replies-section" id="replies">
+    <div class="replies-section__title">
+        Réponses
+        <span class="replies-count-badge">{{ replies|length }}</span>
+    </div>
+
+    {% if replies is empty %}
+        <p style="color: var(--color-text-light); font-size: 13px; margin-bottom: 20px;">
+            Aucune réponse pour le moment. Soyez le premier à répondre !
+        </p>
+    {% else %}
+        {# Chaque réponse a une ancre id="reply-{id}" pour les redirections post-création #}
+        {% for reply in replies %}
+            <div class="reply-item{% if reply.solution %} reply-item--solution{% endif %}" id="reply-{{ reply.id }}">
+
+                {# Avatar de l'auteur (initiales) #}
+                <div class="reply-item__avatar">
+                    {{ reply.author.email|slice(0, 2)|upper }}
+                </div>
+
+                <div class="reply-item__body">
+                    <div class="reply-item__header">
+                        <span class="reply-item__author">
+                            {{ reply.author.email|split('@')|first }}
+                            {% if reply.solution %}
+                                <span style="color: #198754; font-size: 11px;">✓ Solution</span>
+                            {% endif %}
+                        </span>
+                        <span class="reply-item__date">
+                            {{ reply.createdAt|date('d/m/Y à H:i') }}
+                            {# Indique si la réponse a été modifiée après sa création #}
+                            {% if reply.updatedAt.timestamp != reply.createdAt.timestamp %}
+                                <em>(modifiée)</em>
+                            {% endif %}
+                        </span>
+                    </div>
+
+                    {# |nl2br : échappe le HTML puis convertit \n en <br> — protection XSS #}
+                    <div class="reply-item__content">{{ reply.content|nl2br }}</div>
+
+                    {# Bouton de suppression de réponse (auteur ou admin/modo) #}
+                    {% if is_granted(constant('App\\Security\\Voter\\ForumVoter::FORUM_DELETE'), reply) %}
+                        <div class="reply-item__delete">
+                            <form action="{{ path('app_forum_delete_reply', { id: reply.id }) }}" method="post"
+                                  onsubmit="return confirm('Supprimer cette réponse ?')"
+                                  style="display: inline;">
+                                <input type="hidden" name="_token" value="{{ csrf_token('forum_delete_reply_' ~ reply.id) }}">
+                                <button type="submit" class="btn-mod btn-mod--danger" style="font-size: 11px;">
+                                    🗑 Supprimer
+                                </button>
+                            </form>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    {% endif %}
+</section>
+
+{# ── Formulaire de réponse ───────────────────────────────────────────────────── #}
+{# canReply est calculé dans le controller : !thread.locked || is_granted(ROLE_MODERATOR) #}
+{% if canReply %}
+    <div class="reply-form" id="reply-form">
+        <div class="reply-form__title">Répondre à ce sujet</div>
+        <form action="{{ path('app_forum_reply', { id: thread.id }) }}" method="post">
+            {# Token CSRF unique par thread pour éviter les attaques de type CSRF #}
+            <input type="hidden" name="_token" value="{{ csrf_token('forum_reply_' ~ thread.id) }}">
+
+            {#
+                Le textarea est vide par défaut.
+                Après un POST, Symfony redirige (redirect-after-post) donc les données POST
+                ne sont pas disponibles ici — app.request.get('content') serait toujours ''.
+                En cas d'erreur de validation, le flash message guide l'utilisateur.
+            #}
+            <textarea name="content"
+                      placeholder="Votre réponse... (minimum 5 caractères)"
+                      minlength="5"
+                      required></textarea>
+
+            <div class="reply-form__footer">
+                <button type="submit" class="btn-submit">
+                    ✉ Publier ma réponse
+                </button>
+            </div>
+        </form>
+    </div>
+{% else %}
+    {# Thread verrouillé — affichage d'un message explicatif #}
+    <div class="thread-locked-notice">
+        🔒
+        <span>Ce sujet est verrouillé. Les nouvelles réponses ne sont pas autorisées.</span>
+    </div>
+{% endif %}
+{% endblock %}

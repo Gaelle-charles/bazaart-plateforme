@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: Inter, sans-serif; margin: 0; padding: 16px; background: #1a1a18; color: #ededed; font-size: 13px; }
+  h2 { font-size: 15px; margin-bottom: 4px; color: #C8A96E; }
+  p { color: #a9a9a9; margin-bottom: 16px; font-size: 12px; }
+  .btn { width: 100%; padding: 10px; background: #C8A96E; color: #1a1200; border: none; border-radius: 6px; font-weight: 700; font-size: 13px; cursor: pointer; margin-top: 8px; }
+  .btn:hover { background: #d4b87a; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-outline { background: transparent; color: #C8A96E; border: 1px solid #C8A96E; margin-top: 6px; }
+  label { display: block; font-size: 11px; color: #a9a9a9; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  select { width: 100%; padding: 7px 8px; background: #222220; border: 1px solid #333; border-radius: 4px; color: #ededed; font-size: 12px; margin-bottom: 12px; }
+  /* Zone de statut — visible pendant ET après la génération */
+  .status {
+    margin-top: 12px;
+    padding: 10px;
+    background: #222220;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #a9a9a9;
+    display: none;
+    line-height: 1.5;
+  }
+  .status.visible { display: block; }
+  .status.success { border-left: 3px solid #C8A96E; color: #C8A96E; }
+  .status.error   { border-left: 3px solid #C0392B; color: #ff6b6b; }
+  .status.running { border-left: 3px solid #555; }
+</style>
+</head>
+<body>
+  <h2>BazaArt Maquettes</h2>
+  <p>Génère les frames de la plateforme BazaArt dans Figma.</p>
+
+  <label>Section à générer</label>
+  <select id="scope">
+    <option value="landing">Accueil seulement — 1 frame (idéal pour commencer)</option>
+    <option value="auth">Auth seulement — 2 frames</option>
+    <option value="app">Application — 7 frames</option>
+    <option value="resources">Ressources — 4 frames</option>
+    <option value="community">Communauté + Articles — 5 frames</option>
+    <option value="admin">Administration — 4 frames</option>
+    <option value="all">Toutes les pages — 21 frames</option>
+  </select>
+
+  <button class="btn" id="btnGenerate" onclick="generate()">Générer les frames</button>
+  <button class="btn btn-outline" onclick="generateTokens()">Générer le Design System</button>
+
+  <!-- Zone de progression — toujours visible après le lancement -->
+  <div class="status running" id="status">En attente…</div>
+
+  <script>
+    var statusEl = document.getElementById('status');
+    var btnEl = document.getElementById('btnGenerate');
+
+    function setStatus(msg, type) {
+      statusEl.textContent = msg;
+      statusEl.className = 'status visible ' + (type || '');
+    }
+
+    function generate() {
+      var scope = document.getElementById('scope').value;
+      var format = 'desktop';
+      // Désactiver le bouton pendant la génération
+      btnEl.disabled = true;
+      setStatus('Chargement des polices...', 'running');
+      parent.postMessage({ pluginMessage: { type: 'generate', scope: scope, format: format } }, '*');
+    }
+
+    function generateTokens() {
+      parent.postMessage({ pluginMessage: { type: 'tokens' } }, '*');
+    }
+
+    window.onmessage = function(e) {
+      var msg = e.data.pluginMessage;
+      if (!msg) return;
+      if (msg.type === 'progress') {
+        setStatus(msg.message, 'running');
+      }
+      if (msg.type === 'done') {
+        btnEl.disabled = false;
+        setStatus('OK : ' + msg.message, 'success');
+      }
+      if (msg.type === 'error') {
+        btnEl.disabled = false;
+        setStatus('ERREUR : ' + msg.message, 'error');
+      }
+    };
+  </script>
+</body>
+</html>

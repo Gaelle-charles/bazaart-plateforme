@@ -1,0 +1,424 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Communauté — BazaArt{% endblock %}
+{% block page_title %}Communauté{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── Layout : fil principal + sidebar ── */
+    .community-layout {
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        gap: 20px;
+        align-items: start;
+    }
+
+    /* ── Formulaire de publication ── */
+    .post-composer {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 20px;
+        margin-bottom: 16px;
+    }
+
+    .post-composer__inner { display: flex; gap: 12px; align-items: flex-start; }
+
+    .composer-textarea {
+        flex: 1;
+        width: 100%;
+        padding: 10px 14px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        font-family: var(--font-body);
+        font-size: 13px;
+        line-height: 1.5;
+        resize: vertical;
+        background: var(--color-input-bg);
+        color: var(--color-text);
+        outline: none;
+        transition: border-color 0.15s;
+    }
+    .composer-textarea:focus { border-color: var(--color-green); }
+
+    .composer-footer {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-top: 8px; padding-left: 44px;
+    }
+    .char-counter { font-size: 11px; color: var(--color-text-light); }
+
+    /* ── Carte post ── */
+    .post-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 20px;
+        margin-bottom: 12px;
+    }
+
+    /* En-tête du post */
+    .post-header {
+        display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;
+    }
+
+    .post-author { display: flex; gap: 10px; align-items: center; }
+
+    .post-avatar {
+        width: 38px; height: 38px; border-radius: 50%;
+        background: var(--color-orange); color: white;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 12px; font-weight: 700; flex-shrink: 0;
+    }
+
+    .post-author-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
+    .post-time { font-size: 11px; color: var(--color-text-light); margin-top: 1px; }
+
+    /* Bouton supprimer */
+    .btn-delete {
+        background: none; border: none; cursor: pointer;
+        color: var(--color-text-light); font-size: 14px; padding: 4px; line-height: 1;
+    }
+    .btn-delete:hover { color: #dc3545; }
+
+    /* Contenu du post */
+    .post-content {
+        font-size: 13px; line-height: 1.7; color: var(--color-text);
+        white-space: pre-wrap; margin-bottom: 14px;
+    }
+
+    /* Barre d'actions : like + commentaires */
+    .post-actions {
+        display: flex; gap: 14px; align-items: center;
+        padding: 10px 0; border-top: 1px solid var(--color-border);
+        border-bottom: 1px solid var(--color-border); margin-bottom: 14px;
+    }
+
+    .like-btn {
+        background: none; border: none; cursor: pointer;
+        display: flex; align-items: center; gap: 5px;
+        font-size: 13px; font-weight: 600; padding: 4px 8px;
+        border-radius: var(--radius-full); transition: background 0.12s;
+        font-family: var(--font-body);
+    }
+    .like-btn:hover { background: var(--color-red-light); }
+
+    .comment-count { font-size: 13px; color: var(--color-text-muted); }
+
+    /* ── Commentaires ── */
+    .comments-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+
+    .comment {
+        display: flex; gap: 8px; align-items: flex-start;
+    }
+
+    .comment-avatar {
+        width: 28px; height: 28px; border-radius: 50%;
+        background: #6c757d; color: white;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+    }
+
+    .comment-bubble {
+        flex: 1; background: var(--color-bg);
+        border-radius: 10px; padding: 8px 12px;
+    }
+
+    .comment-header {
+        display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;
+    }
+
+    .comment-author { font-size: 12px; font-weight: 600; color: var(--color-text); }
+    .comment-date { font-size: 11px; color: var(--color-text-light); }
+    .comment-text { font-size: 12px; line-height: 1.5; color: var(--color-text-muted); white-space: pre-wrap; }
+
+    /* Formulaire commentaire */
+    .comment-form {
+        display: flex; gap: 8px; align-items: center;
+    }
+
+    .comment-input-wrap {
+        flex: 1; display: flex; gap: 6px; align-items: center;
+        background: var(--color-bg); border-radius: var(--radius-full); padding: 4px 4px 4px 12px;
+    }
+
+    .comment-input {
+        flex: 1; border: none; background: transparent; font-size: 12px;
+        outline: none; font-family: var(--font-body); color: var(--color-text);
+    }
+
+    .btn-comment-send {
+        background: var(--color-green); color: white; border: none;
+        border-radius: var(--radius-full); padding: 5px 14px;
+        font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+        font-family: var(--font-body);
+    }
+    .btn-comment-send:hover { opacity: 0.88; }
+
+    /* ── Pagination ── */
+    .pagination {
+        display: flex; justify-content: center; gap: 6px; margin-top: 16px; flex-wrap: wrap;
+    }
+
+    .page-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 34px; height: 34px; padding: 0 10px;
+        border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+        text-decoration: none; border: 1px solid var(--color-border); color: var(--color-text-muted);
+    }
+    .page-btn:hover { border-color: var(--color-green); color: var(--color-green); }
+    .page-btn--active { background: var(--color-green); color: white; border-color: var(--color-green); }
+
+    /* ── Sidebar communauté ── */
+    .side-widget {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        overflow: hidden; margin-bottom: 16px;
+    }
+
+    .side-widget__header {
+        padding: 14px 16px 10px; border-bottom: 1px solid var(--color-border);
+        font-size: 13px; font-weight: 600; color: var(--color-text);
+    }
+
+    .side-widget__body { padding: 14px 16px; font-size: 13px; color: var(--color-text-muted); }
+
+    /* État vide */
+    .empty-feed {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); padding: 48px; text-align: center; color: var(--color-text-muted);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="community-layout">
+
+    {# ── FIL PRINCIPAL ────────────────────────────────────────────────────── #}
+    <div>
+
+        {# Formulaire de publication #}
+        <div class="post-composer">
+            <div class="post-composer__inner">
+                {# Avatar de l'utilisateur connecté #}
+                {% set currentUser = app.user %}
+                {% if currentUser.artistProfile and currentUser.artistProfile.avatarPath %}
+                    <img src="{{ asset(currentUser.artistProfile.avatarPath) }}"
+                         alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+                {% else %}
+                    <div class="post-avatar">{{ currentUser.email|first|upper }}</div>
+                {% endif %}
+
+                <form method="post" action="{{ path('app_post_new') }}" style="flex:1;">
+                    <input type="hidden" name="_token" value="{{ csrf_token('post_new') }}">
+                    <textarea
+                        class="composer-textarea"
+                        name="content"
+                        rows="3"
+                        maxlength="2000"
+                        placeholder="Partagez une actualité, une question, une découverte..."
+                        oninput="document.getElementById('char-count').textContent = this.value.length"></textarea>
+                    <div class="composer-footer">
+                        <span class="char-counter">
+                            <span id="char-count">0</span> / 2000
+                        </span>
+                        <button type="submit" class="btn btn-primary" style="height:34px;font-size:12px;">
+                            Publier
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {# Fil de posts #}
+        {% if posts is empty %}
+            <div class="empty-feed">
+                <p>Aucune publication pour l'instant.</p>
+                <p style="font-size:13px;margin-top:6px;">Soyez le premier à partager quelque chose !</p>
+            </div>
+        {% else %}
+            {% for post in posts %}
+                <div class="post-card" id="post-{{ post.id }}">
+
+                    {# En-tête #}
+                    <div class="post-header">
+                        <div class="post-author">
+                            {% if post.author.artistProfile and post.author.artistProfile.avatarPath %}
+                                <img src="{{ asset(post.author.artistProfile.avatarPath) }}"
+                                     alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+                            {% else %}
+                                <div class="post-avatar">{{ post.author.email|first|upper }}</div>
+                            {% endif %}
+                            <div>
+                                <div class="post-author-name">
+                                    {% if post.author.artistProfile %}{{ post.author.artistProfile.displayName }}
+                                    {% elseif post.author.organizationProfile %}{{ post.author.organizationProfile.name }}
+                                    {% else %}{{ post.author.email }}{% endif %}
+                                </div>
+                                <div class="post-time">
+                                    {% set diff = ("now"|date('U')) - post.createdAt.timestamp %}
+                                    {% if diff < 60 %}À l'instant
+                                    {% elseif diff < 3600 %}Il y a {{ (diff // 60) }}min
+                                    {% elseif diff < 86400 %}Il y a {{ (diff // 3600) }}h
+                                    {% elseif diff < 604800 %}Il y a {{ (diff // 86400) }}j
+                                    {% else %}{{ post.createdAt|date('d/m/Y') }}{% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if app.user == post.author or is_granted('ROLE_ADMIN') %}
+                            <form method="post" action="{{ path('app_post_delete', {id: post.id}) }}"
+                                  onsubmit="return confirm('Supprimer ce post ?')">
+                                <input type="hidden" name="_token" value="{{ csrf_token('post_delete_' ~ post.id) }}">
+                                <button type="submit" class="btn-delete" title="Supprimer">✕</button>
+                            </form>
+                        {% endif %}
+                    </div>
+
+                    {# Contenu #}
+                    <p class="post-content">{{ post.content }}</p>
+
+                    {# Actions #}
+                    <div class="post-actions">
+                        <button class="like-btn"
+                                data-post-id="{{ post.id }}"
+                                data-token="{{ csrf_token('like_' ~ post.id) }}"
+                                data-liked="{{ post.isLikedByUser(app.user) ? '1' : '0' }}"
+                                style="color:{{ post.isLikedByUser(app.user) ? '#e0245e' : 'var(--color-text-muted)' }}">
+                            <span class="like-icon">{{ post.isLikedByUser(app.user) ? '❤️' : '🤍' }}</span>
+                            <span class="like-count">{{ post.likesCount }}</span>
+                        </button>
+
+                        <span class="comment-count">
+                            💬 {{ post.comments|length }} commentaire{{ post.comments|length > 1 ? 's' : '' }}
+                        </span>
+                    </div>
+
+                    {# Commentaires #}
+                    {% if post.comments|length > 0 %}
+                        <div class="comments-list">
+                            {% for comment in post.comments %}
+                                <div class="comment">
+                                    {% if comment.author.artistProfile and comment.author.artistProfile.avatarPath %}
+                                        <img src="{{ asset(comment.author.artistProfile.avatarPath) }}"
+                                             alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;margin-top:2px;">
+                                    {% else %}
+                                        <div class="comment-avatar">{{ comment.author.email|first|upper }}</div>
+                                    {% endif %}
+
+                                    <div class="comment-bubble">
+                                        <div class="comment-header">
+                                            <span class="comment-author">
+                                                {% if comment.author.artistProfile %}{{ comment.author.artistProfile.displayName }}
+                                                {% elseif comment.author.organizationProfile %}{{ comment.author.organizationProfile.name }}
+                                                {% else %}{{ comment.author.email }}{% endif %}
+                                            </span>
+                                            <div style="display:flex;align-items:center;gap:8px;">
+                                                <span class="comment-date">{{ comment.createdAt|date('d/m à H:i') }}</span>
+                                                {% if app.user == comment.author or is_granted('ROLE_ADMIN') %}
+                                                    <form method="post" action="{{ path('app_post_comment_delete', {id: comment.id}) }}"
+                                                          onsubmit="return confirm('Supprimer ce commentaire ?')">
+                                                        <input type="hidden" name="_token" value="{{ csrf_token('comment_delete_' ~ comment.id) }}">
+                                                        <button type="submit" class="btn-delete" style="font-size:11px;">✕</button>
+                                                    </form>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <p class="comment-text">{{ comment.content }}</p>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {# Ajouter un commentaire #}
+                    <form method="post" action="{{ path('app_post_comment', {id: post.id}) }}" class="comment-form">
+                        <input type="hidden" name="_token" value="{{ csrf_token('comment_' ~ post.id) }}">
+                        {% if app.user.artistProfile and app.user.artistProfile.avatarPath %}
+                            <img src="{{ asset(app.user.artistProfile.avatarPath) }}"
+                                 alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+                        {% else %}
+                            <div class="comment-avatar">{{ app.user.email|first|upper }}</div>
+                        {% endif %}
+                        <div class="comment-input-wrap">
+                            <input class="comment-input" type="text" name="content"
+                                   maxlength="1000" placeholder="Écrire un commentaire...">
+                            <button type="submit" class="btn-comment-send">Envoyer</button>
+                        </div>
+                    </form>
+
+                </div>
+            {% endfor %}
+
+            {# Pagination #}
+            {% if totalPages > 1 %}
+                <div class="pagination">
+                    {% if page > 1 %}
+                        <a href="{{ path('app_post_feed', {page: page - 1}) }}" class="page-btn">←</a>
+                    {% endif %}
+                    {% for p in 1..totalPages %}
+                        <a href="{{ path('app_post_feed', {page: p}) }}"
+                           class="page-btn {{ p == page ? 'page-btn--active' : '' }}">{{ p }}</a>
+                    {% endfor %}
+                    {% if page < totalPages %}
+                        <a href="{{ path('app_post_feed', {page: page + 1}) }}" class="page-btn">→</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        {% endif %}
+
+    </div>
+
+    {# ── SIDEBAR ──────────────────────────────────────────────────────────── #}
+    <div>
+        <div class="side-widget">
+            <div class="side-widget__header">À propos de la communauté</div>
+            <div class="side-widget__body">
+                Échangez avec des artistes francophones, partagez vos expériences et découvrez de nouvelles opportunités.
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+<script>
+/**
+ * Gestion des likes sans rechargement de page (requête AJAX).
+ * fetch() envoie un POST au serveur et met à jour l'icône + compteur.
+ */
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.like-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const postId = btn.dataset.postId;
+            const token  = btn.dataset.token;
+
+            const body = new URLSearchParams();
+            body.append('_token', token);
+
+            fetch('/community/post/' + postId + '/like', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString(),
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                btn.querySelector('.like-icon').textContent = data.liked ? '❤️' : '🤍';
+                btn.querySelector('.like-count').textContent = data.count;
+                btn.style.color = data.liked ? '#e0245e' : 'var(--color-text-muted)';
+                btn.dataset.liked = data.liked ? '1' : '0';
+            })
+            .catch(function () {
+                console.error('Erreur lors du like.');
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

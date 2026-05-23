@@ -1,0 +1,256 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Mes messages — BazaArt{% endblock %}
+{% block page_title %}Messages{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── En-tête de section ── */
+    .messaging-header {
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .messaging-header__title {
+        font-family: var(--font-heading);
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--color-text);
+    }
+    .messaging-header__subtitle {
+        font-size: 13px;
+        color: var(--color-text-light);
+        margin-top: 4px;
+    }
+
+    /* ── Liste des conversations ── */
+    .conversations-list {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+    }
+
+    /* Chaque ligne de conversation */
+    .conversation-item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 20px;
+        text-decoration: none;
+        color: var(--color-text);
+        border-bottom: 1px solid var(--color-border);
+        transition: background 0.12s;
+        position: relative;
+    }
+    .conversation-item:last-child {
+        border-bottom: none;
+    }
+    .conversation-item:hover {
+        background: #f8f9fa;
+    }
+
+    /* Conversation avec messages non lus → fond légèrement teinté */
+    .conversation-item--unread {
+        background: #fff9f8;
+    }
+
+    /* Avatar de l'interlocuteur */
+    .conv-avatar {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: var(--color-orange, #E07A3A);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 700;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    /* Zone de texte (nom + extrait) */
+    .conv-body {
+        flex: 1;
+        min-width: 0; /* nécessaire pour que text-overflow: ellipsis fonctionne dans un flex */
+    }
+    .conv-body__name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--color-text);
+        margin-bottom: 3px;
+    }
+    .conv-body__preview {
+        font-size: 12px;
+        color: var(--color-text-light);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+    /* Nom en gras si messages non lus */
+    .conversation-item--unread .conv-body__name {
+        color: var(--color-red, #C8503A);
+    }
+
+    /* Zone droite : date + badge */
+    .conv-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+        flex-shrink: 0;
+    }
+    .conv-meta__date {
+        font-size: 11px;
+        color: var(--color-text-light);
+    }
+
+    /* Badge "N messages non lus" */
+    .badge-unread {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+        background: var(--color-red, #C8503A);
+        color: white;
+        font-size: 11px;
+        font-weight: 700;
+        border-radius: 10px;
+    }
+
+    /* ── État vide ── */
+    .messaging-empty {
+        text-align: center;
+        padding: 64px 24px;
+        color: var(--color-text-light);
+    }
+    .messaging-empty__icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+    .messaging-empty__text {
+        font-size: 15px;
+        margin-bottom: 20px;
+    }
+    .messaging-empty__link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 18px;
+        background: var(--color-red, #C8503A);
+        color: white;
+        border-radius: var(--radius-sm);
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 600;
+        transition: background 0.15s;
+    }
+    .messaging-empty__link:hover {
+        background: #a84232;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── En-tête ──────────────────────────────────────────────────────────────────── #}
+<div class="messaging-header">
+    <div>
+        <h2 class="messaging-header__title">Mes messages</h2>
+        <p class="messaging-header__subtitle">
+            Vos conversations privées avec les membres de la communauté.
+        </p>
+    </div>
+</div>
+
+{# ── Liste des conversations ──────────────────────────────────────────────────── #}
+{% if conversations is empty %}
+
+    {# Aucune conversation — invite à en démarrer une #}
+    <div class="conversations-list">
+        <div class="messaging-empty">
+            <div class="messaging-empty__icon">✉</div>
+            <p class="messaging-empty__text">
+                Vous n'avez pas encore de conversation.<br>
+                Démarrez un échange avec un artiste de l'annuaire !
+            </p>
+            {# Lien vers l'annuaire artistes pour trouver un interlocuteur #}
+            <a href="{{ path('app_artist_profile_directory') }}" class="messaging-empty__link">
+                Parcourir l'annuaire artistes
+            </a>
+        </div>
+    </div>
+
+{% else %}
+
+    <div class="conversations-list">
+        {% for conversation in conversations %}
+
+            {# Récupère l'interlocuteur (l'autre participant, pas l'utilisateur courant) #}
+            {% set otherUser = conversation.getOtherParticipant(currentUser) %}
+
+            {# Nombre de messages non lus pour cette conversation #}
+            {% set unread = unreadCounts[conversation.id] ?? 0 %}
+
+            {# Lien vers le fil de la conversation #}
+            <a href="{{ path('app_messaging_show', { id: conversation.id }) }}"
+               class="conversation-item {% if unread > 0 %}conversation-item--unread{% endif %}">
+
+                {# Avatar avec les initiales de l'interlocuteur #}
+                <div class="conv-avatar">
+                    {# On prend les 2 premières lettres de la partie avant l'@ de l'email #}
+                    {{ otherUser ? (otherUser.email|split('@')|first|slice(0, 2)|upper) : '?' }}
+                </div>
+
+                {# Nom et aperçu du dernier message #}
+                <div class="conv-body">
+                    <div class="conv-body__name">
+                        {# Affiche la partie avant l'@ de l'email comme nom d'usage #}
+                        {{ otherUser ? otherUser.email|split('@')|first : 'Utilisateur inconnu' }}
+                    </div>
+                    {#
+                        On n'affiche pas le dernier message ici pour éviter une requête
+                        supplémentaire par conversation. En V2, on pourrait dénormaliser
+                        lastMessageContent dans l'entité Conversation.
+                        Pour l'instant, on affiche la date uniquement.
+                    #}
+                    <div class="conv-body__preview">
+                        {% if conversation.lastMessageAt %}
+                            Dernière activité le {{ conversation.lastMessageAt|date('d/m/Y à H:i') }}
+                        {% else %}
+                            Conversation démarrée le {{ conversation.createdAt|date('d/m/Y') }}
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# Date et badge de non-lus #}
+                <div class="conv-meta">
+                    <span class="conv-meta__date">
+                        {# Affiche la date du dernier message ou de création #}
+                        {% if conversation.lastMessageAt %}
+                            {{ conversation.lastMessageAt|date('d/m') }}
+                        {% else %}
+                            {{ conversation.createdAt|date('d/m') }}
+                        {% endif %}
+                    </span>
+                    {% if unread > 0 %}
+                        {# Badge rouge avec le nombre de messages non lus #}
+                        <span class="badge-unread">{{ unread }}</span>
+                    {% endif %}
+                </div>
+
+            </a>
+
+        {% endfor %}
+    </div>
+
+{% endif %}
+
+{% endblock %}

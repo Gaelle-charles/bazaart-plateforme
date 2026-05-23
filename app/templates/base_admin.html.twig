@@ -1,0 +1,381 @@
+{% extends 'base.html.twig' %}
+
+{#
+ # base_admin.html.twig — Layout réservé aux pages d'administration
+ #
+ # Différent de base_app.html.twig (dashboard utilisateur) :
+ # - Sidebar sombre (ardoise) avec navigation admin uniquement
+ # - Badge ADMIN visible
+ # - Pas de navigation utilisateur (profil, communauté, etc.)
+ #
+ # UTILISATION :
+ # {% extends 'base_admin.html.twig' %}
+ # {% block page_title %}Ma page admin{% endblock %}
+ # {% block content %}...{% endblock %}
+ #}
+
+{% block stylesheets %}
+<style>
+    /* ── Variables couleurs admin ──────────────────────────────────────── */
+    :root {
+        --admin-sidebar-bg:    #1a1f2e;   /* fond sidebar — ardoise foncé */
+        --admin-sidebar-dark:  #13172280;  /* séparateurs */
+        --admin-sidebar-text:  #c8cdd8;   /* texte normal */
+        --admin-sidebar-muted: #5c6070;   /* labels sections */
+        --admin-accent:        #c8503a;   /* rouge BazaArt */
+        --admin-accent-light:  rgba(200, 80, 58, 0.12);
+    }
+
+    body { background: #f4f5f7; }
+
+    .app-layout {
+        display: flex;
+        min-height: 100vh;
+    }
+
+    /* ── Sidebar admin ──────────────────────────────────────────────────── */
+    .sidebar {
+        width: 240px;
+        min-height: 100vh;
+        background: var(--admin-sidebar-bg);
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 100;
+    }
+
+    /* En-tête sidebar */
+    .sidebar__logo {
+        padding: 20px 24px 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .sidebar__logo-wordmark {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .sidebar__logo-title {
+        font-family: var(--font-heading);
+        font-size: 18px;
+        color: #fff;
+        font-weight: 700;
+    }
+
+    /* Badge ADMIN à côté du logo */
+    .sidebar__admin-badge {
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        background: var(--admin-accent);
+        color: #fff;
+        padding: 2px 7px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        margin-top: 2px;
+    }
+
+    /* Navigation */
+    .sidebar__nav {
+        padding: 16px 0;
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .sidebar__section-title {
+        font-size: 9px;
+        font-weight: 700;
+        color: var(--admin-sidebar-muted);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        padding: 12px 24px 5px;
+    }
+
+    /* Lien de navigation */
+    .sidebar__link {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 20px;
+        font-size: 13px;
+        color: var(--admin-sidebar-text);
+        text-decoration: none;
+        transition: background 0.12s;
+        position: relative;
+    }
+    .sidebar__link:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: #fff;
+    }
+
+    /* Lien actif */
+    .sidebar__link--active {
+        background: var(--admin-accent-light);
+        color: #e8896e;
+        font-weight: 600;
+    }
+    .sidebar__link--active::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: var(--admin-accent);
+        border-radius: 0 2px 2px 0;
+    }
+
+    /* Badge rouge (ex: nombre de ressources en attente) */
+    .sidebar__count {
+        margin-left: auto;
+        background: var(--admin-accent);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 5px;
+    }
+
+    .sidebar__icon { font-size: 13px; width: 18px; text-align: center; }
+
+    /* Séparateur */
+    .sidebar__divider {
+        border: none;
+        border-top: 1px solid rgba(255,255,255,0.06);
+        margin: 8px 20px;
+    }
+
+    /* Zone utilisateur en bas */
+    .sidebar__user {
+        padding: 14px 16px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--admin-accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .sidebar__user-name {
+        font-size: 12px;
+        font-weight: 600;
+        color: #fff;
+    }
+    .sidebar__user-role {
+        font-size: 10px;
+        color: var(--admin-sidebar-muted);
+    }
+
+    /* ── Zone principale ────────────────────────────────────────────────── */
+    .app-main {
+        margin-left: 240px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+    }
+
+    /* Topbar */
+    .topbar {
+        height: 56px;
+        background: #fff;
+        border-bottom: 1px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 28px;
+        position: sticky;
+        top: 0;
+        z-index: 50;
+    }
+
+    .topbar__title {
+        font-family: var(--font-heading);
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--color-text);
+    }
+
+    /* Lien "Voir l'app" dans la topbar */
+    .topbar__link {
+        font-size: 12px;
+        color: var(--admin-sidebar-muted);
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        transition: color 0.15s;
+    }
+    .topbar__link:hover { color: var(--color-text); }
+
+    /* Contenu */
+    .app-content {
+        padding: 28px;
+        flex: 1;
+    }
+
+    /* Messages flash */
+    .flash {
+        padding: 12px 16px;
+        border-radius: var(--radius-sm);
+        margin-bottom: 16px;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    .flash--success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .flash--error   { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .flash--info    { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="app-layout">
+
+    {# ── SIDEBAR ADMIN ─────────────────────────────────────────────────────── #}
+    <aside class="sidebar">
+
+        {# Logo + badge admin #}
+        <div class="sidebar__logo">
+            <div class="sidebar__logo-wordmark">
+                <span class="sidebar__logo-title">BazaArt</span>
+                <span class="sidebar__admin-badge">Admin</span>
+            </div>
+        </div>
+
+        {# Navigation admin #}
+        <nav class="sidebar__nav">
+
+            <div class="sidebar__section-title">Tableau de bord</div>
+
+            <a href="{{ path('app_admin_dashboard') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_admin_dashboard' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">⊞</span> Vue d'ensemble
+            </a>
+
+            <hr class="sidebar__divider">
+            <div class="sidebar__section-title">Gestion</div>
+
+            {# Utilisateurs #}
+            <a href="{{ path('app_admin_users') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_admin_users' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">👥</span> Utilisateurs
+            </a>
+
+            {# Articles #}
+            <a href="{{ path('app_article_index') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_article' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">📝</span> Articles
+            </a>
+
+            {# Opportunités (ressources publiées) #}
+            <a href="{{ path('app_admin_resources_all', {status: 'published'}) }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_admin_resources_all' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">◈</span> Opportunités
+            </a>
+
+            {# Opportunités scrapées (depuis Google Sheets) #}
+            <a href="{{ path('app_admin_scraped_opportunities') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_admin_scraped_opportunities' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">🔍</span> Scraping Sheets
+            </a>
+
+            {# File de modération #}
+            <a href="{{ path('app_admin_resources_pending') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_admin_resources_pending' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">📋</span> Modération
+                {# Affiche le nombre en attente si disponible via la variable globale #}
+            </a>
+
+            {# Structures partenaires — candidatures à valider #}
+            <a href="{{ path('app_admin_structures_pending') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_admin_structure' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">🏛</span> Structures
+            </a>
+
+            <hr class="sidebar__divider">
+            <div class="sidebar__section-title">Liens rapides</div>
+
+            {# Voir la vitrine publique #}
+            <a href="{{ path('app_home') }}" target="_blank"
+               class="sidebar__link">
+                <span class="sidebar__icon">🌐</span> Voir la vitrine
+            </a>
+
+            {# Voir le dashboard utilisateur #}
+            <a href="{{ path('app_dashboard') }}"
+               class="sidebar__link">
+                <span class="sidebar__icon">↩</span> App utilisateur
+            </a>
+
+        </nav>
+
+        {# Zone utilisateur #}
+        <div class="sidebar__user">
+            {% if app.user %}
+                {% set initials = app.user.email|slice(0, 2)|upper %}
+                <div class="avatar">{{ initials }}</div>
+                <div>
+                    <div class="sidebar__user-name">{{ app.user.email|split('@')|first }}</div>
+                    <div class="sidebar__user-role">Administrateur</div>
+                </div>
+                <a href="{{ path('app_logout') }}"
+                   style="margin-left:auto; font-size:18px; color:var(--admin-sidebar-muted); text-decoration:none;"
+                   title="Se déconnecter">⎋</a>
+            {% endif %}
+        </div>
+
+    </aside>
+
+    {# ── ZONE PRINCIPALE ───────────────────────────────────────────────────── #}
+    <div class="app-main">
+
+        {# Topbar #}
+        <div class="topbar">
+            <h1 class="topbar__title">{% block page_title %}{% endblock %}</h1>
+            <a href="{{ path('app_home') }}" class="topbar__link" target="_blank">
+                ↗ Voir la vitrine
+            </a>
+        </div>
+
+        {# Contenu #}
+        <div class="app-content">
+
+            {% for message in app.flashes('success') %}
+                <div class="flash flash--success">{{ message }}</div>
+            {% endfor %}
+            {% for message in app.flashes('error') %}
+                <div class="flash flash--error">{{ message }}</div>
+            {% endfor %}
+            {% for message in app.flashes('info') %}
+                <div class="flash flash--info">{{ message }}</div>
+            {% endfor %}
+
+            {% block content %}{% endblock %}
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

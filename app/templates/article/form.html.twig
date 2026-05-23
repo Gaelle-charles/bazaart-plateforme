@@ -1,0 +1,156 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}{{ article ? "Modifier l'article" : 'Écrire un article' }} — BazaArt{% endblock %}
+{% block page_title %}{{ article ? "Modifier l'article" : 'Écrire un article' }}{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Contrainte de largeur pour l'éditeur */
+    .editor-container { max-width: 800px; }
+
+    /* Section de formulaire dans une carte */
+    .form-card {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        padding: 24px; margin-bottom: 14px;
+    }
+
+    .form-card__title {
+        font-size: 13px; font-weight: 700; color: var(--color-text);
+        margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--color-border);
+    }
+
+    /* Champ titre plus grand */
+    #title {
+        font-size: 18px; font-weight: 600; padding: 10px 14px;
+    }
+
+    /* Zone de contenu plus haute */
+    #content { min-height: 320px; resize: vertical; }
+
+    /* Aperçu de l'image de couverture actuelle */
+    .cover-preview {
+        width: 100%; max-height: 200px; object-fit: cover;
+        border-radius: var(--radius-sm); margin-bottom: 12px; display: block;
+    }
+
+    /* Bouton brouillon (style secondaire) */
+    .btn-draft {
+        display: inline-flex; align-items: center; height: 40px; padding: 0 20px;
+        border: 2px solid var(--color-border); border-radius: var(--radius-sm);
+        background: var(--color-white); color: var(--color-text);
+        font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font-body);
+        transition: border-color 0.15s;
+    }
+    .btn-draft:hover { border-color: var(--color-green); color: var(--color-green); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="editor-container">
+
+    {# Message d'erreur éventuel #}
+    {% if error %}
+        <div class="flash flash-error">{{ error }}</div>
+    {% endif %}
+
+    {# enctype="multipart/form-data" obligatoire pour l'upload de l'image de couverture #}
+    <form method="post" enctype="multipart/form-data">
+
+        {# ── Titre de l'article ── #}
+        <div class="form-card">
+            <div class="form-group" style="margin:0;">
+                <label for="title">Titre *</label>
+                <input type="text" id="title" name="title" required maxlength="255"
+                       value="{{ formData['title'] ?? article.title ?? '' }}"
+                       placeholder="Donnez un titre accrocheur à votre article">
+            </div>
+        </div>
+
+        {# ── Accroche (résumé court) ── #}
+        <div class="form-card">
+            <div class="form-group" style="margin:0;">
+                <label for="excerpt">
+                    Accroche
+                    <small style="font-weight:normal; color:var(--color-text-light);">
+                        (résumé court affiché dans les listes — optionnel)
+                    </small>
+                </label>
+                <textarea id="excerpt" name="excerpt" rows="2" maxlength="400"
+                          placeholder="Une phrase ou deux pour donner envie de lire l'article...">{{ formData['excerpt'] ?? article.excerpt ?? '' }}</textarea>
+            </div>
+        </div>
+
+        {# ── Contenu principal ── #}
+        <div class="form-card">
+            <div class="form-group" style="margin:0;">
+                <label for="content">Contenu *</label>
+                {# Zone de texte longue : les sauts de ligne sont respectés à l'affichage #}
+                <textarea id="content" name="content" rows="18" required
+                          placeholder="Rédigez votre article ici...
+
+Les sauts de ligne seront respectés à l'affichage.">{{ formData['content'] ?? article.content ?? '' }}</textarea>
+                <small style="color:var(--color-text-light); display:block; margin-top:6px;">
+                    Les retours à la ligne sont respectés à l'affichage. Pas besoin de HTML.
+                </small>
+            </div>
+        </div>
+
+        {# ── Image de couverture ── #}
+        <div class="form-card">
+            <div class="form-card__title">Image de couverture</div>
+
+            {# Aperçu de l'image actuelle si elle existe #}
+            {% if article and article.coverImagePath %}
+                <img src="{{ asset(article.coverImagePath) }}"
+                     alt="Couverture actuelle"
+                     class="cover-preview">
+                <p style="font-size:12px; color:var(--color-text-light); margin-bottom:12px;">
+                    Sélectionner une nouvelle image remplacera celle-ci.
+                </p>
+            {% endif %}
+
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="cover">
+                    {{ article and article.coverImagePath ? "Changer l'image" : 'Ajouter une image' }}
+                    <small style="font-weight:normal; color:var(--color-text-light);">
+                        (JPG, PNG — max 10Mo — recommandé : 1200×630px)
+                    </small>
+                </label>
+                <input type="file" id="cover" name="cover" accept="image/jpeg,image/png,image/webp">
+            </div>
+        </div>
+
+        {# ── Boutons de sauvegarde ── #}
+        {# Le champ caché "action" est mis à jour par JavaScript selon le bouton cliqué.
+           Deux modes : brouillon (non visible) ou publié (visible de tous) #}
+        <input type="hidden" name="action" id="action-input" value="save_draft">
+
+        <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+
+            {# Bouton brouillon : enregistre sans publier #}
+            <button type="submit"
+                    onclick="document.getElementById('action-input').value='save_draft'"
+                    class="btn-draft">
+                💾 Enregistrer comme brouillon
+            </button>
+
+            {# Bouton publier : rend l'article visible de tous #}
+            <button type="submit"
+                    onclick="document.getElementById('action-input').value='save_publish'"
+                    class="btn btn-primary">
+                🌐 {{ article and article.isPublished() ? 'Mettre à jour et publier' : "Publier l'article" }}
+            </button>
+
+            {# Lien annuler : retourne au détail ou à la liste perso #}
+            <a href="{{ article ? path('app_article_show', {slug: article.slug}) : path('app_article_my') }}"
+               style="margin-left:auto; font-size:13px; color:var(--color-text-light); text-decoration:none; padding:0 8px;">
+                Annuler
+            </a>
+
+        </div>
+
+    </form>
+</div>
+{% endblock %}

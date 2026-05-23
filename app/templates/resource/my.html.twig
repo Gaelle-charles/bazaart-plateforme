@@ -1,0 +1,118 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Mes soumissions — BazaArt{% endblock %}
+{% block page_title %}Mes soumissions{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    .page-toolbar { display:flex; justify-content:flex-end; margin-bottom:20px; }
+
+    .submissions-list { display:flex; flex-direction:column; gap:12px; }
+
+    .submission-card {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card); padding: 16px 20px;
+    }
+
+    .submission-card__header {
+        display:flex; justify-content:space-between; align-items:flex-start;
+        flex-wrap:wrap; gap:8px; margin-bottom:8px;
+    }
+
+    .type-badge {
+        display:inline-flex; align-items:center; height:20px; padding:0 8px;
+        border-radius: var(--radius-full); font-size:10px; font-weight:600;
+        background: var(--color-red-light); color: var(--color-red);
+    }
+
+    .status-badge {
+        display:inline-flex; align-items:center; height:20px; padding:0 8px;
+        border-radius: var(--radius-full); font-size:10px; font-weight:700;
+    }
+    .status-pending   { background:#fff3cd; color:#856404; }
+    .status-published { background:#d4edda; color:#155724; }
+    .status-rejected  { background:#f8d7da; color:#721c24; }
+
+    .submission-title {
+        font-size:14px; font-weight:600; color:var(--color-text); text-decoration:none;
+    }
+    .submission-title:hover { color:var(--color-red); }
+
+    .submission-meta { font-size:11px; color:var(--color-text-light); margin-top:4px; }
+
+    .submission-notice {
+        margin-top:10px; padding:8px 12px; border-radius:var(--radius-sm); font-size:12px;
+    }
+    .notice-pending  { background:#fff3cd; color:#856404; }
+    .notice-rejected { background:#f8d7da; color:#721c24; }
+
+    .empty-state {
+        background:var(--color-white); border:1px solid var(--color-border);
+        border-radius:var(--radius-md); padding:48px; text-align:center; color:var(--color-text-muted);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-toolbar">
+    <a href="{{ path('app_resource_submit') }}" class="btn btn-primary">+ Soumettre une ressource</a>
+</div>
+
+{% if resources is empty %}
+    <div class="empty-state">
+        <p>Vous n'avez pas encore soumis de ressource.</p>
+        <a href="{{ path('app_resource_submit') }}"
+           style="display:inline-block;margin-top:10px;color:var(--color-red);font-weight:600;text-decoration:none;">
+            Soumettre ma première ressource →
+        </a>
+    </div>
+{% else %}
+    <div class="submissions-list">
+        {% for resource in resources %}
+            <div class="submission-card">
+
+                <div class="submission-card__header">
+                    <span class="type-badge">
+                        {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
+                    </span>
+                    {# `resource.status` est un enum ResourceStatus depuis la migration enums.
+                       Pour générer le nom de classe CSS, on accède à `.value` (la valeur backed string).
+                       Pour les conditions, on utilise les helpers de l'entité. #}
+                    <span class="status-badge status-{{ resource.status.value }}">
+                        {% if resource.isPending %}En attente
+                        {% elseif resource.isPublished %}Publiée
+                        {% else %}Rejetée{% endif %}
+                    </span>
+                </div>
+
+                {% if resource.isPublished() %}
+                    <a href="{{ path('app_resource_show', {id: resource.id}) }}" class="submission-title">
+                        {{ resource.title }}
+                    </a>
+                {% else %}
+                    <span class="submission-title" style="cursor:default;">{{ resource.title }}</span>
+                {% endif %}
+
+                <div class="submission-meta">
+                    Soumise le {{ resource.createdAt|date('d/m/Y') }}
+                    {% if resource.deadline %} — Deadline : {{ resource.deadline|date('d/m/Y') }}{% endif %}
+                </div>
+
+                {% if resource.isPending %}
+                    <div class="submission-notice notice-pending">
+                        Notre équipe va examiner votre soumission. Vous serez notifié une fois la décision prise.
+                    </div>
+                {% elseif resource.isRejected %}
+                    <div class="submission-notice notice-rejected">
+                        Cette ressource a été rejetée. Contactez-nous si vous souhaitez la modifier et la resoumettre.
+                    </div>
+                {% endif %}
+
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% endblock %}

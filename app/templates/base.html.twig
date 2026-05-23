@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}BazaArt{% endblock %}</title>
+
+    {# ── Polices Google Fonts ──────────────────────────────────────────────── #}
+    {# Playfair Display : pour les titres (élégant, serif)                     #}
+    {# Inter            : pour le corps de texte (moderne, lisible)            #}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+
+    <style>
+        /* ══════════════════════════════════════════════════════════════════
+         * DESIGN SYSTEM — Variables CSS (tokens du design Figma)
+         * Ces variables centralisent toutes les couleurs et espacements.
+         * Pour modifier une couleur, tu changes juste la variable ici !
+         * ══════════════════════════════════════════════════════════════════ */
+        :root {
+            /* Couleurs principales */
+            --color-green:       #1c3a2f;   /* vert forêt — sidebar, titres */
+            --color-green-dark:  #2d4c40;   /* vert légèrement plus clair — séparateurs sidebar */
+            --color-green-mid:   #718f84;   /* vert muted — textes secondaires sidebar */
+            --color-green-light: #d4e6dc;   /* vert très clair — badges résidence */
+            --color-red:         #c8503a;   /* terracotta — CTA, badges, accents */
+            --color-red-light:   #fef0ec;   /* rouge très pâle — fond badges */
+            --color-orange:      #e8a87c;   /* orange doux — avatars */
+            --color-orange-light:#fef5ef;   /* orange très pâle — badge appel à projets */
+
+            /* Couleurs neutres */
+            --color-bg:          #f7f4ef;   /* beige chaud — fond global */
+            --color-white:       #ffffff;
+            --color-border:      #e2ddd6;   /* beige gris — bordures, séparateurs */
+            --color-input-bg:    #faf9f7;   /* blanc cassé — fond des champs */
+            --color-text:        #1a1a1a;   /* presque noir — texte principal */
+            --color-text-muted:  #6b6860;   /* gris chaud — texte secondaire */
+            --color-text-light:  #a9a6a0;   /* gris clair — texte placeholder/caption */
+            --color-text-green:  #718f84;   /* vert doux — texte footer */
+
+            /* Typographie */
+            --font-heading: 'Playfair Display', Georgia, serif;
+            --font-body:    'Inter', system-ui, sans-serif;
+
+            /* Ombres */
+            --shadow-card: 0 2px 16px rgba(0, 0, 0, 0.06);
+
+            /* Rayons de bordure */
+            --radius-sm:  6px;
+            --radius-md:  12px;
+            --radius-lg:  16px;
+            --radius-full: 999px;
+        }
+
+        /* ══════════════════════════════════════════════════════════════════
+         * RESET & BASE
+         * ══════════════════════════════════════════════════════════════════ */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--color-bg);
+            color: var(--color-text);
+            min-height: 100vh;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* ══════════════════════════════════════════════════════════════════
+         * COMPOSANTS RÉUTILISABLES
+         * ══════════════════════════════════════════════════════════════════ */
+
+        /* ── Boutons ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 20px;
+            height: 40px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-body);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            border: none;
+            transition: opacity 0.15s;
+        }
+        .btn:hover { opacity: 0.88; }
+
+        /* Bouton principal — terracotta */
+        .btn-primary {
+            background: var(--color-red);
+            color: var(--color-white);
+        }
+
+        /* Bouton outline — contour noir */
+        .btn-outline {
+            background: var(--color-white);
+            color: var(--color-text);
+            border: 1.5px solid var(--color-text);
+        }
+
+        /* Bouton pleine largeur */
+        .btn-full { width: 100%; }
+
+        /* ── Carte ── */
+        .card {
+            background: var(--color-white);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-card);
+        }
+
+        /* ── Champs de formulaire ── */
+        .form-label {
+            display: block;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--color-text-light);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .form-input {
+            width: 100%;
+            height: 40px;
+            padding: 0 12px;
+            background: var(--color-input-bg);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            font-family: var(--font-body);
+            font-size: 13px;
+            color: var(--color-text);
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .form-input:focus {
+            border-color: var(--color-green);
+        }
+        .form-input::placeholder {
+            color: var(--color-text-light);
+        }
+
+        .form-group { margin-bottom: 18px; }
+
+        /* ── Badge ── */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0 10px;
+            height: 22px;
+            border-radius: var(--radius-full);
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .badge-red   { background: var(--color-red-light);   color: var(--color-red); }
+        .badge-green { background: var(--color-green-light); color: var(--color-green); }
+        .badge-orange{ background: var(--color-orange-light);color: var(--color-orange); }
+
+        /* ── Messages flash ── */
+        .flash {
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+        .flash--success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .flash--error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        /* ── Séparateur avec texte ── */
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--color-text-light);
+            font-size: 12px;
+        }
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--color-border);
+        }
+    </style>
+
+    {% block stylesheets %}{% endblock %}
+</head>
+<body>
+    {% block body %}{% endblock %}
+    {% block javascripts %}{% endblock %}
+</body>
+</html>

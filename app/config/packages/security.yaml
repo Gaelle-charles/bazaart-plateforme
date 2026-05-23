@@ -1,0 +1,87 @@
+security:
+    password_hashers:
+        App\Entity\User:
+            # bcrypt est le standard actuel recommandé par Symfony Security 7.x.
+            # Note : l'ancien fichier utilisait argon2id — changé selon le CDC V3 (§2 changements mars 2026).
+            algorithm: bcrypt
+
+    providers:
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: email
+
+    # ─── Hiérarchie des rôles ─────────────────────────────────────────────────
+    #
+    # Symfony applique cette hiérarchie automatiquement via le RoleHierarchyVoter.
+    # Si un utilisateur a ROLE_ADMIN, Symfony lui accordera aussi ROLE_STRUCTURE,
+    # ROLE_MODERATOR, ROLE_ARTIST et ROLE_USER — sans qu'on ait à les inscrire
+    # manuellement dans la BDD.
+    #
+    # Convention du projet (CDC V3 §7) :
+    #   ROLE_USER      → tout compte authentifié
+    #   ROLE_ARTIST    → profil artiste activé
+    #   ROLE_STRUCTURE → compte structure partenaire validé par un admin
+    #   ROLE_MODERATOR → modérateur de la communauté (forum, signalements)
+    #   ROLE_ADMIN     → équipe Bazaart (accès complet)
+    role_hierarchy:
+        ROLE_ARTIST:    [ROLE_USER]
+        ROLE_STRUCTURE: [ROLE_USER]
+        ROLE_MODERATOR: [ROLE_USER]
+        # ROLE_ADMIN hérite de TOUS les autres rôles — l'équipe Bazaart a accès à tout
+        ROLE_ADMIN:     [ROLE_USER, ROLE_ARTIST, ROLE_STRUCTURE, ROLE_MODERATOR]
+
+    firewalls:
+        dev:
+            pattern: ^/(_profiler|_wdt|assets|build)/
+            security: false
+        main:
+            lazy: true
+            provider: app_user_provider
+            form_login:
+                login_path: app_login
+                check_path: app_login
+                default_target_path: app_dashboard
+                username_parameter: email
+                password_parameter: password
+            logout:
+                path: app_logout
+                target: app_login
+            remember_me:
+                secret: '%kernel.secret%'
+                lifetime: 604800 # 7 jours
+            # Déclare notre GoogleAuthenticator pour gérer le callback OAuth2
+            custom_authenticators:
+                - App\Security\GoogleAuthenticator
+            # Avec plusieurs authenticators, Symfony doit savoir lequel gère
+            # la redirection des utilisateurs non connectés vers la page de login
+            entry_point: App\Security\GoogleAuthenticator
+
+    access_control:
+        - { path: ^/login, roles: PUBLIC_ACCESS }
+        - { path: ^/register, roles: PUBLIC_ACCESS }
+        # Les routes Google OAuth doivent être publiques (l'utilisateur n'est pas encore connecté)
+        - { path: ^/connect/google, roles: PUBLIC_ACCESS }
+        # Page d'accueil et formulaire de contact — accessibles sans être connecté
+        - { path: ^/$, roles: PUBLIC_ACCESS }
+        - { path: ^/contact, roles: PUBLIC_ACCESS }
+        # Espace structure : réservé aux comptes structure activés (ROLE_STRUCTURE)
+        # Note : la vérification isStructurePartner = true est faite dans StructureVoter,
+        # car access_control ne peut pas lire les champs BDD.
+        - { path: ^/structure/dashboard, roles: ROLE_STRUCTURE }
+        - { path: ^/structure/register, roles: ROLE_USER }
+        # Administration : ROLE_ADMIN seulement
+        - { path: ^/admin, roles: ROLE_ADMIN }
+        # Tout le reste : authentification requise
+        - { path: ^/, roles: ROLE_USER }
+
+when@test:
+    security:
+        password_hashers:
+            Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface:
+                # En environnement de test, on réduit le coût du hashage pour accélérer les tests.
+                # `cost: 4` est le minimum pour bcrypt (par défaut: 13) — acceptable en test uniquement.
+                # time_cost et memory_cost sont supprimés : ce sont des paramètres Argon2id,
+                # sans effet avec l'algorithme `auto` (qui sélectionne bcrypt en V1).
+                algorithm: auto
+                cost: 4

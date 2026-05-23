@@ -1,0 +1,39 @@
+# Dépendances (se régénèrent, ne jamais committer)
+/vendor/
+/app/vendor/
+node_modules/
+
+# Variables d'environnement et secrets
+.env.local
+.env.*.local
+/app/.env.local
+/app/.env.*.local
+
+# Caches et logs Symfony
+/app/var/cache/
+/app/var/log/
+/app/var/sessions/
+
+# Fichiers système macOS
+.DS_Store
+
+# Sauvegardes et archives
+*.backup-*
+CLAUDE.md.backup-*
+*.zip
+
+# Build front éventuel
+/app/public/build/
+/app/public/bundles/
+
+# Secrets Google / clés de service
+**/google-service-account.json
+**/*service-account*.json
+*.pem
+*.key
+
+# Env Symfony (par sécurité)
+/app/.env.dev.local
+
+# Env principal contenant des secrets (NE PAS committer)
+/app/.env

@@ -1,0 +1,283 @@
+{% extends 'base.html.twig' %}
+
+{#
+ # auth/register.html.twig — Page d'inscription
+ #
+ # Même mise en page split-screen que la page de connexion :
+ # - Gauche (vert foncé) : branding
+ # - Droite (beige) : formulaire d'inscription
+ #
+ # Le formulaire inclut un sélecteur de type de profil :
+ # Artiste ou Organisation
+ #}
+
+{% block title %}Inscription — BazaArt{% endblock %}
+
+{% block stylesheets %}
+<style>
+    html, body { height: 100%; overflow: hidden; }
+
+    /* ── Layout deux colonnes (identique au login) ── */
+    .auth-layout {
+        display: flex;
+        height: 100vh;
+    }
+
+    .auth-left {
+        width: 560px;
+        flex-shrink: 0;
+        background: var(--color-green);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 60px;
+    }
+
+    .auth-left__title {
+        font-family: var(--font-heading);
+        font-size: 42px;
+        font-weight: 700;
+        color: var(--color-white);
+        margin-bottom: 16px;
+    }
+
+    .auth-left__tagline {
+        font-size: 14px;
+        color: var(--color-text-green);
+        line-height: 1.6;
+    }
+
+    .auth-right {
+        flex: 1;
+        background: var(--color-bg);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 40px;
+        overflow-y: auto; /* scroll si le formulaire est trop long */
+    }
+
+    .auth-right__header {
+        margin-bottom: 20px;
+        text-align: left;
+        width: 460px;
+    }
+
+    .auth-right__title {
+        font-family: var(--font-heading);
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 4px;
+    }
+
+    .auth-right__subtitle {
+        font-size: 13px;
+        color: var(--color-text-muted);
+    }
+
+    .auth-card {
+        width: 460px;
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-card);
+        padding: 32px 40px;
+    }
+
+    /* ── Sélecteur de type : Artiste / Organisation ── */
+    .type-selector {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 22px;
+    }
+
+    .type-selector__label {
+        font-size: 13px;
+        color: var(--color-text-light);
+        margin-bottom: 10px;
+    }
+
+    /* Chaque option de type */
+    .type-option {
+        flex: 1;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        font-size: 13px;
+        cursor: pointer;
+        border: 1px solid var(--color-border);
+        background: #f2f0eb;
+        color: var(--color-text-muted);
+        transition: all 0.15s;
+        user-select: none;
+    }
+
+    /* Option sélectionnée — style actif */
+    .type-option--active {
+        background: var(--color-red-light);
+        border-color: var(--color-red);
+        color: var(--color-red);
+        font-weight: 600;
+    }
+
+    .auth-footer-text {
+        text-align: center;
+        font-size: 13px;
+        color: var(--color-text-light);
+        margin-top: 16px;
+    }
+    .auth-footer-text a {
+        color: var(--color-red);
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .auth-footer-text a:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="auth-layout">
+
+    {# ── COLONNE GAUCHE ────────────────────────────────────────────────────── #}
+    <div class="auth-left">
+        <h1 class="auth-left__title">BazaArt</h1>
+        <p class="auth-left__tagline">
+            Rejoignez la communauté<br>des artistes francophones
+        </p>
+    </div>
+
+    {# ── COLONNE DROITE ────────────────────────────────────────────────────── #}
+    <div class="auth-right">
+
+        <div class="auth-right__header">
+            <h2 class="auth-right__title">Créer un compte</h2>
+            <p class="auth-right__subtitle">Rejoignez la communauté des artistes francophones</p>
+        </div>
+
+        <div class="auth-card">
+
+            {# Affichage de l'erreur si l'inscription a échoué #}
+            {% if error %}
+                <div class="flash flash--error">{{ error }}</div>
+            {% endif %}
+
+            {# Bouton inscription via Google #}
+            <a href="{{ path('app_google_connect') }}"
+               style="display:flex; align-items:center; justify-content:center; gap:10px;
+                      width:100%; height:40px; background:var(--color-white);
+                      border:1px solid var(--color-border); border-radius:var(--radius-sm);
+                      font-size:13px; font-weight:500; color:var(--color-text);
+                      text-decoration:none; transition:background 0.15s; margin-bottom:18px;">
+                <svg width="18" height="18" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+                S'inscrire avec Google
+            </a>
+
+            <div class="divider" style="margin-bottom:18px;">ou</div>
+
+            {# ── Formulaire d'inscription ── #}
+            <form method="post">
+
+                {# Sélecteur de type : Artiste ou Organisation #}
+                {# Ce champ sera géré en JS pour changer l'apparence, la valeur est en hidden #}
+                <div class="type-selector__label">Je suis…</div>
+                <div class="type-selector">
+                    {# Par défaut "artiste" est sélectionné #}
+                    <div class="type-option type-option--active" id="type-artiste"
+                         onclick="selectType('artiste', this)">
+                        Artiste
+                    </div>
+                    <div class="type-option" id="type-organisation"
+                         onclick="selectType('organisation', this)">
+                        Organisation
+                    </div>
+                </div>
+                {# Champ caché qui envoie le type au serveur #}
+                <input type="hidden" name="profile_type" id="profile_type" value="artiste">
+
+                <div class="form-group">
+                    <label class="form-label" for="display_name">Nom affiché</label>
+                    <input
+                        class="form-input"
+                        type="text"
+                        id="display_name"
+                        name="display_name"
+                        placeholder="ex : Marie Callot"
+                        required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="email">Adresse e-mail</label>
+                    <input
+                        class="form-input"
+                        type="email"
+                        id="email"
+                        name="email"
+                        placeholder="vous@exemple.com"
+                        autocomplete="email"
+                        required
+                        autofocus>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="password">
+                        Mot de passe <span style="font-weight:400; text-transform:none;">(8 caractères min.)</span>
+                    </label>
+                    <input
+                        class="form-input"
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="••••••••"
+                        autocomplete="new-password"
+                        required
+                        minlength="8">
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-full">
+                    Créer mon compte
+                </button>
+            </form>
+
+            <div class="auth-footer-text">
+                Déjà un compte ?
+                <a href="{{ path('app_login') }}">Se connecter →</a>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+{# Petit script JS pour gérer le sélecteur Artiste / Organisation #}
+{% block javascripts %}
+<script>
+    /**
+     * Gère la sélection du type de profil (Artiste ou Organisation).
+     * @param {string} type    - 'artiste' ou 'organisation'
+     * @param {HTMLElement} el - L'élément cliqué
+     */
+    function selectType(type, el) {
+        // Retire le style actif de tous les boutons de type
+        document.querySelectorAll('.type-option').forEach(function(btn) {
+            btn.classList.remove('type-option--active');
+        });
+
+        // Ajoute le style actif au bouton cliqué
+        el.classList.add('type-option--active');
+
+        // Met à jour le champ caché avec le type choisi
+        document.getElementById('profile_type').value = type;
+    }
+</script>
+{% endblock %}
+
+{% endblock %}

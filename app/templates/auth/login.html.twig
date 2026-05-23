@@ -1,0 +1,247 @@
+{% extends 'base.html.twig' %}
+
+{#
+ # auth/login.html.twig — Page de connexion
+ #
+ # Mise en page split-screen (deux colonnes) :
+ # - Gauche (vert foncé) : branding, citation
+ # - Droite (beige) : formulaire de connexion
+ #}
+
+{% block title %}Connexion — BazaArt{% endblock %}
+
+{% block stylesheets %}
+<style>
+    /* Page de login sans scroll — plein écran */
+    html, body { height: 100%; overflow: hidden; }
+
+    /* ── Layout deux colonnes ── */
+    .auth-layout {
+        display: flex;
+        height: 100vh;
+    }
+
+    /* ── Colonne gauche — branding ── */
+    .auth-left {
+        width: 560px;
+        flex-shrink: 0;
+        background: var(--color-green);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 60px;
+        position: relative;
+    }
+
+    /* Badge "Nouveau sur BazaArt ?" */
+    .auth-left__badge {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 12px;
+        background: var(--color-red);
+        border-radius: var(--radius-full);
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--color-white);
+        margin-bottom: 40px;
+        align-self: flex-start;
+    }
+
+    .auth-left__title {
+        font-family: var(--font-heading);
+        font-size: 42px;
+        font-weight: 700;
+        color: var(--color-white);
+        margin-bottom: 16px;
+    }
+
+    .auth-left__tagline {
+        font-size: 14px;
+        color: var(--color-text-green);
+        line-height: 1.6;
+    }
+
+    /* ── Colonne droite — formulaire ── */
+    .auth-right {
+        flex: 1;
+        background: var(--color-bg);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 40px;
+    }
+
+    /* Le titre et le sous-titre sont en dehors de la carte */
+    .auth-right__header { margin-bottom: 24px; text-align: left; width: 440px; }
+
+    .auth-right__title {
+        font-family: var(--font-heading);
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 6px;
+    }
+
+    .auth-right__subtitle {
+        font-size: 13px;
+        color: var(--color-text-muted);
+    }
+
+    /* ── Carte formulaire ── */
+    .auth-card {
+        width: 440px;
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-card);
+        padding: 32px 40px;
+    }
+
+    /* Lien "Mot de passe oublié ?" aligné à droite */
+    .forgot-link {
+        font-size: 12px;
+        color: var(--color-red);
+        text-decoration: none;
+        float: right;
+        margin-top: -4px;
+    }
+    .forgot-link:hover { text-decoration: underline; }
+
+    /* Bouton Google */
+    .btn-google {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+        height: 40px;
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--color-text);
+        text-decoration: none;
+        transition: background 0.15s;
+        margin-bottom: 20px;
+    }
+    .btn-google:hover { background: var(--color-bg); }
+
+    /* Liens du bas */
+    .auth-footer-text {
+        text-align: center;
+        font-size: 13px;
+        color: var(--color-text-light);
+        margin-top: 16px;
+    }
+    .auth-footer-text a {
+        color: var(--color-red);
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .auth-footer-text a:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="auth-layout">
+
+    {# ── COLONNE GAUCHE : branding ─────────────────────────────────────────── #}
+    <div class="auth-left">
+        {# Badge visible en haut de la colonne #}
+        <span class="auth-left__badge">Nouveau sur BazaArt ?</span>
+
+        <h1 class="auth-left__title">BazaArt</h1>
+        <p class="auth-left__tagline">
+            La plateforme des artistes<br>francophones
+        </p>
+    </div>
+
+    {# ── COLONNE DROITE : formulaire ──────────────────────────────────────── #}
+    <div class="auth-right">
+
+        {# Titre et sous-titre au-dessus de la carte #}
+        <div class="auth-right__header">
+            <h2 class="auth-right__title">Connexion</h2>
+            <p class="auth-right__subtitle">Ravis de vous revoir</p>
+        </div>
+
+        {# Carte avec le formulaire #}
+        <div class="auth-card">
+
+            {# Affichage des erreurs de connexion (mauvais mot de passe, etc.) #}
+            {% if error %}
+                <div class="flash flash--error">
+                    {{ error.messageKey|trans(error.messageData, 'security') }}
+                </div>
+            {% endif %}
+
+            {# Bouton connexion via Google (OAuth2) #}
+            <a href="{{ path('app_google_connect') }}" class="btn-google">
+                {# Logo Google en SVG (pas d'image externe nécessaire) #}
+                <svg width="18" height="18" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+                Connexion avec Google
+            </a>
+
+            {# Séparateur "ou" #}
+            <div class="divider" style="margin-bottom: 20px;">ou</div>
+
+            {# Formulaire email / mot de passe #}
+            {# action="" = la même URL gère le POST (configuré dans security.yaml) #}
+            <form method="post">
+
+                <div class="form-group">
+                    <label class="form-label" for="email">Adresse e-mail</label>
+                    <input
+                        class="form-input"
+                        type="email"
+                        id="email"
+                        name="email"
+                        value="{{ last_username }}"
+                        placeholder="vous@exemple.com"
+                        autocomplete="email"
+                        required
+                        autofocus>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="password">
+                        Mot de passe
+                        <a href="#" class="forgot-link">Mot de passe oublié ?</a>
+                    </label>
+                    <input
+                        class="form-input"
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="••••••••"
+                        autocomplete="current-password"
+                        required>
+                </div>
+
+                {# Token CSRF — protection contre les attaques CSRF (obligatoire avec Symfony) #}
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
+
+                <button type="submit" class="btn btn-primary btn-full" style="margin-top: 4px;">
+                    Se connecter
+                </button>
+            </form>
+
+            {# Lien vers la page d'inscription #}
+            <div class="auth-footer-text" style="margin-top: 20px;">
+                Pas encore de compte ?
+                <a href="{{ path('app_register') }}">S'inscrire →</a>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

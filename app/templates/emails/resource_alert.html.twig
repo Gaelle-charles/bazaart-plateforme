@@ -1,0 +1,218 @@
+{#
+    Template HTML de l'email d'alerte Ressourcerie.
+
+    Variables disponibles (passées par ResourceAlertService::sendAlertEmail) :
+      - alert     : App\Entity\ResourceAlert  — les préférences de l'utilisateur
+      - resources : App\Entity\Resource[]     — la liste des ressources à afficher
+      - user      : App\Entity\User           — l'utilisateur destinataire
+      - count     : int                       — nombre de ressources (raccourci)
+
+    Ce template est AUTONOME : pas de {% extends %} car les emails ne peuvent pas
+    hériter du layout Twig standard (pas de session, pas de JS, client email limité).
+
+    Compatibilité email (Gmail, Outlook, Apple Mail) :
+      - On utilise des <table> pour la mise en page (CSS flexbox/grid non supporté)
+      - Tout le CSS est INLINE (la plupart des clients email ignorent les <style>)
+      - Pas de police externe, pas de Google Fonts
+      - Les URLs sont ABSOLUES via url() Twig (pas path() qui génère des URLs relatives)
+#}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    {# viewport pour les clients qui respectent le responsive #}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ count }} nouvelle(s) opportunité(s) sur Bazaart</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: Arial, Helvetica, sans-serif; font-size: 16px; color: #1a1f2e;">
+
+{# Conteneur principal centré — max 600px pour la lisibilité email #}
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f4f4; padding: 20px 0;">
+    <tr>
+        <td align="center">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
+
+                {# ══════════════════════════════════════════════════════════════ #}
+                {# HEADER — fond rouge Bazaart #C8503A, logo texte blanc         #}
+                {# ══════════════════════════════════════════════════════════════ #}
+                <tr>
+                    <td style="background-color: #C8503A; padding: 28px 32px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                            <tr>
+                                <td>
+                                    {# Logo texte — remplacer par <img> si un logo PNG est disponible #}
+                                    <span style="font-family: Georgia, serif; font-size: 28px; font-weight: bold; color: #ffffff; letter-spacing: 2px;">
+                                        BAZAART
+                                    </span>
+                                </td>
+                                <td align="right">
+                                    {# Badge fréquence — rappelle à l'utilisateur son réglage #}
+                                    <span style="background-color: rgba(255,255,255,0.2); color: #ffffff; font-size: 12px; padding: 4px 10px; border-radius: 20px;">
+                                        Alerte {{ alert.frequency.label() }}
+                                    </span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                {# ══════════════════════════════════════════════════════════════ #}
+                {# INTRO — accroche personnalisée                                #}
+                {# ══════════════════════════════════════════════════════════════ #}
+                <tr>
+                    <td style="padding: 32px 32px 16px 32px;">
+                        {#
+                            On dérive un prénom "approximatif" en coupant l'email avant @.
+                            Ce n'est pas toujours un prénom réel, mais c'est personnalisé
+                            et donne une touche humaine. En V2, on pourra utiliser le vrai prénom.
+                        #}
+                        {% set display_name = user.email|split('@')|first %}
+                        <p style="margin: 0 0 12px 0; font-size: 18px; font-weight: bold; color: #1a1f2e;">
+                            Bonjour {{ display_name }} !
+                        </p>
+                        <p style="margin: 0; color: #555555; line-height: 1.6;">
+                            {% if count == 1 %}
+                                <strong>1 nouvelle opportunité</strong> correspond à votre profil sur la Ressourcerie Bazaart.
+                            {% else %}
+                                <strong>{{ count }} nouvelles opportunités</strong> correspondent à votre profil sur la Ressourcerie Bazaart.
+                            {% endif %}
+                        </p>
+                    </td>
+                </tr>
+
+                {# Ligne de séparation décorative #}
+                <tr>
+                    <td style="padding: 0 32px;">
+                        <hr style="border: none; border-top: 2px solid #C8503A; margin: 8px 0 24px 0; opacity: 0.2;">
+                    </td>
+                </tr>
+
+                {# ══════════════════════════════════════════════════════════════ #}
+                {# LISTE DES RESSOURCES                                          #}
+                {# ══════════════════════════════════════════════════════════════ #}
+                <tr>
+                    <td style="padding: 0 32px 24px 32px;">
+
+                        {% for resource in resources %}
+                        {# Carte ressource — séparée par un bordure basse sauf pour la dernière #}
+                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+                               style="border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 16px; overflow: hidden;">
+                            <tr>
+                                {#
+                                    Barre colorée à gauche : accent visuel Bazaart.
+                                    On utilise une cellule narrow avec background rouge.
+                                #}
+                                <td width="4" style="background-color: #C8503A;">&nbsp;</td>
+                                <td style="padding: 16px;">
+
+                                    {# Type de ressource (badge) #}
+                                    <p style="margin: 0 0 6px 0;">
+                                        <span style="background-color: #f0e8e6; color: #C8503A; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                            {{ resource.resourceType ? resource.resourceType.name : 'Non précisé' }}
+                                        </span>
+                                        {% if resource.location %}
+                                            <span style="color: #888888; font-size: 12px; margin-left: 8px;">
+                                                {{ resource.location }}
+                                            </span>
+                                        {% endif %}
+                                    </p>
+
+                                    {# Titre de la ressource #}
+                                    <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #1a1f2e; line-height: 1.4;">
+                                        {{ resource.title }}
+                                    </p>
+
+                                    {#
+                                        Description tronquée à 150 caractères.
+                                        Le filtre Twig |slice coupe proprement sans casser les mots.
+                                        On ajoute "…" si la description est plus longue.
+                                    #}
+                                    {% if resource.description %}
+                                        <p style="margin: 0 0 12px 0; color: #555555; font-size: 14px; line-height: 1.5;">
+                                            {% if resource.description|length > 150 %}
+                                                {{ resource.description|slice(0, 150) }}…
+                                            {% else %}
+                                                {{ resource.description }}
+                                            {% endif %}
+                                        </p>
+                                    {% endif %}
+
+                                    {# Deadline — mise en valeur si présente #}
+                                    <p style="margin: 0 0 14px 0; font-size: 13px;">
+                                        {% if resource.deadline %}
+                                            <span style="color: #C8503A; font-weight: bold;">
+                                                Deadline :
+                                            </span>
+                                            <span style="color: #1a1f2e;">
+                                                {{ resource.deadline|date('d/m/Y') }}
+                                            </span>
+                                        {% else %}
+                                            <span style="color: #888888;">
+                                                Deadline : Non précisée
+                                            </span>
+                                        {% endif %}
+                                    </p>
+
+                                    {#
+                                        Bouton CTA — URL absolue obligatoire dans les emails.
+                                        url() génère une URL complète (ex: https://bazaart.fr/resources/42)
+                                        path() générerait une URL relative (/resources/42) qui ne fonctionne
+                                        pas dans les clients email (pas de base URL connue).
+                                    #}
+                                    <a href="{{ url('app_resource_show', {id: resource.id}) }}"
+                                       style="display: inline-block; background-color: #C8503A; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 4px; font-size: 14px; font-weight: bold;">
+                                        Voir l'opportunité →
+                                    </a>
+
+                                </td>
+                            </tr>
+                        </table>
+                        {% endfor %}
+
+                    </td>
+                </tr>
+
+                {# ══════════════════════════════════════════════════════════════ #}
+                {# CTA SECONDAIRE — Voir toutes les ressources                   #}
+                {# ══════════════════════════════════════════════════════════════ #}
+                <tr>
+                    <td style="padding: 0 32px 32px 32px; text-align: center;">
+                        <a href="{{ url('app_resource_index') }}"
+                           style="color: #C8503A; text-decoration: underline; font-size: 14px;">
+                            Voir toutes les opportunités de la Ressourcerie →
+                        </a>
+                    </td>
+                </tr>
+
+                {# ══════════════════════════════════════════════════════════════ #}
+                {# FOOTER — informations légales et lien de désabonnement        #}
+                {# ══════════════════════════════════════════════════════════════ #}
+                <tr>
+                    <td style="background-color: #1a1f2e; padding: 24px 32px; border-radius: 0 0 8px 8px;">
+                        <p style="margin: 0 0 8px 0; color: #aaaaaa; font-size: 12px; text-align: center; line-height: 1.6;">
+                            Vous recevez cet email car vous avez activé les alertes sur
+                            <a href="{{ url('app_home') }}" style="color: #C8503A; text-decoration: none;">bazaart.fr</a>.
+                        </p>
+                        <p style="margin: 0; color: #aaaaaa; font-size: 12px; text-align: center;">
+                            {# Lien "Gérer mes préférences" = même URL que désabonnement en V1 #}
+                            <a href="{{ url('app_resource_alerts') }}" style="color: #aaaaaa; text-decoration: underline;">
+                                Gérer mes préférences d'alertes
+                            </a>
+                            &nbsp;|&nbsp;
+                            <a href="{{ url('app_resource_alerts') }}" style="color: #aaaaaa; text-decoration: underline;">
+                                Se désabonner
+                            </a>
+                        </p>
+                        <p style="margin: 12px 0 0 0; color: #666666; font-size: 11px; text-align: center;">
+                            Bazaart — Pôle Lab — Plateforme dédiée aux artistes de la diaspora afro-atlantique
+                        </p>
+                    </td>
+                </tr>
+
+            </table>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

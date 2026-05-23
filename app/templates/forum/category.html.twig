@@ -1,0 +1,321 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}{{ category.name }} — Forum BazaArt{% endblock %}
+{% block page_title %}Forum{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── Breadcrumb ── */
+    .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--color-text-light);
+        margin-bottom: 20px;
+    }
+    .breadcrumb a {
+        color: var(--color-text-light);
+        text-decoration: none;
+    }
+    .breadcrumb a:hover { color: var(--color-red, #C8503A); }
+    .breadcrumb__separator { color: var(--color-border); }
+    .breadcrumb__current { color: var(--color-text); font-weight: 500; }
+
+    /* ── En-tête catégorie ── */
+    .category-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 2px solid {{ category.color ?? '#C8503A' }};
+    }
+    .category-header__left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .category-header__icon { font-size: 28px; }
+    .category-header__title {
+        font-family: var(--font-heading);
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--color-text);
+        margin-bottom: 2px;
+    }
+    .category-header__desc {
+        font-size: 13px;
+        color: var(--color-text-light);
+    }
+
+    /* ── Bouton créer un thread ── */
+    .btn-new-thread {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 18px;
+        background: var(--color-red, #C8503A);
+        color: white;
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: background 0.15s;
+    }
+    .btn-new-thread:hover { background: #a84232; }
+
+    /* ── Liste des threads ── */
+    .thread-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        background: var(--color-border);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+    }
+
+    /* ── Ligne de thread ── */
+    .thread-item {
+        background: var(--color-white);
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 18px;
+        text-decoration: none;
+        color: var(--color-text);
+        transition: background 0.1s;
+    }
+    .thread-item:hover { background: var(--color-bg, #f8f9fa); }
+
+    /* Icône d'état (épinglé / verrouillé / normal) */
+    .thread-item__status {
+        font-size: 16px;
+        flex-shrink: 0;
+        width: 22px;
+        text-align: center;
+    }
+
+    .thread-item__main { flex: 1; min-width: 0; }
+
+    /* Titre du thread */
+    .thread-item__title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--color-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 3px;
+    }
+
+    /* Méta : auteur + date */
+    .thread-item__meta {
+        font-size: 11px;
+        color: var(--color-text-light);
+    }
+
+    /* Badges de modération */
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
+    .badge--pinned {
+        background: #fff3cd;
+        color: #856404;
+    }
+    .badge--locked {
+        background: #f8d7da;
+        color: #842029;
+    }
+
+    /* Stats du thread (réponses, vues) */
+    .thread-item__stats {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 3px;
+        flex-shrink: 0;
+        font-size: 12px;
+        color: var(--color-text-light);
+        min-width: 80px;
+        text-align: right;
+    }
+
+    /* ── Forum vide ── */
+    .thread-list--empty {
+        background: var(--color-white);
+        border: 1px dashed var(--color-border);
+        border-radius: var(--radius-md);
+        padding: 48px 24px;
+        text-align: center;
+        color: var(--color-text-light);
+    }
+
+    /* ── Pagination ── */
+    .pagination {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 24px;
+    }
+    .pagination__btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 7px 14px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        background: var(--color-white);
+        color: var(--color-text);
+        font-size: 13px;
+        text-decoration: none;
+        transition: border-color 0.1s;
+    }
+    .pagination__btn:hover { border-color: var(--color-red, #C8503A); }
+    .pagination__btn--disabled {
+        opacity: 0.4;
+        pointer-events: none;
+    }
+    .pagination__info {
+        font-size: 13px;
+        color: var(--color-text-light);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{# ── Breadcrumb ──────────────────────────────────────────────────────────────── #}
+<nav class="breadcrumb">
+    <a href="{{ path('app_forum_index') }}">Forum</a>
+    <span class="breadcrumb__separator">›</span>
+    <span class="breadcrumb__current">{{ category.name }}</span>
+</nav>
+
+{# ── En-tête de la catégorie ─────────────────────────────────────────────────── #}
+<div class="category-header">
+    <div class="category-header__left">
+        {% if category.icon %}
+            <span class="category-header__icon">{{ category.icon }}</span>
+        {% endif %}
+        <div>
+            <div class="category-header__title">{{ category.name }}</div>
+            {% if category.description %}
+                <div class="category-header__desc">{{ category.description }}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Bouton "Nouveau sujet" — visible pour tout utilisateur connecté (ROLE_USER) #}
+    {# Le controller est protégé par #[IsGranted('ROLE_USER')], mais on garde la vérif
+       ici pour que le bouton n'apparaisse pas si l'utilisateur est déconnecté (cas edge) #}
+    {% if is_granted('ROLE_USER') %}
+        <a href="{{ path('app_forum_new_thread', { categorySlug: category.slug }) }}"
+           class="btn-new-thread">
+            ✏ Nouveau sujet
+        </a>
+    {% endif %}
+</div>
+
+{# ── Liste des threads ───────────────────────────────────────────────────────── #}
+{% if threads is empty %}
+    <div class="thread-list--empty">
+        <p style="font-size: 32px; margin-bottom: 10px;">💬</p>
+        <p style="font-size: 15px; font-weight: 600; margin-bottom: 6px;">Aucun sujet pour le moment</p>
+        <p style="font-size: 13px;">Soyez le premier à lancer une discussion dans cette catégorie !</p>
+        {% if is_granted('ROLE_USER') %}
+            <a href="{{ path('app_forum_new_thread', { categorySlug: category.slug }) }}"
+               class="btn-new-thread"
+               style="margin-top: 16px;">
+                ✏ Créer le premier sujet
+            </a>
+        {% endif %}
+    </div>
+{% else %}
+    <div class="thread-list">
+        {% for thread in threads %}
+            {# Chaque ligne est un lien vers le thread complet #}
+            <a href="{{ path('app_forum_thread', { categorySlug: category.slug, threadSlug: thread.slug }) }}"
+               class="thread-item">
+
+                {# Icône d'état : épinglé > verrouillé > normal #}
+                <div class="thread-item__status">
+                    {% if thread.pinned %}
+                        📌
+                    {% elseif thread.locked %}
+                        🔒
+                    {% else %}
+                        💬
+                    {% endif %}
+                </div>
+
+                <div class="thread-item__main">
+                    <div class="thread-item__title">
+                        {{ thread.title }}
+                        {# Badges visuels pour les états de modération #}
+                        {% if thread.pinned %}
+                            <span class="badge badge--pinned">📌 Épinglé</span>
+                        {% endif %}
+                        {% if thread.locked %}
+                            <span class="badge badge--locked">🔒 Verrouillé</span>
+                        {% endif %}
+                    </div>
+                    <div class="thread-item__meta">
+                        par <strong>{{ thread.author.email|split('@')|first }}</strong>
+                        — {{ thread.createdAt|date('d/m/Y') }}
+                        {# Si le thread a des réponses, on affiche la date de la dernière #}
+                        {% if thread.lastReplyAt %}
+                            — dernière réponse le {{ thread.lastReplyAt|date('d/m/Y') }}
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# Statistiques du thread (réponses et vues) #}
+                <div class="thread-item__stats">
+                    <span title="Réponses">💬 {{ thread.repliesCount }}</span>
+                    <span title="Vues">👁 {{ thread.viewsCount }}</span>
+                </div>
+            </a>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{# ── Pagination ──────────────────────────────────────────────────────────────── #}
+{# On n'affiche la pagination que s'il y a plus d'une page #}
+{% if totalPages > 1 %}
+    <nav class="pagination">
+        {# Bouton "Précédent" #}
+        {% if page > 1 %}
+            <a href="{{ path('app_forum_category', { categorySlug: category.slug, page: page - 1 }) }}"
+               class="pagination__btn">
+                ← Précédent
+            </a>
+        {% else %}
+            <span class="pagination__btn pagination__btn--disabled">← Précédent</span>
+        {% endif %}
+
+        {# Indicateur de page courante #}
+        <span class="pagination__info">Page {{ page }} / {{ totalPages }}</span>
+
+        {# Bouton "Suivant" #}
+        {% if page < totalPages %}
+            <a href="{{ path('app_forum_category', { categorySlug: category.slug, page: page + 1 }) }}"
+               class="pagination__btn">
+                Suivant →
+            </a>
+        {% else %}
+            <span class="pagination__btn pagination__btn--disabled">Suivant →</span>
+        {% endif %}
+    </nav>
+{% endif %}
+{% endblock %}

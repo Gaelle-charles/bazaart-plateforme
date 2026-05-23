@@ -1,0 +1,132 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Mes articles — BazaArt{% endblock %}
+{% block page_title %}Mes articles{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    .page-toolbar { display:flex; justify-content:flex-end; margin-bottom:20px; }
+
+    .articles-list { display:flex; flex-direction:column; gap:12px; }
+
+    .article-row {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        padding: 16px 20px; display:flex; gap:14px; align-items:center; flex-wrap:wrap;
+    }
+
+    /* Miniature de couverture */
+    .article-thumb {
+        width: 72px; height: 50px; border-radius: var(--radius-sm);
+        object-fit: cover; flex-shrink: 0;
+    }
+
+    .article-thumb-placeholder {
+        width: 72px; height: 50px; border-radius: var(--radius-sm);
+        background: var(--color-bg); display:flex; align-items:center; justify-content:center;
+        font-size: 20px; flex-shrink: 0; border: 1px solid var(--color-border);
+    }
+
+    .article-info { flex:1; min-width:0; }
+
+    .article-status-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px; }
+
+    .status-badge {
+        display:inline-flex; align-items:center; height:18px; padding:0 8px;
+        border-radius: var(--radius-full); font-size:10px; font-weight:700;
+    }
+    .status-published { background:#d4edda; color:#155724; }
+    .status-draft     { background:#fff3cd; color:#856404; }
+
+    .article-date-sm { font-size:11px; color:var(--color-text-light); }
+
+    .article-title-sm {
+        font-size:14px; font-weight:600; color:var(--color-text);
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+
+    .article-row-actions { display:flex; gap:6px; flex-shrink:0; }
+
+    .btn-sm {
+        display:inline-flex; align-items:center; height:28px; padding:0 10px;
+        border-radius: var(--radius-sm); font-size:11px; font-weight:600; text-decoration:none;
+        border: 1px solid var(--color-border); color: var(--color-text-muted); cursor:pointer;
+        font-family: var(--font-body); background: var(--color-white);
+    }
+    .btn-sm:hover { border-color: var(--color-green); color: var(--color-green); }
+
+    .btn-sm-edit { background:#e8f0fe; color:#1a5fb4; border-color:#a8c7fa; }
+    .btn-sm-edit:hover { background:#d0e3fc; }
+
+    .btn-sm-delete { background:#f8d7da; color:#721c24; border-color:#f5c6cb; }
+    .btn-sm-delete:hover { background:#f5c6cb; }
+
+    .empty-state {
+        background:var(--color-white); border:1px solid var(--color-border);
+        border-radius:var(--radius-md); padding:48px; text-align:center; color:var(--color-text-muted);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-toolbar">
+    <a href="{{ path('app_article_new') }}" class="btn btn-primary">+ Écrire un article</a>
+</div>
+
+{% if articles is empty %}
+    <div class="empty-state">
+        <p>Vous n'avez pas encore écrit d'article.</p>
+        <a href="{{ path('app_article_new') }}"
+           style="display:inline-block;margin-top:10px;color:var(--color-red);font-weight:600;text-decoration:none;">
+            Écrire mon premier article →
+        </a>
+    </div>
+{% else %}
+    <div class="articles-list">
+        {% for article in articles %}
+            <div class="article-row">
+
+                {# Miniature #}
+                {% if article.coverImagePath %}
+                    <img src="{{ asset(article.coverImagePath) }}" alt="" class="article-thumb">
+                {% else %}
+                    <div class="article-thumb-placeholder">📝</div>
+                {% endif %}
+
+                {# Infos article #}
+                <div class="article-info">
+                    <div class="article-status-row">
+                        {% if article.isPublished() %}
+                            <span class="status-badge status-published">Publié</span>
+                            <span class="article-date-sm">le {{ article.publishedAt|date('d/m/Y') }}</span>
+                        {% else %}
+                            <span class="status-badge status-draft">Brouillon</span>
+                            <span class="article-date-sm">modifié le {{ article.updatedAt|date('d/m/Y') }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="article-title-sm">{{ article.title }}</div>
+                </div>
+
+                {# Actions #}
+                <div class="article-row-actions">
+                    <a href="{{ path('app_article_show', {slug: article.slug}) }}" class="btn-sm">
+                        {{ article.isPublished() ? 'Voir' : 'Aperçu' }}
+                    </a>
+                    <a href="{{ path('app_article_edit', {id: article.id}) }}" class="btn-sm btn-sm-edit">
+                        Modifier
+                    </a>
+                    <form method="post" action="{{ path('app_article_delete', {id: article.id}) }}"
+                          onsubmit="return confirm('Supprimer « {{ article.title }} » ?')">
+                        <input type="hidden" name="_token" value="{{ csrf_token('article_delete_' ~ article.id) }}">
+                        <button type="submit" class="btn-sm btn-sm-delete">Supprimer</button>
+                    </form>
+                </div>
+
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% endblock %}

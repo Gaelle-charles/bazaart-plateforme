@@ -1,0 +1,195 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}{{ profile.displayName }} — BazaArt{% endblock %}
+{% block page_title %}Profil artiste{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    .profile-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 20px;
+        align-items: start;
+    }
+
+    /* ── Carte profil (colonne gauche) ── */
+    .profile-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 24px;
+        text-align: center;
+    }
+
+    /* Grand avatar rond */
+    .profile-avatar {
+        width: 80px; height: 80px; border-radius: 50%;
+        background: var(--color-orange); color: white;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 28px; font-weight: 700;
+        margin: 0 auto 14px;
+    }
+
+    .profile-avatar img {
+        width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
+    }
+
+    .profile-name {
+        font-family: var(--font-heading); font-size: 20px; font-weight: 700;
+        color: var(--color-text); margin-bottom: 4px;
+    }
+
+    .profile-location {
+        font-size: 13px; color: var(--color-text-light); margin-bottom: 16px;
+    }
+
+    /* Bouton Modifier (visible uniquement pour le propriétaire) */
+    .btn-edit {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 100%; height: 36px; border: 1.5px solid var(--color-border);
+        border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+        color: var(--color-text-muted); text-decoration: none; transition: all 0.15s;
+        margin-bottom: 16px;
+    }
+    .btn-edit:hover { border-color: var(--color-green); color: var(--color-green); }
+
+    /* Liens réseaux sociaux */
+    .social-links { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+
+    .social-link {
+        display: inline-flex; align-items: center; height: 26px; padding: 0 10px;
+        border: 1px solid var(--color-border); border-radius: var(--radius-full);
+        font-size: 11px; color: var(--color-text-muted); text-decoration: none;
+        transition: all 0.15s;
+    }
+    .social-link:hover { border-color: var(--color-green); color: var(--color-green); }
+
+    /* ── Colonne droite ── */
+    .profile-content { display: flex; flex-direction: column; gap: 16px; }
+
+    .content-card {
+        background: var(--color-white);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: 24px;
+    }
+
+    .section-label {
+        font-size: 10px; font-weight: 700; color: var(--color-text-light);
+        text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;
+    }
+
+    .bio-text { font-size: 14px; line-height: 1.8; color: var(--color-text-muted); }
+
+    /* Liens portfolio/site */
+    .link-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 0; border-bottom: 1px solid var(--color-border);
+        font-size: 13px;
+    }
+    .link-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .link-item__label { font-weight: 600; color: var(--color-text); min-width: 80px; }
+    .link-item a { color: var(--color-red); text-decoration: none; font-size: 13px; }
+    .link-item a:hover { text-decoration: underline; }
+
+    /* État vide */
+    .empty-profile {
+        text-align: center; padding: 32px; color: var(--color-text-light); font-size: 13px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="profile-layout">
+
+    {# ── Colonne gauche : carte profil ── #}
+    <div class="profile-card">
+
+        {# Avatar #}
+        {% if profile.avatarPath %}
+            <img src="{{ asset(profile.avatarPath) }}" alt="{{ profile.displayName }}"
+                 style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin:0 auto 14px;display:block;">
+        {% else %}
+            <div class="profile-avatar">{{ profile.displayName|first|upper }}</div>
+        {% endif %}
+
+        <div class="profile-name">{{ profile.displayName }}</div>
+
+        {% if profile.location %}
+            <div class="profile-location">📍 {{ profile.location }}</div>
+        {% endif %}
+
+        {# Bouton modifier — uniquement pour le propriétaire #}
+        {% if app.user == profile.user %}
+            <a href="{{ path('app_artist_profile_edit') }}" class="btn-edit">Modifier le profil</a>
+        {% endif %}
+
+        {# Liens réseaux sociaux #}
+        {% if profile.socialLinks %}
+            <div class="social-links">
+                {% for network, url in profile.socialLinks %}
+                    <a href="{{ url }}" target="_blank" rel="noopener" class="social-link">
+                        {{ network|capitalize }}
+                    </a>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+    </div>
+
+    {# ── Colonne droite : biographie + liens ── #}
+    <div class="profile-content">
+
+        {# Biographie #}
+        {% if profile.bio %}
+            <div class="content-card">
+                <div class="section-label">Biographie</div>
+                <p class="bio-text">{{ profile.bio|nl2br }}</p>
+            </div>
+        {% else %}
+            <div class="content-card">
+                <div class="section-label">Biographie</div>
+                <div class="empty-profile">
+                    Aucune biographie renseignée.
+                    {% if app.user == profile.user %}
+                        <br><a href="{{ path('app_artist_profile_edit') }}"
+                               style="color:var(--color-red);font-weight:600;text-decoration:none;">
+                            Ajouter une bio →
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+
+        {# Liens portfolio / site web #}
+        {% if profile.websiteUrl or profile.portfolioUrl %}
+            <div class="content-card">
+                <div class="section-label">Liens</div>
+                {% if profile.websiteUrl %}
+                    <div class="link-item">
+                        <span class="link-item__label">Site web</span>
+                        <a href="{{ profile.websiteUrl }}" target="_blank" rel="noopener">
+                            {{ profile.websiteUrl }}
+                        </a>
+                    </div>
+                {% endif %}
+                {% if profile.portfolioUrl %}
+                    <div class="link-item">
+                        <span class="link-item__label">Portfolio</span>
+                        <a href="{{ profile.portfolioUrl }}" target="_blank" rel="noopener">
+                            {{ profile.portfolioUrl }}
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
+
+    </div>
+
+</div>
+
+{% endblock %}

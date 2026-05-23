@@ -1,0 +1,170 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Articles — BazaArt{% endblock %}
+{% block page_title %}Articles{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Barre d'outils en haut de la liste */
+    .page-toolbar {
+        display: flex; justify-content: flex-end; gap: 10px;
+        margin-bottom: 20px; flex-wrap: wrap;
+    }
+
+    /* Liste des articles */
+    .articles-feed { display: flex; flex-direction: column; gap: 16px; }
+
+    /* Carte d'article */
+    .article-card {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        padding: 20px; display: flex; gap: 20px; align-items: flex-start;
+    }
+
+    /* Image de couverture */
+    .article-cover {
+        width: 160px; height: 110px; border-radius: var(--radius-sm);
+        object-fit: cover; flex-shrink: 0;
+    }
+
+    .article-body { flex: 1; min-width: 0; }
+
+    /* Ligne auteur + date */
+    .article-meta {
+        display: flex; align-items: center; gap: 8px;
+        flex-wrap: wrap; margin-bottom: 8px;
+    }
+
+    /* Mini avatar auteur */
+    .author-avatar {
+        width: 28px; height: 28px; border-radius: 50%;
+        object-fit: cover; flex-shrink: 0;
+    }
+    .author-avatar-placeholder {
+        width: 28px; height: 28px; border-radius: 50%;
+        background: var(--color-green); color: white;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+
+    .author-name  { font-size: 13px; font-weight: 600; color: var(--color-text); }
+    .meta-sep     { color: var(--color-border); font-size: 12px; }
+    .article-date { font-size: 12px; color: var(--color-text-light); }
+
+    /* Titre de l'article */
+    .article-title {
+        font-family: var(--font-heading); font-size: 18px; font-weight: 700;
+        color: var(--color-text); text-decoration: none; line-height: 1.3;
+        margin-bottom: 8px; display: block;
+    }
+    .article-title:hover { color: var(--color-red); }
+
+    /* Extrait */
+    .article-excerpt {
+        font-size: 13px; line-height: 1.7; color: var(--color-text-muted); margin-bottom: 10px;
+    }
+
+    /* Lien "Lire l'article" */
+    .read-link {
+        font-size: 12px; font-weight: 600; color: var(--color-red); text-decoration: none;
+    }
+    .read-link:hover { text-decoration: underline; }
+
+    /* État vide */
+    .empty-state {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); padding: 48px; text-align: center;
+        color: var(--color-text-muted);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# Barre d'outils : accès à mes articles + bouton écrire #}
+<div class="page-toolbar">
+    <a href="{{ path('app_article_my') }}" class="btn btn-outline">Mes articles</a>
+    <a href="{{ path('app_article_new') }}" class="btn btn-primary">+ Écrire un article</a>
+</div>
+
+{% if articles is empty %}
+    {# État vide : aucun article publié #}
+    <div class="empty-state">
+        <p>Aucun article publié pour l'instant.</p>
+        <a href="{{ path('app_article_new') }}"
+           style="display:inline-block; margin-top:10px; color:var(--color-red); font-weight:600; text-decoration:none;">
+            Écrire le premier article →
+        </a>
+    </div>
+{% else %}
+    {# Liste des articles publiés #}
+    <div class="articles-feed">
+        {% for article in articles %}
+            <article class="article-card">
+
+                {# Image de couverture cliquable (si elle existe) #}
+                {% if article.coverImagePath %}
+                    <a href="{{ path('app_article_show', {slug: article.slug}) }}" style="flex-shrink:0;">
+                        <img src="{{ asset(article.coverImagePath) }}"
+                             alt="{{ article.title }}"
+                             class="article-cover">
+                    </a>
+                {% endif %}
+
+                <div class="article-body">
+
+                    {# Métadonnées : avatar auteur + nom + date #}
+                    <div class="article-meta">
+                        {# Avatar de l'auteur (photo ou initiale) #}
+                        {% if article.author.artistProfile and article.author.artistProfile.avatarPath %}
+                            <img src="{{ asset(article.author.artistProfile.avatarPath) }}"
+                                 alt="" class="author-avatar">
+                        {% else %}
+                            <div class="author-avatar-placeholder">
+                                {{ article.author.email|first|upper }}
+                            </div>
+                        {% endif %}
+
+                        {# Nom affiché : nom d'artiste ou email par défaut #}
+                        <span class="author-name">
+                            {% if article.author.artistProfile %}
+                                {{ article.author.artistProfile.displayName }}
+                            {% else %}
+                                {{ article.author.email }}
+                            {% endif %}
+                        </span>
+
+                        <span class="meta-sep">•</span>
+
+                        {# Date de publication (ou de création si non publié) #}
+                        <span class="article-date">
+                            {{ article.publishedAt ? article.publishedAt|date('d/m/Y') : article.createdAt|date('d/m/Y') }}
+                        </span>
+                    </div>
+
+                    {# Titre cliquable #}
+                    <a href="{{ path('app_article_show', {slug: article.slug}) }}" class="article-title">
+                        {{ article.title }}
+                    </a>
+
+                    {# Extrait : on utilise l'excerpt s'il existe, sinon le début du contenu #}
+                    <p class="article-excerpt">
+                        {% if article.excerpt %}
+                            {{ article.excerpt|slice(0, 200) }}{{ article.excerpt|length > 200 ? '...' : '' }}
+                        {% else %}
+                            {{ article.content|slice(0, 200) }}{{ article.content|length > 200 ? '...' : '' }}
+                        {% endif %}
+                    </p>
+
+                    <a href="{{ path('app_article_show', {slug: article.slug}) }}" class="read-link">
+                        Lire l'article →
+                    </a>
+
+                </div>
+            </article>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Mon profil artiste — BazaArt{% endblock %}
+{% block page_title %}{{ profile ? 'Modifier mon profil' : 'Créer mon profil artiste' }}{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Contrainte de largeur pour les formulaires */
+    .form-container { max-width: 680px; }
+
+    /* Section de formulaire dans une carte */
+    .form-card {
+        background: var(--color-white); border: 1px solid var(--color-border);
+        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+        padding: 24px; margin-bottom: 16px;
+    }
+
+    .form-card__title {
+        font-size: 13px; font-weight: 700; color: var(--color-text);
+        margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border);
+    }
+
+    /* Avatar actuel */
+    .current-avatar {
+        width: 80px; height: 80px; border-radius: 50%;
+        object-fit: cover; display: block; margin-bottom: 14px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+
+    {# enctype="multipart/form-data" est OBLIGATOIRE pour l'upload de fichiers #}
+    <form method="post" enctype="multipart/form-data">
+
+        {# ── Section 1 : Informations générales ── #}
+        <div class="form-card">
+            <div class="form-card__title">Informations générales</div>
+
+            <div class="form-group">
+                <label for="displayName">Nom d'affichage public *</label>
+                <input type="text" id="displayName" name="displayName" required
+                       value="{{ profile ? profile.displayName : '' }}"
+                       placeholder="Ex: Marie Dupont, DJ Kévin...">
+            </div>
+
+            <div class="form-group">
+                <label for="bio">Biographie</label>
+                {# Utilisez textarea pour les textes longs multi-lignes #}
+                <textarea id="bio" name="bio" rows="5"
+                          placeholder="Parlez de votre parcours, votre pratique artistique...">{{ profile ? profile.bio : '' }}</textarea>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="location">Localisation</label>
+                <input type="text" id="location" name="location"
+                       value="{{ profile ? profile.location : '' }}"
+                       placeholder="Ex: Paris, France">
+            </div>
+        </div>
+
+        {# ── Section 2 : Liens & portfolio ── #}
+        <div class="form-card">
+            <div class="form-card__title">Liens & portfolio</div>
+
+            <div class="form-group">
+                <label for="websiteUrl">Site web</label>
+                <input type="url" id="websiteUrl" name="websiteUrl"
+                       value="{{ profile ? profile.websiteUrl : '' }}"
+                       placeholder="https://monsite.com">
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="portfolioUrl">Portfolio</label>
+                <input type="url" id="portfolioUrl" name="portfolioUrl"
+                       value="{{ profile ? profile.portfolioUrl : '' }}"
+                       placeholder="https://behance.net/...">
+            </div>
+        </div>
+
+        {# ── Section 3 : Réseaux sociaux ── #}
+        <div class="form-card">
+            <div class="form-card__title">Réseaux sociaux</div>
+
+            {# Boucle sur les réseaux pour éviter la répétition #}
+            {% for network in ['instagram', 'linkedin', 'twitter', 'facebook', 'youtube'] %}
+                <div class="form-group {{ loop.last ? 'mb-0' : '' }}" style="{{ loop.last ? 'margin-bottom:0' : '' }}">
+                    <label for="social_{{ network }}">{{ network|capitalize }}</label>
+                    <input type="url" id="social_{{ network }}" name="social_{{ network }}"
+                           value="{{ profile and profile.socialLinks ? (profile.socialLinks[network] ?? '') : '' }}"
+                           placeholder="https://{{ network }}.com/...">
+                </div>
+            {% endfor %}
+        </div>
+
+        {# ── Section 4 : Avatar ── #}
+        <div class="form-card">
+            <div class="form-card__title">Avatar</div>
+
+            {# Afficher l'avatar actuel si disponible #}
+            {% if profile and profile.avatarPath %}
+                <img src="{{ asset(profile.avatarPath) }}"
+                     alt="Avatar actuel"
+                     class="current-avatar">
+            {% endif %}
+
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="avatar">
+                    Changer l'avatar
+                    <small style="font-weight:normal; color:var(--color-text-light);">(JPG, PNG — max 2Mo)</small>
+                </label>
+                <input type="file" id="avatar" name="avatar" accept="image/jpeg,image/png,image/webp">
+            </div>
+        </div>
+
+        {# ── Boutons de validation ── #}
+        <div style="display:flex; gap:12px; align-items:center;">
+            <button type="submit" class="btn btn-primary">Enregistrer</button>
+            {% if profile %}
+                <a href="{{ path('app_artist_profile_show') }}" class="btn btn-outline">Annuler</a>
+            {% endif %}
+        </div>
+
+    </form>
+</div>
+{% endblock %}

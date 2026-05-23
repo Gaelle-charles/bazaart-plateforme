@@ -1,0 +1,287 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Mes notifications — BazaArt{% endblock %}
+{% block page_title %}Notifications{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* ── Entête de la page notifications ── */
+    .notif-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .notif-header__title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--color-text);
+    }
+    .notif-header__subtitle {
+        font-size: 12px;
+        color: var(--color-text-muted);
+        margin-top: 2px;
+    }
+
+    /* ── Liste des notifications ── */
+    .notif-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        background: var(--color-white);
+    }
+
+    /* ── Item de notification ── */
+    .notif-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--color-border);
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.12s;
+    }
+    .notif-item:last-child {
+        border-bottom: none;
+    }
+    .notif-item:hover {
+        background: #faf9f7;
+    }
+
+    /* Notification NON LUE : fond blanc + bordure rouge sur la gauche */
+    .notif-item--unread {
+        background: #fff;
+        border-left: 3px solid var(--color-red);
+        padding-left: 15px; /* compense les 3px de bordure */
+    }
+    .notif-item--unread:hover {
+        background: #fef8f7;
+    }
+
+    /* Notification LUE : fond légèrement grisé */
+    .notif-item--read {
+        background: #faf9f7;
+        opacity: 0.85;
+    }
+
+    /* Icône du type de notification */
+    .notif-item__icon {
+        font-size: 18px;
+        flex-shrink: 0;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: var(--color-bg);
+    }
+
+    /* Corps textuel de la notification */
+    .notif-item__body {
+        flex: 1;
+        min-width: 0;
+    }
+    .notif-item__text {
+        font-size: 13px;
+        color: var(--color-text);
+        line-height: 1.4;
+    }
+    .notif-item__date {
+        font-size: 11px;
+        color: var(--color-text-light);
+        margin-top: 4px;
+    }
+
+    /* Indicateur visuel de non-lu (pastille rouge) */
+    .notif-item__dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--color-red);
+        flex-shrink: 0;
+        margin-top: 5px;
+    }
+
+    /* ── État vide ── */
+    .notif-empty {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--color-text-muted);
+    }
+    .notif-empty__icon {
+        font-size: 40px;
+        margin-bottom: 12px;
+        opacity: 0.5;
+    }
+    .notif-empty__text {
+        font-size: 14px;
+    }
+
+    /* ── Bouton "Tout marquer comme lu" ── */
+    .btn-mark-all {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 14px;
+        height: 34px;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--color-white);
+        border: 1.5px solid var(--color-border);
+        color: var(--color-text-muted);
+        cursor: pointer;
+        transition: all 0.12s;
+    }
+    .btn-mark-all:hover {
+        border-color: var(--color-green);
+        color: var(--color-green);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="notif-header">
+    <div>
+        <div class="notif-header__title">Mes notifications</div>
+        <div class="notif-header__subtitle">
+            {{ notifications|length }} notification{{ notifications|length != 1 ? 's' : '' }} récente{{ notifications|length != 1 ? 's' : '' }}
+        </div>
+    </div>
+
+    {#
+        Bouton "Tout marquer comme lu" — formulaire POST avec jeton CSRF.
+        Le bouton est affiché même si tout est déjà lu (idempotent, pas de dommage).
+        Le jeton CSRF est généré par csrf_token() (fonction Twig Symfony).
+        Il sera vérifié dans NotificationController::markAllRead().
+    #}
+    {% if notifications is not empty %}
+        <form method="POST" action="{{ path('app_notification_mark_all_read') }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('notification_mark_all_read') }}">
+            <button type="submit" class="btn-mark-all">
+                ✓ Tout marquer comme lu
+            </button>
+        </form>
+    {% endif %}
+</div>
+
+{# ── Liste des notifications ──────────────────────────────────────────────── #}
+{% if notifications is empty %}
+    {# État vide : aucune notification #}
+    <div class="notif-empty">
+        <div class="notif-empty__icon">🔔</div>
+        <div class="notif-empty__text">Vous n'avez pas encore de notifications.</div>
+    </div>
+{% else %}
+    <div class="notif-list">
+        {% for notification in notifications %}
+            {#
+                Détermine le lien de destination selon le type d'entité liée.
+                On utilise path() (Twig) plutôt que getLink() (PHP) car on a accès
+                au Router Symfony dans les templates → URLs correctes avec le nom de route.
+
+                Convention V1 :
+                  - conversation  → page de la conversation (app_messaging_show)
+                  - forum_thread  → liste du forum (pas de route directe par ID en V1)
+                  - resource      → page de la ressource (app_resource_show)
+                  - autres types  → pas de lien (href="#")
+            #}
+            {% set notifLink = '#' %}
+            {% if notification.relatedEntityType and notification.relatedEntityId %}
+                {% if notification.relatedEntityType == 'conversation' %}
+                    {% set notifLink = path('app_messaging_show', {id: notification.relatedEntityId}) %}
+                {% elseif notification.relatedEntityType == 'forum_thread' %}
+                    {# V1 : pas de route directe vers un thread par son ID — on pointe vers l'index #}
+                    {% set notifLink = path('app_forum_index') %}
+                {% elseif notification.relatedEntityType == 'resource' %}
+                    {% set notifLink = path('app_resource_show', {id: notification.relatedEntityId}) %}
+                {% endif %}
+            {% endif %}
+
+            {#
+                Icône selon le type de notification.
+                Mapping type → emoji pour l'identification visuelle rapide.
+            #}
+            {% set notifIcon = '🔔' %}
+            {% if notification.type.value == 'new_message' %}
+                {% set notifIcon = '✉' %}
+            {% elseif notification.type.value == 'new_reply' %}
+                {% set notifIcon = '💬' %}
+            {% elseif notification.type.value == 'mention' %}
+                {% set notifIcon = '@' %}
+            {% elseif notification.type.value == 'new_live' %}
+                {% set notifIcon = '📺' %}
+            {% elseif notification.type.value == 'resource_validated' %}
+                {% set notifIcon = '✅' %}
+            {% elseif notification.type.value == 'resource_match' %}
+                {% set notifIcon = '🔎' %}
+            {% endif %}
+
+            {#
+                Texte descriptif selon le type et les données complémentaires.
+                notification.data contient les infos contextuelles stockées lors de la création
+                (ex: {"senderEmail": "marie@ex.com", "threadTitle": "Recherche graphiste"}).
+            #}
+            {% set notifText = notification.type.label() %}
+            {% if notification.type.value == 'new_message' %}
+                {% if notification.data and notification.data.senderEmail is defined %}
+                    {#
+                        |e applique l'échappement HTML sur la donnée issue du JSON avant
+                        de la concaténer dans la chaîne — défense en profondeur contre XSS.
+                        Twig auto-échappe {{ notifText }} à l'affichage, mais si un futur
+                        développeur ajoute |raw sur notifText, les données seraient vulnérables
+                        sans ce |e préventif sur la source.
+                    #}
+                    {% set notifText = 'Nouveau message de ' ~ notification.data.senderEmail|e %}
+                {% else %}
+                    {% set notifText = 'Vous avez reçu un nouveau message privé.' %}
+                {% endif %}
+            {% elseif notification.type.value == 'new_reply' %}
+                {% if notification.data and notification.data.threadTitle is defined %}
+                    {% set notifText = 'Nouvelle réponse sur votre sujet : "' ~ notification.data.threadTitle|e ~ '"' %}
+                {% else %}
+                    {% set notifText = 'Quelqu\'un a répondu à votre sujet de forum.' %}
+                {% endif %}
+            {% elseif notification.type.value == 'mention' %}
+                {% set notifText = 'Vous avez été mentionné(e) dans une discussion.' %}
+            {% elseif notification.type.value == 'new_live' %}
+                {% set notifText = 'Un nouveau live a été planifié.' %}
+            {% elseif notification.type.value == 'resource_validated' %}
+                {% set notifText = 'Votre ressource soumise a été publiée.' %}
+            {% elseif notification.type.value == 'resource_match' %}
+                {% set notifText = 'Une nouvelle ressource correspond à vos alertes.' %}
+            {% endif %}
+
+            {# Classe CSS selon le statut de lecture #}
+            {% set itemClass = notification.isRead ? 'notif-item--read' : 'notif-item--unread' %}
+
+            <a href="{{ notifLink }}" class="notif-item {{ itemClass }}">
+                {# Icône du type #}
+                <div class="notif-item__icon">{{ notifIcon }}</div>
+
+                {# Corps de la notification #}
+                <div class="notif-item__body">
+                    <div class="notif-item__text">{{ notifText }}</div>
+                    <div class="notif-item__date">
+                        {# Format : "21/05/2026 à 14:30" #}
+                        {{ notification.createdAt|date('d/m/Y à H:i') }}
+                    </div>
+                </div>
+
+                {# Pastille rouge pour les non lues #}
+                {% if not notification.isRead %}
+                    <div class="notif-item__dot"></div>
+                {% endif %}
+            </a>
+        {% endfor %}
+    </div>
+{% endif %}
+{% endblock %}

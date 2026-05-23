@@ -1,0 +1,1978 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BazaArt — Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   DESIGN TOKENS — BazaArt
+   Palette extraite de bazaart.fr (dark artistic theme)
+   ============================================================ */
+:root {
+  --bg-primary:    #0A0A0A;
+  --bg-secondary:  #141413;
+  --bg-tertiary:   #1C1C1A;
+  --bg-card:       #1A1A18;
+  --bg-hover:      #222220;
+  --text-primary:  #EDEDED;
+  --text-secondary:#A9A9A9;
+  --text-muted:    #6B6B68;
+  --accent-gold:   #C8A96E;
+  --accent-brown:  #5D4037;
+  --accent-green:  #2D6A4F;
+  --accent-amber:  #E9C46A;
+  --accent-red:    #C0392B;
+  --border:        rgba(237,237,237,0.07);
+  --border-strong: rgba(237,237,237,0.14);
+  --radius-sm:     6px;
+  --radius-md:     10px;
+  --radius-lg:     16px;
+  --radius-xl:     24px;
+  --shadow-card:   0 2px 20px rgba(0,0,0,0.4);
+  --shadow-modal:  0 8px 60px rgba(0,0,0,0.7);
+  --sidebar-w:     240px;
+  --font-body:     'Inter', system-ui, sans-serif;
+  --font-display:  'Playfair Display', Georgia, serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { font-family: var(--font-body); background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; font-size: 14px; line-height: 1.6; }
+a { color: inherit; text-decoration: none; }
+img { max-width: 100%; }
+button { cursor: pointer; font-family: inherit; }
+input, textarea, select { font-family: inherit; }
+
+/* ============================================================
+   PAGE ROUTER — affiche/cache les pages
+   ============================================================ */
+.page { display: none; min-height: 100vh; }
+.page.active { display: flex; }
+
+/* ============================================================
+   LAYOUT AUTH — centré pleine page
+   ============================================================ */
+.auth-layout {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg-primary);
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+.auth-layout::before {
+  content: '';
+  position: absolute;
+  top: -200px; left: -200px;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(200,169,110,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+.auth-logo {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 2px;
+  margin-bottom: 0.4rem;
+  text-align: center;
+}
+.auth-tagline {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  margin-bottom: 2.5rem;
+  letter-spacing: 0.5px;
+}
+.auth-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: var(--shadow-modal);
+}
+.auth-card h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+.auth-card .subtitle {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-bottom: 1.8rem;
+}
+
+/* ============================================================
+   LAYOUT APP — sidebar + main
+   ============================================================ */
+.app-layout {
+  flex-direction: row;
+  min-height: 100vh;
+}
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 100;
+}
+.sidebar-logo {
+  padding: 1.6rem 1.5rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-logo .brand {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 1.5px;
+  display: block;
+}
+.sidebar-logo .brand-sub {
+  font-size: 0.7rem;
+  color: var(--accent-gold);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.sidebar-nav { flex: 1; padding: 1rem 0; overflow-y: auto; }
+.nav-section-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 0.8rem 1.5rem 0.4rem;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 1.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+.nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.nav-item.active { background: rgba(200,169,110,0.08); color: var(--accent-gold); border-left-color: var(--accent-gold); }
+.nav-item .icon { font-size: 1rem; width: 20px; text-align: center; }
+.sidebar-user {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.user-avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--accent-brown);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem; font-weight: 700;
+  color: #fff; flex-shrink: 0;
+}
+.user-info .name { font-size: 0.8rem; font-weight: 600; }
+.user-info .role { font-size: 0.68rem; color: var(--text-muted); }
+
+/* Main content */
+.main-content {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  min-height: 100vh;
+  background: var(--bg-primary);
+}
+.topbar {
+  height: 56px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.topbar-title { font-size: 1rem; font-weight: 600; }
+.topbar-actions { display: flex; align-items: center; gap: 0.75rem; }
+.page-body { padding: 2rem; }
+
+/* ============================================================
+   COMPOSANTS COMMUNS
+   ============================================================ */
+/* Formulaires */
+.form-group { margin-bottom: 1.2rem; }
+.form-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+  outline: none;
+}
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 0 3px rgba(200,169,110,0.12);
+}
+.form-group input::placeholder,
+.form-group textarea::placeholder { color: var(--text-muted); }
+.form-group textarea { resize: vertical; min-height: 100px; }
+.form-group select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23A9A9A9' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 1rem center; padding-right: 2.5rem; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.form-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem; }
+
+/* Boutons */
+.btn {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.65rem 1.4rem;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.15s;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--accent-gold); color: #1a1200; }
+.btn-primary:hover { background: #d4b87a; }
+.btn-secondary { background: transparent; color: var(--text-primary); border: 1px solid var(--border-strong); }
+.btn-secondary:hover { background: var(--bg-hover); }
+.btn-danger { background: rgba(192,57,43,0.15); color: #e74c3c; border: 1px solid rgba(192,57,43,0.3); }
+.btn-danger:hover { background: rgba(192,57,43,0.25); }
+.btn-success { background: rgba(45,106,79,0.2); color: #27ae60; border: 1px solid rgba(45,106,79,0.4); }
+.btn-ghost { background: transparent; color: var(--text-secondary); border: none; }
+.btn-ghost:hover { color: var(--text-primary); }
+.btn-sm { padding: 0.4rem 0.85rem; font-size: 0.78rem; }
+.btn-lg { padding: 0.85rem 2rem; font-size: 1rem; }
+.btn-full { width: 100%; justify-content: center; }
+
+/* Cartes */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-card);
+}
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.2rem; }
+.card-title { font-size: 1rem; font-weight: 600; }
+.card-subtitle { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+/* Badges de statut */
+.badge {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.badge-gold { background: rgba(200,169,110,0.15); color: var(--accent-gold); border: 1px solid rgba(200,169,110,0.3); }
+.badge-green { background: rgba(45,106,79,0.2); color: #2ecc71; border: 1px solid rgba(45,106,79,0.4); }
+.badge-red { background: rgba(192,57,43,0.15); color: #e74c3c; border: 1px solid rgba(192,57,43,0.3); }
+.badge-gray { background: rgba(169,169,169,0.1); color: var(--text-muted); border: 1px solid var(--border); }
+.badge-amber { background: rgba(233,196,106,0.15); color: #f39c12; border: 1px solid rgba(233,196,106,0.3); }
+
+/* Divider */
+.divider { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+.divider-text { display: flex; align-items: center; gap: 1rem; color: var(--text-muted); font-size: 0.8rem; margin: 1.2rem 0; }
+.divider-text::before, .divider-text::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
+
+/* Tags disciplines */
+.tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.tag {
+  padding: 0.2rem 0.65rem;
+  background: rgba(200,169,110,0.1);
+  border: 1px solid rgba(200,169,110,0.2);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  color: var(--accent-gold);
+  font-weight: 500;
+}
+.tag-outline { background: transparent; color: var(--text-secondary); border-color: var(--border-strong); }
+
+/* Search bar */
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 1rem;
+  width: 100%;
+}
+.search-bar input { background: none; border: none; outline: none; color: var(--text-primary); flex: 1; font-size: 0.875rem; }
+.search-bar input::placeholder { color: var(--text-muted); }
+.search-bar .icon { color: var(--text-muted); font-size: 0.9rem; }
+
+/* Filter bar */
+.filter-bar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1.5rem; }
+
+/* Stats cards */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.2rem 1.5rem;
+}
+.stat-card .stat-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 0.4rem; }
+.stat-card .stat-value { font-size: 1.8rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-display); }
+.stat-card .stat-delta { font-size: 0.75rem; color: #2ecc71; margin-top: 0.2rem; }
+.stat-card .stat-icon { font-size: 1.3rem; margin-bottom: 0.5rem; }
+
+/* Section headers */
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.2rem; }
+.section-title { font-size: 1.05rem; font-weight: 600; }
+.section-subtitle { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+/* Page header */
+.page-header { margin-bottom: 2rem; }
+.page-header h1 { font-family: var(--font-display); font-size: 1.8rem; font-weight: 700; margin-bottom: 0.3rem; }
+.page-header p { color: var(--text-secondary); font-size: 0.9rem; }
+
+/* Table */
+.table-wrapper { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th { text-align: left; padding: 0.7rem 1rem; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); border-bottom: 1px solid var(--border-strong); }
+td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); color: var(--text-secondary); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--bg-hover); }
+
+/* Resource cards */
+.resource-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.2rem; }
+.resource-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.4rem;
+  transition: border-color 0.2s, transform 0.15s;
+  cursor: pointer;
+}
+.resource-card:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+.resource-card .resource-type { font-size: 0.7rem; font-weight: 600; color: var(--accent-gold); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.6rem; }
+.resource-card h3 { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; line-height: 1.4; }
+.resource-card p { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 0.8rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.resource-card .resource-meta { display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); }
+.resource-card .deadline { color: var(--accent-amber); font-weight: 500; }
+
+/* Post cards */
+.post-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.4rem;
+  margin-bottom: 1rem;
+}
+.post-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+.post-avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--accent-brown); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; color: #fff; flex-shrink: 0; }
+.post-meta .author { font-size: 0.875rem; font-weight: 600; }
+.post-meta .date { font-size: 0.75rem; color: var(--text-muted); }
+.post-body { font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem; }
+.post-actions { display: flex; gap: 1rem; }
+.post-action-btn { display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 0.3rem 0; transition: color 0.15s; }
+.post-action-btn:hover { color: var(--accent-gold); }
+.post-action-btn.liked { color: var(--accent-red); }
+
+/* Article cards */
+.article-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color 0.2s;
+  cursor: pointer;
+}
+.article-card:hover { border-color: var(--border-strong); }
+.article-img { height: 160px; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 2rem; }
+.article-body { padding: 1.2rem; }
+.article-category { font-size: 0.7rem; font-weight: 600; color: var(--accent-gold); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+.article-card h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; line-height: 1.4; }
+.article-card p { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.article-footer { padding: 0.75rem 1.2rem; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); }
+
+/* Profile header */
+.profile-hero {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+.profile-avatar-lg {
+  width: 90px; height: 90px;
+  border-radius: 50%;
+  background: var(--accent-brown);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; font-weight: 700; color: #fff;
+  flex-shrink: 0;
+  border: 3px solid var(--border-strong);
+}
+.profile-info h1 { font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; margin-bottom: 0.3rem; }
+.profile-info .location { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.7rem; }
+.profile-info .bio { font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; max-width: 500px; }
+
+/* Notifications / alerts */
+.alert {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  border-radius: var(--radius-sm);
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+.alert-info { background: rgba(200,169,110,0.1); border: 1px solid rgba(200,169,110,0.25); color: var(--accent-gold); }
+.alert-success { background: rgba(45,106,79,0.15); border: 1px solid rgba(45,106,79,0.35); color: #2ecc71; }
+.alert-danger { background: rgba(192,57,43,0.12); border: 1px solid rgba(192,57,43,0.3); color: #e74c3c; }
+
+/* Pagination */
+.pagination { display: flex; align-items: center; gap: 0.4rem; justify-content: center; margin-top: 2rem; }
+.page-btn {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.page-btn:hover, .page-btn.active { background: var(--accent-gold); color: #1a1200; border-color: var(--accent-gold); }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 4rem 2rem; color: var(--text-muted); }
+.empty-state .empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.4; }
+.empty-state h3 { font-size: 1rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+.empty-state p { font-size: 0.85rem; }
+
+/* Topbar nav prototype */
+.prototype-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: #000;
+  border-top: 1px solid var(--border-strong);
+  padding: 0.5rem 1rem;
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  z-index: 9999;
+  font-size: 0.7rem;
+}
+.proto-btn {
+  padding: 0.3rem 0.6rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-family: var(--font-body);
+  transition: all 0.1s;
+  white-space: nowrap;
+}
+.proto-btn:hover, .proto-btn.active { background: var(--accent-gold); color: #1a1200; border-color: var(--accent-gold); }
+.proto-section { color: var(--text-muted); padding: 0.3rem 0.2rem; align-self: center; font-weight: 600; }
+
+/* Comments */
+.comment { display: flex; gap: 0.75rem; margin-bottom: 1rem; }
+.comment-body { background: var(--bg-tertiary); border-radius: var(--radius-sm); padding: 0.75rem 1rem; flex: 1; }
+.comment-author { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.3rem; }
+.comment-text { font-size: 0.82rem; color: var(--text-secondary); }
+
+/* Admin moderation row */
+.mod-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.2rem 1.5rem;
+  margin-bottom: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.mod-info { flex: 1; }
+.mod-info h4 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.2rem; }
+.mod-info p { font-size: 0.78rem; color: var(--text-muted); }
+.mod-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); transition: transform 0.25s; }
+  .sidebar.open { transform: translateX(0); }
+  .main-content { margin-left: 0; }
+  .form-row { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .resource-grid { grid-template-columns: 1fr; }
+  .profile-hero { flex-direction: column; }
+  .prototype-nav { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     NAVIGATION PROTOTYPE (barre du bas)
+     ============================================================ -->
+<nav class="prototype-nav">
+  <span class="proto-section">Auth:</span>
+  <button class="proto-btn active" onclick="showPage('login')">Login</button>
+  <button class="proto-btn" onclick="showPage('register')">Register</button>
+  <span class="proto-section">App:</span>
+  <button class="proto-btn" onclick="showPage('dashboard')">Dashboard</button>
+  <span class="proto-section">Profil:</span>
+  <button class="proto-btn" onclick="showPage('artist-show')">Artiste</button>
+  <button class="proto-btn" onclick="showPage('artist-edit')">Édit. Artiste</button>
+  <button class="proto-btn" onclick="showPage('org-show')">Organisation</button>
+  <button class="proto-btn" onclick="showPage('org-edit')">Édit. Org.</button>
+  <span class="proto-section">Ressources:</span>
+  <button class="proto-btn" onclick="showPage('resources-list')">Liste</button>
+  <button class="proto-btn" onclick="showPage('resource-detail')">Détail</button>
+  <button class="proto-btn" onclick="showPage('resource-submit')">Soumettre</button>
+  <button class="proto-btn" onclick="showPage('resource-my')">Mes soumissions</button>
+  <span class="proto-section">Communauté:</span>
+  <button class="proto-btn" onclick="showPage('community')">Feed</button>
+  <span class="proto-section">Articles:</span>
+  <button class="proto-btn" onclick="showPage('articles-list')">Articles</button>
+  <button class="proto-btn" onclick="showPage('article-show')">Lire</button>
+  <button class="proto-btn" onclick="showPage('article-new')">Écrire</button>
+  <button class="proto-btn" onclick="showPage('article-my')">Mes articles</button>
+  <span class="proto-section">Admin:</span>
+  <button class="proto-btn" onclick="showPage('admin-dashboard')">Dashboard</button>
+  <button class="proto-btn" onclick="showPage('admin-pending')">Modération</button>
+  <button class="proto-btn" onclick="showPage('admin-resources')">Ressources</button>
+  <button class="proto-btn" onclick="showPage('admin-users')">Utilisateurs</button>
+</nav>
+
+<!-- ================================================================
+     PAGE 1 — LOGIN
+     ================================================================ -->
+<div class="page active" id="page-login">
+  <div class="auth-layout" style="width:100%;">
+    <div class="auth-logo">BazaArt</div>
+    <div class="auth-tagline">La plateforme des artistes francophones</div>
+    <div class="auth-card">
+      <h2>Connexion</h2>
+      <p class="subtitle">Ravis de vous revoir ✦</p>
+      <div class="form-group">
+        <label>Adresse e-mail</label>
+        <input type="email" placeholder="vous@exemple.com">
+      </div>
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input type="password" placeholder="••••••••">
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:1.2rem;">
+        <a href="#" style="font-size:0.8rem;color:var(--accent-gold);">Mot de passe oublié ?</a>
+      </div>
+      <button class="btn btn-primary btn-full btn-lg" onclick="showPage('dashboard')">Se connecter</button>
+      <div class="divider-text">ou</div>
+      <div style="text-align:center;font-size:0.85rem;color:var(--text-muted);">
+        Pas encore de compte ?
+        <a href="#" onclick="showPage('register')" style="color:var(--accent-gold);font-weight:600;"> S'inscrire</a>
+      </div>
+    </div>
+    <p style="margin-top:2rem;font-size:0.75rem;color:var(--text-muted);text-align:center;">
+      En vous connectant, vous acceptez nos <a href="#" style="color:var(--accent-gold);">CGU</a>
+    </p>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 2 — REGISTER
+     ================================================================ -->
+<div class="page" id="page-register">
+  <div class="auth-layout" style="width:100%;">
+    <div class="auth-logo">BazaArt</div>
+    <div class="auth-tagline">Rejoignez la communauté artistique francophone</div>
+    <div class="auth-card" style="max-width:460px;">
+      <h2>Créer un compte</h2>
+      <p class="subtitle">Gratuit, sans engagement</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Prénom</label>
+          <input type="text" placeholder="Marie">
+        </div>
+        <div class="form-group">
+          <label>Nom</label>
+          <input type="text" placeholder="Dupont">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Adresse e-mail</label>
+        <input type="email" placeholder="vous@exemple.com">
+      </div>
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input type="password" placeholder="Minimum 8 caractères">
+        <div class="form-hint">Au moins 8 caractères, une majuscule et un chiffre.</div>
+      </div>
+      <div class="form-group">
+        <label>Je suis…</label>
+        <select>
+          <option value="">Choisir un profil</option>
+          <option>Artiste</option>
+          <option>Organisation culturelle</option>
+          <option>Les deux</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-full btn-lg" style="margin-top:0.5rem;" onclick="showPage('dashboard')">Créer mon compte</button>
+      <div style="text-align:center;font-size:0.85rem;color:var(--text-muted);margin-top:1.2rem;">
+        Déjà inscrit·e ?
+        <a href="#" onclick="showPage('login')" style="color:var(--accent-gold);font-weight:600;"> Se connecter</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 3 — DASHBOARD
+     ================================================================ -->
+<div class="page" id="page-dashboard">
+  <div class="app-layout" style="width:100%;">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <span class="brand">BazaArt</span>
+        <span class="brand-sub">Artistes francophones</span>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Principal</div>
+        <div class="nav-item active" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-item" onclick="showPage('resources-list')"><span class="icon">◈</span> Ressources</div>
+        <div class="nav-item" onclick="showPage('community')"><span class="icon">◉</span> Communauté</div>
+        <div class="nav-item" onclick="showPage('articles-list')"><span class="icon">◎</span> Articles</div>
+        <div class="nav-section-label">Mon espace</div>
+        <div class="nav-item" onclick="showPage('artist-show')"><span class="icon">◐</span> Profil artiste</div>
+        <div class="nav-item" onclick="showPage('org-show')"><span class="icon">▣</span> Mon organisation</div>
+        <div class="nav-item" onclick="showPage('resource-my')"><span class="icon">◳</span> Mes soumissions</div>
+        <div class="nav-item" onclick="showPage('article-my')"><span class="icon">◷</span> Mes articles</div>
+        <div class="nav-section-label">Admin</div>
+        <div class="nav-item" onclick="showPage('admin-dashboard')" style="color:var(--accent-gold)"><span class="icon">⚙</span> Administration</div>
+      </nav>
+      <div class="sidebar-user">
+        <div class="user-avatar">MC</div>
+        <div class="user-info">
+          <div class="name">Marie Callot</div>
+          <div class="role">Artiste · Admin</div>
+        </div>
+      </div>
+    </aside>
+    <!-- Main -->
+    <div class="main-content">
+      <div class="topbar">
+        <span class="topbar-title">Tableau de bord</span>
+        <div class="topbar-actions">
+          <button class="btn btn-secondary btn-sm" onclick="showPage('resource-submit')">+ Soumettre une ressource</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <!-- Greeting -->
+        <div style="margin-bottom:2rem;">
+          <h1 style="font-family:var(--font-display);font-size:1.6rem;margin-bottom:0.3rem;">Bonjour, Marie ✦</h1>
+          <p style="color:var(--text-muted);font-size:0.875rem;">Voici les dernières opportunités et actualités de la communauté.</p>
+        </div>
+        <!-- Stats -->
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-icon">◈</div><div class="stat-label">Ressources publiées</div><div class="stat-value">247</div><div class="stat-delta">↑ +12 cette semaine</div></div>
+          <div class="stat-card"><div class="stat-icon">◉</div><div class="stat-label">Membres actifs</div><div class="stat-value">1 842</div><div class="stat-delta">↑ +38 ce mois</div></div>
+          <div class="stat-card"><div class="stat-icon">◎</div><div class="stat-label">Articles publiés</div><div class="stat-value">93</div></div>
+          <div class="stat-card"><div class="stat-icon">◷</div><div class="stat-label">Mes soumissions</div><div class="stat-value">4</div></div>
+        </div>
+        <!-- 2 colonnes -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+          <!-- Ressources récentes -->
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Ressources récentes</div><div class="card-subtitle">Dernières opportunités validées</div></div>
+              <button class="btn btn-ghost btn-sm" onclick="showPage('resources-list')">Voir tout →</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.8rem;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:0.8rem;background:var(--bg-tertiary);border-radius:var(--radius-sm);cursor:pointer;" onclick="showPage('resource-detail')">
+                <div><div style="font-size:0.65rem;color:var(--accent-gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:0.3rem;">Résidence</div><div style="font-size:0.85rem;font-weight:600;">Résidence Villa Médicis 2025</div><div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem;">Deadline : 15 avr. 2025</div></div>
+                <span class="badge badge-green">✓ Ouvert</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:0.8rem;background:var(--bg-tertiary);border-radius:var(--radius-sm);cursor:pointer;" onclick="showPage('resource-detail')">
+                <div><div style="font-size:0.65rem;color:var(--accent-gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:0.3rem;">Financement</div><div style="font-size:0.85rem;font-weight:600;">Bourse Fondation Cartier</div><div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem;">Deadline : 30 mars 2025</div></div>
+                <span class="badge badge-amber">⚠ Bientôt</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:0.8rem;background:var(--bg-tertiary);border-radius:var(--radius-sm);cursor:pointer;" onclick="showPage('resource-detail')">
+                <div><div style="font-size:0.65rem;color:var(--accent-gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:0.3rem;">Appel à projets</div><div style="font-size:0.85rem;font-weight:600;">Festival Off Avignon — Sélection</div><div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem;">Deadline : 1 mai 2025</div></div>
+                <span class="badge badge-green">✓ Ouvert</span>
+              </div>
+            </div>
+          </div>
+          <!-- Activité communauté -->
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Communauté</div><div class="card-subtitle">Publications récentes</div></div>
+              <button class="btn btn-ghost btn-sm" onclick="showPage('community')">Voir tout →</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.8rem;">
+              <div style="display:flex;gap:0.75rem;align-items:flex-start;">
+                <div class="user-avatar" style="width:32px;height:32px;font-size:0.72rem;">JT</div>
+                <div><div style="font-size:0.8rem;font-weight:600;">Jean Tamba <span style="color:var(--text-muted);font-weight:400;">· il y a 2h</span></div><div style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.2rem;">Quelqu'un a de l'expérience avec les bourses DRAC Île-de-France ? Je cherche des retours...</div></div>
+              </div>
+              <hr style="border-color:var(--border);">
+              <div style="display:flex;gap:0.75rem;align-items:flex-start;">
+                <div class="user-avatar" style="width:32px;height:32px;font-size:0.72rem;background:var(--accent-green);">AL</div>
+                <div><div style="font-size:0.8rem;font-weight:600;">Amara Ly <span style="color:var(--text-muted);font-weight:400;">· hier</span></div><div style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.2rem;">Super conférence sur la médiation culturelle ce weekend à Lyon — très recommandé!</div></div>
+              </div>
+              <hr style="border-color:var(--border);">
+              <div style="display:flex;gap:0.75rem;align-items:flex-start;">
+                <div class="user-avatar" style="width:32px;height:32px;font-size:0.72rem;background:#7b5ea7;">PD</div>
+                <div><div style="font-size:0.8rem;font-weight:600;">Paula Diaz <span style="color:var(--text-muted);font-weight:400;">· il y a 3j</span></div><div style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.2rem;">J'ai publié un article sur les droits des artistes en résidence — vos retours sont bienvenus !</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Mes soumissions récentes -->
+        <div class="card" style="margin-top:1.5rem;">
+          <div class="card-header">
+            <div><div class="card-title">Mes soumissions récentes</div></div>
+            <button class="btn btn-ghost btn-sm" onclick="showPage('resource-my')">Voir tout →</button>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Titre</th><th>Type</th><th>Statut</th><th>Soumis le</th></tr></thead>
+              <tbody>
+                <tr><td style="color:var(--text-primary);font-weight:500;">Programme de mentorat CNC</td><td><span class="badge badge-gray">Financement</span></td><td><span class="badge badge-amber">En attente</span></td><td>5 mars 2025</td></tr>
+                <tr><td style="color:var(--text-primary);font-weight:500;">Bourse Aide à la Création SACD</td><td><span class="badge badge-gray">Bourse</span></td><td><span class="badge badge-green">Validé</span></td><td>1 mars 2025</td></tr>
+                <tr><td style="color:var(--text-primary);font-weight:500;">Résidence Cité des Arts Paris</td><td><span class="badge badge-gray">Résidence</span></td><td><span class="badge badge-red">Rejeté</span></td><td>20 fév. 2025</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 4 — ARTIST PROFILE SHOW
+     ================================================================ -->
+<div class="page" id="page-artist-show">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-item" onclick="showPage('resources-list')"><span class="icon">◈</span> Ressources</div>
+        <div class="nav-item" onclick="showPage('community')"><span class="icon">◉</span> Communauté</div>
+        <div class="nav-item" onclick="showPage('articles-list')"><span class="icon">◎</span> Articles</div>
+        <div class="nav-section-label">Mon espace</div>
+        <div class="nav-item active" onclick="showPage('artist-show')"><span class="icon">◐</span> Profil artiste</div>
+        <div class="nav-item" onclick="showPage('org-show')"><span class="icon">▣</span> Mon organisation</div>
+        <div class="nav-item" onclick="showPage('resource-my')"><span class="icon">◳</span> Mes soumissions</div>
+        <div class="nav-item" onclick="showPage('article-my')"><span class="icon">◷</span> Mes articles</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Artiste</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar">
+        <span class="topbar-title">Mon profil artiste</span>
+        <div class="topbar-actions"><button class="btn btn-primary btn-sm" onclick="showPage('artist-edit')">✎ Modifier le profil</button></div>
+      </div>
+      <div class="page-body">
+        <div class="profile-hero">
+          <div class="profile-avatar-lg">MC</div>
+          <div class="profile-info" style="flex:1">
+            <h1>Marie Callot</h1>
+            <div class="location">📍 Lyon, France</div>
+            <div class="bio">Plasticienne et chercheuse en arts visuels, mon travail explore les intersections entre mémoire collective et espaces urbains. Diplômée de l'ENSBA Lyon, j'expose régulièrement en France et à l'international.</div>
+            <div class="tags" style="margin-top:0.8rem;">
+              <span class="tag">Arts visuels</span>
+              <span class="tag">Photographie</span>
+              <span class="tag">Installation</span>
+              <span class="tag">Recherche artistique</span>
+            </div>
+            <div style="display:flex;gap:1rem;margin-top:1rem;">
+              <a href="#" style="font-size:0.82rem;color:var(--accent-gold);">🌐 marie-callot.fr</a>
+              <a href="#" style="font-size:0.82rem;color:var(--accent-gold);">📁 Portfolio</a>
+              <a href="#" style="font-size:0.82rem;color:var(--accent-gold);">Instagram</a>
+            </div>
+          </div>
+        </div>
+        <!-- Sections -->
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;">
+          <div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">Parcours & démarche</div></div>
+              <p style="font-size:0.875rem;color:var(--text-secondary);line-height:1.7;">Mon travail s'inscrit dans une démarche documentaire et poétique. En mobilisant la photographie argentique et l'installation in situ, je crée des dispositifs qui interrogent notre rapport aux lieux chargés d'histoire...</p>
+              <p style="font-size:0.875rem;color:var(--text-secondary);line-height:1.7;margin-top:0.8rem;">Depuis 2018, je collabore régulièrement avec des institutions publiques (FRAC, centres d'art) et des collectivités locales dans le cadre de commandes artistiques et de résidences de territoire.</p>
+            </div>
+            <div class="card" style="margin-top:1.2rem;">
+              <div class="card-header"><div class="card-title">Articles publiés</div><button class="btn btn-ghost btn-sm" onclick="showPage('article-my')">Voir tout</button></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;">
+                <div class="article-card" onclick="showPage('article-show')"><div class="article-img">🖼</div><div class="article-body"><div class="article-category">Pratique</div><h3>Monter un dossier de résidence efficace</h3></div></div>
+                <div class="article-card" onclick="showPage('article-show')"><div class="article-img">📸</div><div class="article-body"><div class="article-category">Droits</div><h3>Droit à l'image en milieu urbain</h3></div></div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">Informations</div></div>
+              <div style="display:flex;flex-direction:column;gap:0.9rem;">
+                <div><div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin-bottom:0.2rem;">Localisation</div><div style="font-size:0.875rem;">Lyon, Auvergne-Rhône-Alpes</div></div>
+                <div><div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin-bottom:0.2rem;">Disciplines</div><div class="tags"><span class="tag">Arts visuels</span><span class="tag">Photo</span></div></div>
+                <div><div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin-bottom:0.2rem;">Membre depuis</div><div style="font-size:0.875rem;">Janvier 2024</div></div>
+              </div>
+            </div>
+            <div class="card" style="margin-top:1rem;">
+              <div class="card-header"><div class="card-title">Statistiques</div></div>
+              <div style="display:flex;flex-direction:column;gap:0.6rem;">
+                <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-muted);">Articles publiés</span><span style="font-weight:600;">7</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-muted);">Ressources soumises</span><span style="font-weight:600;">4</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-muted);">Contributions comm.</span><span style="font-weight:600;">23</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 5 — ARTIST PROFILE EDIT
+     ================================================================ -->
+<div class="page" id="page-artist-edit">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-section-label">Mon espace</div>
+        <div class="nav-item active" onclick="showPage('artist-edit')"><span class="icon">◐</span> Profil artiste</div>
+        <div class="nav-item" onclick="showPage('org-edit')"><span class="icon">▣</span> Mon organisation</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Artiste</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar">
+        <span class="topbar-title">Modifier mon profil artiste</span>
+        <div class="topbar-actions">
+          <button class="btn btn-secondary btn-sm" onclick="showPage('artist-show')">Annuler</button>
+          <button class="btn btn-primary btn-sm">Sauvegarder</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div style="max-width:720px;margin:0 auto;">
+          <!-- Avatar -->
+          <div class="card" style="margin-bottom:1.5rem;">
+            <div class="card-title" style="margin-bottom:1rem;">Photo de profil</div>
+            <div style="display:flex;align-items:center;gap:1.5rem;">
+              <div class="profile-avatar-lg" style="width:72px;height:72px;font-size:1.6rem;">MC</div>
+              <div>
+                <button class="btn btn-secondary btn-sm">📷 Changer la photo</button>
+                <div class="form-hint" style="margin-top:0.5rem;">JPG, PNG · max 2 Mo · carré recommandé</div>
+              </div>
+            </div>
+          </div>
+          <!-- Infos de base -->
+          <div class="card" style="margin-bottom:1.5rem;">
+            <div class="card-title" style="margin-bottom:1.2rem;">Informations de base</div>
+            <div class="form-group"><label>Nom d'artiste / Pseudo</label><input type="text" value="Marie Callot"></div>
+            <div class="form-group"><label>Biographie courte</label><textarea>Plasticienne et chercheuse en arts visuels, mon travail explore les intersections entre mémoire collective et espaces urbains.</textarea></div>
+            <div class="form-row">
+              <div class="form-group"><label>Ville</label><input type="text" value="Lyon"></div>
+              <div class="form-group"><label>Pays</label><select><option>France</option><option>Belgique</option><option>Suisse</option></select></div>
+            </div>
+          </div>
+          <!-- Liens -->
+          <div class="card" style="margin-bottom:1.5rem;">
+            <div class="card-title" style="margin-bottom:1.2rem;">Liens</div>
+            <div class="form-group"><label>Site web</label><input type="url" placeholder="https://votre-site.com" value="https://marie-callot.fr"></div>
+            <div class="form-group"><label>Portfolio / Behance / Dribble</label><input type="url" placeholder="https://..."></div>
+            <div class="form-row">
+              <div class="form-group"><label>Instagram</label><input type="text" placeholder="@pseudo" value="@marie_callot_art"></div>
+              <div class="form-group"><label>LinkedIn</label><input type="text" placeholder="URL ou pseudo"></div>
+            </div>
+          </div>
+          <!-- Disciplines -->
+          <div class="card">
+            <div class="card-title" style="margin-bottom:1rem;">Disciplines artistiques</div>
+            <div class="form-hint" style="margin-bottom:1rem;">Sélectionnez jusqu'à 5 disciplines.</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;">
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.8rem;background:rgba(200,169,110,0.1);border:1px solid rgba(200,169,110,0.3);border-radius:var(--radius-sm);cursor:pointer;font-size:0.82rem;color:var(--text-primary);"><input type="checkbox" checked style="accent-color:var(--accent-gold);"> Arts visuels</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.8rem;background:rgba(200,169,110,0.1);border:1px solid rgba(200,169,110,0.3);border-radius:var(--radius-sm);cursor:pointer;font-size:0.82rem;color:var(--text-primary);"><input type="checkbox" checked style="accent-color:var(--accent-gold);"> Photographie</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.8rem;background:rgba(200,169,110,0.1);border:1px solid rgba(200,169,110,0.3);border-radius:var(--radius-sm);cursor:pointer;font-size:0.82rem;color:var(--text-primary);"><input type="checkbox" checked style="accent-color:var(--accent-gold);"> Installation</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.8rem;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;font-size:0.82rem;color:var(--text-secondary);"><input type="checkbox" style="accent-color:var(--accent-gold);"> Peinture</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.8rem;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;font-size:0.82rem;color:var(--text-secondary);"><input type="checkbox" style="accent-color:var(--accent-gold);"> Sculpture</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.8rem;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;font-size:0.82rem;color:var(--text-secondary);"><input type="checkbox" style="accent-color:var(--accent-gold);"> Danse</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.8rem;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;font-size:0.82rem;color:var(--text-secondary);"><input type="checkbox" style="accent-color:var(--accent-gold);"> Musique</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.8rem;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;font-size:0.82rem;color:var(--text-secondary);"><input type="checkbox" style="accent-color:var(--accent-gold);"> Théâtre</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.8rem;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;font-size:0.82rem;color:var(--text-secondary);"><input type="checkbox" style="accent-color:var(--accent-gold);"> Littérature</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 6 — ORGANIZATION PROFILE SHOW
+     ================================================================ -->
+<div class="page" id="page-org-show">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-item" onclick="showPage('resources-list')"><span class="icon">◈</span> Ressources</div>
+        <div class="nav-section-label">Mon espace</div>
+        <div class="nav-item" onclick="showPage('artist-show')"><span class="icon">◐</span> Profil artiste</div>
+        <div class="nav-item active" onclick="showPage('org-show')"><span class="icon">▣</span> Mon organisation</div>
+        <div class="nav-item" onclick="showPage('resource-my')"><span class="icon">◳</span> Mes soumissions</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Organisation</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar">
+        <span class="topbar-title">Mon organisation</span>
+        <div class="topbar-actions"><button class="btn btn-primary btn-sm" onclick="showPage('org-edit')">✎ Modifier</button></div>
+      </div>
+      <div class="page-body">
+        <div class="profile-hero">
+          <div class="profile-avatar-lg" style="background:var(--accent-green);border-radius:var(--radius-md);">AC</div>
+          <div class="profile-info" style="flex:1">
+            <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.3rem;">
+              <h1 style="margin-bottom:0;">Atelier Collectif Sud</h1>
+              <span class="badge badge-green">✓ Vérifié</span>
+            </div>
+            <div class="location">📍 Marseille, France · <span style="color:var(--text-muted)">SIRET : 842 361 950 00018</span></div>
+            <div class="bio" style="margin-top:0.5rem;">Association loi 1901 fondée en 2015, l'Atelier Collectif Sud accompagne les artistes émergents de la région PACA à travers des résidences, des expositions et des formations professionnelles.</div>
+            <div style="display:flex;gap:1rem;margin-top:0.8rem;">
+              <a href="#" style="font-size:0.82rem;color:var(--accent-gold);">🌐 ateliersuds.fr</a>
+              <a href="#" style="font-size:0.82rem;color:var(--accent-gold);">📧 contact@ateliersuds.fr</a>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:1rem;">À propos</div>
+            <p style="font-size:0.875rem;color:var(--text-secondary);line-height:1.7;">Depuis 10 ans, nous œuvrons pour rendre les pratiques artistiques accessibles et professionnalisantes dans le Sud de la France. Notre programmation annuelle accueille une trentaine d'artistes en résidence et organise plus de 15 événements publics...</p>
+          </div>
+          <div>
+            <div class="card" style="margin-bottom:1rem;">
+              <div class="card-title" style="margin-bottom:1rem;">Informations légales</div>
+              <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                <div><div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin-bottom:0.2rem;">Statut</div><div style="font-size:0.875rem;">Association loi 1901</div></div>
+                <div><div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin-bottom:0.2rem;">SIRET</div><div style="font-size:0.875rem;font-family:monospace;">842 361 950 00018</div></div>
+                <div><div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin-bottom:0.2rem;">Vérification</div><span class="badge badge-green">✓ Organisation vérifiée</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 7 — ORGANIZATION PROFILE EDIT
+     ================================================================ -->
+<div class="page" id="page-org-edit">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-section-label">Mon espace</div>
+        <div class="nav-item" onclick="showPage('artist-edit')"><span class="icon">◐</span> Profil artiste</div>
+        <div class="nav-item active" onclick="showPage('org-edit')"><span class="icon">▣</span> Mon organisation</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Organisation</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar">
+        <span class="topbar-title">Modifier mon organisation</span>
+        <div class="topbar-actions">
+          <button class="btn btn-secondary btn-sm" onclick="showPage('org-show')">Annuler</button>
+          <button class="btn btn-primary btn-sm">Sauvegarder</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div style="max-width:720px;margin:0 auto;">
+          <div class="alert alert-info" style="margin-bottom:1.5rem;">ℹ️ La vérification SIRET peut prendre 48h après modification.</div>
+          <div class="card" style="margin-bottom:1.5rem;">
+            <div class="card-title" style="margin-bottom:1.2rem;">Informations de l'organisation</div>
+            <div class="form-group"><label>Nom de l'organisation</label><input type="text" value="Atelier Collectif Sud"></div>
+            <div class="form-group"><label>SIRET</label><input type="text" value="842 361 950 00018" placeholder="14 chiffres"><div class="form-hint">Requis pour la vérification et la publication de ressources.</div></div>
+            <div class="form-group"><label>Description</label><textarea style="min-height:120px;">Association loi 1901 fondée en 2015, l'Atelier Collectif Sud accompagne les artistes émergents de la région PACA...</textarea></div>
+            <div class="form-row">
+              <div class="form-group"><label>Ville</label><input type="text" value="Marseille"></div>
+              <div class="form-group"><label>Pays</label><select><option>France</option><option>Belgique</option></select></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="margin-bottom:1.2rem;">Contact & liens</div>
+            <div class="form-group"><label>Email de contact</label><input type="email" value="contact@ateliersuds.fr"></div>
+            <div class="form-group"><label>Site web</label><input type="url" value="https://ateliersuds.fr"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 8 — RESOURCES LIST
+     ================================================================ -->
+<div class="page" id="page-resources-list">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-item active" onclick="showPage('resources-list')"><span class="icon">◈</span> Ressources</div>
+        <div class="nav-item" onclick="showPage('community')"><span class="icon">◉</span> Communauté</div>
+        <div class="nav-item" onclick="showPage('articles-list')"><span class="icon">◎</span> Articles</div>
+        <div class="nav-section-label">Mon espace</div>
+        <div class="nav-item" onclick="showPage('artist-show')"><span class="icon">◐</span> Profil artiste</div>
+        <div class="nav-item" onclick="showPage('resource-my')"><span class="icon">◳</span> Mes soumissions</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Artiste</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar">
+        <span class="topbar-title">Ressources</span>
+        <div class="topbar-actions"><button class="btn btn-primary btn-sm" onclick="showPage('resource-submit')">+ Soumettre</button></div>
+      </div>
+      <div class="page-body">
+        <div class="page-header"><h1>Opportunités artistiques</h1><p>247 ressources disponibles pour les artistes francophones</p></div>
+        <!-- Filtres -->
+        <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:0.8rem;margin-bottom:1.5rem;align-items:center;">
+          <div class="search-bar"><span class="icon">🔍</span><input type="text" placeholder="Rechercher une ressource…"></div>
+          <select style="background:var(--bg-card);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:0.55rem 2rem 0.55rem 0.8rem;color:var(--text-secondary);font-size:0.85rem;appearance:none;"><option>Tous types</option><option>Résidence</option><option>Financement</option><option>Bourse</option><option>Appel à projets</option><option>Formation</option></select>
+          <select style="background:var(--bg-card);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:0.55rem 2rem 0.55rem 0.8rem;color:var(--text-secondary);font-size:0.85rem;appearance:none;"><option>Toutes disciplines</option><option>Arts visuels</option><option>Musique</option><option>Danse</option><option>Théâtre</option></select>
+          <select style="background:var(--bg-card);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:0.55rem 2rem 0.55rem 0.8rem;color:var(--text-secondary);font-size:0.85rem;appearance:none;"><option>Tous pays</option><option>France</option><option>Belgique</option><option>Suisse</option><option>International</option></select>
+        </div>
+        <!-- Active filters -->
+        <div class="filter-bar">
+          <span style="font-size:0.75rem;color:var(--text-muted);">Filtres actifs :</span>
+          <span class="tag tag-outline">Arts visuels ×</span>
+          <span class="tag tag-outline">France ×</span>
+          <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;">Tout effacer</button>
+        </div>
+        <!-- Resource grid -->
+        <div class="resource-grid">
+          <div class="resource-card" onclick="showPage('resource-detail')">
+            <div class="resource-type">🏛 Résidence</div>
+            <h3>Résidence de création Villa Médicis</h3>
+            <p>Programme annuel de résidence à Rome pour artistes plasticiens et créateurs. Logement, atelier et bourse mensuelle fournis.</p>
+            <div class="tags" style="margin-bottom:0.8rem;"><span class="tag">Arts visuels</span><span class="tag">Littérature</span></div>
+            <div class="resource-meta"><span class="deadline">⏱ 15 avr. 2025</span><span>🌍 International</span></div>
+          </div>
+          <div class="resource-card" onclick="showPage('resource-detail')">
+            <div class="resource-type">💰 Financement</div>
+            <h3>Bourse de création Fondation Cartier</h3>
+            <p>Soutien financier pour projets artistiques innovants, notamment dans les domaines du design, de la photographie et des arts numériques.</p>
+            <div class="tags" style="margin-bottom:0.8rem;"><span class="tag">Design</span><span class="tag">Photographie</span></div>
+            <div class="resource-meta"><span class="deadline">⏱ 30 mars 2025</span><span>🇫🇷 France</span></div>
+          </div>
+          <div class="resource-card" onclick="showPage('resource-detail')">
+            <div class="resource-type">📣 Appel à projets</div>
+            <h3>Festival Off Avignon — Sélection 2025</h3>
+            <p>Candidature ouverte pour les compagnies théâtrales souhaitant participer au Off Avignon, le plus grand festival de théâtre au monde.</p>
+            <div class="tags" style="margin-bottom:0.8rem;"><span class="tag">Théâtre</span><span class="tag">Danse</span></div>
+            <div class="resource-meta"><span class="deadline">⏱ 1 mai 2025</span><span>🇫🇷 France</span></div>
+          </div>
+          <div class="resource-card" onclick="showPage('resource-detail')">
+            <div class="resource-type">🎓 Formation</div>
+            <h3>Masterclass médiation culturelle — INHA</h3>
+            <p>Cycle de formation intensive sur les pratiques de médiation contemporaines, destiné aux artistes et professionnels de la culture.</p>
+            <div class="tags" style="margin-bottom:0.8rem;"><span class="tag">Médiation</span><span class="tag">Tous</span></div>
+            <div class="resource-meta"><span style="color:var(--text-muted);">Gratuit</span><span>🇫🇷 Paris</span></div>
+          </div>
+          <div class="resource-card" onclick="showPage('resource-detail')">
+            <div class="resource-type">💰 Bourse</div>
+            <h3>Aide individuelle à la création — DRAC PACA</h3>
+            <p>Bourse régionale pour artistes professionnels résidant en région PACA. Montant : jusqu'à 8 000 €.</p>
+            <div class="tags" style="margin-bottom:0.8rem;"><span class="tag">Arts visuels</span><span class="tag">Musique</span><span class="tag">Cinéma</span></div>
+            <div class="resource-meta"><span class="deadline">⏱ 15 juin 2025</span><span>🇫🇷 PACA</span></div>
+          </div>
+          <div class="resource-card" onclick="showPage('resource-detail')">
+            <div class="resource-type">🏛 Résidence</div>
+            <h3>Résidence La Friche — Marseille</h3>
+            <p>Résidence de 3 mois à la Friche La Belle de Mai, avec atelier partagé et accompagnement professionnel au cœur de Marseille.</p>
+            <div class="tags" style="margin-bottom:0.8rem;"><span class="tag">Pluridisciplinaire</span></div>
+            <div class="resource-meta"><span class="deadline">⏱ 20 avr. 2025</span><span>🇫🇷 Marseille</span></div>
+          </div>
+        </div>
+        <div class="pagination">
+          <button class="page-btn active">1</button>
+          <button class="page-btn">2</button>
+          <button class="page-btn">3</button>
+          <button class="page-btn">…</button>
+          <button class="page-btn">12</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 9 — RESOURCE DETAIL
+     ================================================================ -->
+<div class="page" id="page-resource-detail">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-item active" onclick="showPage('resources-list')"><span class="icon">◈</span> Ressources</div>
+        <div class="nav-item" onclick="showPage('community')"><span class="icon">◉</span> Communauté</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Artiste</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar">
+        <span class="topbar-title"><button class="btn btn-ghost btn-sm" onclick="showPage('resources-list')">← Ressources</button> / Résidence Villa Médicis</span>
+      </div>
+      <div class="page-body">
+        <div style="max-width:800px;margin:0 auto;">
+          <!-- Header -->
+          <div style="margin-bottom:2rem;">
+            <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.8rem;">
+              <span class="badge badge-gold">🏛 Résidence</span>
+              <span class="badge badge-green">✓ Validé</span>
+              <span style="font-size:0.75rem;color:var(--text-muted);">Soumis par Admin · 5 mars 2025</span>
+            </div>
+            <h1 style="font-family:var(--font-display);font-size:2rem;font-weight:700;margin-bottom:0.8rem;">Résidence de création Villa Médicis</h1>
+            <div class="tags" style="margin-bottom:1rem;"><span class="tag">Arts visuels</span><span class="tag">Littérature</span><span class="tag">Musique</span><span class="tag">Architecture</span></div>
+            <div style="display:flex;gap:2rem;font-size:0.85rem;color:var(--text-muted);">
+              <span>📍 Rome, Italie</span>
+              <span>🌍 International</span>
+              <span class="deadline" style="color:var(--accent-amber);font-weight:500;">⏱ Deadline : 15 avril 2025</span>
+            </div>
+          </div>
+          <!-- CTA -->
+          <div class="card" style="margin-bottom:2rem;background:rgba(200,169,110,0.06);border-color:rgba(200,169,110,0.2);">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div><div style="font-weight:600;margin-bottom:0.2rem;">Candidater à cette résidence</div><div style="font-size:0.8rem;color:var(--text-muted);">Deadline : 15 avril 2025 · Dossier complet requis</div></div>
+              <a href="#" target="_blank"><button class="btn btn-primary">Candidater →</button></a>
+            </div>
+          </div>
+          <!-- Description -->
+          <div class="card" style="margin-bottom:1.5rem;">
+            <div class="card-title" style="margin-bottom:1rem;">Description</div>
+            <div style="font-size:0.9rem;color:var(--text-secondary);line-height:1.8;">
+              <p style="margin-bottom:1rem;">La Villa Médicis, siège de l'Académie de France à Rome, propose chaque année une résidence de création à des artistes et créateurs francophones de toutes disciplines.</p>
+              <p style="margin-bottom:1rem;">Les résidents bénéficient d'un atelier individuel, d'un logement sur le site, d'une allocation mensuelle et d'un programme culturel riche incluant voyages d'études, conférences et expositions.</p>
+              <p>La durée de la résidence est de 12 mois, de septembre à août. La sélection est effectuée par un jury indépendant sur dossier artistique et projet de résidence.</p>
+            </div>
+          </div>
+          <!-- Conditions -->
+          <div class="card" style="margin-bottom:1.5rem;">
+            <div class="card-title" style="margin-bottom:1rem;">Conditions d'éligibilité</div>
+            <ul style="font-size:0.875rem;color:var(--text-secondary);line-height:2;padding-left:1.2rem;">
+              <li>Être ressortissant·e d'un pays francophone</li>
+              <li>Moins de 35 ans à la date de dépôt</li>
+              <li>Justifier d'une pratique artistique professionnelle de 2 ans minimum</li>
+              <li>Ne pas avoir bénéficié d'une résidence Villa Médicis précédemment</li>
+            </ul>
+          </div>
+          <!-- Organisation -->
+          <div class="card">
+            <div class="card-title" style="margin-bottom:1rem;">Organisation</div>
+            <div style="display:flex;gap:1rem;align-items:center;">
+              <div class="user-avatar" style="border-radius:var(--radius-sm);background:var(--accent-green);width:44px;height:44px;">VM</div>
+              <div><div style="font-size:0.9rem;font-weight:600;">Villa Médicis — Académie de France à Rome</div><div style="font-size:0.8rem;color:var(--text-muted);">Viale della Trinità dei Monti 1, Rome</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 10 — RESOURCE SUBMIT
+     ================================================================ -->
+<div class="page" id="page-resource-submit">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-item active" onclick="showPage('resources-list')"><span class="icon">◈</span> Ressources</div>
+        <div class="nav-section-label">Mon espace</div>
+        <div class="nav-item" onclick="showPage('resource-my')"><span class="icon">◳</span> Mes soumissions</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Artiste</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar">
+        <span class="topbar-title"><button class="btn btn-ghost btn-sm" onclick="showPage('resources-list')">← Ressources</button> / Soumettre</span>
+      </div>
+      <div class="page-body">
+        <div style="max-width:700px;margin:0 auto;">
+          <div class="page-header"><h1>Soumettre une ressource</h1><p>Contribuez à la base de ressources de la communauté. Votre soumission sera examinée par notre équipe avant publication.</p></div>
+          <div class="alert alert-info">ℹ️ Les ressources sont validées sous 48–72h par notre équipe de modération.</div>
+          <div class="card" style="margin-bottom:1.5rem;">
+            <div class="card-title" style="margin-bottom:1.2rem;">Informations générales</div>
+            <div class="form-group"><label>Titre de la ressource *</label><input type="text" placeholder="Ex : Bourse de création DRAC Île-de-France 2025"></div>
+            <div class="form-row">
+              <div class="form-group"><label>Type de ressource *</label>
+                <select>
+                  <option value="">Choisir un type</option>
+                  <option>Résidence</option><option>Financement</option><option>Bourse</option>
+                  <option>Appel à projets</option><option>Formation</option><option>Prix / Concours</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Pays concerné</label>
+                <select><option>France</option><option>Belgique</option><option>Suisse</option><option>International</option></select>
+              </div>
+            </div>
+            <div class="form-group"><label>Description *</label><textarea placeholder="Décrivez la ressource : contexte, bénéfices, critères d'éligibilité…" style="min-height:140px;"></textarea></div>
+            <div class="form-row">
+              <div class="form-group"><label>Date limite (optionnel)</label><input type="date"></div>
+              <div class="form-group"><label>Lien externe</label><input type="url" placeholder="https://..."></div>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:1.5rem;">
+            <div class="card-title" style="margin-bottom:1rem;">Disciplines concernées *</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;">
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.7rem;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;font-size:0.8rem;color:var(--text-secondary);"><input type="checkbox" style="accent-color:var(--accent-gold);"> Arts visuels</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.7rem;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;font-size:0.8rem;color:var(--text-secondary);"><input type="checkbox" style="accent-color:var(--accent-gold);"> Musique</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.7rem;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;font-size:0.8rem;color:var(--text-secondary);"><input type="checkbox" style="accent-color:var(--accent-gold);"> Danse</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.7rem;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;font-size:0.8rem;color:var(--text-secondary);"><input type="checkbox" style="accent-color:var(--accent-gold);"> Théâtre</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.7rem;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;font-size:0.8rem;color:var(--text-secondary);"><input type="checkbox" style="accent-color:var(--accent-gold);"> Cinéma</label>
+              <label style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.7rem;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;font-size:0.8rem;color:var(--text-secondary);"><input type="checkbox" style="accent-color:var(--accent-gold);"> Toutes disciplines</label>
+            </div>
+          </div>
+          <div style="display:flex;gap:1rem;justify-content:flex-end;">
+            <button class="btn btn-secondary" onclick="showPage('resources-list')">Annuler</button>
+            <button class="btn btn-primary">Soumettre pour validation</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 11 — MY RESOURCES
+     ================================================================ -->
+<div class="page" id="page-resource-my">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-item" onclick="showPage('resources-list')"><span class="icon">◈</span> Ressources</div>
+        <div class="nav-section-label">Mon espace</div>
+        <div class="nav-item active" onclick="showPage('resource-my')"><span class="icon">◳</span> Mes soumissions</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Artiste</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar">
+        <span class="topbar-title">Mes soumissions</span>
+        <div class="topbar-actions"><button class="btn btn-primary btn-sm" onclick="showPage('resource-submit')">+ Nouvelle soumission</button></div>
+      </div>
+      <div class="page-body">
+        <div class="page-header"><h1>Mes soumissions</h1><p>Suivez l'état de validation de vos ressources soumises.</p></div>
+        <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;">
+          <button class="btn btn-secondary btn-sm active" style="background:rgba(200,169,110,0.1);border-color:var(--accent-gold);color:var(--accent-gold);">Toutes (4)</button>
+          <button class="btn btn-secondary btn-sm">En attente (1)</button>
+          <button class="btn btn-secondary btn-sm">Validées (2)</button>
+          <button class="btn btn-secondary btn-sm">Rejetées (1)</button>
+        </div>
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Titre</th><th>Type</th><th>Statut</th><th>Soumis le</th><th>Actions</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td style="color:var(--text-primary);font-weight:500;">Programme de mentorat CNC</td>
+                  <td><span class="badge badge-gray">Financement</span></td>
+                  <td><span class="badge badge-amber">⏳ En attente</span></td>
+                  <td>5 mars 2025</td>
+                  <td><button class="btn btn-ghost btn-sm" style="font-size:0.72rem;">Voir</button></td>
+                </tr>
+                <tr>
+                  <td style="color:var(--text-primary);font-weight:500;">Bourse Aide à la Création SACD</td>
+                  <td><span class="badge badge-gray">Bourse</span></td>
+                  <td><span class="badge badge-green">✓ Validé</span></td>
+                  <td>1 mars 2025</td>
+                  <td><button class="btn btn-ghost btn-sm" onclick="showPage('resource-detail')" style="font-size:0.72rem;">Voir</button></td>
+                </tr>
+                <tr>
+                  <td style="color:var(--text-primary);font-weight:500;">Résidence Cité des Arts Paris</td>
+                  <td><span class="badge badge-gray">Résidence</span></td>
+                  <td><span class="badge badge-red">✗ Rejeté</span></td>
+                  <td>20 fév. 2025</td>
+                  <td><button class="btn btn-ghost btn-sm" style="font-size:0.72rem;">Voir détails</button></td>
+                </tr>
+                <tr>
+                  <td style="color:var(--text-primary);font-weight:500;">Formation médiation INHA</td>
+                  <td><span class="badge badge-gray">Formation</span></td>
+                  <td><span class="badge badge-green">✓ Validé</span></td>
+                  <td>10 fév. 2025</td>
+                  <td><button class="btn btn-ghost btn-sm" onclick="showPage('resource-detail')" style="font-size:0.72rem;">Voir</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Ressource rejetée avec motif -->
+        <div class="card" style="margin-top:1rem;border-color:rgba(192,57,43,0.3);">
+          <div style="display:flex;gap:0.75rem;">
+            <span style="font-size:1.2rem;">⚠️</span>
+            <div><div style="font-weight:600;margin-bottom:0.3rem;font-size:0.875rem;">Motif du rejet — Résidence Cité des Arts Paris</div><div style="font-size:0.82rem;color:var(--text-muted);">"Cette ressource est déjà référencée dans notre base. Merci de vérifier les doublons avant soumission. Vous pouvez soumettre d'autres ressources inédites."</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 12 — COMMUNITY FEED
+     ================================================================ -->
+<div class="page" id="page-community">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-item" onclick="showPage('resources-list')"><span class="icon">◈</span> Ressources</div>
+        <div class="nav-item active" onclick="showPage('community')"><span class="icon">◉</span> Communauté</div>
+        <div class="nav-item" onclick="showPage('articles-list')"><span class="icon">◎</span> Articles</div>
+        <div class="nav-section-label">Mon espace</div>
+        <div class="nav-item" onclick="showPage('artist-show')"><span class="icon">◐</span> Profil artiste</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Artiste</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar"><span class="topbar-title">Communauté</span></div>
+      <div class="page-body">
+        <div style="max-width:680px;margin:0 auto;">
+          <!-- Créer un post -->
+          <div class="card" style="margin-bottom:1.5rem;">
+            <div style="display:flex;gap:0.75rem;align-items:flex-start;">
+              <div class="user-avatar">MC</div>
+              <div style="flex:1;">
+                <textarea placeholder="Partagez une expérience, posez une question, annoncez un projet…" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:0.7rem 1rem;color:var(--text-primary);font-size:0.875rem;resize:none;outline:none;min-height:80px;"></textarea>
+                <div style="display:flex;justify-content:flex-end;margin-top:0.5rem;">
+                  <button class="btn btn-primary btn-sm">Publier</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Post 1 -->
+          <div class="post-card">
+            <div class="post-header">
+              <div class="post-avatar" style="background:#7b5ea7;">JT</div>
+              <div class="post-meta">
+                <div class="author">Jean Tamba <span class="tag" style="font-size:0.65rem;padding:0.1rem 0.4rem;">Artiste</span></div>
+                <div class="date">il y a 2 heures · Lyon</div>
+              </div>
+            </div>
+            <div class="post-body">Quelqu'un a de l'expérience avec les bourses DRAC Île-de-France ? Je cherche des retours sur le processus de dépôt, notamment pour les arts numériques. Mon dossier est presque prêt mais je veux m'assurer d'avoir tous les justificatifs requis. 🙏</div>
+            <div class="tags" style="margin-bottom:0.8rem;"><span class="tag tag-outline">DRAC</span><span class="tag tag-outline">Financement</span><span class="tag tag-outline">Arts numériques</span></div>
+            <div class="post-actions">
+              <button class="post-action-btn liked">♥ 14</button>
+              <button class="post-action-btn">💬 6 commentaires</button>
+              <button class="post-action-btn">↗ Partager</button>
+            </div>
+            <!-- Commentaires -->
+            <div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem;">
+              <div class="comment">
+                <div class="user-avatar" style="width:30px;height:30px;font-size:0.7rem;background:var(--accent-green);">AL</div>
+                <div class="comment-body"><div class="comment-author">Amara Ly · il y a 1h</div><div class="comment-text">J'ai déposé un dossier l'an dernier pour la musique. Il faut absolument joindre le RIB de l'association ou le tien si tu es auto-entrepreneur, et 3 lettres de recommandation pro minimum.</div></div>
+              </div>
+              <div style="display:flex;gap:0.6rem;align-items:center;margin-top:0.6rem;">
+                <div class="user-avatar" style="width:26px;height:26px;font-size:0.65rem;">MC</div>
+                <input type="text" placeholder="Répondre…" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:20px;padding:0.4rem 0.9rem;color:var(--text-primary);font-size:0.8rem;outline:none;">
+              </div>
+            </div>
+          </div>
+          <!-- Post 2 -->
+          <div class="post-card">
+            <div class="post-header">
+              <div class="post-avatar" style="background:var(--accent-green);">AL</div>
+              <div class="post-meta">
+                <div class="author">Amara Ly <span class="tag" style="font-size:0.65rem;padding:0.1rem 0.4rem;">Artiste</span></div>
+                <div class="date">hier · Dakar, Sénégal</div>
+              </div>
+            </div>
+            <div class="post-body">Super conférence sur la médiation culturelle ce weekend à Lyon — très recommandé pour tous ceux qui travaillent à l'interface art/public. Des intervenants de qualité, des échanges très riches, et j'ai découvert des associations partenaires potentielles. Je partage mes notes dans un article cette semaine !</div>
+            <div class="post-actions">
+              <button class="post-action-btn">♥ 31</button>
+              <button class="post-action-btn">💬 4 commentaires</button>
+              <button class="post-action-btn">↗ Partager</button>
+            </div>
+          </div>
+          <!-- Post 3 -->
+          <div class="post-card">
+            <div class="post-header">
+              <div class="post-avatar" style="background:var(--accent-brown);">PD</div>
+              <div class="post-meta">
+                <div class="author">Paula Diaz <span class="tag" style="font-size:0.65rem;padding:0.1rem 0.4rem;background:rgba(45,106,79,0.15);color:#2ecc71;border-color:rgba(45,106,79,0.3);">Organisation</span></div>
+                <div class="date">il y a 3 jours · Bruxelles</div>
+              </div>
+            </div>
+            <div class="post-body">J'ai publié un article sur les droits des artistes en résidence — droits à l'image, propriété intellectuelle des œuvres créées, conditions de restitution. Vos retours sont bienvenus !</div>
+            <div class="post-actions">
+              <button class="post-action-btn">♥ 52</button>
+              <button class="post-action-btn">💬 11 commentaires</button>
+              <button class="post-action-btn">↗ Partager</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 13 — ARTICLES LIST
+     ================================================================ -->
+<div class="page" id="page-articles-list">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-item" onclick="showPage('resources-list')"><span class="icon">◈</span> Ressources</div>
+        <div class="nav-item" onclick="showPage('community')"><span class="icon">◉</span> Communauté</div>
+        <div class="nav-item active" onclick="showPage('articles-list')"><span class="icon">◎</span> Articles</div>
+        <div class="nav-section-label">Mon espace</div>
+        <div class="nav-item" onclick="showPage('article-my')"><span class="icon">◷</span> Mes articles</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Artiste</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar">
+        <span class="topbar-title">Articles</span>
+        <div class="topbar-actions"><button class="btn btn-primary btn-sm" onclick="showPage('article-new')">✎ Écrire un article</button></div>
+      </div>
+      <div class="page-body">
+        <div class="page-header"><h1>Articles</h1><p>Partages d'expérience, conseils et réflexions de la communauté</p></div>
+        <div class="search-bar" style="max-width:500px;margin-bottom:1.5rem;"><span class="icon">🔍</span><input placeholder="Rechercher un article…"></div>
+        <!-- Featured -->
+        <div class="card" style="display:flex;gap:2rem;margin-bottom:2rem;align-items:center;cursor:pointer;" onclick="showPage('article-show')">
+          <div style="width:200px;height:130px;background:linear-gradient(135deg,var(--bg-tertiary),var(--accent-brown) 80%);border-radius:var(--radius-sm);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:2.5rem;">📝</div>
+          <div>
+            <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;"><span class="badge badge-gold">✦ À la une</span><span class="badge badge-gray">Droits</span></div>
+            <h2 style="font-family:var(--font-display);font-size:1.2rem;margin-bottom:0.5rem;">Les droits des artistes en résidence : ce que vous devez savoir</h2>
+            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.8rem;">Propriété intellectuelle, droits à l'image, rémunération… Un guide complet pour protéger votre pratique.</p>
+            <div style="font-size:0.75rem;color:var(--text-muted);">Paula Diaz · 3 mars 2025 · 12 min de lecture</div>
+          </div>
+        </div>
+        <!-- Article grid -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1.2rem;">
+          <div class="article-card" onclick="showPage('article-show')"><div class="article-img">📁</div><div class="article-body"><div class="article-category">Pratique</div><h3>Monter un dossier de résidence efficace</h3><p>Les étapes clés, les pièges à éviter et les ressources indispensables pour constituer un dossier convaincant.</p></div><div class="article-footer"><span>Marie Callot</span><span>8 min</span></div></div>
+          <div class="article-card" onclick="showPage('article-show')"><div class="article-img">🎵</div><div class="article-body"><div class="article-category">Financement</div><h3>Financer sa tournée musicale en 2025</h3><p>CNM, SACEM, SPEDIDAM, régions… Le tour des dispositifs de financement pour musiciens.</p></div><div class="article-footer"><span>Amara Ly</span><span>10 min</span></div></div>
+          <div class="article-card" onclick="showPage('article-show')"><div class="article-img">🌍</div><div class="article-body"><div class="article-category">International</div><h3>Exporter son travail artistique à l'étranger</h3><p>Visas, droits d'auteur à l'international, fiscalité… Ce qu'il faut savoir avant de partir.</p></div><div class="article-footer"><span>Redaction BazaArt</span><span>7 min</span></div></div>
+          <div class="article-card" onclick="showPage('article-show')"><div class="article-img">📸</div><div class="article-body"><div class="article-category">Droit</div><h3>Droit à l'image en milieu urbain</h3><p>Comprendre les limites légales de la photographie de rue, des œuvres architecturales et des personnes.</p></div><div class="article-footer"><span>Marie Callot</span><span>6 min</span></div></div>
+          <div class="article-card" onclick="showPage('article-show')"><div class="article-img">🤝</div><div class="article-body"><div class="article-category">Réseau</div><h3>Construire son réseau professionnel artistique</h3><p>Stratégies concrètes pour développer des collaborations et des partenariats durables.</p></div><div class="article-footer"><span>Jean Tamba</span><span>5 min</span></div></div>
+          <div class="article-card" onclick="showPage('article-show')"><div class="article-img">💡</div><div class="article-body"><div class="article-category">Pratique</div><h3>Auto-entrepreneur ou intermittent : quel statut ?</h3><p>Comparaison des deux statuts principaux pour les artistes, avec leurs avantages et inconvénients.</p></div><div class="article-footer"><span>Redaction BazaArt</span><span>9 min</span></div></div>
+        </div>
+        <div class="pagination">
+          <button class="page-btn active">1</button>
+          <button class="page-btn">2</button>
+          <button class="page-btn">3</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 14 — ARTICLE SHOW
+     ================================================================ -->
+<div class="page" id="page-article-show">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-item" onclick="showPage('resources-list')"><span class="icon">◈</span> Ressources</div>
+        <div class="nav-item" onclick="showPage('community')"><span class="icon">◉</span> Communauté</div>
+        <div class="nav-item active" onclick="showPage('articles-list')"><span class="icon">◎</span> Articles</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Artiste</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar"><span class="topbar-title"><button class="btn btn-ghost btn-sm" onclick="showPage('articles-list')">← Articles</button></span></div>
+      <div class="page-body">
+        <div style="max-width:720px;margin:0 auto;">
+          <!-- Article header -->
+          <div style="margin-bottom:2rem;">
+            <div style="display:flex;gap:0.5rem;margin-bottom:1rem;"><span class="badge badge-gold">Droits</span></div>
+            <h1 style="font-family:var(--font-display);font-size:2rem;font-weight:700;line-height:1.3;margin-bottom:1rem;">Les droits des artistes en résidence : ce que vous devez savoir</h1>
+            <div style="display:flex;align-items:center;gap:1rem;padding-bottom:1.5rem;border-bottom:1px solid var(--border);">
+              <div class="user-avatar" style="width:36px;height:36px;background:var(--accent-brown);">PD</div>
+              <div><div style="font-size:0.875rem;font-weight:600;">Paula Diaz</div><div style="font-size:0.75rem;color:var(--text-muted);">3 mars 2025 · 12 min de lecture</div></div>
+              <div style="margin-left:auto;display:flex;gap:0.5rem;">
+                <button class="btn btn-secondary btn-sm">♥ 52</button>
+                <button class="btn btn-secondary btn-sm">↗ Partager</button>
+              </div>
+            </div>
+          </div>
+          <!-- Article image -->
+          <div style="height:300px;background:linear-gradient(135deg,var(--bg-tertiary),var(--accent-brown));border-radius:var(--radius-md);margin-bottom:2rem;display:flex;align-items:center;justify-content:center;font-size:4rem;">📝</div>
+          <!-- Article content -->
+          <div style="font-size:0.95rem;color:var(--text-secondary);line-height:1.9;">
+            <p style="font-size:1.1rem;font-weight:500;color:var(--text-primary);margin-bottom:1.5rem;">Partir en résidence artistique est une opportunité précieuse — mais il est essentiel de bien comprendre vos droits avant de signer quoi que ce soit.</p>
+            <h2 style="font-family:var(--font-display);font-size:1.3rem;color:var(--text-primary);margin:1.5rem 0 0.8rem;">1. La propriété intellectuelle de vos œuvres</h2>
+            <p style="margin-bottom:1rem;">Par défaut, les œuvres créées durant une résidence vous appartiennent entièrement, sauf clause contraire dans le contrat. Il est donc crucial de lire attentivement toute convention de résidence avant signature, en portant une attention particulière aux articles sur la cession de droits...</p>
+            <h2 style="font-family:var(--font-display);font-size:1.3rem;color:var(--text-primary);margin:1.5rem 0 0.8rem;">2. La rémunération</h2>
+            <p style="margin-bottom:1rem;">Le droit à la rémunération des artistes en résidence est reconnu par la charte des résidences d'artistes. Une bourse ou allocation mensuelle ne dispense pas la structure d'accueil de rémunérer les prestations distinctes (ateliers, conférences, médiations)...</p>
+            <h2 style="font-family:var(--font-display);font-size:1.3rem;color:var(--text-primary);margin:1.5rem 0 0.8rem;">3. Les droits à l'image</h2>
+            <p>La résidence peut impliquer des actions de communication où vous apparaissez. Votre droit à l'image reste inaliénable : vous devez consentir expressément à toute utilisation de votre image, et ce consentement doit être formalisé par écrit.</p>
+          </div>
+          <!-- Comments section -->
+          <div style="margin-top:3rem;padding-top:2rem;border-top:1px solid var(--border);">
+            <h3 style="font-size:1rem;font-weight:600;margin-bottom:1.2rem;">11 commentaires</h3>
+            <div style="display:flex;gap:0.75rem;margin-bottom:1.5rem;">
+              <div class="user-avatar">MC</div>
+              <input type="text" placeholder="Ajouter un commentaire…" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:0.6rem 1rem;color:var(--text-primary);font-size:0.875rem;outline:none;">
+            </div>
+            <div class="comment"><div class="user-avatar" style="width:34px;height:34px;font-size:0.75rem;background:#7b5ea7;">JT</div><div class="comment-body"><div class="comment-author">Jean Tamba · il y a 1 jour</div><div class="comment-text">Article très utile ! J'aurais ajouté un paragraphe sur le régime de sécurité sociale pendant la résidence, qui est souvent source de confusion.</div></div></div>
+            <div class="comment"><div class="user-avatar" style="width:34px;height:34px;font-size:0.75rem;background:var(--accent-green);">AL</div><div class="comment-body"><div class="comment-author">Amara Ly · il y a 2 jours</div><div class="comment-text">Merci pour ce guide ! La partie sur les droits à l'image m'a particulièrement éclairée. Est-ce que vous avez une version PDF téléchargeable ?</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 15 — ARTICLE NEW / EDIT
+     ================================================================ -->
+<div class="page" id="page-article-new">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-item" onclick="showPage('articles-list')"><span class="icon">◎</span> Articles</div>
+        <div class="nav-section-label">Mon espace</div>
+        <div class="nav-item active" onclick="showPage('article-my')"><span class="icon">◷</span> Mes articles</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Artiste</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar">
+        <span class="topbar-title">Écrire un article</span>
+        <div class="topbar-actions">
+          <button class="btn btn-secondary btn-sm">Enregistrer brouillon</button>
+          <button class="btn btn-primary btn-sm">Publier</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div style="max-width:760px;margin:0 auto;">
+          <div class="form-group"><input type="text" placeholder="Titre de votre article…" style="font-size:1.5rem;font-family:var(--font-display);font-weight:700;background:transparent;border:none;border-bottom:1px solid var(--border-strong);border-radius:0;padding:0.5rem 0;width:100%;color:var(--text-primary);"></div>
+          <!-- Toolbar -->
+          <div style="display:flex;gap:0.3rem;padding:0.6rem;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:1rem;flex-wrap:wrap;">
+            <button class="btn btn-ghost btn-sm" style="font-weight:700;">B</button>
+            <button class="btn btn-ghost btn-sm" style="font-style:italic;">I</button>
+            <button class="btn btn-ghost btn-sm" style="text-decoration:underline;">U</button>
+            <div style="width:1px;background:var(--border-strong);margin:0 0.3rem;"></div>
+            <button class="btn btn-ghost btn-sm">H1</button>
+            <button class="btn btn-ghost btn-sm">H2</button>
+            <div style="width:1px;background:var(--border-strong);margin:0 0.3rem;"></div>
+            <button class="btn btn-ghost btn-sm">🔗 Lien</button>
+            <button class="btn btn-ghost btn-sm">🖼 Image</button>
+            <button class="btn btn-ghost btn-sm">❝ Citation</button>
+          </div>
+          <textarea placeholder="Commencez à écrire votre article ici…&#10;&#10;Partagez votre expérience, vos conseils, vos réflexions. Soyez précis·e, bienveillant·e et constructif·ve." style="width:100%;min-height:400px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1.2rem;color:var(--text-primary);font-size:0.95rem;line-height:1.8;resize:vertical;outline:none;"></textarea>
+          <div style="display:flex;gap:1.5rem;margin-top:1.5rem;">
+            <div class="form-group" style="flex:1;"><label>Catégorie</label><select><option>Pratique</option><option>Droits</option><option>Financement</option><option>International</option><option>Réseau</option><option>Témoignage</option></select></div>
+            <div class="form-group" style="flex:1;"><label>Image de couverture</label><input type="file" accept="image/*" style="padding:0.5rem;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 16 — MY ARTICLES
+     ================================================================ -->
+<div class="page" id="page-article-my">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub">Artistes francophones</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">⊞</span> Tableau de bord</div>
+        <div class="nav-item" onclick="showPage('articles-list')"><span class="icon">◎</span> Articles</div>
+        <div class="nav-section-label">Mon espace</div>
+        <div class="nav-item active" onclick="showPage('article-my')"><span class="icon">◷</span> Mes articles</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role">Artiste</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar">
+        <span class="topbar-title">Mes articles</span>
+        <div class="topbar-actions"><button class="btn btn-primary btn-sm" onclick="showPage('article-new')">✎ Nouvel article</button></div>
+      </div>
+      <div class="page-body">
+        <div class="page-header"><h1>Mes articles</h1></div>
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Titre</th><th>Catégorie</th><th>Statut</th><th>Publié le</th><th>Vues</th><th>Actions</th></tr></thead>
+              <tbody>
+                <tr><td style="color:var(--text-primary);font-weight:500;" onclick="showPage('article-show')" style="cursor:pointer;">Monter un dossier de résidence efficace</td><td><span class="badge badge-gray">Pratique</span></td><td><span class="badge badge-green">✓ Publié</span></td><td>28 fév. 2025</td><td>342</td><td style="display:flex;gap:0.4rem;"><button class="btn btn-ghost btn-sm" onclick="showPage('article-new')">Modifier</button><button class="btn btn-ghost btn-sm" style="color:var(--accent-red);">Supprimer</button></td></tr>
+                <tr><td style="color:var(--text-primary);font-weight:500;">Droit à l'image en milieu urbain</td><td><span class="badge badge-gray">Droit</span></td><td><span class="badge badge-green">✓ Publié</span></td><td>15 fév. 2025</td><td>198</td><td style="display:flex;gap:0.4rem;"><button class="btn btn-ghost btn-sm" onclick="showPage('article-new')">Modifier</button><button class="btn btn-ghost btn-sm" style="color:var(--accent-red);">Supprimer</button></td></tr>
+                <tr><td style="color:var(--text-primary);font-weight:500;">Brouillon : Les FRAC, mode d'emploi</td><td><span class="badge badge-gray">Financement</span></td><td><span class="badge badge-gray">📝 Brouillon</span></td><td>—</td><td>—</td><td style="display:flex;gap:0.4rem;"><button class="btn btn-ghost btn-sm" onclick="showPage('article-new')">Continuer</button><button class="btn btn-ghost btn-sm" style="color:var(--accent-red);">Supprimer</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 17 — ADMIN DASHBOARD
+     ================================================================ -->
+<div class="page" id="page-admin-dashboard">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub" style="color:var(--accent-amber);">Administration</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Admin</div>
+        <div class="nav-item active" onclick="showPage('admin-dashboard')" style="color:var(--accent-gold);"><span class="icon">⊞</span> Dashboard Admin</div>
+        <div class="nav-item" onclick="showPage('admin-pending')"><span class="icon">⏳</span> Modération <span class="badge badge-amber" style="margin-left:auto;padding:0.1rem 0.5rem;font-size:0.65rem;">7</span></div>
+        <div class="nav-item" onclick="showPage('admin-resources')"><span class="icon">◈</span> Toutes les ressources</div>
+        <div class="nav-item" onclick="showPage('admin-users')"><span class="icon">👤</span> Utilisateurs</div>
+        <div class="nav-section-label">Site</div>
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">↗</span> Retour au site</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar" style="background:var(--accent-amber);color:#000;">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role" style="color:var(--accent-amber);">Administratrice</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar" style="background:var(--bg-secondary);">
+        <span class="topbar-title">Tableau de bord administrateur</span>
+        <div class="topbar-actions"><span class="badge badge-amber">⚙ Mode Admin</span></div>
+      </div>
+      <div class="page-body">
+        <div class="page-header"><h1>Vue d'ensemble</h1><p>Plateforme BazaArt · Mise à jour en temps réel</p></div>
+        <!-- Stats grid -->
+        <div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));">
+          <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-label">Utilisateurs total</div><div class="stat-value">1 842</div><div class="stat-delta">↑ +38 ce mois</div></div>
+          <div class="stat-card"><div class="stat-icon">◈</div><div class="stat-label">Ressources publiées</div><div class="stat-value">247</div><div class="stat-delta">↑ +12 cette semaine</div></div>
+          <div class="stat-card" style="border-color:rgba(233,196,106,0.3);"><div class="stat-icon">⏳</div><div class="stat-label">En attente modération</div><div class="stat-value" style="color:var(--accent-amber);">7</div><div style="font-size:0.75rem;color:var(--accent-amber);margin-top:0.2rem;">⚠ À traiter</div></div>
+          <div class="stat-card"><div class="stat-icon">🏢</div><div class="stat-label">Organisations</div><div class="stat-value">183</div><div class="stat-delta">↑ +5 cette semaine</div></div>
+          <div class="stat-card"><div class="stat-icon">◎</div><div class="stat-label">Articles publiés</div><div class="stat-value">93</div></div>
+          <div class="stat-card"><div class="stat-icon">✓</div><div class="stat-label">Orgs. vérifiées</div><div class="stat-value">124</div></div>
+        </div>
+        <!-- 2 colonnes -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+          <!-- Modération rapide -->
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">File de modération</div><div class="card-subtitle">7 ressources en attente</div></div>
+              <button class="btn btn-primary btn-sm" onclick="showPage('admin-pending')">Modérer →</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.6rem;">
+              <div class="mod-card" style="padding:0.8rem 1rem;">
+                <div class="mod-info"><h4 style="font-size:0.82rem;">Bourse ARTIM 2025</h4><p style="font-size:0.72rem;">Soumis par : jean.tamba@email.fr · il y a 2h</p></div>
+                <div class="mod-actions"><button class="btn btn-success btn-sm">✓</button><button class="btn btn-danger btn-sm">✗</button></div>
+              </div>
+              <div class="mod-card" style="padding:0.8rem 1rem;">
+                <div class="mod-info"><h4 style="font-size:0.82rem;">Résidence Camac Marnay</h4><p style="font-size:0.72rem;">Soumis par : amara.ly@email.fr · il y a 5h</p></div>
+                <div class="mod-actions"><button class="btn btn-success btn-sm">✓</button><button class="btn btn-danger btn-sm">✗</button></div>
+              </div>
+              <div class="mod-card" style="padding:0.8rem 1rem;">
+                <div class="mod-info"><h4 style="font-size:0.82rem;">Formation chorégraphie CNDC</h4><p style="font-size:0.72rem;">Soumis par : paula.diaz@email.fr · hier</p></div>
+                <div class="mod-actions"><button class="btn btn-success btn-sm">✓</button><button class="btn btn-danger btn-sm">✗</button></div>
+              </div>
+            </div>
+          </div>
+          <!-- Derniers inscrits -->
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Derniers inscrits</div></div>
+              <button class="btn btn-ghost btn-sm" onclick="showPage('admin-users')">Voir tout →</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.6rem;">
+              <div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid var(--border);">
+                <div class="user-avatar" style="width:32px;height:32px;font-size:0.72rem;background:#7b5ea7;">KA</div>
+                <div style="flex:1;"><div style="font-size:0.82rem;font-weight:600;">Kofi Asante</div><div style="font-size:0.72rem;color:var(--text-muted);">il y a 30 min · Artiste</div></div>
+                <span class="badge badge-gray" style="font-size:0.65rem;">Nouveau</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid var(--border);">
+                <div class="user-avatar" style="width:32px;height:32px;font-size:0.72rem;background:var(--accent-green);">SM</div>
+                <div style="flex:1;"><div style="font-size:0.82rem;font-weight:600;">Sophie Martin</div><div style="font-size:0.72rem;color:var(--text-muted);">il y a 2h · Organisation</div></div>
+                <span class="badge badge-amber" style="font-size:0.65rem;">Org.</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0;">
+                <div class="user-avatar" style="width:32px;height:32px;font-size:0.72rem;">RN</div>
+                <div style="flex:1;"><div style="font-size:0.82rem;font-weight:600;">Raphaël Noël</div><div style="font-size:0.72rem;color:var(--text-muted);">hier · Artiste</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 18 — ADMIN MODERATION PENDING
+     ================================================================ -->
+<div class="page" id="page-admin-pending">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub" style="color:var(--accent-amber);">Administration</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('admin-dashboard')"><span class="icon">⊞</span> Dashboard Admin</div>
+        <div class="nav-item active" onclick="showPage('admin-pending')"><span class="icon">⏳</span> Modération <span class="badge badge-amber" style="margin-left:auto;padding:0.1rem 0.5rem;font-size:0.65rem;">7</span></div>
+        <div class="nav-item" onclick="showPage('admin-resources')"><span class="icon">◈</span> Toutes les ressources</div>
+        <div class="nav-item" onclick="showPage('admin-users')"><span class="icon">👤</span> Utilisateurs</div>
+        <div class="nav-section-label">Site</div>
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">↗</span> Retour au site</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar" style="background:var(--accent-amber);color:#000;">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role" style="color:var(--accent-amber);">Administratrice</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar"><span class="topbar-title">File de modération</span><div class="topbar-actions"><span class="badge badge-amber">7 en attente</span></div></div>
+      <div class="page-body">
+        <div class="page-header"><h1>Modération des ressources</h1><p>Validez ou rejetez les ressources soumises par la communauté.</p></div>
+        <!-- Ressource à modérer 1 -->
+        <div class="card" style="margin-bottom:1rem;border-left:3px solid var(--accent-amber);">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;">
+            <div>
+              <div style="display:flex;gap:0.5rem;margin-bottom:0.4rem;"><span class="badge badge-amber">⏳ En attente</span><span class="badge badge-gray">Bourse</span></div>
+              <h3 style="font-size:1rem;font-weight:600;">Bourse ARTIM 2025 — Arts traversant les médias</h3>
+              <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">Soumis par jean.tamba@email.fr · il y a 2 heures</p>
+            </div>
+            <div style="display:flex;gap:0.5rem;">
+              <button class="btn btn-success">✓ Valider</button>
+              <button class="btn btn-danger">✗ Rejeter</button>
+              <button class="btn btn-secondary btn-sm">↺ En attente</button>
+            </div>
+          </div>
+          <div style="background:var(--bg-tertiary);border-radius:var(--radius-sm);padding:1rem;font-size:0.85rem;color:var(--text-secondary);line-height:1.7;">
+            <p>La bourse ARTIM soutient les artistes dont la pratique traverse et questionne différents médias. Dotation : 5 000 €. Ouverte aux artistes de la francophonie ayant moins de 40 ans.</p>
+            <div style="margin-top:0.8rem;font-size:0.75rem;color:var(--text-muted);">🔗 <a href="#" style="color:var(--accent-gold);">https://bourse-artim.fr/candidature</a> · 📅 Deadline : 30 avril 2025 · 🌍 France</div>
+          </div>
+        </div>
+        <!-- Ressource 2 -->
+        <div class="card" style="margin-bottom:1rem;border-left:3px solid var(--accent-amber);">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;">
+            <div>
+              <div style="display:flex;gap:0.5rem;margin-bottom:0.4rem;"><span class="badge badge-amber">⏳ En attente</span><span class="badge badge-gray">Résidence</span></div>
+              <h3 style="font-size:1rem;font-weight:600;">Résidence CAMAC — Marnay Art Centre</h3>
+              <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">Soumis par amara.ly@email.fr · il y a 5 heures</p>
+            </div>
+            <div style="display:flex;gap:0.5rem;">
+              <button class="btn btn-success">✓ Valider</button>
+              <button class="btn btn-danger">✗ Rejeter</button>
+              <button class="btn btn-secondary btn-sm">↺ En attente</button>
+            </div>
+          </div>
+          <div style="background:var(--bg-tertiary);border-radius:var(--radius-sm);padding:1rem;font-size:0.85rem;color:var(--text-secondary);line-height:1.7;">
+            <p>Le CAMAC propose des résidences de 2 à 4 semaines dans un cadre naturel de 17 hectares. Logement, atelier, repas fournis. Ouvert à tous les artistes sans conditions de nationalité.</p>
+            <div style="margin-top:0.8rem;font-size:0.75rem;color:var(--text-muted);">🔗 <a href="#" style="color:var(--accent-gold);">https://camac.fr/residences</a> · 📅 Deadline : 15 mars 2025 · 📍 Marnay-sur-Seine</div>
+          </div>
+        </div>
+        <!-- Rejection form -->
+        <div class="card" style="background:rgba(192,57,43,0.04);border-color:rgba(192,57,43,0.2);">
+          <div class="card-title" style="margin-bottom:0.8rem;color:var(--accent-red);">✗ Formulaire de rejet</div>
+          <div class="form-group"><label>Motif du rejet (envoyé au soumettant)</label><textarea placeholder="Ex : Cette ressource est déjà référencée dans notre base. Merci de vérifier les doublons avant soumission." style="min-height:80px;"></textarea></div>
+          <button class="btn btn-danger">Confirmer le rejet</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 19 — ADMIN ALL RESOURCES
+     ================================================================ -->
+<div class="page" id="page-admin-resources">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub" style="color:var(--accent-amber);">Administration</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('admin-dashboard')"><span class="icon">⊞</span> Dashboard Admin</div>
+        <div class="nav-item" onclick="showPage('admin-pending')"><span class="icon">⏳</span> Modération</div>
+        <div class="nav-item active" onclick="showPage('admin-resources')"><span class="icon">◈</span> Toutes les ressources</div>
+        <div class="nav-item" onclick="showPage('admin-users')"><span class="icon">👤</span> Utilisateurs</div>
+        <div class="nav-section-label">Site</div>
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">↗</span> Retour au site</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar" style="background:var(--accent-amber);color:#000;">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role" style="color:var(--accent-amber);">Administratrice</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar"><span class="topbar-title">Toutes les ressources</span></div>
+      <div class="page-body">
+        <div class="page-header"><h1>Gestion des ressources</h1></div>
+        <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" style="background:rgba(200,169,110,0.1);border-color:var(--accent-gold);color:var(--accent-gold);">Toutes (258)</button>
+          <button class="btn btn-secondary btn-sm">Validées (247)</button>
+          <button class="btn btn-secondary btn-sm">En attente (7)</button>
+          <button class="btn btn-secondary btn-sm">Rejetées (4)</button>
+          <div class="search-bar" style="width:auto;flex:1;max-width:300px;"><span class="icon">🔍</span><input placeholder="Rechercher…"></div>
+        </div>
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Titre</th><th>Type</th><th>Source</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead>
+              <tbody>
+                <tr><td style="color:var(--text-primary);font-weight:500;">Résidence Villa Médicis</td><td><span class="badge badge-gray">Résidence</span></td><td><span style="font-size:0.72rem;color:var(--text-muted);">👤 Utilisateur</span></td><td><span class="badge badge-green">✓ Validé</span></td><td>5 mars 2025</td><td><button class="btn btn-ghost btn-sm">Voir</button></td></tr>
+                <tr><td style="color:var(--text-primary);font-weight:500;">Bourse ARTIM 2025</td><td><span class="badge badge-gray">Bourse</span></td><td><span style="font-size:0.72rem;color:var(--text-muted);">👤 Utilisateur</span></td><td><span class="badge badge-amber">⏳ Attente</span></td><td>10 mars 2025</td><td><button class="btn btn-success btn-sm">✓</button><button class="btn btn-danger btn-sm">✗</button></td></tr>
+                <tr><td style="color:var(--text-primary);font-weight:500;">Formation INHA Médiation</td><td><span class="badge badge-gray">Formation</span></td><td><span style="font-size:0.72rem;color:var(--text-muted);">⚙ Admin</span></td><td><span class="badge badge-green">✓ Validé</span></td><td>1 mars 2025</td><td><button class="btn btn-ghost btn-sm">Voir</button></td></tr>
+                <tr><td style="color:var(--text-primary);font-weight:500;">Résidence Cité des Arts Paris</td><td><span class="badge badge-gray">Résidence</span></td><td><span style="font-size:0.72rem;color:var(--text-muted);">👤 Utilisateur</span></td><td><span class="badge badge-red">✗ Rejeté</span></td><td>20 fév. 2025</td><td><button class="btn btn-ghost btn-sm">↺ Réinitialiser</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 20 — ADMIN USERS
+     ================================================================ -->
+<div class="page" id="page-admin-users">
+  <div class="app-layout" style="width:100%;">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="brand">BazaArt</span><span class="brand-sub" style="color:var(--accent-amber);">Administration</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" onclick="showPage('admin-dashboard')"><span class="icon">⊞</span> Dashboard Admin</div>
+        <div class="nav-item" onclick="showPage('admin-pending')"><span class="icon">⏳</span> Modération</div>
+        <div class="nav-item" onclick="showPage('admin-resources')"><span class="icon">◈</span> Ressources</div>
+        <div class="nav-item active" onclick="showPage('admin-users')"><span class="icon">👤</span> Utilisateurs</div>
+        <div class="nav-section-label">Site</div>
+        <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">↗</span> Retour au site</div>
+      </nav>
+      <div class="sidebar-user"><div class="user-avatar" style="background:var(--accent-amber);color:#000;">MC</div><div class="user-info"><div class="name">Marie Callot</div><div class="role" style="color:var(--accent-amber);">Administratrice</div></div></div>
+    </aside>
+    <div class="main-content">
+      <div class="topbar"><span class="topbar-title">Gestion des utilisateurs</span></div>
+      <div class="page-body">
+        <div class="page-header"><h1>Utilisateurs <span style="font-size:1rem;font-weight:400;color:var(--text-muted);">1 842 comptes</span></h1></div>
+        <!-- Filters -->
+        <div style="display:flex;gap:0.8rem;margin-bottom:1.5rem;align-items:center;flex-wrap:wrap;">
+          <div class="search-bar" style="max-width:320px;"><span class="icon">🔍</span><input placeholder="Rechercher par email ou nom…"></div>
+          <select style="background:var(--bg-card);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:0.55rem 1.5rem 0.55rem 0.8rem;color:var(--text-secondary);font-size:0.82rem;"><option>Tous les rôles</option><option>ROLE_USER</option><option>ROLE_ARTIST</option><option>ROLE_ORGANIZATION</option><option>ROLE_ADMIN</option></select>
+        </div>
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Utilisateur</th><th>Email</th><th>Rôles</th><th>Inscrit le</th><th>Vérifié</th><th>Actions</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><div style="display:flex;align-items:center;gap:0.6rem;"><div class="user-avatar" style="width:28px;height:28px;font-size:0.65rem;">MC</div><span style="color:var(--text-primary);font-weight:500;">Marie Callot</span></div></td>
+                  <td>marie.callot@email.fr</td>
+                  <td><span class="badge badge-gold" style="font-size:0.65rem;">Admin</span></td>
+                  <td>Janv. 2024</td>
+                  <td>✓</td>
+                  <td><button class="btn btn-ghost btn-sm">Voir</button></td>
+                </tr>
+                <tr>
+                  <td><div style="display:flex;align-items:center;gap:0.6rem;"><div class="user-avatar" style="width:28px;height:28px;font-size:0.65rem;background:#7b5ea7;">JT</div><span style="color:var(--text-primary);font-weight:500;">Jean Tamba</span></div></td>
+                  <td>jean.tamba@email.fr</td>
+                  <td><span class="badge badge-gray" style="font-size:0.65rem;">Artiste</span></td>
+                  <td>Mars 2024</td>
+                  <td>✓</td>
+                  <td style="display:flex;gap:0.3rem;"><button class="btn btn-ghost btn-sm">Voir</button><button class="btn btn-ghost btn-sm" style="color:var(--accent-gold);">↑ Admin</button><button class="btn btn-ghost btn-sm" style="color:var(--accent-red);">✗</button></td>
+                </tr>
+                <tr>
+                  <td><div style="display:flex;align-items:center;gap:0.6rem;"><div class="user-avatar" style="width:28px;height:28px;font-size:0.65rem;background:var(--accent-green);">AL</div><span style="color:var(--text-primary);font-weight:500;">Amara Ly</span></div></td>
+                  <td>amara.ly@email.fr</td>
+                  <td><span class="badge badge-gray" style="font-size:0.65rem;">Artiste</span></td>
+                  <td>Fév. 2024</td>
+                  <td>✓</td>
+                  <td style="display:flex;gap:0.3rem;"><button class="btn btn-ghost btn-sm">Voir</button><button class="btn btn-ghost btn-sm" style="color:var(--accent-gold);">↑ Admin</button><button class="btn btn-ghost btn-sm" style="color:var(--accent-red);">✗</button></td>
+                </tr>
+                <tr>
+                  <td><div style="display:flex;align-items:center;gap:0.6rem;"><div class="user-avatar" style="width:28px;height:28px;font-size:0.65rem;background:var(--accent-brown);">PD</div><span style="color:var(--text-primary);font-weight:500;">Paula Diaz</span></div></td>
+                  <td>paula.diaz@email.fr</td>
+                  <td><div style="display:flex;gap:0.3rem;"><span class="badge badge-gray" style="font-size:0.65rem;">Artiste</span><span class="badge badge-green" style="font-size:0.65rem;">Org.</span></div></td>
+                  <td>Jan. 2024</td>
+                  <td>✓</td>
+                  <td style="display:flex;gap:0.3rem;"><button class="btn btn-ghost btn-sm">Voir</button><button class="btn btn-ghost btn-sm" style="color:var(--accent-gold);">↑ Admin</button><button class="btn btn-ghost btn-sm" style="color:var(--accent-red);">✗</button></td>
+                </tr>
+                <tr>
+                  <td><div style="display:flex;align-items:center;gap:0.6rem;"><div class="user-avatar" style="width:28px;height:28px;font-size:0.65rem;">KA</div><span style="color:var(--text-primary);font-weight:500;">Kofi Asante</span></div></td>
+                  <td>kofi.asante@email.fr</td>
+                  <td><span class="badge badge-gray" style="font-size:0.65rem;">Utilisateur</span></td>
+                  <td>Mars 2025</td>
+                  <td style="color:var(--accent-amber);">⏳ En attente</td>
+                  <td style="display:flex;gap:0.3rem;"><button class="btn btn-ghost btn-sm">Voir</button><button class="btn btn-ghost btn-sm" style="color:var(--accent-red);">✗</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="pagination">
+          <button class="page-btn active">1</button>
+          <button class="page-btn">2</button>
+          <button class="page-btn">…</button>
+          <button class="page-btn">37</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================================================================
+   ROUTEUR DE PAGES PROTOTYPE
+   ================================================================ */
+function showPage(pageId) {
+  // Cacher toutes les pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  // Afficher la page demandée
+  const target = document.getElementById('page-' + pageId);
+  if (target) {
+    target.classList.add('active');
+    window.scrollTo(0, 0);
+  }
+  // Mettre à jour les boutons de navigation prototype
+  document.querySelectorAll('.proto-btn').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('onclick') === `showPage('${pageId}')`);
+  });
+}
+// Initialisation — afficher la page de login
+showPage('login');
+</script>
+</body>
+</html>

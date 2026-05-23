@@ -1,0 +1,74 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: bazaart_app
+    volumes:
+      - ./app:/var/www/html
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - bazaart_network
+
+  nginx:
+    image: nginx:alpine
+    container_name: bazaart_nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./app:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    networks:
+      - bazaart_network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: bazaart_postgres
+    environment:
+      POSTGRES_DB: bazaart
+      POSTGRES_USER: bazaart_user
+      POSTGRES_PASSWORD: bazaart_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bazaart_network
+
+  redis:
+    image: redis:alpine
+    container_name: bazaart_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - bazaart_network
+
+  mailpit:
+    image: axllent/mailpit
+    container_name: bazaart_mail
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    networks:
+      - bazaart_network
+
+  adminer:
+    image: adminer
+    container_name: bazaart_adminer
+    ports:
+      - "8081:8080"
+    depends_on:
+      - postgres
+    networks:
+      - bazaart_network
+
+volumes:
+  postgres_data:
+
+networks:
+  bazaart_network:
+    driver: bridge

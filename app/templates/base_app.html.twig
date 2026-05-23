@@ -1,0 +1,464 @@
+{% extends 'base.html.twig' %}
+
+{#
+ # base_app.html.twig — Layout pour les pages de l'application (connectées)
+ #
+ # Ce template définit la mise en page avec :
+ # - Une sidebar verte à gauche (navigation principale)
+ # - Une zone principale à droite (topbar + contenu)
+ #
+ # UTILISATION dans un template enfant :
+ # {% extends 'base_app.html.twig' %}
+ # {% block page_title %}Ma page{% endblock %}
+ # {% block content %}...{% endblock %}
+ #}
+
+{% block stylesheets %}
+<style>
+    /* ── Layout général application ─────────────────────────────────────── */
+    body { background: var(--color-white); }
+
+    .app-layout {
+        display: flex;
+        min-height: 100vh;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────────── */
+    .sidebar {
+        width: 240px;
+        min-height: 100vh;
+        background: var(--color-green);
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        position: fixed;   /* fixe sur le côté — ne défile pas */
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 100;
+    }
+
+    /* Logo en haut de la sidebar */
+    .sidebar__logo {
+        padding: 20px 24px 14px;
+        border-bottom: 1px solid var(--color-green-dark);
+    }
+    .sidebar__logo-title {
+        font-family: var(--font-heading);
+        font-size: 18px;
+        color: var(--color-white);
+        font-weight: 700;
+    }
+    .sidebar__logo-subtitle {
+        font-size: 9px;
+        color: var(--color-green-mid);
+        margin-top: 2px;
+    }
+
+    /* Navigation */
+    .sidebar__nav { padding: 16px 0; flex: 1; overflow-y: auto; }
+
+    .sidebar__section-title {
+        font-size: 9px;
+        font-weight: 600;
+        color: var(--color-green-mid);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 10px 24px 6px;
+    }
+
+    /* Lien de navigation */
+    .sidebar__link {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 20px;
+        font-size: 13px;
+        color: #e2eae7;
+        text-decoration: none;
+        transition: background 0.12s;
+        position: relative;
+    }
+    .sidebar__link:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    /* Lien actif — fond clair + barre rouge sur la gauche */
+    .sidebar__link--active {
+        background: var(--color-red-light);
+        color: var(--color-red);
+        font-weight: 600;
+    }
+    .sidebar__link--active::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: var(--color-red);
+        border-radius: 0 2px 2px 0;
+    }
+
+    /* Icône (emoji ou SVG) dans les liens */
+    .sidebar__icon { font-size: 14px; width: 18px; text-align: center; }
+
+    /* Zone utilisateur en bas de la sidebar */
+    .sidebar__user {
+        padding: 14px 16px;
+        border-top: 1px solid var(--color-green-dark);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    /* Avatar rond avec initiales */
+    .avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--color-orange);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .sidebar__user-name {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-white);
+    }
+    .sidebar__user-role {
+        font-size: 10px;
+        color: var(--color-green-mid);
+    }
+
+    /* ── Zone principale ─────────────────────────────────────────────────── */
+    .app-main {
+        margin-left: 240px;   /* décalage = largeur sidebar */
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+    }
+
+    /* Barre du haut */
+    .topbar {
+        height: 56px;
+        background: var(--color-white);
+        border-bottom: 1px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        padding: 0 28px;
+        position: sticky;
+        top: 0;
+        z-index: 50;
+    }
+    .topbar__title {
+        font-family: var(--font-heading);
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--color-text);
+    }
+
+    /* Contenu de la page */
+    .app-content {
+        padding: 28px;
+        flex: 1;
+    }
+</style>
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+{#
+    Script de polling pour le badge de notifications non lues.
+
+    Pourquoi du JS vanilla plutôt que Stimulus ?
+    Le projet n'a pas encore d'importmap / Stimulus configuré — le JS est vanilla
+    inline dans les templates (voir messaging/show.html.twig pour le même pattern).
+    Ce script est inclus dans base_app.html.twig → s'exécute sur TOUTES les pages
+    de l'application connectée.
+
+    Fonctionnement :
+    1. On récupère les éléments badge et le lien notification depuis le DOM.
+    2. On lit le compte initial depuis data-initial-count (valeur SSR, sans JS).
+    3. Toutes les 60 secondes, on appelle /api/notifications/unread-count en AJAX.
+    4. Si le count a changé, on met à jour le badge.
+
+    Fallback SSR : même si JS est désactivé, le badge s'affiche avec la valeur SSR.
+#}
+<script>
+(function () {
+    'use strict';
+
+    // Récupère le lien Notifications dans la sidebar (il porte un attribut data-notif-badge)
+    var notifLink = document.getElementById('notif-badge-link');
+    var badge = document.getElementById('notif-badge-count');
+
+    // Si les éléments ne sont pas dans le DOM (page sans sidebar), on sort immédiatement
+    if (!notifLink || !badge) {
+        return;
+    }
+
+    // Récupère l'URL de l'API depuis l'attribut data (injecté par Twig)
+    var apiUrl = notifLink.getAttribute('data-api-url');
+    if (!apiUrl) {
+        return;
+    }
+
+    /**
+     * Met à jour l'affichage du badge avec le nouveau count.
+     * @param {number} count
+     */
+    function updateBadge(count) {
+        if (count > 0) {
+            // Affiche "99+" si plus de 99 notifs (évite le débordement graphique)
+            badge.textContent = count > 99 ? '99+' : String(count);
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    /**
+     * Interroge l'API et met à jour le badge si le count a changé.
+     */
+    function poll() {
+        fetch(apiUrl, {
+            // X-Requested-With permet au serveur de détecter les requêtes AJAX
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (response) {
+            // Si la requête échoue (réseau, session expirée...), on ignore silencieusement
+            if (!response.ok) { return null; }
+            return response.json();
+        })
+        .then(function (data) {
+            if (data && typeof data.count === 'number') {
+                updateBadge(data.count);
+            }
+        })
+        .catch(function () {
+            // Silencieux : le polling échoue sans faire planter l'UI
+        });
+    }
+
+    // Lance le polling toutes les 60 secondes (60 000 ms)
+    // On démarre immédiatement une première fois (synchronisation avec le SSR)
+    // puis on laisse l'intervalle gérer les mises à jour suivantes.
+    setInterval(poll, 60000);
+}());
+</script>
+{% endblock %}
+
+{% block body %}
+<div class="app-layout">
+
+    {# ── SIDEBAR ──────────────────────────────────────────────────────────── #}
+    <aside class="sidebar">
+
+        {# Logo #}
+        <div class="sidebar__logo">
+            <div class="sidebar__logo-title">BazaArt</div>
+            <div class="sidebar__logo-subtitle">artistes francophones</div>
+        </div>
+
+        {# Navigation principale #}
+        <nav class="sidebar__nav">
+            <div class="sidebar__section-title">Principal</div>
+
+            {# app.request.attributes.get('_route') retourne le nom de la route active #}
+            <a href="{{ path('app_dashboard') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_dashboard' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">⊞</span> Tableau de bord
+            </a>
+
+            <a href="{{ path('app_resource_index') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_resource' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">◈</span> Ressources
+            </a>
+
+            <a href="{{ path('app_post_feed') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_post' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">◉</span> Communauté
+            </a>
+
+            {# Forum — sous-section de Communauté, accessible à tous les membres #}
+            <a href="{{ path('app_forum_index') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_forum' %}sidebar__link--active{% endif %}"
+               style="padding-left: 36px; font-size: 12px;">
+                <span class="sidebar__icon">💬</span> Forum
+            </a>
+
+            {# Messagerie privée — conversations 1-à-1 entre membres #}
+            <a href="{{ path('app_messaging_index') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_messaging' %}sidebar__link--active{% endif %}"
+               style="padding-left: 36px; font-size: 12px;">
+                <span class="sidebar__icon">✉</span> Messages
+            </a>
+
+            {#
+                Notifications — badge en temps réel via Stimulus (polling toutes les 60s).
+
+                Fonctionnement du badge :
+                  1. Au chargement, on appelle unread_notifications_count() (extension Twig)
+                     pour récupérer le compte initial depuis la BDD sans JS.
+                  2. Le contrôleur Stimulus notification_badge_controller.js prend le relai
+                     et interroge /api/notifications/unread-count toutes les 60 secondes.
+                  3. Quand le count change, Stimulus met à jour l'affichage du badge.
+
+                Attributs Stimulus :
+                  data-controller         → identifie le contrôleur JS à instancier
+                  data-notification-badge-url-value  → URL de l'API polling
+                  data-notification-badge-count-value → valeur initiale (int, SSR)
+                  data-notification-badge-target="badge" → l'élément <span> à mettre à jour
+            #}
+            {% set notifCount = unread_notifications_count() %}
+            {#
+                id="notif-badge-link"       → cible utilisée par le script JS de polling
+                data-api-url                → URL de l'API, lue par le script JS
+            #}
+            <a href="{{ path('app_notification_index') }}"
+               id="notif-badge-link"
+               data-api-url="{{ path('app_api_notification_unread_count') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_notification' %}sidebar__link--active{% endif %}"
+               style="padding-left: 36px; font-size: 12px;">
+                <span class="sidebar__icon">🔔</span> Notifications
+                {#
+                    id="notif-badge-count"  → cible du script JS pour mise à jour
+                    Le badge est masqué si count = 0 (style display:none).
+                    Limite d'affichage : "99+" pour éviter le débordement graphique.
+                #}
+                <span id="notif-badge-count"
+                      style="{{ notifCount == 0 ? 'display:none;' : '' }}margin-left: auto; background: #C8503A; color: white; border-radius: 999px; font-size: 10px; font-weight: 700; padding: 2px 6px; min-width: 16px; text-align: center;">
+                    {{ notifCount > 99 ? '99+' : notifCount }}
+                </span>
+            </a>
+
+            <a href="{{ path('app_article_index') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_article' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">◎</span> Articles
+            </a>
+
+            {# Annuaire artistes — liste tous les profils publics #}
+            <a href="{{ path('app_artist_profile_directory') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') in ['app_artist_profile_directory', 'app_artist_profile_public'] %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">◑</span> Annuaire artistes
+            </a>
+
+            <div class="sidebar__section-title" style="margin-top: 8px;">Mon espace</div>
+
+            <a href="{{ path('app_artist_profile_show') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') in ['app_artist_profile_show', 'app_artist_profile_edit'] %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">◐</span> Mon profil artiste
+            </a>
+
+            <a href="{{ path('app_org_profile_show') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_org' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">▣</span> Mon organisation
+            </a>
+
+            <a href="{{ path('app_resource_my') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_resource_my' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">◳</span> Mes soumissions
+            </a>
+
+            {# Mes favoris — page listant les ressources mises en favori par l'utilisateur #}
+            <a href="{{ path('app_resource_favorites') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_resource_favorites' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">&#9825;</span> Mes favoris
+            </a>
+
+            {# Alertes — préférences d'alertes email pour les nouvelles ressources #}
+            <a href="{{ path('app_resource_alerts') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_resource_alerts' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">&#9993;</span> Alertes ressources
+            </a>
+
+            <a href="{{ path('app_article_my') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_article_my' %}sidebar__link--active{% endif %}">
+                <span class="sidebar__icon">◷</span> Mes articles
+            </a>
+
+            {# Lien Espace Structure — visible uniquement pour les structures partenaires #}
+            {% if is_granted('ROLE_STRUCTURE') %}
+                <div class="sidebar__section-title" style="margin-top: 8px;">Espace Structure</div>
+                <a href="{{ path('app_structure_dashboard') }}"
+                   class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_structure' %}sidebar__link--active{% endif %}">
+                    <span class="sidebar__icon">🏛</span> Mon espace structure
+                </a>
+            {% endif %}
+
+            {# Lien Admin — visible uniquement pour les admins #}
+            {% if is_granted('ROLE_ADMIN') %}
+                <div class="sidebar__section-title" style="margin-top: 8px;">Administration</div>
+                <a href="{{ path('app_admin_dashboard') }}"
+                   class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_admin' %}sidebar__link--active{% endif %}"
+                   style="color: #f0c040;">
+                    <span class="sidebar__icon">⚙</span> Admin
+                </a>
+            {% endif %}
+        </nav>
+
+        {# Zone utilisateur (en bas de la sidebar) #}
+        <div class="sidebar__user">
+            {% if app.user %}
+                {# Génère les initiales de l'email : "marie@test.com" → "MA" #}
+                {% set initials = app.user.email|slice(0, 2)|upper %}
+                <div class="avatar">{{ initials }}</div>
+                <div>
+                    <div class="sidebar__user-name">{{ app.user.email|split('@')|first }}</div>
+                    <div class="sidebar__user-role">
+                        {#
+                            is_granted() utilise la hiérarchie de rôles de security.yaml,
+                            contrairement à app.user.roles qui retourne les rôles bruts stockés
+                            en BDD (sans propagation). Un ROLE_ADMIN qui hérite de ROLE_STRUCTURE
+                            serait mal identifié avec app.user.roles.
+                        #}
+                        {% if is_granted('ROLE_ADMIN') %}Admin
+                        {% elseif is_granted('ROLE_STRUCTURE') %}Structure
+                        {% elseif is_granted('ROLE_ARTIST') %}Artiste
+                        {% else %}Membre{% endif %}
+                    </div>
+                </div>
+                <a href="{{ path('app_logout') }}"
+                   style="margin-left: auto; font-size: 11px; color: var(--color-green-mid); text-decoration: none;">
+                    ⎋
+                </a>
+            {% endif %}
+        </div>
+
+    </aside>
+
+    {# ── ZONE PRINCIPALE ──────────────────────────────────────────────────── #}
+    <div class="app-main">
+
+        {# Barre du haut avec le titre de la page #}
+        <div class="topbar">
+            <h1 class="topbar__title">{% block page_title %}{% endblock %}</h1>
+        </div>
+
+        {# Contenu de la page #}
+        <div class="app-content">
+
+            {# Messages flash (succès / erreur) — affichés en haut de chaque page #}
+            {% for message in app.flashes('success') %}
+                <div class="flash flash--success">{{ message }}</div>
+            {% endfor %}
+            {% for message in app.flashes('error') %}
+                <div class="flash flash--error">{{ message }}</div>
+            {% endfor %}
+
+            {# Le contenu spécifique à chaque page va ici #}
+            {% block content %}{% endblock %}
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}
