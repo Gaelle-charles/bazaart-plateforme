@@ -1,0 +1,2100 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>BazaArt — Hub artistique pluridisciplinaire</title>
+<meta name="viewport" content="width=1440" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,800;0,9..144,900;1,9..144,400;1,9..144,500;1,9..144,600;1,9..144,700;1,9..144,800&family=Boldonse&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+
+<style>
+  :root{
+    /* New brand from logo composition */
+    --choco:        #5A2A0A;   /* main brown star fill */
+    --choco-deep:   #3D1B05;
+    --choco-soft:   #7A3D14;
+
+    --cream:        #FAF5EA;
+    --cream-deep:   #F1E8D2;
+    --paper:        #FFFCF4;
+
+    --magenta:      #D14EA8;
+    --lime:         #B7D03F;
+    --blue:         #2E6BD9;
+    --yellow:       #F5C518;
+    --coral:        #E86C3F;
+
+    --ink:          #131008;
+    --ink-soft:     #5C5443;
+    --ink-faint:    #9A9181;
+
+    /* Type */
+    --display:      "Boldonse", "Anton", Impact, sans-serif;
+    --serif:        "Fraunces", "Cormorant Garamond", Georgia, serif;
+    --sans:         "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --mono:         "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  *,*::before,*::after{ box-sizing: border-box }
+  html,body{ margin:0; padding:0; }
+  html{ scroll-behavior: smooth; }
+  body{
+    background: var(--cream);
+    color: var(--ink);
+    font: 16px/1.55 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+  img{ max-width: 100%; display: block; }
+  a{ color: inherit; text-decoration: none; }
+  button{ font: inherit; cursor: default; }
+  ::selection{ background: var(--yellow); color: var(--ink); }
+
+  /* Custom cursor blob */
+  .cursor-blob{
+    position: fixed; pointer-events: none; z-index: 9999;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--magenta);
+    mix-blend-mode: difference;
+    transition: width .25s ease, height .25s ease, background .25s ease, transform .12s ease-out;
+    will-change: transform;
+    transform: translate(-50%, -50%);
+    top: 0; left: 0;
+    opacity: 0;
+  }
+  .cursor-blob.show{ opacity: 1 }
+  .cursor-blob.lg{ width: 64px; height: 64px; background: var(--lime); }
+
+  /* ───────────────────────────────────────── NAV */
+  .nav{
+    position: fixed; top: 16px; left: 16px; right: 16px; z-index: 100;
+    background: rgba(255,252,244,.78);
+    border: 1px solid rgba(19,16,8,.10);
+    border-radius: 999px;
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    padding: 10px 12px 10px 28px;
+    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+    transition: transform .3s ease;
+  }
+  .nav-logo{ height: 22px; }
+  .nav-logo img{ height: 100%; width: auto; }
+  .nav-links{ display: flex; align-items: center; gap: 28px; }
+  .nav-link{
+    font: 500 14px var(--sans);
+    color: var(--ink); padding: 4px 0;
+    position: relative;
+  }
+  .nav-link::after{
+    content:""; position:absolute; left: 0; right: 0; bottom: -2px;
+    height: 1.5px; background: var(--choco);
+    transform: scaleX(0); transform-origin: left center;
+    transition: transform .35s cubic-bezier(.6,.05,.1,1);
+  }
+  .nav-link:hover::after, .nav-link.active::after{ transform: scaleX(1); }
+  .nav-cta{ display: flex; align-items: center; gap: 8px; }
+
+  .btn{
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 13px 24px;
+    font: 500 14px var(--sans);
+    border-radius: 999px;
+    border: 1.5px solid transparent;
+    transition: transform .14s ease, background .14s ease, color .14s ease, box-shadow .14s ease;
+    position: relative; overflow: hidden;
+    white-space: nowrap;
+  }
+  .btn:hover{ transform: translateY(-2px); }
+  .btn-choco{ background: var(--choco); color: var(--cream); border-color: var(--choco); }
+  .btn-choco:hover{ background: var(--ink); border-color: var(--ink); }
+  .btn-cream{ background: var(--paper); color: var(--ink); border-color: rgba(19,16,8,.18); }
+  .btn-cream:hover{ background: var(--cream-deep); }
+  .btn-outline{ background: transparent; color: var(--ink); border-color: rgba(19,16,8,.25); }
+  .btn-outline:hover{ background: var(--ink); color: var(--cream); border-color: var(--ink); }
+  .btn-yellow{ background: var(--yellow); color: var(--ink); border-color: var(--yellow); font-weight: 600; }
+  .btn-yellow:hover{ background: var(--ink); color: var(--yellow); border-color: var(--ink); }
+  .btn-sm{ padding: 9px 16px; font-size: 13px; }
+
+  .icon-heart{ width: 14px; height: 14px; }
+
+  /* ───────────────────────────────────────── LAYOUT */
+  .container{ max-width: 1360px; margin: 0 auto; padding: 0 32px; }
+  section{ position: relative; }
+
+  .eyebrow{
+    display: inline-flex; align-items: center; gap: 12px;
+    font: 600 11px/1 var(--mono);
+    letter-spacing: .14em; text-transform: uppercase;
+    color: var(--choco);
+  }
+  .eyebrow::before{
+    content:""; display: block;
+    width: 22px; height: 2px; background: currentColor;
+  }
+  .eyebrow-cream{ color: var(--yellow); }
+  .eyebrow-coral{ color: var(--coral); }
+
+  .h-display{
+    font-family: var(--display);
+    font-weight: 400;
+    line-height: .92;
+    letter-spacing: -.025em;
+    color: var(--ink);
+    margin: 0;
+  }
+  .h-serif{
+    font-family: var(--serif);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -.02em;
+    color: var(--ink);
+    margin: 0;
+  }
+  .it-coral{ font-family: var(--serif); font-style: italic; font-weight: 500; color: var(--coral); letter-spacing: -.015em; }
+  .it-magenta{ font-family: var(--serif); font-style: italic; font-weight: 500; color: var(--magenta); letter-spacing: -.015em; }
+  .it-yellow{ font-family: var(--serif); font-style: italic; font-weight: 500; color: var(--yellow); letter-spacing: -.015em; }
+  .it-lime{ font-family: var(--serif); font-style: italic; font-weight: 500; color: var(--lime); letter-spacing: -.015em; }
+  .it-blue{ font-family: var(--serif); font-style: italic; font-weight: 500; color: var(--blue); letter-spacing: -.015em; }
+  .it-cream{ font-family: var(--serif); font-style: italic; font-weight: 500; color: var(--cream); letter-spacing: -.015em; }
+  .it-choco{ font-family: var(--serif); font-style: italic; font-weight: 500; color: var(--choco); letter-spacing: -.015em; }
+
+  /* Pill */
+  .pill{
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 14px; border-radius: 999px;
+    font: 600 11.5px/1 var(--sans); letter-spacing: .04em;
+    text-transform: uppercase;
+    border: 1px solid rgba(19,16,8,.10);
+    background: var(--paper);
+  }
+  .pill-magenta{ background: var(--magenta); color: #fff; border-color: var(--magenta); }
+  .pill-lime{ background: var(--lime); color: var(--ink); border-color: var(--lime); }
+  .pill-blue{ background: var(--blue); color: #fff; border-color: var(--blue); }
+  .pill-yellow{ background: var(--yellow); color: var(--ink); border-color: var(--yellow); }
+  .pill-coral{ background: var(--coral); color: #fff; border-color: var(--coral); }
+  .pill-choco{ background: var(--choco); color: var(--cream); border-color: var(--choco); }
+  .pill-dot::before{
+    content:""; display:inline-block; width:6px; height:6px; border-radius:50%;
+    background: currentColor; opacity: .7;
+  }
+  .pill-live::before{
+    content:""; display:inline-block; width:8px; height:8px; border-radius:50%;
+    background: var(--coral); animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{ opacity:1; transform: scale(1) } 50%{ opacity:.4; transform: scale(.85) } }
+
+  /* ───────────────────────────────────────── REVEAL animations */
+  .reveal{ opacity: 0; transform: translateY(28px); transition: opacity .9s cubic-bezier(.2,.6,.2,1), transform .9s cubic-bezier(.2,.6,.2,1); }
+  .reveal.in{ opacity: 1; transform: none; }
+  .reveal-2{ transition-delay: .12s; }
+  .reveal-3{ transition-delay: .24s; }
+  .reveal-4{ transition-delay: .36s; }
+  .reveal-5{ transition-delay: .48s; }
+
+  /* ───────────────────────────────────────── HERO */
+  .hero{
+    background: var(--cream);
+    padding: 140px 0 80px;
+    overflow: hidden;
+    position: relative;
+    min-height: 100vh;
+    display: flex; align-items: center;
+  }
+  .hero-bg{
+    position: absolute; inset: 0;
+    pointer-events: none; z-index: 0;
+  }
+  .hero-bg svg{ width: 100%; height: 100%; }
+
+  /* The animated star canvas */
+  .star-stage{
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .star-stage svg{
+    width: min(78vh, 720px); height: min(78vh, 720px);
+    overflow: visible;
+  }
+  .blob{ transform-origin: center; will-change: transform; }
+  .blob-1{ animation: drift1 14s ease-in-out infinite alternate; }
+  .blob-2{ animation: drift2 17s ease-in-out infinite alternate; }
+  .blob-3{ animation: drift3 12s ease-in-out infinite alternate; }
+  .blob-4{ animation: drift4 16s ease-in-out infinite alternate; }
+  @keyframes drift1{ from{ transform: translate(0,0) } to{ transform: translate(-12px,-18px) scale(1.05) } }
+  @keyframes drift2{ from{ transform: translate(0,0) } to{ transform: translate(14px,-10px) scale(1.04) } }
+  @keyframes drift3{ from{ transform: translate(0,0) } to{ transform: translate(-10px,14px) scale(1.06) } }
+  @keyframes drift4{ from{ transform: translate(0,0) } to{ transform: translate(12px,16px) scale(1.05) } }
+
+  .star-shape{
+    transform-origin: center;
+    animation: starSpin 60s linear infinite;
+  }
+  @keyframes starSpin{ from{ transform: rotate(0deg) } to{ transform: rotate(360deg) } }
+
+  /* Hero content layout */
+  .hero-content{
+    position: relative; z-index: 2;
+    display: grid; grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .hero-row-top{
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 36px;
+  }
+  .hero-row-top .pill{ }
+
+  .hero-marker{
+    font: 500 12px var(--mono); letter-spacing: .08em;
+    color: var(--ink-soft); text-align: right;
+    line-height: 1.5;
+  }
+  .hero-marker strong{ color: var(--ink); display: block; font-weight: 600; }
+
+  .hero-h{
+    font-family: var(--display);
+    font-size: clamp(80px, 14vw, 220px);
+    line-height: .82;
+    letter-spacing: -.04em;
+    text-align: center;
+    margin: 0;
+    text-transform: uppercase;
+    color: var(--ink);
+    position: relative;
+  }
+  .hero-h-row{ display: block; }
+  .hero-h .it{ font-family: var(--serif); font-style: italic; font-weight: 500; text-transform: none; letter-spacing: -.03em; color: var(--coral); }
+  .hero-h .it-y{ color: var(--yellow); -webkit-text-stroke: 2px var(--ink); }
+  .hero-h .it-m{ color: var(--magenta); }
+  .hero-h .it-l{ color: var(--lime); -webkit-text-stroke: 2px var(--ink); }
+
+  /* Letter-by-letter reveal */
+  .hero-h .letter{
+    display: inline-block;
+    opacity: 0; transform: translateY(60px) rotate(8deg);
+    animation: dropIn 1.1s cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  @keyframes dropIn{ to{ opacity: 1; transform: none; } }
+
+  .hero-bottom{
+    margin-top: 56px;
+    display: grid; grid-template-columns: 1fr auto auto 1fr;
+    gap: 40px; align-items: end;
+  }
+  .hero-lead{
+    font: 500 18px/1.5 var(--sans);
+    color: var(--ink-soft);
+    max-width: 340px;
+  }
+  .hero-ctas{ display: flex; gap: 12px; }
+  .hero-meta{
+    text-align: right;
+    font: 500 12px/1.5 var(--mono); letter-spacing: .06em;
+    color: var(--ink-soft);
+  }
+  .hero-meta strong{
+    display: block;
+    font-family: var(--serif); font-style: italic; font-weight: 500;
+    color: var(--ink); font-size: 16px; letter-spacing: 0;
+    margin-bottom: 4px;
+  }
+
+  /* Floating petals (parallax on scroll) */
+  .petal{
+    position: absolute;
+    pointer-events: none;
+    will-change: transform;
+    z-index: 1;
+  }
+  .petal svg{ width: 100%; height: 100%; display: block; }
+  .petal-1{ top: 18%; left: 6%;  width: 80px; transform: rotate(-15deg); animation: float1 8s ease-in-out infinite alternate; }
+  .petal-2{ top: 68%; left: 12%; width: 56px; transform: rotate(40deg); animation: float2 10s ease-in-out infinite alternate; }
+  .petal-3{ top: 14%; right: 8%; width: 72px; transform: rotate(60deg); animation: float3 9s ease-in-out infinite alternate; }
+  .petal-4{ top: 72%; right: 6%; width: 64px; transform: rotate(-30deg); animation: float4 11s ease-in-out infinite alternate; }
+  @keyframes float1{ from{ transform: translate(0,0) rotate(-15deg) } to{ transform: translate(8px,-16px) rotate(-5deg) } }
+  @keyframes float2{ from{ transform: translate(0,0) rotate(40deg) } to{ transform: translate(-10px,-8px) rotate(50deg) } }
+  @keyframes float3{ from{ transform: translate(0,0) rotate(60deg) } to{ transform: translate(-6px,12px) rotate(70deg) } }
+  @keyframes float4{ from{ transform: translate(0,0) rotate(-30deg) } to{ transform: translate(10px,-14px) rotate(-15deg) } }
+
+  /* ───────────────────────────────────────── MARQUEE */
+  .marquee{
+    background: var(--ink);
+    color: var(--cream);
+    overflow: hidden;
+    padding: 22px 0;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+  }
+  .marquee-track{
+    display: inline-flex; gap: 56px; align-items: center;
+    white-space: nowrap;
+    animation: marquee 40s linear infinite;
+  }
+  .marquee-track:hover{ animation-play-state: paused; }
+  .marquee-item{
+    display: inline-flex; align-items: center; gap: 14px;
+    font: 500 26px/1 var(--serif); font-style: italic;
+  }
+  .marquee-star{ width: 18px; height: 18px; color: var(--lime); display: inline-block; }
+  @keyframes marquee{ from{ transform: translateX(0) } to{ transform: translateX(-50%) } }
+
+  /* ───────────────────────────────────────── ABOUT — manifesto */
+  .manifesto{
+    background: var(--cream);
+    padding: 140px 0 120px;
+    position: relative;
+  }
+  .manifesto-inner{
+    display: grid; grid-template-columns: 1fr 1.4fr; gap: 80px; align-items: flex-start;
+  }
+  .manifesto h2{
+    font-family: var(--serif);
+    font-weight: 600; font-size: clamp(64px, 7vw, 104px);
+    line-height: .96; letter-spacing: -.02em;
+    color: var(--ink);
+  }
+  .manifesto-body{
+    font: 500 22px/1.45 var(--sans);
+    color: var(--ink);
+    max-width: 600px;
+  }
+  .manifesto-body p{ margin: 0 0 24px; }
+  .manifesto-body p:last-child{ margin: 0; }
+  .manifesto-body .lead{ font-size: 26px; line-height: 1.35; font-family: var(--serif); font-weight: 500; }
+  .manifesto-body strong{ font-weight: 600; }
+  .manifesto-sig{
+    margin-top: 40px;
+    font: 500 13px var(--mono); letter-spacing: .08em;
+    color: var(--ink-soft); text-transform: uppercase;
+  }
+  .manifesto-sig::before{
+    content:""; display: block; width: 40px; height: 1px; background: var(--ink-soft);
+    margin-bottom: 12px;
+  }
+
+  /* ───────────────────────────────────────── HUBS */
+  .hubs{
+    background: var(--choco);
+    color: var(--cream);
+    padding: 140px 0 160px;
+    position: relative; overflow: hidden;
+  }
+  .hubs::before{
+    content:""; position: absolute; inset: 0;
+    background:
+      radial-gradient(800px circle at 12% 18%, rgba(209,78,168,.14), transparent 50%),
+      radial-gradient(700px circle at 88% 32%, rgba(183,208,63,.10), transparent 50%),
+      radial-gradient(900px circle at 50% 90%, rgba(46,107,217,.12), transparent 55%);
+    pointer-events: none;
+  }
+  .hubs-head{ display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: flex-end; position: relative; z-index: 2; }
+  .hubs h2{
+    font-family: var(--serif); font-weight: 600;
+    font-size: clamp(72px, 8vw, 124px); line-height: .94; letter-spacing: -.022em;
+    color: var(--cream); margin: 16px 0 0;
+  }
+  .hubs-intro{
+    font: 500 18px/1.55 var(--sans);
+    color: rgba(250,245,234,.72);
+    max-width: 460px;
+  }
+
+  .hubs-grid{
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+    margin-top: 64px;
+    position: relative; z-index: 2;
+  }
+  .hub{
+    position: relative;
+    background: var(--paper); color: var(--ink);
+    border-radius: 28px;
+    padding: 32px 28px 28px;
+    min-height: 440px;
+    display: flex; flex-direction: column; gap: 20px;
+    overflow: hidden;
+    transition: transform .35s cubic-bezier(.2,.7,.2,1);
+  }
+  .hub:hover{ transform: translateY(-6px); }
+  .hub-magenta{ background: var(--magenta); color: #fff; }
+  .hub-blue{ background: var(--blue); color: #fff; }
+  .hub-no{
+    font-family: var(--display); font-weight: 400;
+    font-size: 52px; line-height: 1;
+    opacity: .5;
+    letter-spacing: -.04em;
+  }
+  .hub h3{
+    font-family: var(--serif); font-weight: 600;
+    font-size: 38px; line-height: 1; letter-spacing: -.015em;
+    margin: 0;
+  }
+  .hub p{
+    font: 500 15px/1.55 var(--sans);
+    opacity: .88;
+    margin: 0;
+  }
+  .hub-list{
+    margin-top: auto;
+    display: flex; flex-direction: column; gap: 8px;
+    padding-top: 20px;
+    border-top: 1px solid currentColor;
+    border-color: rgba(19,16,8,.12);
+  }
+  .hub-magenta .hub-list, .hub-blue .hub-list{ border-color: rgba(255,255,255,.22); }
+  .hub-list li{
+    list-style: none;
+    display: flex; justify-content: space-between; align-items: center;
+    font: 500 13px var(--mono); letter-spacing: .02em;
+    padding: 4px 0;
+  }
+  .hub-list .dot{
+    width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor; opacity: .6;
+  }
+
+  .hub-icon{
+    position: absolute; bottom: 24px; right: 24px;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: 1.5px solid currentColor; opacity: .35;
+    transition: transform .35s ease;
+  }
+  .hub:hover .hub-icon{ transform: rotate(45deg) scale(1.08); }
+
+  /* Stats counter */
+  .stats{
+    margin-top: 100px;
+    position: relative; z-index: 2;
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid rgba(250,245,234,.18);
+  }
+  .stat{
+    padding: 32px 0 0 32px;
+    border-left: 1px solid rgba(250,245,234,.16);
+  }
+  .stat:first-child{ padding-left: 0; border-left: 0; }
+  .stat-num{
+    font-family: var(--display); font-weight: 400;
+    font-size: 96px; line-height: 1;
+    color: var(--yellow);
+    letter-spacing: -.03em;
+  }
+  .stat-label{
+    margin-top: 14px;
+    font: 600 12px var(--mono); letter-spacing: .14em;
+    text-transform: uppercase; color: rgba(250,245,234,.7);
+  }
+
+  /* ───────────────────────────────────────── PLATFORM (SaaS preview) */
+  .saas{
+    background: var(--cream);
+    padding: 160px 0 140px;
+    position: relative;
+  }
+  .saas-head{ text-align: center; margin-bottom: 96px; }
+  .saas-head .eyebrow{ justify-content: center; }
+  .saas h2{
+    font-family: var(--serif); font-weight: 600;
+    font-size: clamp(72px, 8vw, 128px); line-height: .96; letter-spacing: -.022em;
+    margin: 16px 0 24px;
+  }
+  .saas-sub{
+    font: 500 18px/1.55 var(--sans);
+    color: var(--ink-soft);
+    max-width: 560px; margin: 0 auto;
+  }
+
+  .saas-grid{
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    grid-auto-rows: minmax(260px, auto);
+    gap: 20px;
+  }
+  .saas-card{
+    position: relative;
+    border-radius: 28px;
+    padding: 28px;
+    overflow: hidden;
+    transition: transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s ease;
+    cursor: default;
+  }
+  .saas-card:hover{
+    transform: translateY(-4px);
+    box-shadow: 0 32px 64px -28px rgba(19,16,8,.28);
+  }
+  .saas-card h3{
+    font-family: var(--serif); font-weight: 600;
+    font-size: 32px; line-height: 1.05; letter-spacing: -.015em;
+    margin: 0 0 12px;
+  }
+  .saas-card .saas-label{
+    font: 600 11px var(--mono); letter-spacing: .14em; text-transform: uppercase;
+    opacity: .55; margin-bottom: 18px;
+  }
+  .saas-card p{
+    font: 500 14.5px/1.55 var(--sans);
+    margin: 0;
+    opacity: .88;
+  }
+  .saas-card .arrow{
+    position: absolute; top: 24px; right: 24px;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    display: flex; align-items: center; justify-content: center;
+    opacity: .35;
+    transition: transform .35s ease, opacity .35s ease;
+  }
+  .saas-card:hover .arrow{ opacity: 1; transform: rotate(-45deg) translate(2px,-2px); }
+
+  /* Card variants */
+  .card-opp{ grid-column: 1 / 2; grid-row: 1 / 2; background: var(--paper); color: var(--ink); min-height: 480px; padding: 32px; display: flex; flex-direction: column; }
+  .card-forum{ grid-column: 2 / 3; grid-row: 1 / 2; background: var(--ink); color: var(--cream); min-height: 480px; padding: 32px; display: flex; flex-direction: column; }
+  .card-dash{  grid-column: 1 / 2; grid-row: 2 / 3; background: var(--magenta); color: #fff; min-height: 360px; padding: 32px; }
+  .card-pay{   grid-column: 2 / 3; grid-row: 2 / 3; background: var(--lime); color: var(--ink); min-height: 360px; padding: 32px; }
+
+  /* Opportunités mock */
+  .opp-list{ display: flex; flex-direction: column; gap: 12px; margin-top: 20px; flex: 1; }
+  .opp-row{
+    display: grid; grid-template-columns: 1fr auto;
+    align-items: center;
+    padding: 14px 18px;
+    background: var(--cream);
+    border-radius: 14px;
+    transition: background .2s ease, transform .2s ease;
+  }
+  .opp-row:hover{ background: var(--cream-deep); transform: translateX(4px); }
+  .opp-row-l{ display: flex; flex-direction: column; gap: 4px; }
+  .opp-row-title{ font: 600 14.5px var(--sans); color: var(--ink); }
+  .opp-row-meta{ font: 500 12px var(--mono); color: var(--ink-soft); letter-spacing: .04em; }
+  .opp-tag{
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 999px;
+    font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase;
+  }
+  .opp-tag-mag{ background: var(--magenta); color: #fff; }
+  .opp-tag-blu{ background: var(--blue); color: #fff; }
+  .opp-tag-lim{ background: var(--lime); color: var(--ink); }
+  .opp-tag-yel{ background: var(--yellow); color: var(--ink); }
+  .opp-tag-cor{ background: var(--coral); color: #fff; }
+  .opp-count{
+    margin-top: 16px; padding-top: 16px;
+    border-top: 1px dashed rgba(19,16,8,.12);
+    display: flex; justify-content: space-between; align-items: center;
+    font: 500 13px var(--sans); color: var(--ink-soft);
+  }
+  .opp-count strong{ color: var(--ink); font-weight: 600; }
+
+  /* Forum mock — live + messages */
+  .forum-live{
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 16px;
+    padding: 14px;
+    margin-top: 20px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .forum-live-vis{
+    width: 64px; height: 64px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--magenta), var(--coral));
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .forum-live-vis::before{
+    content:""; position: absolute; inset: 0;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.4), transparent 60%);
+  }
+  .forum-live-vis::after{
+    content:""; position: absolute; inset: 0;
+    background: repeating-linear-gradient(90deg, transparent 0 4px, rgba(0,0,0,.25) 4px 5px);
+    opacity: .3;
+  }
+  .forum-live-info{ flex: 1; min-width: 0; }
+  .forum-live-info .pill{ font-size: 10px; padding: 3px 8px; }
+  .forum-live-title{
+    font: 600 14px var(--sans); margin-top: 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .forum-live-meta{ font: 500 11px var(--mono); color: rgba(250,245,234,.55); margin-top: 3px; }
+
+  .forum-feed{ margin-top: 14px; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .forum-msg{
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 10px 12px;
+    background: rgba(255,255,255,.04);
+    border-radius: 12px;
+  }
+  .forum-msg-avatar{
+    width: 30px; height: 30px; border-radius: 50%;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font: 700 11px var(--mono); color: var(--ink);
+  }
+  .forum-msg-text{ font: 500 13px/1.4 var(--sans); flex: 1; min-width: 0; }
+  .forum-msg-text strong{ color: var(--cream); font-weight: 600; display: block; margin-bottom: 2px; font-size: 12px; }
+  .forum-msg-text span{ color: rgba(250,245,234,.7); }
+
+  /* Dashboard mock — magenta */
+  .dash-mock{
+    margin-top: 18px;
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 16px;
+    padding: 16px;
+    display: flex; gap: 16px; align-items: center;
+  }
+  .dash-avatar{
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--paper);
+    display: flex; align-items: center; justify-content: center;
+    font: 700 18px var(--serif); color: var(--magenta);
+    flex-shrink: 0;
+  }
+  .dash-info{ flex: 1; }
+  .dash-info-name{ font: 600 15px var(--sans); }
+  .dash-info-bio{ font: 500 12px var(--mono); opacity: .75; margin-top: 3px; }
+  .dash-stat{
+    display: flex; gap: 16px; margin-top: 18px;
+  }
+  .dash-stat-cell{
+    flex: 1;
+    background: rgba(255,255,255,.10);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .dash-stat-num{ font: 600 22px/1 var(--serif); }
+  .dash-stat-lbl{ font: 500 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; opacity: .7; margin-top: 4px; }
+
+  /* Payments mock — lime */
+  .pay-mock{
+    margin-top: 20px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .pay-row{
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px;
+    background: rgba(19,16,8,.06);
+    border-radius: 12px;
+    font: 500 13px var(--sans);
+  }
+  .pay-row strong{ font-weight: 600; }
+  .pay-row .pay-amount{ font: 600 14px var(--mono); }
+  .pay-total{
+    background: var(--ink); color: var(--cream);
+    margin-top: 6px;
+  }
+
+  /* ───────────────────────────────────────── OPPORTUNITIES detail */
+  .opps-section{
+    background: var(--paper);
+    padding: 160px 0 140px;
+  }
+  .section-head{ display: grid; grid-template-columns: 1fr auto; align-items: flex-end; gap: 32px; margin-bottom: 72px; }
+  .section-head h2{
+    font-family: var(--serif); font-weight: 600;
+    font-size: clamp(64px, 7vw, 112px); line-height: .96; letter-spacing: -.022em;
+    margin: 16px 0 0;
+  }
+  .section-head-sub{
+    font: 500 17px/1.55 var(--sans);
+    color: var(--ink-soft);
+    max-width: 420px;
+  }
+
+  .opps-grid{
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+  }
+  .opp-card{
+    background: var(--cream);
+    border-radius: 24px;
+    padding: 28px;
+    display: flex; flex-direction: column; gap: 18px;
+    min-height: 360px;
+    transition: transform .35s cubic-bezier(.2,.7,.2,1);
+    position: relative; overflow: hidden;
+  }
+  .opp-card:hover{ transform: translateY(-6px); }
+  .opp-card-magenta{ background: var(--magenta); color: #fff; }
+  .opp-card-yellow{ background: var(--yellow); color: var(--ink); }
+  .opp-card-choco{ background: var(--choco); color: var(--cream); }
+
+  .opp-card-head{ display: flex; justify-content: space-between; align-items: center; }
+  .opp-card-countdown{
+    font: 600 14px var(--mono); letter-spacing: .02em;
+    padding: 6px 12px;
+    background: rgba(19,16,8,.08);
+    border-radius: 999px;
+  }
+  .opp-card-magenta .opp-card-countdown{ background: rgba(255,255,255,.18); }
+  .opp-card-choco .opp-card-countdown{ background: rgba(255,255,255,.12); }
+  .opp-card h3{
+    font-family: var(--serif); font-weight: 600;
+    font-size: 26px; line-height: 1.08; letter-spacing: -.015em;
+    margin: 0;
+  }
+  .opp-card-org{ font: 500 13px var(--mono); letter-spacing: .04em; opacity: .8; }
+  .opp-card-foot{
+    margin-top: auto;
+    padding-top: 18px;
+    border-top: 1px solid rgba(19,16,8,.10);
+    display: flex; justify-content: space-between; align-items: center;
+    font: 500 13.5px var(--sans);
+  }
+  .opp-card-magenta .opp-card-foot, .opp-card-choco .opp-card-foot{ border-color: rgba(255,255,255,.18); }
+  .opp-card-amount{ font: 600 18px var(--serif); }
+
+  /* ───────────────────────────────────────── FORUM/LIVES SHOWCASE */
+  .forum-section{
+    background: var(--ink);
+    color: var(--cream);
+    padding: 160px 0 140px;
+    position: relative; overflow: hidden;
+  }
+  .forum-section::before{
+    content:""; position: absolute; inset: 0;
+    background:
+      radial-gradient(700px circle at 8% 12%, rgba(209,78,168,.18), transparent 50%),
+      radial-gradient(800px circle at 92% 88%, rgba(46,107,217,.18), transparent 55%);
+    pointer-events: none;
+  }
+  .forum-section .section-head h2{ color: var(--cream); }
+  .forum-section .section-head-sub{ color: rgba(250,245,234,.65); }
+  .forum-section .eyebrow{ color: var(--magenta); }
+
+  .forum-showcase{
+    display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px;
+    position: relative; z-index: 2;
+  }
+  .live-player{
+    background: linear-gradient(135deg, var(--choco-deep), #1f0e02);
+    border-radius: 28px;
+    padding: 28px;
+    min-height: 460px;
+    position: relative; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .live-player-vis{
+    aspect-ratio: 16/9;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--magenta) 0%, var(--coral) 40%, var(--yellow) 100%);
+    position: relative; overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .live-player-vis svg{ width: 100%; height: 100%; position: absolute; inset: 0; }
+  .live-badge{
+    position: absolute; top: 14px; left: 14px;
+    background: var(--coral); color: #fff;
+    padding: 5px 12px; border-radius: 999px;
+    font: 700 10px var(--mono); letter-spacing: .14em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .live-badge::before{
+    content:""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: #fff; animation: pulse 1.4s ease-in-out infinite;
+  }
+  .live-viewers{
+    position: absolute; top: 14px; right: 14px;
+    background: rgba(0,0,0,.6); color: #fff;
+    padding: 5px 12px; border-radius: 999px;
+    font: 600 11px var(--mono); letter-spacing: .04em;
+  }
+  .live-info{ display: flex; align-items: center; gap: 16px; }
+  .live-info-avatar{
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--lime); color: var(--ink);
+    font: 700 18px var(--serif);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .live-info-text h3{
+    font: 600 22px/1.1 var(--serif); margin: 0 0 4px;
+    letter-spacing: -.01em;
+  }
+  .live-info-text p{ font: 500 13px var(--mono); margin: 0; opacity: .65; letter-spacing: .04em; }
+
+  /* Forum messages stack */
+  .forum-msgs{
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 28px;
+    padding: 28px;
+    min-height: 460px;
+    display: flex; flex-direction: column;
+  }
+  .forum-msgs-head{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .forum-msgs-title{ font: 600 16px var(--sans); }
+  .forum-msg-large{
+    flex: 1;
+    display: flex; flex-direction: column; gap: 12px;
+    overflow: hidden;
+  }
+  .forum-msg-card{
+    display: grid; grid-template-columns: 44px 1fr; gap: 12px;
+    padding: 14px;
+    background: rgba(255,255,255,.05);
+    border-radius: 16px;
+  }
+  .forum-msg-card-avatar{
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font: 700 14px var(--mono); color: var(--ink);
+  }
+  .forum-msg-card-text strong{
+    display: flex; align-items: center; gap: 8px;
+    font: 600 14px var(--sans); margin-bottom: 5px;
+  }
+  .forum-msg-card-text strong span{ font: 500 11px var(--mono); opacity: .55; }
+  .forum-msg-card-text p{ font: 500 13.5px/1.5 var(--sans); margin: 0; opacity: .82; }
+  .forum-msg-vote{
+    display: inline-flex; align-items: center; gap: 4px;
+    font: 600 11px var(--mono); margin-top: 8px; opacity: .7;
+  }
+
+  /* ───────────────────────────────────────── PRICING */
+  .pricing-section{
+    background: var(--cream);
+    padding: 160px 0 140px;
+  }
+  .pricing-grid{
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+  }
+  .pricing-card{
+    background: var(--paper);
+    border-radius: 28px;
+    padding: 36px 32px 32px;
+    display: flex; flex-direction: column; gap: 20px;
+    position: relative;
+    transition: transform .35s cubic-bezier(.2,.7,.2,1);
+    min-height: 540px;
+  }
+  .pricing-card:hover{ transform: translateY(-6px); }
+  .pricing-recommended{
+    background: var(--choco); color: var(--cream);
+    transform: translateY(-12px);
+  }
+  .pricing-recommended:hover{ transform: translateY(-18px); }
+  .pricing-card-badge{
+    position: absolute; top: -14px; right: 24px;
+    background: var(--yellow); color: var(--ink);
+    padding: 6px 14px; border-radius: 999px;
+    font: 700 11px var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  }
+  .pricing-name{ font: 600 14px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+  .pricing-price{
+    font-family: var(--display); font-weight: 400;
+    font-size: 88px; line-height: 1;
+    letter-spacing: -.04em;
+  }
+  .pricing-price small{
+    display: block;
+    font: 500 14px var(--sans);
+    margin-top: 8px;
+    opacity: .75;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .pricing-lead{
+    font: 500 14.5px/1.5 var(--sans);
+    opacity: .82;
+  }
+  .pricing-list{
+    flex: 1;
+    margin: 0; padding: 0;
+    list-style: none;
+    display: flex; flex-direction: column; gap: 10px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(19,16,8,.12);
+  }
+  .pricing-recommended .pricing-list{ border-color: rgba(250,245,234,.18); }
+  .pricing-list li{
+    display: flex; gap: 10px; align-items: flex-start;
+    font: 500 14px var(--sans);
+  }
+  .pricing-list li::before{
+    content:"✓"; flex-shrink: 0;
+    width: 18px; height: 18px;
+    background: var(--lime); color: var(--ink);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font: 700 11px var(--sans);
+    margin-top: 2px;
+  }
+
+  /* ───────────────────────────────────────── EVENTS — kept from previous */
+  .events-section{ background: var(--paper); padding: 160px 0 140px; }
+  .events-grid{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 32px; }
+  .event-col{ display: flex; flex-direction: column; gap: 16px; }
+  .event-status{ display: flex; gap: 8px; margin-bottom: 8px; }
+  .event-poster{
+    aspect-ratio: 3/4; border-radius: 18px; overflow: hidden;
+    box-shadow: 0 20px 40px -20px rgba(19,16,8,.28);
+    transition: transform .4s cubic-bezier(.2,.7,.2,1), box-shadow .4s ease;
+  }
+  .event-col:hover .event-poster{ transform: translateY(-6px); box-shadow: 0 30px 60px -20px rgba(19,16,8,.35); }
+  .event-title{
+    font-family: var(--serif); font-weight: 600; font-size: 26px;
+    line-height: 1.15; color: var(--ink); margin: 8px 0 0;
+    letter-spacing: -.01em;
+  }
+  .event-meta{ font: 500 14px/1.55 var(--sans); color: var(--ink-soft); }
+  .event-meta a{ color: var(--coral); border-bottom: 1px solid var(--coral); }
+  .event-meta strong{ color: var(--ink); font-weight: 600; }
+
+  /* Posters reused from previous */
+  .poster-sd{
+    background: linear-gradient(180deg, #E8E4DA 0%, #C8C2B0 100%);
+    display:flex; flex-direction:column; padding:18px; position:relative; overflow:hidden;
+  }
+  .poster-dime{ background: linear-gradient(135deg, #D24839, #8E2715); }
+  .poster-mansa{ background: #E8E4DA; }
+
+  /* ───────────────────────────────────────── TEAM */
+  .team-section{
+    background: var(--magenta); color: #fff;
+    padding: 160px 0 140px;
+    position: relative; overflow: hidden;
+  }
+  .team-section::before{
+    content:""; position: absolute; inset: 0;
+    background:
+      radial-gradient(600px circle at 90% 10%, rgba(245,197,24,.20), transparent 50%),
+      radial-gradient(700px circle at 10% 90%, rgba(46,107,217,.15), transparent 55%);
+    pointer-events: none;
+  }
+  .team-section .section-head h2{ color: #fff; }
+  .team-section .section-head-sub{ color: rgba(255,255,255,.78); }
+  .team-section .eyebrow{ color: var(--yellow); }
+
+  .team-grid{
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
+    position: relative; z-index: 2;
+  }
+  .team-card{
+    background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.20);
+    border-radius: 24px;
+    padding: 32px 24px 28px;
+    text-align: center;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: transform .35s ease, background .35s ease;
+  }
+  .team-card:hover{ transform: translateY(-6px); background: rgba(255,255,255,.16); }
+  .team-avatar{
+    width: 88px; height: 88px; border-radius: 50%;
+    background: var(--paper);
+    margin: 0 auto 20px;
+    display: flex; align-items: center; justify-content: center;
+    font: 700 26px var(--serif); color: var(--magenta);
+    transition: transform .4s cubic-bezier(.2,.7,.2,1);
+  }
+  .team-card:hover .team-avatar{ transform: rotate(-6deg) scale(1.05); }
+  .team-name{ font: 600 19px/1.15 var(--serif); margin: 0 0 8px; }
+  .team-role{ font: 500 13px/1.55 var(--sans); color: rgba(255,255,255,.85); }
+
+  /* ───────────────────────────────────────── CTA */
+  .cta{
+    background: var(--choco);
+    color: var(--cream);
+    padding: 160px 0 100px;
+    position: relative; overflow: hidden;
+    text-align: center;
+  }
+  .cta-bg{
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+    font-family: var(--display); font-weight: 400;
+    font-size: 80vh;
+    line-height: 1;
+    color: rgba(250,245,234,.04);
+    opacity: 1;
+  }
+  .cta-inner{ position: relative; z-index: 2; }
+  .cta-h{
+    font-family: var(--serif); font-weight: 600;
+    font-size: clamp(80px, 11vw, 180px);
+    line-height: .94; letter-spacing: -.025em;
+    color: var(--cream); margin: 0 0 32px;
+  }
+  .cta-h .it{ display: block; font-family: var(--serif); font-style: italic; font-weight: 500; color: var(--yellow); letter-spacing: -.025em; }
+  .cta-lead{
+    font: 500 18px/1.55 var(--sans);
+    color: rgba(250,245,234,.72);
+    max-width: 520px; margin: 0 auto 56px;
+  }
+  .cta-mail{
+    display: inline-flex; align-items: center; gap: 14px;
+    padding: 22px 40px;
+    background: var(--yellow); color: var(--ink);
+    border-radius: 999px;
+    font: 700 22px var(--mono); letter-spacing: -.01em;
+    transition: transform .15s ease, background .15s ease;
+  }
+  .cta-mail:hover{ transform: translateY(-3px); background: var(--cream); }
+
+  /* ───────────────────────────────────────── FOOTER */
+  .footer{
+    background: var(--ink); color: var(--cream);
+    padding: 80px 0 40px;
+  }
+  .footer-grid{
+    display: grid; grid-template-columns: 1.4fr repeat(4, 1fr);
+    gap: 48px;
+    margin-bottom: 64px;
+  }
+  .footer-brand img{ height: 28px; width: auto; filter: invert(1); margin-bottom: 24px; }
+  .footer-brand p{
+    font: 500 14px/1.55 var(--sans);
+    color: rgba(250,245,234,.65);
+    max-width: 320px;
+    margin: 0 0 18px;
+  }
+  .footer-meta{ font: 500 11px/1.6 var(--mono); color: rgba(250,245,234,.45); letter-spacing: .04em; }
+  .footer-col h4{ font: 600 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: rgba(250,245,234,.45); margin: 0 0 18px; }
+  .footer-col ul{ list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  .footer-col a{ font: 500 14px var(--sans); color: var(--cream); }
+  .footer-col a:hover{ color: var(--yellow); }
+  .footer-bottom{
+    border-top: 1px solid rgba(250,245,234,.10);
+    padding-top: 24px;
+    display: flex; justify-content: space-between;
+    font: 500 12px var(--mono); color: rgba(250,245,234,.45); letter-spacing: .04em;
+  }
+  .footer-bigword{
+    font-family: var(--display);
+    font-size: 28vw;
+    line-height: .8;
+    color: rgba(250,245,234,.04);
+    position: absolute; bottom: -8vw; left: 0; right: 0;
+    text-align: center;
+    pointer-events: none; user-select: none;
+  }
+
+  /* SVG stroke util */
+  .svg-stroke{ stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+</style>
+</head>
+<body>
+
+<div class="cursor-blob" id="cursorBlob"></div>
+
+<!-- ╔════════════════════════════════════════════════════════ NAV ══╗ -->
+<nav class="nav" id="nav">
+  <a href="#" class="nav-logo">
+    <img src="assets/logo-wordmark.png" alt="BazaArt" />
+  </a>
+  <div class="nav-links">
+    <a href="#manifesto" class="nav-link">À propos</a>
+    <a href="#hubs" class="nav-link">Les hubs</a>
+    <a href="#platform" class="nav-link">La plateforme</a>
+    <a href="#pricing" class="nav-link">Tarifs</a>
+    <a href="#events" class="nav-link">Évents</a>
+    <a href="#team" class="nav-link">Équipe</a>
+  </div>
+  <div class="nav-cta">
+    <a href="#cta" class="btn btn-outline btn-sm">
+      <svg class="icon-heart" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.5-9.5-9C.7 8 3 4 6.5 4 9 4 10.5 5.5 12 7.5 13.5 5.5 15 4 17.5 4 21 4 23.3 8 21.5 12 19 16.5 12 21 12 21z"/></svg>
+      Faire un don
+    </a>
+    <a href="#pricing" class="btn btn-choco btn-sm">Rejoindre →</a>
+  </div>
+</nav>
+
+<!-- ╔══════════════════════════════════════════════════════════ HERO ══╗ -->
+<section class="hero" id="top">
+  <!-- Subtle grid bg -->
+  <div class="hero-bg">
+    <svg viewBox="0 0 1440 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+          <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(19,16,8,.05)" stroke-width="1"/>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#grid)"/>
+    </svg>
+  </div>
+
+  <!-- Animated star -->
+  <div class="star-stage" id="starStage">
+    <svg viewBox="-300 -300 600 600">
+      <!-- 4 colored blobs around -->
+      <g class="blob blob-1" style="transform-origin: -160px -180px">
+        <circle cx="-160" cy="-180" r="170" fill="#D14EA8" opacity=".95"/>
+      </g>
+      <g class="blob blob-2" style="transform-origin: 180px -160px">
+        <circle cx="180" cy="-160" r="160" fill="#B7D03F" opacity=".95"/>
+      </g>
+      <g class="blob blob-3" style="transform-origin: -180px 180px">
+        <circle cx="-180" cy="180" r="170" fill="#2E6BD9" opacity=".95"/>
+      </g>
+      <g class="blob blob-4" style="transform-origin: 180px 180px">
+        <circle cx="180" cy="180" r="160" fill="#F5C518" opacity=".95"/>
+      </g>
+      <!-- Brown star at center, masking through -->
+      <path class="star-shape"
+            d="M 0,-240
+               C 60,-100  100,-60  240,0
+               C 100,60   60,100   0,240
+               C -60,100  -100,60  -240,0
+               C -100,-60 -60,-100 0,-240 Z"
+            fill="#5A2A0A"/>
+    </svg>
+  </div>
+
+  <!-- Floating petals -->
+  <div class="petal petal-1" data-speed="0.3">
+    <svg viewBox="0 0 100 60"><path d="M50 5 C 80 5, 95 28, 95 30 C 95 32, 80 55, 50 55 C 50 55, 50 32, 50 30 C 50 28, 50 5, 50 5 Z M50 5 C 20 5, 5 28, 5 30 C 5 32, 20 55, 50 55" fill="#F5C518" stroke="#131008" stroke-width="2"/></svg>
+  </div>
+  <div class="petal petal-2" data-speed="0.6">
+    <svg viewBox="0 0 100 60"><path d="M50 5 C 80 5, 95 28, 95 30 C 95 32, 80 55, 50 55 C 50 55, 50 32, 50 30 C 50 28, 50 5, 50 5 Z M50 5 C 20 5, 5 28, 5 30 C 5 32, 20 55, 50 55" fill="#D14EA8"/></svg>
+  </div>
+  <div class="petal petal-3" data-speed="0.4">
+    <svg viewBox="0 0 100 60"><path d="M50 5 C 80 5, 95 28, 95 30 C 95 32, 80 55, 50 55 C 50 55, 50 32, 50 30 C 50 28, 50 5, 50 5 Z M50 5 C 20 5, 5 28, 5 30 C 5 32, 20 55, 50 55" fill="#B7D03F"/></svg>
+  </div>
+  <div class="petal petal-4" data-speed="0.7">
+    <svg viewBox="0 0 100 60"><path d="M50 5 C 80 5, 95 28, 95 30 C 95 32, 80 55, 50 55 C 50 55, 50 32, 50 30 C 50 28, 50 5, 50 5 Z M50 5 C 20 5, 5 28, 5 30 C 5 32, 20 55, 50 55" fill="#2E6BD9"/></svg>
+  </div>
+
+  <!-- Hero content -->
+  <div class="container">
+    <div class="hero-content">
+
+      <div class="hero-row-top">
+        <span class="pill pill-magenta pill-dot">Hub artistique pluridisciplinaire</span>
+        <div class="hero-marker">
+          <strong>MMXXVI — La plateforme</strong>
+          16°N · 61°W · Guadeloupe → Monde
+        </div>
+      </div>
+
+      <h1 class="hero-h" id="heroHeading">
+        <span class="hero-h-row" data-word="le-bazar">LE BAZAR</span>
+        <span class="hero-h-row" data-word="de-lart">DE&nbsp;<span class="it it-y">l'art</span></span>
+        <span class="hero-h-row" data-word="rangé">RANGÉ.</span>
+      </h1>
+
+      <div class="hero-bottom">
+        <p class="hero-lead">
+          Une <em style="font-family:var(--serif);font-style:italic;color:var(--magenta);">coopérative</em>, une plateforme et trois hubs — pour donner aux artistes les outils, les opportunités et les pairs qu'ils méritent.
+        </p>
+        <div class="hero-ctas">
+          <a href="#platform" class="btn btn-choco" data-magnetic>Explorer la plateforme →</a>
+          <a href="#manifesto" class="btn btn-cream" data-magnetic>Découvrir l'asso</a>
+        </div>
+        <div class="hero-meta">
+          <strong>+ 1 800 artistes</strong>
+          inscrits ce mois<br/>
+          <span style="color: var(--coral);">+ 247 opportunités</span> ouvertes
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ╔════════════════════════════════════════════════════════ MARQUEE ══╗ -->
+<section class="marquee">
+  <div class="marquee-track">
+    <span class="marquee-item">Arts visuels <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Musique <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Cinéma <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Performance <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Théâtre <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Danse <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Photographie <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Littérature <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <!-- duplicate for seamless loop -->
+    <span class="marquee-item">Arts visuels <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Musique <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Cinéma <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Performance <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Théâtre <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Danse <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Photographie <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+    <span class="marquee-item">Littérature <svg class="marquee-star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z"/></svg></span>
+  </div>
+</section>
+
+<!-- ╔════════════════════════════════════════════════ MANIFESTO ══╗ -->
+<section class="manifesto" id="manifesto">
+  <div class="container">
+    <div class="manifesto-inner">
+      <div class="reveal">
+        <span class="eyebrow">— Pourquoi BazaArt</span>
+        <h2 class="reveal reveal-2">Le manifeste, <span class="it-coral">vite&nbsp;dit.</span></h2>
+      </div>
+      <div class="manifesto-body">
+        <p class="lead reveal">
+          On en avait <strong>marre</strong> que les opportunités, les pairs et les ressources soient dispersés sur 200 sites, 30 newsletters et trois groupes Facebook fatigués.
+        </p>
+        <p class="reveal reveal-2">
+          BazaArt est <strong>à la fois</strong> une <span class="it-magenta">association</span> ancrée en Guadeloupe et une <span class="it-blue">plateforme</span> ouverte à toute la francophonie artistique. Trois hubs côté asso, une plateforme côté SaaS. Pas de pub, pas de revente de tes données, pas de commission sur tes aides.
+        </p>
+        <p class="reveal reveal-3">
+          On est une coopérative — le contre-pouvoir c'est <span class="it-coral">vous.</span>
+        </p>
+        <div class="manifesto-sig reveal reveal-4">L'équipe fondatrice · Pointe-à-Pitre · MMXXVI</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ╔════════════════════════════════════════════════════════ HUBS ══╗ -->
+<section class="hubs" id="hubs">
+  <div class="container">
+    <div class="hubs-head">
+      <div class="reveal">
+        <span class="eyebrow eyebrow-cream">— Notre structure</span>
+        <h2>Nos <span class="it-yellow">hubs.</span></h2>
+      </div>
+      <p class="hubs-intro reveal reveal-2">Trois espaces complémentaires pour accompagner les artistes — de la première idée à la diffusion internationale.</p>
+    </div>
+
+    <div class="hubs-grid">
+
+      <div class="hub reveal">
+        <div class="hub-no">01</div>
+        <h3>BazaArt <em style="font-family:var(--serif);font-style:italic;font-weight:500;color:var(--choco);">Events</em></h3>
+        <p>Programmation, festivals et soirées — on met les artistes sur scène devant des gens, en vrai. De Pointe-à-Pitre à Paris, du Brésil à Abidjan.</p>
+        <ul class="hub-list">
+          <li><span class="dot"></span>Speed Dating Culturel · Mai 2026</li>
+          <li><span class="dot"></span>DIMÉ · Maison de la Conversation</li>
+          <li><span class="dot"></span>MansA × Mémorial ACTe</li>
+          <li><span class="dot"></span>Awe Party · Paris</li>
+        </ul>
+        <div class="hub-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" class="svg-stroke"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+        </div>
+      </div>
+
+      <div class="hub hub-magenta reveal reveal-2">
+        <div class="hub-no">02</div>
+        <h3>BazaArt <em style="font-family:var(--serif);font-style:italic;font-weight:500;color:#fff;">Lab</em></h3>
+        <p>Ingénierie culturelle : montage de projet, financement croisé, structuration juridique. On outille les artistes et les structures sur les enjeux concrets — fiscalité, droit, modèles économiques.</p>
+        <ul class="hub-list">
+          <li><span class="dot"></span>120 projets accompagnés</li>
+          <li><span class="dot"></span>78% de taux de réussite</li>
+          <li><span class="dot"></span>Réseau de 40 financeurs</li>
+          <li><span class="dot"></span>Cellule conseil 1-to-1</li>
+        </ul>
+        <div class="hub-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" class="svg-stroke"><polygon points="12 3 21 8 21 16 12 21 3 16 3 8 12 3"/></svg>
+        </div>
+      </div>
+
+      <div class="hub hub-blue reveal reveal-3">
+        <div class="hub-no">03</div>
+        <h3>BazaArt <em style="font-family:var(--serif);font-style:italic;font-weight:500;color:#fff;">Formation</em></h3>
+        <p>Cycles courts, animés par des pairs et des experts — fiscalité de l'artiste-auteur, droit, comm, IA dans la pratique. Gratuit pour les adhérents, abordable pour les autres.</p>
+        <ul class="hub-list">
+          <li><span class="dot"></span>12 cycles / an</li>
+          <li><span class="dot"></span>280 artistes formés</li>
+          <li><span class="dot"></span>Note moyenne 4.7 / 5</li>
+          <li><span class="dot"></span>Visio + présentiel</li>
+        </ul>
+        <div class="hub-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" class="svg-stroke"><path d="M3 12c2-3 6-3 9 0s7 3 9 0"/><path d="M3 18c2-3 6-3 9 0s7 3 9 0"/></svg>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="stats">
+      <div class="stat reveal">
+        <div class="stat-num" data-count="15" data-prefix="+">+0</div>
+        <div class="stat-label">Ans d'activités</div>
+      </div>
+      <div class="stat reveal reveal-2">
+        <div class="stat-num" data-count="4">0</div>
+        <div class="stat-label">Territoires d'actions</div>
+      </div>
+      <div class="stat reveal reveal-3">
+        <div class="stat-num" data-count="30" data-prefix="+">+0</div>
+        <div class="stat-label">Projets accompagnés</div>
+      </div>
+      <div class="stat reveal reveal-4">
+        <div class="stat-num" data-count="6">0</div>
+        <div class="stat-label">Expositions internationales</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════════ PLATFORM (SaaS) ══╗ -->
+<section class="saas" id="platform">
+  <div class="container">
+    <div class="saas-head">
+      <span class="eyebrow reveal">— La plateforme · MVP</span>
+      <h2 class="reveal reveal-2">Tout ce dont tu as besoin, <span class="it-coral">sans le bruit.</span></h2>
+      <p class="saas-sub reveal reveal-3">Une seule plateforme. Les opportunités, les pairs, les lives, le mentorat et ton dashboard public. Pour 6,60 € par mois en formule annuelle.</p>
+    </div>
+
+    <div class="saas-grid">
+
+      <!-- Opportunités -->
+      <div class="saas-card card-opp reveal">
+        <div>
+          <div class="saas-label">— 01 · Opportunités</div>
+          <h3>Aides, résidences, appels à projet — filtrés, datés, sauvegardables.</h3>
+          <p>247 opportunités actives. Filtres par discipline, lieu, montant, deadline. Carte de France. Sauvegarde, alertes mail, candidatures suivies.</p>
+        </div>
+        <div class="opp-list">
+          <div class="opp-row">
+            <div class="opp-row-l">
+              <div class="opp-row-title">Résidence Manufacture — atelier 3 mois</div>
+              <div class="opp-row-meta">Ivry · 4 500 € · J-21</div>
+            </div>
+            <span class="opp-tag opp-tag-mag">Résidence</span>
+          </div>
+          <div class="opp-row">
+            <div class="opp-row-l">
+              <div class="opp-row-title">Aide DRAC Hauts-de-France</div>
+              <div class="opp-row-meta">Lille · 25 000 € · J-42</div>
+            </div>
+            <span class="opp-tag opp-tag-blu">Aide</span>
+          </div>
+          <div class="opp-row">
+            <div class="opp-row-l">
+              <div class="opp-row-title">Festival Lumineuses 2027</div>
+              <div class="opp-row-meta">Marseille · 8 000 € · J-8</div>
+            </div>
+            <span class="opp-tag opp-tag-cor">Appel</span>
+          </div>
+          <div class="opp-row">
+            <div class="opp-row-l">
+              <div class="opp-row-title">Mentorat BazaArt × Quai Branly</div>
+              <div class="opp-row-meta">Paris · Gratuit · J-34</div>
+            </div>
+            <span class="opp-tag opp-tag-lim">Mentorat</span>
+          </div>
+        </div>
+        <div class="opp-count">
+          <span><strong>247</strong> opportunités ouvertes</span>
+          <span>→ Tout voir</span>
+        </div>
+        <div class="arrow">↗</div>
+      </div>
+
+      <!-- Forum + lives -->
+      <div class="saas-card card-forum reveal reveal-2">
+        <div>
+          <div class="saas-label">— 02 · Forum & Lives</div>
+          <h3>Un mélange Reddit / Twitch — entre artistes, sans intermédiaire.</h3>
+          <p>Pose une question, programme un live, monte un collectif. Threads votés, lives chattés, replays archivés.</p>
+        </div>
+        <div class="forum-live">
+          <div class="forum-live-vis"></div>
+          <div class="forum-live-info">
+            <span class="pill pill-coral pill-live" style="font-size:9px;padding:3px 9px;color:#fff;">EN DIRECT · 312</span>
+            <div class="forum-live-title">Set modulaire — Sékou T.</div>
+            <div class="forum-live-meta">AMBIENT / DRONE · 00:47:21</div>
+          </div>
+        </div>
+        <div class="forum-feed">
+          <div class="forum-msg">
+            <div class="forum-msg-avatar" style="background:var(--lime)">IK</div>
+            <div class="forum-msg-text">
+              <strong>Inès Khoury</strong>
+              <span>cette texture 😍</span>
+            </div>
+          </div>
+          <div class="forum-msg">
+            <div class="forum-msg-avatar" style="background:var(--yellow)">YD</div>
+            <div class="forum-msg-text">
+              <strong>Yacine Demba</strong>
+              <span>c'est quoi le module orange à droite ?</span>
+            </div>
+          </div>
+          <div class="forum-msg">
+            <div class="forum-msg-avatar" style="background:var(--magenta);color:#fff">MV</div>
+            <div class="forum-msg-text">
+              <strong>Mira V. <span style="font-family:var(--mono);font-size:10px;opacity:.5;font-weight:500;margin-left:6px;">il y a 2s</span></strong>
+              <span>+ 1 sur la setlist en MP svp</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard artiste -->
+      <div class="saas-card card-dash reveal reveal-3">
+        <div class="saas-label">— 03 · Dashboard artiste</div>
+        <h3>Ton <em class="it-yellow">profil public</em> + ton cockpit privé.</h3>
+        <p>Bio, portfolio, géolocalisation. Et de l'autre côté : candidatures, agenda, messages, revenus.</p>
+        <div class="dash-mock">
+          <div class="dash-avatar">MO</div>
+          <div class="dash-info">
+            <div class="dash-info-name">Maïa Oliva</div>
+            <div class="dash-info-bio">VIDÉO · INSTALLATION · MARSEILLE</div>
+          </div>
+        </div>
+        <div class="dash-stat">
+          <div class="dash-stat-cell">
+            <div class="dash-stat-num">7</div>
+            <div class="dash-stat-lbl">Candidatures</div>
+          </div>
+          <div class="dash-stat-cell">
+            <div class="dash-stat-num">412</div>
+            <div class="dash-stat-lbl">Followers</div>
+          </div>
+          <div class="dash-stat-cell">
+            <div class="dash-stat-num">8 300 €</div>
+            <div class="dash-stat-lbl">Aides 2026</div>
+          </div>
+        </div>
+        <div class="arrow">↗</div>
+      </div>
+
+      <!-- Pricing teaser -->
+      <div class="saas-card card-pay reveal reveal-4">
+        <div class="saas-label">— 04 · Modèle</div>
+        <h3>Coopératif. <em class="it-choco">Pas commercial.</em></h3>
+        <p>L'asso fonctionne grâce aux adhésions, aux subventions et aux abonnements à la plateforme. Aucune commission prélevée sur tes aides.</p>
+        <div class="pay-mock">
+          <div class="pay-row">
+            <span><strong>Annuel</strong> · 79 € / an</span>
+            <span class="pay-amount">6,60 €/mois</span>
+          </div>
+          <div class="pay-row pay-total">
+            <span>Adhérent BazaArt</span>
+            <span class="pay-amount">39 €/an</span>
+          </div>
+        </div>
+        <div class="arrow">↗</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ╔═══════════════════════════════════════════ OPPORTUNITIES ══╗ -->
+<section class="opps-section">
+  <div class="container">
+    <div class="section-head">
+      <div class="reveal">
+        <span class="eyebrow">— Échantillon de cette semaine</span>
+        <h2>Ouvert <span class="it-magenta">maintenant.</span></h2>
+      </div>
+      <p class="section-head-sub reveal reveal-2">Quatre extraits sur 247. Toutes vérifiées par l'équipe BazaArt avant publication.</p>
+    </div>
+
+    <div class="opps-grid">
+      <div class="opp-card opp-card-magenta reveal">
+        <div class="opp-card-head">
+          <span class="pill" style="background:rgba(255,255,255,.18);color:#fff;border-color:transparent;">Résidence</span>
+          <span class="opp-card-countdown">J-21 · 06:14</span>
+        </div>
+        <h3>Résidence Manufacture — atelier 3 mois</h3>
+        <p style="font:500 14px/1.5 var(--sans); opacity:.88; margin:0;">Atelier individuel 90 m², bourse de production et restitution publique en septembre.</p>
+        <div class="opp-card-foot">
+          <span>Ivry-sur-Seine · IDF</span>
+          <span class="opp-card-amount">4 500 €</span>
+        </div>
+      </div>
+
+      <div class="opp-card reveal reveal-2">
+        <div class="opp-card-head">
+          <span class="pill pill-blue">Aide financière</span>
+          <span class="opp-card-countdown">J-42 · 09:02</span>
+        </div>
+        <h3>Aide à la création — DRAC Hauts-de-France</h3>
+        <p style="font:500 14px/1.5 var(--sans); color:var(--ink-soft); margin:0;">Soutien à la création pour compagnies professionnelles. Dossier en ligne.</p>
+        <div class="opp-card-foot">
+          <span>Lille · National</span>
+          <span class="opp-card-amount">25 000 € max</span>
+        </div>
+      </div>
+
+      <div class="opp-card opp-card-yellow reveal reveal-3">
+        <div class="opp-card-head">
+          <span class="pill" style="background:var(--ink);color:var(--yellow);border-color:var(--ink);">Appel à projet</span>
+          <span class="opp-card-countdown" style="background:rgba(19,16,8,.12);">J-8 · 03:41</span>
+        </div>
+        <h3>Festival LUMINEUSES — programmation 2027</h3>
+        <p style="font:500 14px/1.5 var(--sans); margin:0;">Création in-situ ou projection vidéo pour la 7ᵉ édition. Thème : « Survivances ».</p>
+        <div class="opp-card-foot">
+          <span>Marseille · PACA</span>
+          <span class="opp-card-amount">2 — 8 000 €</span>
+        </div>
+      </div>
+
+      <div class="opp-card opp-card-choco reveal reveal-4">
+        <div class="opp-card-head">
+          <span class="pill" style="background:var(--lime);color:var(--ink);border-color:var(--lime);">Mentorat</span>
+          <span class="opp-card-countdown">J-34</span>
+        </div>
+        <h3>Mentorat 1-to-1 — production scénique</h3>
+        <p style="font:500 14px/1.5 var(--sans); opacity:.85; margin:0;">8 séances avec un producteur senior. 12 places. Sélection sur dossier court.</p>
+        <div class="opp-card-foot">
+          <span>BazaArt × Quai Branly</span>
+          <span class="opp-card-amount">Gratuit</span>
+        </div>
+      </div>
+
+      <div class="opp-card reveal reveal-5">
+        <div class="opp-card-head">
+          <span class="pill pill-lime">Bourse</span>
+          <span class="opp-card-countdown">J-39 · 14:22</span>
+        </div>
+        <h3>Bourse SACEM — création musicale</h3>
+        <p style="font:500 14px/1.5 var(--sans); color:var(--ink-soft); margin:0;">Soutien à la composition originale. Plusieurs sessions dans l'année.</p>
+        <div class="opp-card-foot">
+          <span>National</span>
+          <span class="opp-card-amount">3 — 15 000 €</span>
+        </div>
+      </div>
+
+      <div class="opp-card reveal reveal-5">
+        <div class="opp-card-head">
+          <span class="pill pill-coral">Commande</span>
+          <span class="opp-card-countdown">J-111</span>
+        </div>
+        <h3>Fresque urbaine 200 m² — Bottière-Chénaie</h3>
+        <p style="font:500 14px/1.5 var(--sans); color:var(--ink-soft); margin:0;">Commande pour un mur du quartier. Concertation habitants.</p>
+        <div class="opp-card-foot">
+          <span>Ville de Nantes</span>
+          <span class="opp-card-amount">18 000 €</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 64px;">
+      <a href="#" class="btn btn-choco" data-magnetic>Explorer les 247 opportunités →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ╔════════════════════════════════════════════ FORUM SHOWCASE ══╗ -->
+<section class="forum-section">
+  <div class="container">
+    <div class="section-head">
+      <div class="reveal">
+        <span class="eyebrow">— Forum + Lives</span>
+        <h2>On se <span class="it-yellow">parle.</span></h2>
+      </div>
+      <p class="section-head-sub reveal reveal-2">Un feed unifié entre threads votés, questions de pairs et lives programmés. 1 824 artistes, 3 lives actuellement en direct.</p>
+    </div>
+
+    <div class="forum-showcase">
+
+      <!-- Live player -->
+      <div class="live-player reveal">
+        <div class="live-player-vis">
+          <span class="live-badge">EN DIRECT</span>
+          <span class="live-viewers">👁 312</span>
+          <svg viewBox="0 0 600 340" preserveAspectRatio="none">
+            <g fill="rgba(255,255,255,.35)">
+              <!-- waveform bars -->
+              <rect x="20" y="100" width="8" height="140"/>
+              <rect x="40" y="80" width="8" height="180"/>
+              <rect x="60" y="120" width="8" height="100"/>
+              <rect x="80" y="60" width="8" height="220"/>
+              <rect x="100" y="90" width="8" height="160"/>
+              <rect x="120" y="130" width="8" height="80"/>
+              <rect x="140" y="70" width="8" height="200"/>
+              <rect x="160" y="110" width="8" height="120"/>
+              <rect x="180" y="50" width="8" height="240"/>
+              <rect x="200" y="100" width="8" height="140"/>
+              <rect x="220" y="80" width="8" height="180"/>
+              <rect x="240" y="120" width="8" height="100"/>
+              <rect x="260" y="60" width="8" height="220"/>
+              <rect x="280" y="90" width="8" height="160"/>
+              <rect x="300" y="40" width="8" height="260"/>
+              <rect x="320" y="80" width="8" height="180"/>
+              <rect x="340" y="110" width="8" height="120"/>
+              <rect x="360" y="70" width="8" height="200"/>
+              <rect x="380" y="130" width="8" height="80"/>
+              <rect x="400" y="90" width="8" height="160"/>
+              <rect x="420" y="60" width="8" height="220"/>
+              <rect x="440" y="100" width="8" height="140"/>
+              <rect x="460" y="120" width="8" height="100"/>
+              <rect x="480" y="80" width="8" height="180"/>
+              <rect x="500" y="50" width="8" height="240"/>
+              <rect x="520" y="100" width="8" height="140"/>
+              <rect x="540" y="90" width="8" height="160"/>
+              <rect x="560" y="120" width="8" height="100"/>
+            </g>
+          </svg>
+        </div>
+        <div class="live-info">
+          <div class="live-info-avatar">ST</div>
+          <div class="live-info-text">
+            <h3>Set modulaire — ambient / drone</h3>
+            <p>Sékou Traoré · Bordeaux · 00:47:21</p>
+          </div>
+          <a href="#" class="btn btn-yellow btn-sm" data-magnetic style="margin-left:auto;">Rejoindre →</a>
+        </div>
+      </div>
+
+      <!-- Threads stack -->
+      <div class="forum-msgs reveal reveal-2">
+        <div class="forum-msgs-head">
+          <span class="forum-msgs-title">Threads · hot du jour</span>
+          <span style="font:500 11px var(--mono); color: rgba(250,245,234,.45); letter-spacing:.06em;">38 NOUVEAUX</span>
+        </div>
+        <div class="forum-msg-large">
+          <div class="forum-msg-card">
+            <div class="forum-msg-card-avatar" style="background:var(--yellow)">YD</div>
+            <div class="forum-msg-card-text">
+              <strong>Yacine Demba <span>il y a 2 h · Statut & droits</span></strong>
+              <p>AGESSA vs MDA en 2026 : on cotise où finalement ?</p>
+              <span class="forum-msg-vote">▲ 212 votes · 38 réponses</span>
+            </div>
+          </div>
+          <div class="forum-msg-card">
+            <div class="forum-msg-card-avatar" style="background:var(--magenta);color:#fff">MV</div>
+            <div class="forum-msg-card-text">
+              <strong>Mira Vasseur <span>il y a 5 h · Local · Lyon</span></strong>
+              <p>Argentique : labo collectif à Lyon, qui dans le coup ?</p>
+              <span class="forum-msg-vote">▲ 88 votes · 14 réponses</span>
+            </div>
+          </div>
+          <div class="forum-msg-card">
+            <div class="forum-msg-card-avatar" style="background:var(--lime)">JP</div>
+            <div class="forum-msg-card-text">
+              <strong>Joana Pires <span>hier · Statut & droits</span></strong>
+              <p>Mutuelle santé pour intermittents — vos retours ?</p>
+              <span class="forum-msg-vote">▲ 74 votes · 22 réponses</span>
+            </div>
+          </div>
+          <div class="forum-msg-card">
+            <div class="forum-msg-card-avatar" style="background:var(--blue);color:#fff">IK</div>
+            <div class="forum-msg-card-text">
+              <strong>Inès K. <span>commence dans 1 h 20 · Live</span></strong>
+              <p>Je relis &amp; corrige mon dossier DRAC en direct.</p>
+              <span class="forum-msg-vote">📅 54 RDV pris</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ╔═══════════════════════════════════════════════════════ PRICING ══╗ -->
+<section class="pricing-section" id="pricing">
+  <div class="container">
+    <div class="section-head">
+      <div class="reveal">
+        <span class="eyebrow">— Trois formules · pas de palier caché</span>
+        <h2>Un prix, <span class="it-coral">point.</span></h2>
+      </div>
+      <p class="section-head-sub reveal reveal-2">Aucune commission sur tes aides. Aucune pub. 7 jours d'essai gratuit, sans CB.</p>
+    </div>
+
+    <div class="pricing-grid">
+
+      <div class="pricing-card reveal">
+        <div class="pricing-name">Mensuel</div>
+        <div class="pricing-price">9,90 €<small>par mois · résiliable</small></div>
+        <p class="pricing-lead">Engagement souple. Annule en un clic, sans justification.</p>
+        <ul class="pricing-list">
+          <li>Accès aux 247 opportunités</li>
+          <li>Forum + lives illimités</li>
+          <li>Dashboard artiste public</li>
+          <li>Newsletter hebdo curée</li>
+        </ul>
+        <a href="#" class="btn btn-outline" data-magnetic>Commencer →</a>
+      </div>
+
+      <div class="pricing-card pricing-recommended reveal reveal-2">
+        <span class="pricing-card-badge">★ Recommandé</span>
+        <div class="pricing-name" style="color:var(--yellow);">Annuel</div>
+        <div class="pricing-price">79 €<small style="color:rgba(250,245,234,.7);">par an · soit 6,60 €/mois</small></div>
+        <p class="pricing-lead" style="color:rgba(250,245,234,.85);">33 % d'économie. Le plan choisi par 60 % des artistes BazaArt.</p>
+        <ul class="pricing-list">
+          <li>Tout le mensuel</li>
+          <li>Accès anticipé aux opportunités (24h)</li>
+          <li>1 séance de mentorat / an</li>
+          <li>Badge « membre soutien »</li>
+        </ul>
+        <a href="#" class="btn btn-yellow" data-magnetic>Le meilleur deal →</a>
+      </div>
+
+      <div class="pricing-card reveal reveal-3">
+        <div class="pricing-name">Adhérent BazaArt</div>
+        <div class="pricing-price">39 €<small>par an · tarif réservé</small></div>
+        <p class="pricing-lead">Pour les adhérents de l'association. Inclut tous les cycles de formation gratuits.</p>
+        <ul class="pricing-list">
+          <li>Tout l'annuel</li>
+          <li>Tous les cycles de formation gratuits</li>
+          <li>Vote à l'AG</li>
+          <li>Priorité programmation Events</li>
+        </ul>
+        <a href="#" class="btn btn-outline" data-magnetic>Vérifier mon adhésion →</a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ╔════════════════════════════════════════════════════════ EVENTS ══╗ -->
+<section class="events-section" id="events">
+  <div class="container">
+    <div class="section-head">
+      <div class="reveal">
+        <span class="eyebrow">— Programmation 2026</span>
+        <h2>Nos <span class="it-coral">événements.</span></h2>
+      </div>
+      <p class="section-head-sub reveal reveal-2">Trois temps forts cette année — entre Guadeloupe, Paris et le Brésil.</p>
+    </div>
+
+    <div class="events-grid">
+
+      <div class="event-col reveal">
+        <div class="event-status">
+          <span class="pill pill-lime pill-dot">En cours</span>
+          <span class="pill pill-magenta">Guadeloupe</span>
+        </div>
+        <div class="event-poster poster-sd">
+          <div style="font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--ink);font-weight:700;margin-bottom:10px;">LES BONNIFIEURS · LOYS · ANNUL'IMPÔTS · BAZAART</div>
+          <div style="font-family:var(--display);font-size:48px;line-height:.92;color:var(--blue);letter-spacing:-.04em;text-transform:uppercase;">SPEED<br/>DATING</div>
+          <div style="display:inline-block;background:var(--lime);color:var(--ink);padding:5px 14px;border-radius:999px;font-weight:700;font-size:13px;margin-top:8px;align-self:flex-start;">CULTUREL</div>
+          <div style="margin-top:auto;display:flex;justify-content:space-between;width:100%;align-items:flex-end;padding-top:32px;">
+            <div style="font-size:10px;line-height:1.5;color:var(--ink);font-family:var(--mono);">
+              ADRESSE :<br/>
+              <strong>LES BONNIFIEURS</strong><br/>
+              BD DE LA POINTE JARRY
+            </div>
+            <div style="background:var(--blue);color:#fff;padding:8px 12px;border-radius:8px;text-align:right;font-size:11px;font-weight:700;font-family:var(--mono);">
+              30 MAI 2026<br/>14H30 — 19H00
+            </div>
+          </div>
+        </div>
+        <h3 class="event-title">Speed Dating Culturel</h3>
+        <p class="event-meta">En partenariat avec <a href="#">Les Bonnifieurs</a>, <a href="#">Loys</a> et <a href="#">Annul'Impôts</a> — atelier fiscalité, conférence puis speed dating professionnel.</p>
+      </div>
+
+      <div class="event-col reveal reveal-2">
+        <div class="event-status">
+          <span class="pill pill-lime pill-dot">En cours</span>
+          <span class="pill pill-magenta">Paris</span>
+        </div>
+        <div class="event-poster poster-dime" style="display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:24px 20px;color:#fff;position:relative;overflow:hidden;">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-style:italic;font-size:46px;font-weight:600;color:rgba(0,0,0,.18);transform:rotate(-12deg);white-space:nowrap;pointer-events:none;">nationale de l'esclavage</div>
+          <div style="display:flex;justify-content:space-between;width:100%;z-index:2;font-size:11px;font-family:var(--mono);font-weight:700;">
+            <span style="background:rgba(0,0,0,.4);padding:4px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.3);">Evok Project</span>
+            <span style="background:rgba(0,0,0,.4);padding:4px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.3);">BazaArt</span>
+          </div>
+          <div style="z-index:2;text-align:center;">
+            <div style="font-family:var(--display);font-size:92px;line-height:1;color:#2E7A3E;letter-spacing:-.04em;">DIMÉ</div>
+            <div style="font-family:var(--serif);font-style:italic;font-size:22px;margin-top:14px;line-height:1.2;">
+              Transmettre, <strong style="font-style:normal;">créer</strong><br/>
+              et faire circuler <em>les mémoires</em>
+            </div>
+            <div style="font-family:var(--mono);font-size:10px;letter-spacing:.1em;margin-top:18px;opacity:.85;">PROGRAMMATION MAI 2026</div>
+          </div>
+          <div style="z-index:2;font-family:var(--mono);font-size:9px;letter-spacing:.06em;opacity:.75;text-align:center;">
+            MAISON VERVEAU · MAISON DE LA CONVERSATION · RINSE FRANCE
+          </div>
+        </div>
+        <h3 class="event-title">DIMÉ — Transmettre, créer, faire circuler les mémoires</h3>
+        <p class="event-meta"><a href="#">Evok Project</a> × BazaArt — trois rendez-vous à Paris dédiés aux mémoires afro-descendantes, avec le soutien de la <a href="#">Fondation pour la Mémoire de l'Esclavage</a>.</p>
+      </div>
+
+      <div class="event-col reveal reveal-3">
+        <div class="event-status">
+          <span class="pill" style="background:rgba(19,16,8,.08);color:var(--ink-soft);">Passé</span>
+          <span class="pill pill-magenta">Guadeloupe</span>
+        </div>
+        <div class="event-poster poster-mansa" style="display:flex;flex-direction:column;justify-content:space-between;padding:18px;position:relative;overflow:hidden;">
+          <div style="background:rgba(0,0,0,.85);color:#fff;padding:8px 14px;font-family:var(--sans);font-weight:700;font-size:16px;display:inline-block;align-self:flex-start;letter-spacing:-.01em;">
+            MansA
+            <div style="font-size:8px;font-weight:500;letter-spacing:.06em;margin-top:2px;opacity:.85;">Maison des<br/>Mondes Africains</div>
+          </div>
+          <div style="background:var(--blue);color:#fff;padding:14px 16px;font-family:var(--sans);font-weight:600;font-size:13px;line-height:1.3;letter-spacing:.02em;">
+            [ MANSA EN GUADELOUPE ]<br/>
+            <span style="font-weight:700;font-size:14px;display:block;margin-top:6px;">ENTREPRENDRE, INNOVER ET SE STRUCTURER DANS LES INDUSTRIES CULTURELLES ET CRÉATIVES</span>
+          </div>
+          <div style="background:#fff;color:var(--ink);padding:10px 14px;font-family:var(--mono);font-weight:700;font-size:10px;letter-spacing:.04em;text-align:center;line-height:1.5;">
+            JEUDI 16 AVRIL 2026<br/>
+            MÉMORIAL ACTe · POINTE-À-PITRE
+          </div>
+        </div>
+        <h3 class="event-title">MansA × Mémorial ACTe</h3>
+        <p class="event-meta">Table ronde sur la structuration des filières culturelles en Guadeloupe — financements, mise en réseau, marchés internationaux. Soirée prolongée par un DJ set.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ╔════════════════════════════════════════════════════════ TEAM ══╗ -->
+<section class="team-section" id="team">
+  <div class="container">
+    <div class="section-head">
+      <div class="reveal">
+        <span class="eyebrow">— Gouvernance collégiale</span>
+        <h2><span class="it-yellow">L'équipe.</span></h2>
+      </div>
+      <p class="section-head-sub reveal reveal-2">Un bureau partagé où chacune porte collectivement les décisions stratégiques, artistiques et opérationnelles.</p>
+    </div>
+
+    <div class="team-grid">
+
+      <div class="team-card reveal">
+        <div class="team-avatar">LC</div>
+        <div class="team-name">Laure Chanteur</div>
+        <div class="team-role">Responsable administrative &amp; financière · Coordinatrice</div>
+      </div>
+
+      <div class="team-card reveal reveal-2">
+        <div class="team-avatar">LB</div>
+        <div class="team-name">Laetitia Charles-Belamour</div>
+        <div class="team-role">Directrice artistique · Coordinatrice</div>
+      </div>
+
+      <div class="team-card reveal reveal-3">
+        <div class="team-avatar">GB</div>
+        <div class="team-name">Gaelle Charles-Belamour</div>
+        <div class="team-role">Responsable projets web · Coordinatrice</div>
+      </div>
+
+      <div class="team-card reveal reveal-4">
+        <div class="team-avatar">WZ</div>
+        <div class="team-name">Wendie Zahibo</div>
+        <div class="team-role">Chargée de projets &amp; production · Coordinatrice</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ╔════════════════════════════════════════════════════════ CTA ══╗ -->
+<section class="cta" id="cta">
+  <div class="cta-bg">B</div>
+  <div class="container">
+    <div class="cta-inner">
+      <span class="pill pill-yellow pill-dot reveal" style="margin-bottom:40px;">✦ Plateforme en lancement · Mai 2026</span>
+      <h2 class="cta-h reveal reveal-2">
+        Travaillons<br/>
+        <span class="it">ensemble.</span>
+      </h2>
+      <p class="cta-lead reveal reveal-3">Pour toute demande de collaboration, partenariat, résidence ou simplement pour nous saluer.</p>
+      <a href="mailto:bonjourbazaart@gmail.com" class="cta-mail reveal reveal-4" data-magnetic>
+        bonjourbazaart@gmail.com →
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ╔════════════════════════════════════════════════════════ FOOTER ══╗ -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <img src="assets/logo-wordmark.png" alt="BazaArt"/>
+        <p>Hub artistique pluridisciplinaire ancré en Guadeloupe — une coopérative, une plateforme et trois hubs pour les artistes francophones.</p>
+        <div class="footer-meta">
+          ASSOCIATION LOI 1901 · POINTE-À-PITRE<br/>
+          SIRET 893 217 449 00012 · MMXXVI
+        </div>
+      </div>
+
+      <div class="footer-col">
+        <h4>Plateforme</h4>
+        <ul>
+          <li><a href="#">Opportunités</a></li>
+          <li><a href="#">Forum &amp; lives</a></li>
+          <li><a href="#">Dashboard</a></li>
+          <li><a href="#">Blog</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>L'asso</h4>
+        <ul>
+          <li><a href="#">Hub Events</a></li>
+          <li><a href="#">Hub Lab</a></li>
+          <li><a href="#">Hub Formation</a></li>
+          <li><a href="#">Adhérer</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Structures</h4>
+        <ul>
+          <li><a href="#">Publier une opportunité</a></li>
+          <li><a href="#">Documentation</a></li>
+          <li><a href="#">Tarifs structure</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Légal</h4>
+        <ul>
+          <li><a href="#">CGU</a></li>
+          <li><a href="#">Confidentialité</a></li>
+          <li><a href="#">Contact</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© 2026 BAZAART · TOUT EST À NOUS</span>
+      <span>v1.0 · MIS À JOUR LE 21 MAI 2026</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  /* ─── Scroll reveal */
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting){
+        e.target.classList.add('in');
+        if (e.target.dataset.count){
+          countUp(e.target);
+        }
+      }
+    });
+  }, { threshold: .12, rootMargin: '0px 0px -50px 0px' });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+  document.querySelectorAll('[data-count]').forEach(el => io.observe(el));
+
+  /* ─── Number count up */
+  function countUp(el){
+    if (el.dataset.counted) return;
+    el.dataset.counted = '1';
+    const target = parseInt(el.dataset.count, 10);
+    const prefix = el.dataset.prefix || '';
+    const dur = 1400; const start = performance.now();
+    function tick(now){
+      const t = Math.min(1, (now - start)/dur);
+      const eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = prefix + Math.round(target * eased);
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  /* ─── Hero heading letter reveal */
+  const heading = document.getElementById('heroHeading');
+  if (heading){
+    heading.querySelectorAll('.hero-h-row').forEach((row, rowIdx) => {
+      // wrap each character in a span, preserving inline children (italic spans)
+      const walk = (node) => {
+        if (node.nodeType === 3){
+          const frag = document.createDocumentFragment();
+          [...node.textContent].forEach((ch, i) => {
+            if (ch === ' '){
+              frag.appendChild(document.createTextNode(' '));
+            } else {
+              const span = document.createElement('span');
+              span.className = 'letter';
+              span.textContent = ch;
+              frag.appendChild(span);
+            }
+          });
+          node.parentNode.replaceChild(frag, node);
+        } else if (node.nodeType === 1){
+          [...node.childNodes].forEach(walk);
+        }
+      };
+      [...row.childNodes].forEach(walk);
+      const letters = row.querySelectorAll('.letter');
+      letters.forEach((l, i) => {
+        l.style.animationDelay = (rowIdx * 200 + i * 30) + 'ms';
+      });
+    });
+  }
+
+  /* ─── Cursor blob */
+  const blob = document.getElementById('cursorBlob');
+  let blobX = 0, blobY = 0, targetX = 0, targetY = 0;
+  document.addEventListener('mousemove', (e) => {
+    targetX = e.clientX; targetY = e.clientY;
+    blob.classList.add('show');
+  });
+  document.addEventListener('mouseleave', () => blob.classList.remove('show'));
+
+  document.querySelectorAll('a, button, .opp-row, .hub, .saas-card, .pricing-card, .opp-card, .team-card, .event-col').forEach(el => {
+    el.addEventListener('mouseenter', () => blob.classList.add('lg'));
+    el.addEventListener('mouseleave', () => blob.classList.remove('lg'));
+  });
+
+  function animateBlob(){
+    blobX += (targetX - blobX) * 0.18;
+    blobY += (targetY - blobY) * 0.18;
+    blob.style.transform = `translate3d(${blobX}px, ${blobY}px, 0) translate(-50%, -50%)`;
+    requestAnimationFrame(animateBlob);
+  }
+  animateBlob();
+
+  /* ─── Magnetic buttons */
+  document.querySelectorAll('[data-magnetic]').forEach(btn => {
+    btn.addEventListener('mousemove', (e) => {
+      const r = btn.getBoundingClientRect();
+      const x = e.clientX - r.left - r.width/2;
+      const y = e.clientY - r.top - r.height/2;
+      btn.style.transform = `translate(${x*0.18}px, ${y*0.25 - 2}px)`;
+    });
+    btn.addEventListener('mouseleave', () => {
+      btn.style.transform = '';
+    });
+  });
+
+  /* ─── Star parallax (mouse follow) */
+  const star = document.getElementById('starStage');
+  document.addEventListener('mousemove', (e) => {
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const dx = (e.clientX - cx) / cx;
+    const dy = (e.clientY - cy) / cy;
+    if (star){
+      star.style.transform = `translate(${dx*18}px, ${dy*18}px)`;
+    }
+  });
+
+  /* ─── Petals parallax on scroll */
+  const petals = document.querySelectorAll('.petal');
+  window.addEventListener('scroll', () => {
+    const y = window.scrollY;
+    petals.forEach(p => {
+      const speed = parseFloat(p.dataset.speed || 0.4);
+      p.style.transform = `translateY(${y * speed * -0.6}px) rotate(${y * speed * 0.04}deg)`;
+    });
+  }, { passive: true });
+
+  /* ─── Nav hide on scroll down, show on scroll up */
+  let lastScroll = 0;
+  const nav = document.getElementById('nav');
+  window.addEventListener('scroll', () => {
+    const y = window.scrollY;
+    if (y > 80 && y > lastScroll){
+      nav.style.transform = 'translateY(-120%)';
+    } else {
+      nav.style.transform = '';
+    }
+    lastScroll = y;
+  }, { passive: true });
+
+  /* ─── Active nav link based on section in view */
+  const sections = ['manifesto', 'hubs', 'platform', 'pricing', 'events', 'team'];
+  const links = document.querySelectorAll('.nav-link');
+  const sectionIO = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting){
+        links.forEach(l => l.classList.remove('active'));
+        const link = document.querySelector(`.nav-link[href="#${e.target.id}"]`);
+        if (link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  sections.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) sectionIO.observe(el);
+  });
+
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>BazaArt — prototype · print</title>
+<meta name="viewport" content="width=1440" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+<style>
+  :root{
+    --bg: #F2EFE6;
+    --bg-alt: #EAE6D9;
+    --ink: #0D0D0D;
+    --ink-mute: #5b584f;
+    --line: #0d0d0d;
+    --line-soft: rgba(13,13,13,.14);
+    --accent: #C6F24E;
+    --accent-2: #FF6B2C;
+    --danger: #E5484D;
+    --ok: #1F8A5B;
+    --display: "Archivo Black", "Anton", Impact, sans-serif;
+    --body: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+    --serif: "Instrument Serif", "Times New Roman", serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg-alt);
+    color:var(--ink);
+    font-family:var(--body);
+    font-size:15px;
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  ::selection{background:var(--accent);color:var(--ink)}
+  a{color:inherit; text-decoration:none}
+  button{font-family:inherit}
+  img{max-width:100%;display:block}
+
+  /* Soft grain on each page */
+  body.no-grain{}
+
+  /* ────────────────────────────────────────── Print stack layout */
+  .print-stack{
+    display: flex; flex-direction: column;
+    gap: 32px;
+    padding: 32px;
+    background: #d9d6cc;
+  }
+  .print-page{
+    background: var(--bg);
+    width: 1440px;
+    margin: 0 auto;
+    box-shadow: 0 16px 40px -16px rgba(13,13,13,.25);
+    position: relative;
+    overflow: hidden;
+  }
+  .print-page-caption{
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 24px;
+    background: var(--ink); color: var(--accent);
+    font: 700 11px var(--mono);
+    letter-spacing: .08em; text-transform: uppercase;
+  }
+  .print-page-frame{
+    /* Containers with sticky/fixed elements still need to behave properly */
+    position: relative;
+  }
+  /* Defang sticky/fixed within each page so they render in-flow on paper */
+  .print-page-frame .nav,
+  .print-page-frame [style*="position: sticky"],
+  .print-page-frame [style*="position:sticky"]{
+    position: relative !important;
+    top: auto !important;
+  }
+  /* Tweaks panel should not appear in print */
+  .twk-panel{ display: none !important; }
+
+  /* ────────────────────────────────────────── Print rules */
+  @media print {
+    @page {
+      size: 1480px 1850px;   /* slightly larger than the 1440px frame */
+      margin: 20px;
+    }
+    html, body{ background: white; }
+    .print-stack{
+      gap: 0; padding: 0; background: white;
+    }
+    .print-page{
+      box-shadow: none;
+      break-after: page;
+      page-break-after: always;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .print-page:last-child{ break-after: auto; page-break-after: auto; }
+    .print-page-caption{
+      background: var(--ink) !important; color: var(--accent) !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    *{ -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="src/tweaks-panel.jsx"></script>
+  <script type="text/babel" src="src/ui.jsx"></script>
+  <script type="text/babel" src="src/data.jsx"></script>
+  <script type="text/babel" src="src/screens-public.jsx"></script>
+  <script type="text/babel" src="src/screens-opps.jsx"></script>
+  <script type="text/babel" src="src/screens-forum.jsx"></script>
+  <script type="text/babel" src="src/screens-dash.jsx"></script>
+  <script type="text/babel" src="src/screens-admin.jsx"></script>
+  <script type="text/babel" src="src/app-print.jsx"></script>
+
+  <!-- Auto-print after layout/fonts settle -->
+  <script type="text/babel">
+    (async () => {
+      // Wait for Babel to mount + fonts to load + a generous buffer for chart SVGs etc.
+      if (document.fonts && document.fonts.ready) {
+        try { await document.fonts.ready; } catch(e){}
+      }
+      // Wait for root to actually render content
+      const start = Date.now();
+      while (Date.now() - start < 4000) {
+        if (document.querySelectorAll('.print-page').length >= 13) break;
+        await new Promise(r => setTimeout(r, 100));
+      }
+      // Final safety buffer
+      await new Promise(r => setTimeout(r, 800));
+      window.print();
+    })();
+  </script>
+</body>
+</html>
