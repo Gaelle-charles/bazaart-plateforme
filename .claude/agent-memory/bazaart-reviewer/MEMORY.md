@@ -12,3 +12,5 @@
 - [Module Forum — patterns et anti-patterns identifiés](feedback_forum_module_patterns.md) — XSS contenu brut, N+1 index, ordre CSRF/autorisation inversé, collision slug inter-catégories
 - [Module Messagerie — patterns et anti-patterns identifiés](feedback_messaging_module_patterns.md) — N+1 compteurs non-lus, redirect sans ancre, removeParticipant() bug copier-coller, DQL brut andWhere(), NULLS LAST manquant PostgreSQL
 - [Module Notifications — patterns et anti-patterns identifiés](feedback_notifications_module_patterns.md) — IDOR silencieux markAsRead, XSS préventif data.threadTitle, PII email en JSON, N+1 Twig extension sans mémoise, getLink() URLs en dur
+- [Fixtures : autoPublished toujours false — incohérence métier](feedback_fixtures_autopublished.md) — autoPublished doit être true pour admin/structure, false uniquement pour artist
+- [Fixtures : validatedAt/validatedBy non-null pour auto-publiées — incohérence](feedback_fixtures_validatedby_structure.md) — ces champs doivent rester null pour les ressources structure/admin

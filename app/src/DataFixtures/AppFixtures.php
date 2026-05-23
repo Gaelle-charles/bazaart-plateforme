@@ -593,34 +593,36 @@ class AppFixtures extends Fixture
                 $resource->addDiscipline($disciplines[$disciplineName]);
             }
 
-            // ── Statut et métadonnées de publication ──────────────────────────
+            // ── Statut et dates de publication ───────────────────────────────
+            $createdAt = new \DateTime('-' . $data['created_days_ago'] . ' days');
             $resource
                 ->setStatus(ResourceStatus::Published)
-                ->setAutoPublished(false);
+                ->setPublishedAt($createdAt);
 
-            // ── Soumetteur et rôle ────────────────────────────────────────────
+            // ── Soumetteur, rôle et autoPublished ────────────────────────────
             if ($data['submitter'] === 'structure') {
-                // Soumis par l'utilisateur structure
+                // Ressource soumise par une structure partenaire.
+                // Règle métier : les structures publient en auto-publication directe
+                // (autoPublished = true, validatedAt/validatedBy restent null).
                 $resource
                     ->setSubmittedBy($structureUser)
                     ->setSubmitterRole(SubmitterRole::Structure)
-                    ->setOrganization($structureOrg);
+                    ->setOrganization($structureOrg)
+                    ->setAutoPublished(true);
+                // Pas de validatedAt/validatedBy : la structure n'a pas besoin
+                // d'une validation admin — la publication est automatique.
             } else {
-                // Soumis par l'admin (simule des ressources ajoutées par l'équipe Bazaart)
+                // Ressource soumise et publiée manuellement par l'admin.
+                // autoPublished = false : l'admin a explicitement cliqué "Publier".
+                // validatedAt et validatedBy tracent qui a validé et quand.
                 $resource
                     ->setSubmittedBy($adminUser)
                     ->setSubmitterRole(SubmitterRole::Admin)
-                    // Pas d'organisation liée pour les ressources admin directes
-                    ->setOrganization(null);
+                    ->setOrganization(null)
+                    ->setAutoPublished(false)
+                    ->setValidatedAt($createdAt)
+                    ->setValidatedBy($adminUser);
             }
-
-            // ── Dates de validation et de publication ─────────────────────────
-            // La ressource a été créée il y a N jours, publiée le même jour.
-            $createdAt = new \DateTime('-' . $data['created_days_ago'] . ' days');
-            $resource
-                ->setPublishedAt($createdAt)
-                ->setValidatedAt($createdAt)
-                ->setValidatedBy($adminUser);
 
             // ── Forçage des timestamps privés via réflexion ───────────────────
             // PrePersist initialise createdAt/updatedAt à NOW() automatiquement.

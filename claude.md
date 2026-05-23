@@ -377,7 +377,7 @@ php bin/phpunit
 - ❌ Lancer `composer update` sans demande explicite
 - ❌ Faire des décisions de scope sans consulter `docs/cahier-des-charges-v3.md`
 - ❌ Ajouter des fonctionnalités V2 ou V3 pendant le développement V1 (planning serré)
-- ❌ Push direct sur `main` (passer par `dev` puis merge)
+- ❌ Merger `demo` dans `main` sans validation — toujours demander confirmation à Gaëlle
 
 ---
 
@@ -398,10 +398,11 @@ php bin/phpunit
 
 ## 14. Workflow Git
 
-- `main` → production (déploiement manuel via SSH + `git pull`)
-- `dev` → intégration / staging
-- `feature/<module>-<description>` → branches de travail, mergées dans `dev`
+- `main` → branche stable de référence (déploiement manuel via SSH + `git pull`)
+- `demo` → branche de travail — nouvelles fonctionnalités et design en cours
 
+Pas de branche `dev` ni de nomenclature `feature/*`. Organisation volontairement simple.
+Merger `demo` → `main` manuellement quand un lot de fonctionnalités est prêt à déployer.
 Toujours un commit par fonctionnalité, message descriptif en français.
 
 ---
