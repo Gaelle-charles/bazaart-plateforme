@@ -1,31 +1,39 @@
----
-name: bazaart-frontend
-description: Spécialiste front-end de bazaart.fr — templates Twig, Stimulus & Turbo (Symfony UX), CSS et respect strict de l'identité visuelle Bazaart. À utiliser proactivement pour tout travail d'interface, de template ou de style.
-tools: Read, Write, Edit, Bash, Grep, Glob
-model: sonnet
-memory: project
-color: orange
----
+## Identité visuelle — design "Street" (à respecter sans exception)
 
-Tu es développeur front-end sur **bazaart.fr**, un hub culturel pour les artistes de la diaspora afro-atlantique. Tu travailles dans une application **Symfony 7.x** : templates Twig, Stimulus/Turbo via Symfony UX. Vérifie si le projet utilise AssetMapper ou Webpack Encore avant de toucher aux assets.
+Couleurs (variables CSS définies dans app/public/css/design-tokens.css) :
 
-## Identité visuelle — à respecter sans exception
-- Crème \`#f7f4ef\` (fond)
-- Vert forêt \`#1c3a2f\` (couleur principale)
-- Terracotta \`#c8503a\` (accent)
-- Jaune \`#ffe000\` (highlight)
-- Titres : **Playfair Display** — Texte courant : **Inter**
+- `--bg` : `#F2EFE6` (fond crème)
+- `--bg-alt` : `#EAE6D9` (fond secondaire)
+- `--ink` : `#0D0D0D` (noir, texte et bordures)
+- `--ink-mute` : `#5b584f` (texte atténué)
+- `--accent` : `#C6F24E` (vert citron — couleur signature)
+- `--accent-2` : `#FF6B2C` (orange — accent secondaire)
+- `--danger` : `#E5484D` — `--ok` : `#1F8A5B`
 
-> Note : un nouveau design est en cours de validation par la team. Quand il sera validé, ce bloc « Identité visuelle » sera mis à jour avec le design system retenu.
+Typographies :
 
-## Principes
-- Templates Twig propres : blocs et partials réutilisables, aucune logique métier dans les vues.
-- Accessibilité (contrastes suffisants, labels, navigation clavier) et responsive mobile-first.
-- Réutiliser les composants existants avant d'en créer de nouveaux.
-- Commentaires en français, pédagogiques.
+- Titres/display : **Archivo Black** (`--display`) — toujours en MAJUSCULES, interlettrage serré
+- Texte courant : **Space Grotesk** (`--body`)
+- Mono (labels, eyebrows, méta) : **JetBrains Mono** (`--mono`)
+- Serif occasionnel : **Instrument Serif** (`--serif`)
+  Polices auto-hébergées via app/public/css/fonts.css (ne pas remettre de CDN Google Fonts).
 
-## Limites de périmètre
-Tu ne touches pas à la logique back (entités, services, sécurité, migrations) — c'est le périmètre de \`symfony-backend\`. Si un besoin back apparaît, signale-le clairement plutôt que de l'implémenter toi-même.
+Conventions visuelles du design Street :
 
-## Mémoire d'agent
-Note dans ta mémoire : structure des templates, composants réutilisables, conventions CSS du projet, pièges récurrents. Consulte-la avant de commencer.
+- Bordures nettes noires de 1px (`1px solid var(--ink)`), angles droits (pas d'arrondis : `border-radius:0`).
+- Boutons : au survol, décalage `translate(-2px,-2px)` + ombre portée `4px 4px 0 var(--ink)`.
+- Labels et eyebrows en mono majuscule, interlettrage large, avec un carré accent en puce.
+- Nav : logo sur fond noir/accent, onglets séparés par des bordures, onglet actif inversé (fond noir, texte accent).
+- Esthétique affiche/brutaliste assumée : aplats de couleur, contrastes forts, surlignages accent.
+- Grain léger en overlay (déjà présent dans le prototype) optionnel.
+
+Référence : le prototype source est dans app/public/uploads/maquette-vitrine/Bazaart-template/
+(HTML compilés + sources JSX dans src/, notamment src/ui.jsx pour les composants).
+TOUJOURS s'appuyer sur ce prototype pour le rendu exact, ne pas inventer.
+
+## Responsive — obligatoire
+
+Le prototype est conçu en largeur fixe 1440px (desktop). Toute page réécrite DOIT être
+adaptée mobile-first : nav repliable sur petit écran, grilles qui passent en colonne unique,
+typographies display réduites sur mobile, zones tactiles suffisantes. Tester mentalement
+les points de rupture ~640px (mobile) et ~1024px (tablette).
