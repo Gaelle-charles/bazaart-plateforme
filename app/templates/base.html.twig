@@ -282,12 +282,559 @@
             height: 1px;
             background: var(--color-border);
         }
+
+        /* ══════════════════════════════════════════════════════════════════
+         * NAV STREET — commune à TOUTES les pages (vitrine + app connectée)
+         *
+         * CSS copié verbatim depuis le prototype Street :
+         * app/public/uploads/maquette-vitrine/Bazaart-template/
+         *                                     Bazaart Prototype (Street).html
+         *
+         * Classes identiques au prototype : .nav .nav-inner .nav-logo
+         * .nav-tabs .nav-tab .nav-side
+         *
+         * Cette nav est rendue AVANT le bloc «body» dans le <body>,
+         * donc toutes les pages qui étendent base.html.twig en héritent
+         * automatiquement — sans rien à écrire dans leurs templates.
+         *
+         * Tokens utilisés (définis dans design-tokens.css) :
+         *   --bg        : #F2EFE6  (fond sable — corps de la nav)
+         *   --ink       : #0D0D0D  (quasi-noir — logo, texte, bordures)
+         *   --accent    : #C6F24E  (vert lime — bouton Rejoindre, onglet actif)
+         *   --line      : rgba(13,13,13,.18)  (bordure standard)
+         *   --line-soft : rgba(13,13,13,.10)  (bordure douce)
+         *   --bg-alt    : #E8E5DC             (fond hover onglet)
+         *   --body      : 'Space Grotesk'     (police corps)
+         *   --display   : 'Archivo Black'     (police titres)
+         *   --mono      : 'JetBrains Mono'    (police monospace)
+         *   --accent-2  : #FF6B2C             (orange — déconnexion)
+         * ══════════════════════════════════════════════════════════════════ */
+
+        /* Barre de nav : sticky en haut, fond sable, bordure bas */
+        .nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--bg, #F2EFE6);
+            border-bottom: 1px solid var(--line, rgba(13,13,13,.18));
+        }
+
+        /* Conteneur interne : flex, max 1440px, hauteur 64px */
+        .nav-inner {
+            display: flex;
+            align-items: stretch;
+            max-width: 1440px;
+            margin: 0 auto;
+            height: 64px;
+        }
+
+        /* Bloc logo — fond NOIR (--ink), texte vert lime (--accent).
+           Séparé des onglets par une bordure droite — signature du prototype. */
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-right: 1px solid var(--line, rgba(13,13,13,.18));
+            background: var(--ink, #0D0D0D);
+            color: var(--accent, #C6F24E);
+            font-family: var(--display, 'Archivo Black', sans-serif);
+            font-size: 22px;
+            letter-spacing: -.01em;
+            text-transform: uppercase;
+            flex-shrink: 0;
+            text-decoration: none;
+        }
+        .nav-logo img { height: 20px; width: auto; display: block; }
+
+        /* Zone des onglets : flex, prend tout l'espace disponible */
+        .nav-tabs {
+            display: flex;
+            align-items: stretch;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        /* Onglet individuel — uppercase, bordure droite fine */
+        .nav-tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 16px;
+            border: 0;
+            background: transparent;
+            cursor: pointer;
+            border-right: 1px solid var(--line-soft, rgba(13,13,13,.10));
+            font: 600 12.5px/1 var(--body, 'Space Grotesk', sans-serif);
+            letter-spacing: .02em;
+            color: var(--ink, #0D0D0D);
+            text-transform: uppercase;
+            transition: background .12s;
+            white-space: nowrap;
+            flex-shrink: 0;
+            text-decoration: none;
+        }
+        .nav-tab:hover { background: var(--bg-alt, #E8E5DC); }
+
+        /* Onglet actif : inversion (fond noir, texte lime) */
+        .nav-tab[data-active="true"] {
+            background: var(--ink, #0D0D0D);
+            color: var(--accent, #C6F24E);
+        }
+
+        /* Point vert visible uniquement sur l'onglet actif */
+        .nav-tab .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent, #C6F24E);
+            display: none;
+        }
+        .nav-tab[data-active="true"] .dot { display: block; }
+
+        /* Zone droite : Connexion + Rejoindre (ou avatar si connecté) */
+        .nav-side {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 14px;
+            border-left: 1px solid var(--line, rgba(13,13,13,.18));
+        }
+
+        /* ── Boutons Connexion / Rejoindre ── */
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            font: 700 12px/1 var(--body, 'Space Grotesk', sans-serif);
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            text-decoration: none;
+            border: 1px solid var(--ink, #0D0D0D);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background .12s, color .12s;
+        }
+
+        /* "Connexion" — contour transparent, texte noir */
+        .nav-btn--ghost {
+            background: transparent;
+            color: var(--ink, #0D0D0D);
+        }
+        .nav-btn--ghost:hover { background: var(--bg-alt, #E8E5DC); }
+
+        /* "Rejoindre" — fond lime, texte noir */
+        .nav-btn--lime {
+            background: var(--accent, #C6F24E);
+            color: var(--ink, #0D0D0D);
+            border-color: var(--accent, #C6F24E);
+        }
+        .nav-btn--lime:hover {
+            background: var(--ink, #0D0D0D);
+            color: var(--accent, #C6F24E);
+            border-color: var(--ink, #0D0D0D);
+        }
+
+        /* ── Avatar utilisateur (carré — règle Street) ── */
+        .nav-avatar {
+            width: 34px;
+            height: 34px;
+            border-radius: 0;
+            background: var(--ink, #0D0D0D);
+            color: var(--accent, #C6F24E);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font: 700 12px var(--mono, 'JetBrains Mono', monospace);
+            letter-spacing: .04em;
+            border: 1px solid var(--ink, #0D0D0D);
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background .12s, color .12s;
+        }
+        .nav-avatar:hover {
+            background: var(--accent, #C6F24E);
+            color: var(--ink, #0D0D0D);
+        }
+
+        /* Dropdown utilisateur */
+        .nav-user { position: relative; }
+        .nav-user-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            right: 0;
+            min-width: 200px;
+            background: var(--bg, #F2EFE6);
+            border: 1px solid var(--ink, #0D0D0D);
+            z-index: 200;
+        }
+        .nav-user-menu.is-open { display: block; }
+        .nav-user-item {
+            display: block;
+            padding: 10px 16px;
+            font: 500 13px var(--body, 'Space Grotesk', sans-serif);
+            color: var(--ink, #0D0D0D);
+            text-decoration: none;
+            border-bottom: 1px solid var(--line-soft, rgba(13,13,13,.10));
+        }
+        .nav-user-item:last-child { border-bottom: 0; }
+        .nav-user-item:hover { background: var(--bg-alt, #E8E5DC); }
+        .nav-user-item.danger { color: var(--accent-2, #FF6B2C); }
+        .nav-user-item.danger:hover { background: var(--accent-2, #FF6B2C); color: #fff; }
+
+        /* ── Hamburger (mobile uniquement) ── */
+        .nav-hamburger {
+            display: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+            width: 40px;
+            height: 40px;
+            flex-shrink: 0;
+        }
+        .nav-hamburger-bar {
+            display: block;
+            width: 22px;
+            height: 2px;
+            background: var(--ink, #0D0D0D);
+        }
+
+        /* ── Panneau mobile (plein écran, glisse sous la nav) ── */
+        .nav-mobile {
+            display: none;
+            position: fixed;
+            top: 64px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg, #F2EFE6);
+            border-top: 1px solid var(--ink, #0D0D0D);
+            z-index: 99;
+            overflow-y: auto;
+        }
+        .nav-mobile.is-open { display: block; }
+        .nav-mobile-item {
+            display: block;
+            padding: 16px 24px;
+            font: 700 14px var(--body, 'Space Grotesk', sans-serif);
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            color: var(--ink, #0D0D0D);
+            text-decoration: none;
+            border-bottom: 1px solid var(--line-soft, rgba(13,13,13,.10));
+        }
+        .nav-mobile-item:hover { background: var(--ink, #0D0D0D); color: var(--accent, #C6F24E); }
+        .nav-mobile-item.danger { color: var(--accent-2, #FF6B2C); }
+        .nav-mobile-sep { height: 1px; background: var(--ink, #0D0D0D); margin: 4px 0; }
+
+        /* Overlay semi-transparent derrière le menu mobile */
+        .nav-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(13,13,13,.45);
+            z-index: 98;
+        }
+        .nav-overlay.is-open { display: block; }
+
+        /* ── Responsive ── */
+        @media (max-width: 767px) {
+            /* Sur mobile, les onglets disparaissent → hamburger prend le relais */
+            .nav-tabs { display: none; }
+            .nav-hamburger { display: flex; }
+            .nav-side { border-left: 0; padding: 0 8px; gap: 6px; }
+        }
     </style>
 
     {% block stylesheets %}{% endblock %}
 </head>
 <body>
-    {% block body %}{% endblock %}
-    {% block javascripts %}{% endblock %}
+
+{#
+    {% block navbar %} encapsule l'intégralité de la nav (skip link, overlay,
+    header.nav, nav mobile). Ce bloc est overridable par les templates enfants.
+
+    Usage : les templates qui ont leur propre navigation (ex: base_admin.html.twig
+    avec sa sidebar) écrasent ce bloc avec un bloc vide :
+        {% block navbar %}{% endblock %}
+
+    Par défaut (pages connectées, vitrine) : la nav Street est rendue.
+#}
+{% block navbar %}
+
+{# ── Lien "Passer au contenu" — accessibilité WCAG 2.4.1 ──────────────────── #}
+{#
+    Ce lien est invisible par défaut (position: absolute, left: -9999px).
+    Il devient visible quand il reçoit le focus clavier (via :focus / onfocus).
+    Il permet aux utilisateurs de navigation au clavier de sauter directement
+    au contenu principal sans traverser toute la nav.
+
+    L'attribut href="#main-content" cible l'élément id="main-content" défini
+    dans les templates enfants (base_app.html.twig → <main id="main-content">)
+    ou directement dans vitrine/index.html.twig → <main id="main-content">.
+#}
+<a href="#main-content"
+   style="position:absolute;left:-9999px;top:0;z-index:999;
+          background:var(--ink,#0D0D0D);color:var(--accent,#C6F24E);
+          padding:8px 16px;font:700 12px var(--mono,'JetBrains Mono',monospace);
+          text-transform:uppercase;letter-spacing:.06em;text-decoration:none;"
+   onfocus="this.style.left='0'" onblur="this.style.left='-9999px'">
+    Passer au contenu principal
+</a>
+
+{# Overlay mobile — arrière-plan semi-opaque derrière le panneau hamburger #}
+<div class="nav-overlay" id="nav-overlay" aria-hidden="true"></div>
+
+{# ══════════════════════════════════════════════════════════════════════════════
+ # NAV PRINCIPALE — commune à toutes les pages
+ #
+ # Structure conforme au prototype (app.jsx, composant App) :
+ #   .nav > .nav-inner > [.nav-logo] [.nav-tabs] [.nav-side]
+ #
+ # Menu (ordre exact du prototype) :
+ #   Accueil · Opportunités · Forum · Blog
+ #
+ # Côté droit :
+ #   - Utilisateur NON connecté : Connexion + Rejoindre
+ #   - Utilisateur connecté     : avatar ▾ avec dropdown (Mon espace + Déconnexion)
+ #
+ # ══════════════════════════════════════════════════════════════════════════ #}
+{# currentRoute : nom Symfony de la route active (ex: "app_resource_index").
+   Utilisé pour positionner data-active="true" sur le bon onglet.
+   app.request est disponible dans tous les templates Twig via l'objet `app`. #}
+{% set currentRoute = app.request.attributes.get('_route') %}
+
+<header class="nav" role="banner">
+    <div class="nav-inner">
+
+        {# ── Logo : bloc fond NOIR à gauche, image verte ─────────────────── #}
+        <a href="{{ path('app_home') }}" class="nav-logo" aria-label="BazaArt — accueil">
+            <img src="{{ asset('images/logo-green.png') }}"
+                 alt="BAZAART"
+                 style="display:block;height:20px;width:auto;">
+        </a>
+
+        {# ── Onglets — EXACTEMENT les 4 items demandés ────────────────────── #}
+        <nav class="nav-tabs" aria-label="Navigation principale">
+
+            {# 1. Accueil #}
+            <a href="{{ path('app_home') }}"
+               class="nav-tab"
+               data-active="{{ currentRoute == 'app_home' ? 'true' : 'false' }}"
+               {% if currentRoute == 'app_home' %}aria-current="page"{% endif %}>
+                <span class="dot" aria-hidden="true"></span>Accueil
+            </a>
+
+            {# 2. Opportunités (= Ressourcerie dans le CDC) #}
+            <a href="{{ path('app_resource_index') }}"
+               class="nav-tab"
+               data-active="{{ currentRoute starts with 'app_resource' ? 'true' : 'false' }}"
+               {% if currentRoute starts with 'app_resource' %}aria-current="page"{% endif %}>
+                <span class="dot" aria-hidden="true"></span>Opportunités
+            </a>
+
+            {# 3. Forum (englobe aussi messagerie et posts) #}
+            <a href="{{ path('app_forum_index') }}"
+               class="nav-tab"
+               data-active="{{ (currentRoute starts with 'app_forum' or currentRoute starts with 'app_post' or currentRoute starts with 'app_messaging') ? 'true' : 'false' }}"
+               {% if currentRoute starts with 'app_forum' or currentRoute starts with 'app_post' or currentRoute starts with 'app_messaging' %}aria-current="page"{% endif %}>
+                <span class="dot" aria-hidden="true"></span>Forum
+            </a>
+
+            {# 4. Blog (articles éditoriaux) #}
+            <a href="{{ path('app_article_index') }}"
+               class="nav-tab"
+               data-active="{{ currentRoute starts with 'app_article' ? 'true' : 'false' }}"
+               {% if currentRoute starts with 'app_article' %}aria-current="page"{% endif %}>
+                <span class="dot" aria-hidden="true"></span>Blog
+            </a>
+
+        </nav>
+
+        {# ── Côté droit — conditionnel selon l'état de connexion ──────────── #}
+        <div class="nav-side">
+
+            {% if app.user %}
+                {#
+                    Utilisateur CONNECTÉ → avatar avec dropdown.
+                    Les initiales sont extraites des 2 premières lettres de l'identifiant
+                    email (partie avant @). Exemple : "amara.diallo@bazaart.fr" → "AM".
+                    À améliorer quand User exposera firstName/lastName.
+                #}
+                {% set initials = app.user.email|split('@')|first|slice(0,2)|upper %}
+                <div class="nav-user">
+                    <button type="button"
+                            class="nav-avatar"
+                            id="user-btn"
+                            aria-expanded="false"
+                            aria-controls="user-menu"
+                            aria-label="Menu de {{ app.user.email|split('@')|first }}">
+                        {{ initials }}
+                    </button>
+                    <div class="nav-user-menu" id="user-menu" role="menu" aria-labelledby="user-btn">
+                        <a href="{{ path('app_dashboard') }}" class="nav-user-item" role="menuitem">
+                            Mon espace
+                        </a>
+                        <a href="{{ path('app_logout') }}" class="nav-user-item danger" role="menuitem">
+                            Se déconnecter
+                        </a>
+                    </div>
+                </div>
+
+            {% else %}
+                {#
+                    Utilisateur NON connecté → Connexion + Rejoindre.
+                    Ordre imposé par la spec : Connexion (secondaire) puis Rejoindre (primaire).
+                    "Connexion" = ghost (transparent), "Rejoindre" = lime (CTA vert).
+                #}
+                <a href="{{ path('app_login') }}" class="nav-btn nav-btn--ghost">
+                    Connexion
+                </a>
+                <a href="{{ path('app_register') }}" class="nav-btn nav-btn--lime">
+                    Rejoindre
+                </a>
+            {% endif %}
+
+            {# Hamburger — visible uniquement sur mobile (< 768px via CSS) #}
+            <button type="button"
+                    class="nav-hamburger"
+                    id="nav-hamburger"
+                    aria-expanded="false"
+                    aria-controls="nav-mobile"
+                    aria-label="Ouvrir le menu">
+                <span class="nav-hamburger-bar" aria-hidden="true"></span>
+                <span class="nav-hamburger-bar" aria-hidden="true"></span>
+                <span class="nav-hamburger-bar" aria-hidden="true"></span>
+            </button>
+
+        </div>
+    </div>
+</header>
+
+{# ── NAV MOBILE (panneau plein écran, < 768px) ──────────────────────────── #}
+{#
+    Ce panneau est masqué par défaut (CSS display:none).
+    La classe .is-open l'affiche (ajoutée/retirée par le JS ci-dessous).
+    Il contient les mêmes liens que la nav desktop + les CTAs auth.
+#}
+<nav class="nav-mobile"
+     id="nav-mobile"
+     aria-label="Menu mobile"
+     aria-hidden="true">
+
+    <a href="{{ path('app_home') }}" class="nav-mobile-item">Accueil</a>
+    <a href="{{ path('app_resource_index') }}" class="nav-mobile-item">Opportunités</a>
+    <a href="{{ path('app_forum_index') }}" class="nav-mobile-item">Forum</a>
+    <a href="{{ path('app_article_index') }}" class="nav-mobile-item">Blog</a>
+
+    <div class="nav-mobile-sep"></div>
+
+    {% if app.user %}
+        <a href="{{ path('app_dashboard') }}" class="nav-mobile-item">Mon espace</a>
+        <a href="{{ path('app_logout') }}" class="nav-mobile-item danger">Se déconnecter</a>
+    {% else %}
+        <a href="{{ path('app_login') }}" class="nav-mobile-item">Connexion</a>
+        <a href="{{ path('app_register') }}" class="nav-mobile-item"
+           style="color:var(--accent, #C6F24E);">Rejoindre</a>
+    {% endif %}
+
+</nav>
+
+{% endblock %}{# fin du bloc navbar #}
+
+{# ── CONTENU DE LA PAGE ─────────────────────────────────────────────────── #}
+{% block body %}{% endblock %}
+
+{# ── SCRIPTS ────────────────────────────────────────────────────────────── #}
+{#
+    Les scripts nav sont ici plutôt que dans un fichier externe pour éviter
+    une dépendance supplémentaire (pas de bundler configuré en V1).
+    Chaque IIFE (Immediately Invoked Function Expression) est autonome :
+    il vérifie l'existence de ses éléments avant d'agir → aucune erreur
+    si la page ne contient pas les éléments attendus.
+
+    {{ parent() }} dans les templates enfants ajoutera leurs propres scripts
+    APRÈS ces scripts nav — ordre garanti.
+#}
+{% block javascripts %}
+<script>
+/* ── Hamburger mobile ────────────────────────────────────────────────────── */
+(function () {
+    'use strict';
+    var btn = document.getElementById('nav-hamburger');
+    var mob = document.getElementById('nav-mobile');
+    var ovl = document.getElementById('nav-overlay');
+    if (!btn || !mob || !ovl) return;
+
+    function open() {
+        mob.classList.add('is-open');
+        ovl.classList.add('is-open');
+        btn.setAttribute('aria-expanded', 'true');
+        mob.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden'; /* bloque le scroll du body */
+    }
+    function close() {
+        mob.classList.remove('is-open');
+        ovl.classList.remove('is-open');
+        btn.setAttribute('aria-expanded', 'false');
+        mob.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }
+
+    btn.addEventListener('click', function () {
+        mob.classList.contains('is-open') ? close() : open();
+    });
+    ovl.addEventListener('click', close);
+    /* Fermeture sur clic d'un lien (navigation) */
+    mob.querySelectorAll('a').forEach(function (a) {
+        a.addEventListener('click', close);
+    });
+    /* Fermeture sur touche Échap — accessibilité clavier */
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && mob.classList.contains('is-open')) {
+            close();
+            btn.focus(); /* remet le focus sur le bouton hamburger */
+        }
+    });
+}());
+
+/* ── Dropdown avatar (utilisateur connecté) ─────────────────────────────── */
+(function () {
+    'use strict';
+    var btn  = document.getElementById('user-btn');
+    var menu = document.getElementById('user-menu');
+    if (!btn || !menu) return; /* non connecté → éléments absents du DOM */
+
+    btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        menu.classList.toggle('is-open');
+        btn.setAttribute('aria-expanded', menu.classList.contains('is-open') ? 'true' : 'false');
+    });
+    /* Clic en dehors → fermeture */
+    document.addEventListener('click', function (e) {
+        if (!btn.contains(e.target) && !menu.contains(e.target)) {
+            menu.classList.remove('is-open');
+            btn.setAttribute('aria-expanded', 'false');
+        }
+    });
+    /* Touche Échap → fermeture + focus bouton */
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && menu.classList.contains('is-open')) {
+            menu.classList.remove('is-open');
+            btn.setAttribute('aria-expanded', 'false');
+            btn.focus();
+        }
+    });
+}());
+</script>
+{% endblock %}
+
 </body>
 </html>

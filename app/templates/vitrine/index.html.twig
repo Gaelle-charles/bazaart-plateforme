@@ -101,76 +101,11 @@
 }
 
 
-/* ──────────────────────────────────────────────────────────────────────
-   1. NAVBAR STICKY
-   Fond --ink sombre (cohérence avec la sidebar de l'app connectée).
-   Border-bottom très subtile (blanc 8 % d'opacité) pour séparer
-   visuellement sans alourdir — même approche que la sidebar.
-────────────────────────────────────────────────────────────────────── */
-
-.lp-nav {
-    position:       sticky;
-    top:            0;
-    z-index:        100;
-    height:         var(--nav-height);  /* 64px */
-    background:     var(--ink);                        /* #0D0D0D — fond sombre */
-    border-bottom:  1px solid rgba(255,255,255,0.08);  /* séparateur discret */
-    display:        flex;
-    align-items:    center;
-}
-
-.lp-nav__inner {
-    display:         flex;
-    align-items:     center;
-    justify-content: space-between;
-    width:           100%;
-}
-
-/* Logo — "BazaArt" en Archivo Black, crème sur fond sombre.
-   Ancré à l'extrémité gauche via justify-content:space-between sur .lp-nav__inner. */
-.lp-nav__logo {
-    font-family:     var(--display);
-    font-size:       22px;
-    font-weight:     400;
-    color:           var(--bg);
-    text-decoration: none;
-    letter-spacing:  -.02em;
-    flex-shrink:     0;
-}
-
-/* Liens centraux de navigation */
-.lp-nav__links {
-    display:     flex;
-    align-items: center;
-    gap:         32px;
-    list-style:  none;
-    margin:      0;
-    padding:     0;
-}
-
-.lp-nav__links a {
-    font-family:    var(--body);
-    font-size:      13px;
-    font-weight:    500;
-    color:          rgba(242,239,230,0.75); /* crème légèrement atténué — repos visuel */
-    text-decoration: none;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-    transition:     color var(--transition-fast);
-}
-
-.lp-nav__links a:hover,
-.lp-nav__links a:focus-visible {
-    color: var(--accent); /* lime #C6F24E au survol — cohérent avec l'état actif sidebar */
-}
-
-/* Groupe de boutons CTA (connexion + rejoindre) */
-.lp-nav__ctas {
-    display:     flex;
-    align-items: center;
-    gap:         10px;
-    flex-shrink: 0;
-}
+{#
+    NAVBAR SUPPRIMÉE — La nav est désormais rendue par base.html.twig.
+    Les styles .lp-nav* ci-après ont été retirés.
+    Les styles des autres sections (.lp-btn, .lp-hero, etc.) sont conservés.
+#}
 
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -228,38 +163,7 @@
     color:        var(--btn-dark-hover-color); /* var(--ink) */
 }
 
-/* ── Surcharges contextuelles navbar (fond sombre) ─────────────────────
-   Ces règles s'appliquent UNIQUEMENT dans .lp-nav (selector de contexte).
-   Elles n'affectent pas les boutons du même type ailleurs sur la page.
-
-   .lp-btn--outline dans la nav :
-     Sur fond sombre, la bordure noire disparaît — on la rend crème.
-     Le hover inverse : fond crème, texte encre (même inversion qu'avant,
-     mais avec les bonnes couleurs pour le contexte sombre). */
-.lp-nav .lp-btn--outline {
-    color:        var(--bg);                  /* crème — lisible sur fond sombre */
-    border-color: rgba(242,239,230,0.5);      /* bordure crème semi-transparente */
-}
-.lp-nav .lp-btn--outline:hover {
-    background:   var(--bg);                  /* fond crème au survol */
-    color:        var(--ink);                 /* texte encre — bon contraste */
-    box-shadow:   none;                       /* supprime l'effet décalé (hors contexte ici) */
-    transform:    none;
-}
-
-/* .lp-btn--dark dans la nav :
-   Sur fond sombre, le bouton "Rejoindre" (noir sur fond noir) serait
-   invisible. On le convertit en bouton lime pour qu'il ressort. */
-.lp-nav .lp-btn--dark {
-    background:   var(--accent);             /* lime #C6F24E — CTA principal */
-    color:        var(--ink);                /* texte encre — contraste maximal */
-    border-color: var(--accent);
-}
-.lp-nav .lp-btn--dark:hover {
-    background:   var(--bg);                 /* fond crème au survol */
-    color:        var(--ink);
-    border-color: var(--bg);
-}
+{# Les surcharges .lp-nav .lp-btn--* sont supprimées (nav retirée de la vitrine) #}
 
 /* Bouton accent (lime) : fond vert acide, texte ink.
    Utilisé pour les CTAs mis en avant (explorer les opps…) */
@@ -284,64 +188,7 @@
 }
 
 
-/* ──────────────────────────────────────────────────────────────────────
-   MENU MOBILE — Technique "checkbox trick" (CSS pur, sans JS)
-   La checkbox (invisible) contrôle l'affichage du menu via :checked.
-   Le <label> sert de bouton hamburger visible et focusable.
-
-   POURQUOI ce pattern ?
-   → Fiable partout, accessible Tab + Espace, aucun JS nécessaire.
-     On ajoute quand même un petit JS dans le bloc 'javascripts' (en bas du fichier)
-     pour fermer au clic sur un lien et à la touche Échap.
-────────────────────────────────────────────────────────────────────── */
-
-/* La checkbox est invisible mais doit rester dans le DOM pour le :checked */
-.lp-nav__mobile-toggle {
-    display:  none;
-    position: absolute;
-}
-
-/* Icône hamburger — masquée sur desktop, visible en mobile via @media */
-.lp-nav__hamburger {
-    display:        none;
-    flex-direction: column;
-    gap:            5px;
-    cursor:         pointer;
-    padding:        8px;
-    border:         none;
-    background:     transparent;
-}
-
-/* Les 3 barres du hamburger — passent en crème sur fond sombre */
-.lp-nav__hamburger span {
-    display:       block;
-    width:         24px;
-    height:        2px;
-    background:    var(--bg);  /* crème #F2EFE6 — visible sur fond --ink */
-    transition:    transform var(--transition-normal),
-                   opacity   var(--transition-normal);
-}
-
-/* Menu déroulant mobile — masqué par défaut (display:none).
-   Fond --ink pour continuité avec la navbar sombre — pas de rupture
-   visuelle entre la barre et le panneau qui s'ouvre. */
-.lp-nav__mobile-menu {
-    display:    none;
-    position:   absolute;
-    top:        100%;
-    left:       0;
-    right:      0;
-    background: var(--ink);                        /* #0D0D0D — idem navbar */
-    border-bottom: 1px solid rgba(255,255,255,0.08); /* séparateur discret */
-    padding:    24px var(--container-px);
-    flex-direction: column;
-    gap:        12px;
-}
-
-/* Quand la checkbox est cochée → menu visible via display:flex */
-.lp-nav__mobile-toggle:checked ~ .lp-nav__mobile-menu {
-    display: flex;
-}
+{# Les styles .lp-nav__mobile-* sont supprimés (hamburger géré par base.html.twig) #}
 
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -1310,24 +1157,6 @@
 
 @media (max-width: 768px) {
 
-    /* ─ Navbar ─ */
-    /* Cache liens et CTAs desktop */
-    .lp-nav__links,
-    .lp-nav__ctas {
-        display: none;
-    }
-    /* Affiche le hamburger */
-    .lp-nav__hamburger {
-        display: flex;
-    }
-    /* Nav devient relative pour positionner le menu absolu */
-    .lp-nav {
-        position:   sticky;
-        flex-wrap:  wrap;
-        height:     auto;
-        min-height: var(--nav-height);
-    }
-
     /* ─ Hero ─ */
     /* Grille hero : 1 colonne */
     .lp-hero__grid {
@@ -1423,102 +1252,12 @@
 #}
 <div class="lp-root">
 
-    {# ════════════════════════════════════════════════════════════════════════
-       1. NAVBAR STICKY
-       Structure : logo | liens | boutons CTA | hamburger mobile
-    ════════════════════════════════════════════════════════════════════════ #}
-    <header>
-        <nav class="lp-nav" aria-label="Navigation principale">
-            <div class="lp-container">
-                <div class="lp-nav__inner">
-
-                    {# Logo — "BazaArt" en Archivo Black, ancré à gauche #}
-                    <a href="{{ path('app_home') }}" class="lp-nav__logo" aria-label="BazaArt — Retour à l'accueil">
-                        BazaArt
-                    </a>
-
-                    {#
-                        Liens desktop — ordre fidèle au prototype : Ressources → Communauté → Articles.
-                        Le lien "Communauté" pointe vers app_post_feed (feed principal de l'app).
-                        Si l'utilisateur n'est pas connecté, il sera redirigé vers /login automatiquement
-                        via le firewall Symfony.
-                    #}
-                    <ul class="lp-nav__links" role="list">
-                        <li>
-                            <a href="{{ path('app_resource_index') }}">Ressources</a>
-                        </li>
-                        <li>
-                            <a href="{{ path('app_post_feed') }}">Communauté</a>
-                        </li>
-                        <li>
-                            <a href="{{ path('app_article_index') }}">Articles</a>
-                        </li>
-                    </ul>
-
-                    {# Boutons CTA desktop #}
-                    <div class="lp-nav__ctas">
-                        {# "Connexion" — outline (secondaire) #}
-                        <a href="{{ path('app_login') }}" class="lp-btn lp-btn--outline">
-                            Connexion
-                        </a>
-                        {# "Rejoindre" — dark (primaire) #}
-                        <a href="{{ path('app_register') }}" class="lp-btn lp-btn--dark">
-                            Rejoindre
-                        </a>
-                    </div>
-
-                    {# ── Menu mobile : checkbox trick ──────────────────────────
-                       aria-hidden="true" sur la checkbox : elle n'est pas
-                       un contrôle accessible (rôle joué par le <label>).
-                       Le <label> est le vrai bouton interactif.
-                    ─────────────────────────────────────────────────────────── #}
-                </div>{# /.lp-nav__inner #}
-
-                {# La checkbox DOIT être dans le même parent que .lp-nav__mobile-menu
-                   pour que le sélecteur :checked + adjacent fonctionne. #}
-                <input
-                    type="checkbox"
-                    id="lp-nav-toggle"
-                    class="lp-nav__mobile-toggle"
-                    aria-hidden="true"
-                >
-                <label
-                    for="lp-nav-toggle"
-                    class="lp-nav__hamburger"
-                    aria-label="Ouvrir le menu"
-                >
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </label>
-
-                {# Menu mobile — affiché via CSS quand :checked.
-                   Les couleurs des boutons (.lp-btn--outline et .lp-btn--dark)
-                   sont surchargées par les règles .lp-nav .lp-btn--* définies
-                   dans le <style> ci-dessus — pas besoin de style inline ici. #}
-                <div class="lp-nav__mobile-menu" id="lp-mobile-nav">
-                    {# Liens de navigation — même ordre que le menu desktop : Ressources → Communauté → Articles #}
-                    <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--outline" style="justify-content:flex-start;">
-                        Ressources
-                    </a>
-                    <a href="{{ path('app_post_feed') }}" class="lp-btn lp-btn--outline" style="justify-content:flex-start;">
-                        Communauté
-                    </a>
-                    <a href="{{ path('app_article_index') }}" class="lp-btn lp-btn--outline" style="justify-content:flex-start;">
-                        Articles
-                    </a>
-                    {# Séparateur visuel entre nav et CTAs auth #}
-                    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.12);margin:4px 0;">
-                    {# CTAs auth — Connexion (outline) + Rejoindre (lime via .lp-nav .lp-btn--dark) #}
-                    <a href="{{ path('app_login') }}"    class="lp-btn lp-btn--outline" style="width:100%;justify-content:center;">Connexion</a>
-                    <a href="{{ path('app_register') }}" class="lp-btn lp-btn--dark"    style="width:100%;justify-content:center;">Rejoindre</a>
-                </div>
-
-            </div>{# /.lp-container #}
-        </nav>
-    </header>
-
-    <main>
+    {#
+        La navbar est désormais rendue par base.html.twig (le parent commun).
+        Plus besoin de la déclarer ici — elle apparaît automatiquement
+        au-dessus du {% block body %} pour toutes les pages du site.
+    #}
+    <main id="main-content">
 
         {# ════════════════════════════════════════════════════════════════
            2. HERO — Le cœur du design Street
@@ -2328,40 +2067,11 @@
 {% endblock %}
 
 
-{# ── JAVASCRIPT MINIMAL (menu mobile + fermeture) ────────────────────────── #}
 {#
-    {{ parent() }} en PREMIER — obligatoire pour ne pas écraser les scripts
-    déclarés dans base.html.twig (importmap Stimulus, Turbo, etc.).
-    Sans cet appel, tout JS ajouté au parent serait ignoré sur cette page.
+    Le JS hamburger mobile est maintenant géré par base.html.twig (script IIFE).
+    Ce bloc n'a plus de script propre — {{ parent() }} suffit pour hériter
+    des scripts nav (hamburger + dropdown avatar) déclarés dans base.html.twig.
 #}
 {% block javascripts %}
 {{ parent() }}
-<script>
-(function () {
-    'use strict';
-
-    // Récupère la checkbox de contrôle du menu mobile
-    var toggle = document.getElementById('lp-nav-toggle');
-    if (!toggle) return;
-
-    // Ferme le menu quand on clique sur un lien à l'intérieur.
-    // Par défaut, cliquer sur un lien ancre (#section-xxx) ne décoche
-    // pas la checkbox — ce JS corrige ce comportement.
-    document.querySelectorAll('.lp-nav__mobile-menu a').forEach(function (link) {
-        link.addEventListener('click', function () {
-            toggle.checked = false;
-        });
-    });
-
-    // Ferme le menu à la touche Échap — accessibilité clavier.
-    // Permet aux utilisateurs de navigation au clavier de fermer le menu
-    // sans devoir trouver et cliquer de nouveau sur le hamburger.
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && toggle.checked) {
-            toggle.checked = false;
-        }
-    });
-
-})();
-</script>
 {% endblock %}

@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>BazaArt · Dashboard Structure</title>
+<meta name="viewport" content="width=1440" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="dashboard-street.css" />
+<style>
+  .struct-banner{
+    background: var(--accent-blue);
+    border: 1px solid var(--ink);
+    padding: 28px 32px;
+    display: grid; grid-template-columns: auto 1fr auto;
+    gap: 28px; align-items: center;
+  }
+  .struct-banner h1{
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 44px; line-height: .92; letter-spacing: -.02em;
+    text-transform: uppercase;
+    margin: 0;
+    color: var(--ink);
+  }
+  .struct-banner h1 .it{
+    font-family: var(--serif); font-style: italic; font-weight: 400;
+    text-transform: none; letter-spacing: -.01em;
+    color: var(--accent-2);
+  }
+  .struct-banner-meta{
+    font: 700 11px var(--mono); letter-spacing: .08em;
+    color: var(--ink); text-transform: uppercase;
+    margin-top: 6px; opacity: .72;
+  }
+  .struct-banner-url{
+    background: var(--ink); color: var(--accent);
+    padding: 12px 16px;
+    border: 1px solid var(--ink);
+  }
+  .struct-banner-url small{
+    display: block;
+    font: 700 9px var(--mono); letter-spacing: .12em; text-transform: uppercase;
+    color: rgba(198,242,78,.6); margin-bottom: 4px;
+  }
+  .struct-banner-url strong{
+    font: 700 13px var(--mono); color: var(--accent);
+  }
+
+  /* Publication row */
+  .pub-row{
+    display: grid; grid-template-columns: 46px 1fr 110px 90px 90px 36px;
+    gap: 14px; align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .pub-row:last-child{ border: 0; }
+  .pub-icn{
+    width: 46px; height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    font: 700 11px var(--mono);
+    border: 1px solid var(--ink);
+  }
+  .pub-icn.rés{ background: var(--accent-pink); color: var(--ink); }
+  .pub-icn.stu{ background: var(--accent); color: var(--ink); }
+  .pub-icn.per{ background: var(--accent-2); color: var(--ink); }
+  .pub-icn.pro{ background: var(--ink); color: var(--accent); }
+  .pub-icn.bro{ background: var(--bg-alt); color: var(--ink-mute); }
+  .pub-row strong{ display: block; font-weight: 700; font-size: 13.5px; }
+  .pub-row small{ font: 600 10.5px var(--mono); color: var(--ink-mute); letter-spacing: .06em; text-transform: uppercase; }
+  .pub-row .meta{ font: 700 11px var(--mono); color: var(--ink-mute); }
+
+  /* Candidates grid */
+  .cand-grid{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; border: 1px solid var(--ink); }
+  .cand{
+    padding: 18px;
+    border-right: 1px solid var(--ink);
+    background: var(--bg);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .cand:nth-child(3n){ border-right: 0; }
+  .cand:nth-child(n+4){ border-top: 1px solid var(--ink); }
+  .cand-head{ display: flex; align-items: center; gap: 10px; }
+  .cand-name strong{ display: block; font-weight: 700; font-size: 13.5px; }
+  .cand-name small{ font: 600 10.5px var(--mono); color: var(--ink-mute); letter-spacing: .06em; text-transform: uppercase; }
+  .cand-meta{ font: 700 10.5px var(--mono); color: var(--ink-mute); letter-spacing: .08em; text-transform: uppercase; }
+  .cand-score{
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px;
+    background: var(--bg-alt);
+    border: 1px solid var(--ink);
+    font: 600 12px var(--body);
+  }
+  .cand-score strong{ font-family: var(--display); font-weight: 400; font-size: 18px; }
+  .cand-actions{ display: flex; gap: 6px; }
+  .cand-actions .btn{ flex: 1; }
+
+  /* Form */
+  .form-step{
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .form-step:last-child{ border: 0; }
+  .form-step-num{
+    width: 30px; height: 30px;
+    background: var(--ink); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font: 700 12px var(--mono);
+    flex-shrink: 0;
+  }
+  .form-step-num.done{ background: var(--accent); color: var(--ink); }
+  .form-step-num.todo{ background: var(--bg-alt); color: var(--ink-mute); }
+  .form-step-info strong{ display: block; font-weight: 700; font-size: 13.5px; }
+  .form-step-info small{ font: 600 10.5px var(--mono); color: var(--ink-mute); letter-spacing: .06em; text-transform: uppercase; }
+
+  .upload{
+    border: 2px dashed var(--ink);
+    padding: 22px;
+    text-align: center;
+    color: var(--ink-mute);
+    background: var(--bg);
+  }
+  .upload strong{ color: var(--ink); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="side">
+    <div class="side-logo">
+      <span class="wm">BAZAART</span>
+      <span class="role-pill struct">STRUCT.</span>
+    </div>
+
+    <div class="side-section">Mes activités</div>
+    <nav class="side-nav">
+      <a class="side-link active">
+        <svg class="s" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Vue d'ensemble
+      </a>
+      <a class="side-link">
+        <svg class="s" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        Publier
+      </a>
+      <a class="side-link">
+        <svg class="s" viewBox="0 0 24 24"><path d="M4 4h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H4z"/><path d="M20 4h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"/></svg>
+        Publications
+        <span class="badge">8</span>
+      </a>
+      <a class="side-link">
+        <svg class="s" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+        Candidatures
+        <span class="badge">47</span>
+      </a>
+    </nav>
+
+    <div class="side-section">Structure</div>
+    <nav class="side-nav">
+      <a class="side-link">
+        <svg class="s" viewBox="0 0 24 24"><path d="M3 9 12 2l9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        Page publique
+      </a>
+      <a class="side-link">
+        <svg class="s" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><circle cx="17" cy="7" r="3"/><path d="M2 22a7 7 0 0 1 14 0M14 22a7 7 0 0 1 9-5"/></svg>
+        Équipe
+      </a>
+      <a class="side-link">
+        <svg class="s" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+        Agenda
+      </a>
+    </nav>
+
+    <div class="side-section">Compte</div>
+    <nav class="side-nav">
+      <a class="side-link">
+        <svg class="s" viewBox="0 0 24 24"><path d="M22 11.4a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L4 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9 8.5 8.5 0 0 1 8.5 8.5z"/></svg>
+        Messages
+      </a>
+      <a class="side-link">
+        <svg class="s" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg>
+        Paramètres
+      </a>
+    </nav>
+
+    <div class="side-user">
+      <div class="side-user-avatar" style="background: var(--accent-blue); color: var(--ink);">MŒ</div>
+      <div class="side-user-info">
+        <strong>Manufacture Œillets</strong>
+        <small>IVRY · MEMBRE 2024</small>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <header class="top">
+      <div class="top-search">
+        <svg class="s" width="14" height="14" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input placeholder="Chercher dans mes publications, candidatures…" />
+        <kbd>⌘K</kbd>
+      </div>
+      <div class="top-actions">
+        <button class="btn-icon">
+          <svg class="s" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 18a2 2 0 0 0 4 0"/></svg>
+          <span class="dot"></span>
+        </button>
+        <button class="btn btn-sm">↗ Page publique</button>
+        <button class="btn btn-sm btn-primary">+ Publier une opportunité</button>
+      </div>
+    </header>
+
+    <div class="page">
+
+      <!-- BANNER -->
+      <div class="struct-banner">
+        <div class="avatar xl" style="background: var(--ink); color: var(--accent-blue); width: 88px; height: 88px;">MŒ</div>
+        <div>
+          <h1>MANUFACTURE<br/><span class="it">des Œillets.</span></h1>
+          <div class="struct-banner-meta">IVRY-SUR-SEINE · LIEU DE FABRIQUE · MEMBRE 2024</div>
+          <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
+            <span class="chip chip-dark">★ Vérifiée</span>
+            <span class="chip">📍 Île-de-France</span>
+            <span class="chip">8 publications</span>
+            <span class="chip">47 candidatures</span>
+          </div>
+        </div>
+        <div class="struct-banner-url">
+          <small>URL publique</small>
+          <strong>bazaart.fr/struct/manufacture</strong>
+        </div>
+      </div>
+
+      <!-- TABS -->
+      <div class="tabs">
+        <span class="tab active">Vue d'ensemble</span>
+        <span class="tab">Publications <span class="count">8</span></span>
+        <span class="tab">Créer</span>
+        <span class="tab">Candidatures <span class="count">47</span></span>
+        <span class="tab">Équipe</span>
+      </div>
+
+      <!-- KPI -->
+      <div class="kpi-grid">
+        <div class="kpi kpi-dark-bg">
+          <span class="kpi-label">Publications</span>
+          <span class="kpi-num">8</span>
+          <span class="kpi-delta">▲ +1 cette semaine</span>
+        </div>
+        <div class="kpi kpi-accent-bg">
+          <span class="kpi-label">Candidatures reçues</span>
+          <span class="kpi-num">47</span>
+          <span class="kpi-delta">▲ +12 cette semaine</span>
+        </div>
+        <div class="kpi kpi-yellow-bg">
+          <span class="kpi-label">Vues · 30j</span>
+          <span class="kpi-num">12 400</span>
+          <span class="kpi-delta muted">+28% vs mois dernier</span>
+        </div>
+        <div class="kpi kpi-warn-bg">
+          <span class="kpi-label">En validation</span>
+          <span class="kpi-num">3</span>
+          <span class="kpi-delta muted">Délai moyen 4h</span>
+        </div>
+      </div>
+
+      <!-- CREATE FORM + SIDEBAR -->
+      <div class="row row-2-1">
+        <div class="card">
+          <div class="card-head">
+            <h2>Nouvelle opportunité</h2>
+            <span class="meta">ÉTAPE 1/3 · INFORMATIONS</span>
+          </div>
+          <div class="card-body" style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="input-group">
+              <label class="input-label">Titre</label>
+              <input class="input" value="Résidence Manufacture — atelier 3 mois"/>
+            </div>
+            <div class="input-row" style="grid-template-columns: 1fr 1fr 1fr;">
+              <div class="input-group">
+                <label class="input-label">Type</label>
+                <select class="input">
+                  <option>Résidence</option>
+                  <option>Appel à projet</option>
+                  <option>Aide financière</option>
+                  <option>Mentorat</option>
+                  <option>Formation</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label class="input-label">Niveau</label>
+                <select class="input">
+                  <option>Tous niveaux</option>
+                  <option>Émergent</option>
+                  <option>Confirmé</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label class="input-label">Disciplines</label>
+                <input class="input" value="Arts visuels · Numérique"/>
+              </div>
+            </div>
+            <div class="input-row" style="grid-template-columns: 2fr 1fr 1fr;">
+              <div class="input-group">
+                <label class="input-label">Lieu</label>
+                <input class="input" value="Ivry-sur-Seine · Île-de-France"/>
+              </div>
+              <div class="input-group">
+                <label class="input-label">Montant</label>
+                <input class="input" value="4 500 €"/>
+              </div>
+              <div class="input-group">
+                <label class="input-label">Deadline</label>
+                <input class="input" value="12 juin 2026"/>
+              </div>
+            </div>
+            <div class="input-group">
+              <label class="input-label">Description</label>
+              <textarea class="input" rows="4">Atelier individuel de 90 m², bourse de production et restitution publique en septembre. Le candidat doit présenter un projet pluridisciplinaire en lien avec les enjeux contemporains du territoire.</textarea>
+            </div>
+            <div class="input-group">
+              <label class="input-label">Dossier d'appel (PDF)</label>
+              <div class="upload">
+                <svg class="s" width="22" height="22" viewBox="0 0 24 24" style="margin-bottom: 8px;"><path d="M12 16V4M5 11l7-7 7 7M4 20h16"/></svg>
+                <div><strong>Glisse ton dossier ici</strong></div>
+                <div style="font-size: 12px; margin-top: 4px;">PDF, max 8 Mo · ou clique pour parcourir</div>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 14px; border-top: 1px solid var(--line-soft); margin-top: 6px;">
+              <button class="btn btn-sm btn-ghost">Sauvegarder brouillon</button>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm">Étape suivante →</button>
+                <button class="btn btn-sm btn-primary">✓ Envoyer pour validation</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SIDE: steps + preview + charter -->
+        <aside style="display: flex; flex-direction: column; gap: 16px; min-width: 0;">
+
+          <div class="card">
+            <div class="card-head">
+              <h2>Étapes</h2>
+            </div>
+            <div class="card-body" style="padding: 4px 18px;">
+              <div class="form-step">
+                <div class="form-step-num done"><svg class="s" width="14" height="14" viewBox="0 0 24 24" stroke-width="3"><path d="m5 12 5 5L20 7"/></svg></div>
+                <div class="form-step-info">
+                  <strong>Informations</strong>
+                  <small>EN COURS</small>
+                </div>
+              </div>
+              <div class="form-step">
+                <div class="form-step-num todo">2</div>
+                <div class="form-step-info">
+                  <strong>Critères &amp; éligibilité</strong>
+                  <small>NIVEAU, ÂGE, DISCIPLINE…</small>
+                </div>
+              </div>
+              <div class="form-step">
+                <div class="form-step-num todo">3</div>
+                <div class="form-step-info">
+                  <strong>Pièces &amp; deadline</strong>
+                  <small>DOSSIER, RDV, CONTACT</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Aperçu -->
+          <div class="card card-dark">
+            <div class="card-head">
+              <h2>Aperçu côté artiste</h2>
+            </div>
+            <div class="card-body">
+              <div class="card" style="background: var(--bg); color: var(--ink);">
+                <div style="padding: 16px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="chip chip-pink">Résidence</span>
+                    <span class="chip chip-warn">J-21</span>
+                  </div>
+                  <h3 style="font-family: var(--display); font-weight: 400; font-size: 20px; text-transform: uppercase; line-height: 1; letter-spacing: -.01em; margin: 14px 0 6px;">Résidence Manufacture — atelier 3 mois</h3>
+                  <small style="font: 600 10.5px var(--mono); color: var(--ink-mute); letter-spacing: .06em; text-transform: uppercase;">MANUFACTURE DES ŒILLETS · IVRY</small>
+                  <div style="font-size: 12.5px; color: var(--ink-mute); margin-top: 10px; line-height: 1.5;">Atelier individuel 90 m², bourse de production et restitution publique.</div>
+                  <div style="display: flex; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--ink); font-family: var(--mono); font-size: 11px;">
+                    <span>IDF</span>
+                    <strong style="font-family: var(--display); font-size: 16px;">4 500 €</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Charte BazaArt -->
+          <div class="card">
+            <div class="card-head">
+              <h2>Charte BazaArt</h2>
+            </div>
+            <div class="card-body">
+              <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; font-size: 12.5px;">
+                <li style="display: flex; gap: 10px; align-items: flex-start;"><span style="color: var(--ok); font-weight: 700;">✓</span>Bonne foi (pas d'appel pyramidal)</li>
+                <li style="display: flex; gap: 10px; align-items: flex-start;"><span style="color: var(--ok); font-weight: 700;">✓</span>Rémunération transparente</li>
+                <li style="display: flex; gap: 10px; align-items: flex-start;"><span style="color: var(--ok); font-weight: 700;">✓</span>Frais d'inscription &le; 30 €</li>
+                <li style="display: flex; gap: 10px; align-items: flex-start;"><span style="color: var(--ok); font-weight: 700;">✓</span>Droits d'auteur respectés</li>
+                <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--ink-mute);"><span style="color: var(--ink-faint);">○</span>Délai de réponse &gt; 14 jours</li>
+              </ul>
+            </div>
+          </div>
+
+        </aside>
+      </div>
+
+      <!-- PUBLICATIONS -->
+      <div class="card">
+        <div class="card-head">
+          <h2>Mes publications</h2>
+          <div style="display: flex; gap: 6px;">
+            <span class="chip chip-dark">Toutes</span>
+            <span class="chip">En ligne</span>
+            <span class="chip">Brouillons</span>
+            <span class="chip">Clôturées</span>
+          </div>
+        </div>
+        <div class="card-body tight">
+
+          <div class="pub-row">
+            <div class="pub-icn rés">RÉS</div>
+            <div>
+              <strong>Résidence Manufacture — atelier 3 mois</strong>
+              <small>4 500 € · IVRY · DEADLINE 12 JUIN</small>
+            </div>
+            <span class="chip chip-ok chip-dot">En ligne</span>
+            <span class="meta">18 cand.</span>
+            <span class="meta">1 240 vues</span>
+            <button class="btn-icon"><svg class="s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+          </div>
+
+          <div class="pub-row">
+            <div class="pub-icn stu">STU</div>
+            <div>
+              <strong>Studio son disponible — 6 mois</strong>
+              <small>2 800 € · IVRY · DEADLINE 25 JUIN</small>
+            </div>
+            <span class="chip chip-yellow chip-dot">À valider</span>
+            <span class="meta">0 cand.</span>
+            <span class="meta">142 vues</span>
+            <button class="btn-icon"><svg class="s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+          </div>
+
+          <div class="pub-row">
+            <div class="pub-icn per">PER</div>
+            <div>
+              <strong>Performance · plateau ouvert</strong>
+              <small>3 ARTISTES · IVRY · DEADLINE 15 JUILLET</small>
+            </div>
+            <span class="chip chip-yellow chip-dot">À valider</span>
+            <span class="meta">0 cand.</span>
+            <span class="meta">— vues</span>
+            <button class="btn-icon"><svg class="s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+          </div>
+
+          <div class="pub-row">
+            <div class="pub-icn pro">PRO</div>
+            <div>
+              <strong>Bourse production vidéo 2025</strong>
+              <small>15 000 € · NATIONAL · CLÔTURÉE</small>
+            </div>
+            <span class="chip">Clôturée</span>
+            <span class="meta">42 cand.</span>
+            <span class="meta">3 280 vues</span>
+            <button class="btn-icon"><svg class="s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+          </div>
+
+          <div class="pub-row">
+            <div class="pub-icn bro">RÉS</div>
+            <div>
+              <strong>Résidence été 2026 — court format</strong>
+              <small>1 500 € · IVRY · BROUILLON</small>
+            </div>
+            <span class="chip chip-yellow chip-dot">Brouillon</span>
+            <span class="meta">— cand.</span>
+            <span class="meta">— vues</span>
+            <button class="btn-icon"><svg class="s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- CANDIDATURES REÇUES -->
+      <div class="card">
+        <div class="card-head">
+          <h2>Candidatures reçues</h2>
+          <div style="display: flex; gap: 8px;">
+            <span class="chip chip-pink">18 nouveaux · RÉSIDENCE MANUFACTURE</span>
+            <button class="btn btn-sm btn-ghost">Toutes (47) →</button>
+          </div>
+        </div>
+        <div class="card-body tight">
+          <div class="cand-grid">
+
+            <div class="cand">
+              <div class="cand-head">
+                <div class="avatar avatar-mag">MO</div>
+                <div class="cand-name">
+                  <strong>Maïa Oliva</strong>
+                  <small>MARSEILLE · VIDÉO</small>
+                </div>
+              </div>
+              <div class="cand-meta">CANDIDATURE COMPLÈTE · 1H</div>
+              <div class="cand-score">
+                <span>Score auto</span>
+                <strong>94%</strong>
+              </div>
+              <div class="cand-actions">
+                <button class="btn btn-sm">Lire</button>
+                <button class="btn btn-sm btn-primary">Présélec.</button>
+              </div>
+            </div>
+
+            <div class="cand">
+              <div class="cand-head">
+                <div class="avatar avatar-yellow">YD</div>
+                <div class="cand-name">
+                  <strong>Yacine Demba</strong>
+                  <small>SAINT-DENIS · THÉÂTRE</small>
+                </div>
+              </div>
+              <div class="cand-meta">CANDIDATURE COMPLÈTE · 3H</div>
+              <div class="cand-score">
+                <span>Score auto</span>
+                <strong>88%</strong>
+              </div>
+              <div class="cand-actions">
+                <button class="btn btn-sm">Lire</button>
+                <button class="btn btn-sm btn-primary">Présélec.</button>
+              </div>
+            </div>
+
+            <div class="cand">
+              <div class="cand-head">
+                <div class="avatar avatar-blue">MV</div>
+                <div class="cand-name">
+                  <strong>Mira Vasseur</strong>
+                  <small>LYON · PHOTOGRAPHIE</small>
+                </div>
+              </div>
+              <div class="cand-meta">PIÈCES MANQUANTES · 5H</div>
+              <div class="cand-score">
+                <span>Score auto</span>
+                <strong>82%</strong>
+              </div>
+              <div class="cand-actions">
+                <button class="btn btn-sm">Lire</button>
+                <button class="btn btn-sm btn-warn">Relancer</button>
+              </div>
+            </div>
+
+            <div class="cand">
+              <div class="cand-head">
+                <div class="avatar avatar-orange">ST</div>
+                <div class="cand-name">
+                  <strong>Sékou Traoré</strong>
+                  <small>BORDEAUX · MUSIQUE</small>
+                </div>
+              </div>
+              <div class="cand-meta">CANDIDATURE COMPLÈTE · HIER</div>
+              <div class="cand-score">
+                <span>Score auto</span>
+                <strong>76%</strong>
+              </div>
+              <div class="cand-actions">
+                <button class="btn btn-sm">Lire</button>
+                <button class="btn btn-sm btn-primary">Présélec.</button>
+              </div>
+            </div>
+
+            <div class="cand">
+              <div class="cand-head">
+                <div class="avatar avatar-lime">JP</div>
+                <div class="cand-name">
+                  <strong>Joana Pires</strong>
+                  <small>NANTES · PERFORMANCE</small>
+                </div>
+              </div>
+              <div class="cand-meta">CANDIDATURE COMPLÈTE · HIER</div>
+              <div class="cand-score">
+                <span>Score auto</span>
+                <strong>71%</strong>
+              </div>
+              <div class="cand-actions">
+                <button class="btn btn-sm">Lire</button>
+                <button class="btn btn-sm btn-primary">Présélec.</button>
+              </div>
+            </div>
+
+            <div class="cand">
+              <div class="cand-head">
+                <div class="avatar">IK</div>
+                <div class="cand-name">
+                  <strong>Inès Khoury</strong>
+                  <small>MARSEILLE · VIDÉO</small>
+                </div>
+              </div>
+              <div class="cand-meta">CANDIDATURE COMPLÈTE · 2J</div>
+              <div class="cand-score">
+                <span>Score auto</span>
+                <strong>68%</strong>
+              </div>
+              <div class="cand-actions">
+                <button class="btn btn-sm">Lire</button>
+                <button class="btn btn-sm btn-danger">Écarter</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div class="page-footer">
+        <a href="Bazaart Prototype (Street).html">← Retour au prototype</a>
+        <div class="links">
+          <a href="Dashboard Artiste (Street).html">Dashboard artiste →</a>
+          <a href="Dashboard Admin (Street).html">Dashboard admin →</a>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+</body>
+</html>

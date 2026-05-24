@@ -14,6 +14,12 @@
  # {% block content %}...{% endblock %}
  #}
 
+{#
+    L'admin utilise sa propre sidebar de navigation (ardoise foncé).
+    La nav Street globale n'est pas pertinente ici → bloc vidé.
+#}
+{% block navbar %}{% endblock %}
+
 {% block stylesheets %}
 <style>
     /* ── Variables couleurs admin ──────────────────────────────────────── */

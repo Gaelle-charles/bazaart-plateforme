@@ -499,12 +499,12 @@
              # Symfony Security intercepte le POST sur la route configurée dans
              # security.yaml (login_path / check_path). Le formulaire doit :
              #   1. Pointer vers path('app_login') (ou l'URL configurée)
-             #   2. Envoyer le champ "email" comme identifiant (configurable via
-             #      username_parameter dans security.yaml — ici on laisse "email"
-             #      et le SecurityController le mappe sur _username).
-             #      ⚠️ IMPORTANT : le name de l'input email DOIT être "_username"
-             #      (convention Symfony) sinon l'authentification échoue.
-             #   3. Le champ password DOIT s'appeler "_password"
+             #   2. Envoyer le champ "email" comme identifiant — configuré via
+             #      username_parameter: email dans security.yaml.
+             #      ⚠️ IMPORTANT : le name de l'input email DOIT être "email"
+             #      (valeur de username_parameter dans security.yaml).
+             #   3. Le champ password DOIT s'appeler "password"
+             #      (valeur de password_parameter dans security.yaml)
              #   4. Le token CSRF DOIT s'appeler "_csrf_token"
              # ═══════════════════════════════════════════════════════════════ #}
             <form method="post" action="{{ path('app_login') }}" novalidate>
@@ -521,9 +521,10 @@
                         class="auth-input"
                         type="email"
                         id="auth-email"
-                        {# ⚠️ name="_username" — nom attendu par Symfony Security.
-                           Ne pas changer, même si le champ s'appelle "email" à l'écran. #}
-                        name="_username"
+                        {# ⚠️ name="email" — doit correspondre EXACTEMENT à username_parameter
+                           dans security.yaml (ligne 45 : username_parameter: email).
+                           Symfony Security lit request->get('email') à chaque soumission. #}
+                        name="email"
                         {# last_username : pré-remplit le champ après une erreur
                            Symfony Security stocke le dernier identifiant saisi
                            en session pour améliorer l'UX. #}
@@ -552,8 +553,9 @@
                         class="auth-input"
                         type="password"
                         id="auth-password"
-                        {# ⚠️ name="_password" — nom attendu par Symfony Security. #}
-                        name="_password"
+                        {# ⚠️ name="password" — doit correspondre à password_parameter
+                           dans security.yaml (ligne 46 : password_parameter: password). #}
+                        name="password"
                         placeholder="••••••••••"
                         autocomplete="current-password"
                         required>

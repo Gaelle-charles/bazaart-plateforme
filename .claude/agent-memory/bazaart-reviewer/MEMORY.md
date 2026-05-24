@@ -16,3 +16,6 @@
 - [Fixtures : validatedAt/validatedBy non-null pour auto-publiées — incohérence](feedback_fixtures_validatedby_structure.md) — ces champs doivent rester null pour les ressources structure/admin
 - [Templates Twig Ressources — patterns et anti-patterns identifiés](feedback_twig_resource_patterns.md) — CSRF absent submit.html.twig, statusFilter non transmis par my(), N+1 disciplines dans favorites, badge--archived sans style, pagination KNP orpheline
 - [Templates Twig Auth + Community — patterns et anti-patterns identifiés](feedback_twig_auth_and_community_patterns.md) — CSRF register ignoré par contrôleur, edit.html.twig sans action= ni CSRF, URL AJAX like en dur dans feed.html.twig
+- [Collision tokens CSS — base.html.twig écrase design-tokens.css](feedback_design_tokens_collision.md) — Bloc :root inline dans base.html.twig redéfinit --color-* qui gagnent sur les nouveaux --bg/--ink/--accent
+- [Duplication CSS composants — pas de fichier components.css global](feedback_css_duplication_components.md) — Chaque template recrée .btn, .chip, .eyebrow localement au lieu de classes globales partagées
+- [Nav Street — audit déplacement vers base.html.twig — mai 2026](feedback_base_app_nav_street.md) — Double layout admin (nav Street + sidebar), skip link cassé login/register/admin, CSS .lp-nav* orphelin dans vitrine
