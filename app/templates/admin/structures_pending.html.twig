@@ -1,12 +1,15 @@
 {% extends 'base_admin.html.twig' %}
 
 {#
- # admin/structures_pending.html.twig — Candidatures Structure en attente
+ # admin/structures_pending.html.twig — Candidatures Structure en attente d'activation
  #
- # Variable disponible :
- #   - pendingApplications : OrganizationProfile[] — candidatures non traitées
- #     (structureApplicationAt IS NOT NULL AND isStructurePartner = false)
- #     triées par date ASC (FIFO — les plus anciennes en premier)
+ # Thème : Street
+ # Layout parent : base_admin.html.twig
+ #
+ # Variables disponibles (AdminController::structuresPending()) :
+ #   - pendingApplications : OrganizationProfile[]
+ #     Critère : structureApplicationAt IS NOT NULL AND isStructurePartner = false
+ #     Triées FIFO par date ASC (les plus anciennes d'abord)
  #
  # Actions disponibles :
  #   - Activer : POST /admin/structures/{id}/activate (CSRF : 'structure_activate_{id}')
@@ -14,304 +17,397 @@
  #}
 
 {% block title %}Candidatures Structure — Admin BazaArt{% endblock %}
-{% block page_title %}Candidatures Structure partenaire{% endblock %}
+{% block page_title %}Structures partenaires{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* Lien retour */
-    .back-link {
+
+    /* ── Zone de contenu fond sable ─────────────────────────────────────────── */
+    .app-content {
+        background: var(--bg);
+        font-family: var(--body);
+    }
+
+    /* ── Retour dashboard ───────────────────────────────────────────────────── */
+    .adm-back {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        font-size: 13px;
-        color: var(--color-text-muted, #8a8f9a);
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
         text-decoration: none;
         margin-bottom: 20px;
+        transition: color var(--transition-fast);
     }
-    .back-link:hover { color: var(--color-text, #1a1a1a); }
+    .adm-back:hover { color: var(--ink); }
 
-    /* Badge compteur */
-    .count-badge {
-        display: inline-flex;
-        align-items: center;
-        height: 24px;
-        padding: 0 12px;
-        background: #fff3cd;
-        color: #856404;
-        border: 1px solid #ffc107;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 700;
-    }
-
-    /* Carte d'une candidature */
-    .app-card {
-        background: #fff;
-        border: 1px solid #e2e4e8;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-        padding: 24px;
-        margin-bottom: 16px;
-    }
-    .app-card__header {
+    /* ── En-tête de section ─────────────────────────────────────────────────── */
+    .adm-section-header {
         display: flex;
+        align-items: center;
         justify-content: space-between;
-        align-items: flex-start;
         flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid #e2e4e8;
+        gap: 12px;
+        margin-bottom: 24px;
     }
-    .app-card__name {
-        font-family: var(--font-heading);
-        font-size: 18px;
-        font-weight: 700;
-        color: #1a1f2e;
+    .adm-section-title {
+        font-family: var(--display);
+        font-size: 24px;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--ink);
     }
-    .app-card__date {
+    /* Badge compteur — orange si en attente */
+    .adm-count-badge {
+        font-family: var(--mono);
         font-size: 11px;
-        color: #8a8f9a;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        padding: 5px 12px;
+        background: var(--accent-2);
+        color: var(--ink);
+        border: 1px solid var(--ink);
+    }
+
+    /* ── Carte de candidature Structure — style Street ───────────────────────── */
+    .adm-struct-card {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        margin-bottom: 20px;
+    }
+
+    /* En-tête de carte : nom organisation + date candidature */
+    .adm-struct-card__head {
+        padding: 14px 18px;
+        background: var(--ink);         /* fond noir — affiche l'importance de la décision */
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .adm-struct-card__name {
+        font-family: var(--display);
+        font-size: 20px;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--bg);              /* texte sable sur fond noir */
+        margin-bottom: 4px;
+    }
+    /* Email du compte lié — chip mono sur fond noir */
+    .adm-struct-card__user {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .06em;
+        color: var(--accent);          /* vert acide */
+        font-weight: 700;
+    }
+    /* Date de candidature à droite */
+    .adm-struct-card__date {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: rgba(242,239,230,.55);  /* sable transparent */
+        letter-spacing: .06em;
         text-align: right;
     }
+    .adm-struct-card__date strong {
+        color: var(--accent-2);         /* orange — alerte temporelle */
+        font-weight: 700;
+        display: block;
+        font-size: 12px;
+        margin-top: 2px;
+    }
 
-    /* Grille d'informations (email, SIRET, localisation...) */
-    .info-grid {
+    /* Corps de la carte */
+    .adm-struct-card__body {
+        padding: 18px;
+    }
+
+    /* Grille d'informations : email, SIRET, localisation, site */
+    .adm-info-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 12px;
+        gap: 14px;
         margin-bottom: 16px;
     }
-    .info-item {
-        font-size: 12px;
-        color: #5c6070;
-    }
-    .info-item__label {
-        font-size: 10px;
+    .adm-info-item__label {
+        font-family: var(--mono);
+        font-size: 9px;
         font-weight: 700;
+        letter-spacing: .1em;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: #8a8f9a;
-        margin-bottom: 2px;
+        color: var(--ink-mute);
+        margin-bottom: 3px;
     }
-    .info-item__value {
-        color: #1a1f2e;
+    .adm-info-item__value {
+        font-size: 13px;
+        color: var(--ink);
         font-weight: 500;
         word-break: break-word;
     }
-    .info-item__value a {
-        color: #c8503a;
+    .adm-info-item__value a {
+        color: var(--accent-2);
         text-decoration: none;
+        font-weight: 700;
     }
-    .info-item__value a:hover { text-decoration: underline; }
+    .adm-info-item__value a:hover { text-decoration: underline; }
+    /* Valeur non renseignée */
+    .adm-info-item__empty {
+        color: var(--ink-mute);
+        font-style: italic;
+        font-size: 12px;
+    }
 
-    /* Description (optionnelle) */
-    .app-description {
+    /* Description de l'organisation (texte long) */
+    .adm-struct-desc {
         font-size: 13px;
         line-height: 1.7;
-        color: #5c6070;
-        margin-bottom: 16px;
-        padding: 12px;
-        background: #f8f9fa;
-        border-radius: 6px;
-        border-left: 3px solid #e2e4e8;
+        color: var(--ink-mute);
+        padding: 12px 14px;
+        background: var(--bg-alt);
+        border-left: 3px solid var(--accent);  /* accent vert — marque éditoriale Street */
+        margin-bottom: 18px;
     }
 
-    /* Boutons d'action */
-    .action-row {
+    /* Barre d'actions : Activer / Rejeter */
+    .adm-struct-card__actions {
         display: flex;
+        align-items: center;
         gap: 10px;
         flex-wrap: wrap;
-        align-items: center;
+        padding-top: 16px;
+        border-top: 1px solid var(--line-soft);
     }
 
-    .btn-activate {
-        height: 36px;
-        padding: 0 20px;
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
-        border-radius: 6px;
-        font-size: 13px;
+    /* Bouton Activer — fond vert acide (vert = action positive) */
+    .adm-btn-activate {
+        height: 38px;
+        padding: 0 24px;
+        background: var(--accent);
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 12px;
         font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
         cursor: pointer;
-        font-family: var(--font-body);
-        transition: background 0.12s;
+        transition: box-shadow var(--transition-fast);
     }
-    .btn-activate:hover { background: #c3e6cb; }
+    .adm-btn-activate:hover { box-shadow: var(--shadow-offset-sm); }
 
-    .btn-reject {
-        height: 36px;
-        padding: 0 20px;
-        background: #f8d7da;
-        color: #721c24;
-        border: 1px solid #f5c6cb;
-        border-radius: 6px;
-        font-size: 13px;
+    /* Bouton Refuser — fond blanc avec bordure ink (action irréversible) */
+    .adm-btn-reject {
+        height: 38px;
+        padding: 0 24px;
+        background: var(--bg);
+        color: var(--danger);
+        border: 2px solid var(--danger);
+        font-family: var(--mono);
+        font-size: 12px;
         font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
         cursor: pointer;
-        font-family: var(--font-body);
-        transition: background 0.12s;
+        transition: box-shadow var(--transition-fast), background var(--transition-fast);
     }
-    .btn-reject:hover { background: #f5c6cb; }
+    .adm-btn-reject:hover {
+        background: var(--danger);
+        color: #fff;
+        box-shadow: 4px 4px 0 var(--danger);
+    }
 
-    /* État vide */
-    .empty-state {
-        background: #fff;
-        border: 1px solid #e2e4e8;
-        border-radius: 8px;
-        padding: 48px;
+    /* Note explicative (texte discret) */
+    .adm-note {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+        margin-left: auto;             /* pousse la note à droite de la barre */
+    }
+
+    /* ── État vide ──────────────────────────────────────────────────────────── */
+    .adm-empty-state {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        padding: 56px 48px;
         text-align: center;
-        color: #8a8f9a;
-        font-size: 14px;
     }
-    .empty-state__icon { font-size: 36px; margin-bottom: 12px; }
-
-    /* Badge utilisateur (email du compte lié) */
-    .user-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
+    .adm-empty-state__icon {
+        font-family: var(--display);
+        font-size: 48px;
+        color: var(--accent);
+        display: block;
+        margin-bottom: 12px;
+    }
+    .adm-empty-state__msg {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+    .adm-empty-state__sub {
+        font-size: 12px;
+        color: var(--ink-mute);
+        margin-top: 10px;
+    }
+    .adm-empty-state__sub code {
+        background: var(--bg-alt);
+        border: 1px solid var(--line-soft);
+        padding: 1px 5px;
+        font-family: var(--mono);
         font-size: 11px;
-        color: #5c6070;
-        background: #f0f2f5;
-        padding: 2px 8px;
-        border-radius: 10px;
     }
+
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# ── En-tête : retour + compteur ─────────────────────────────────────────────── #}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
-    <a href="{{ path('app_admin_dashboard') }}" class="back-link">← Tableau de bord</a>
-    <span class="count-badge">{{ pendingApplications|length }} candidature{{ pendingApplications|length > 1 ? 's' : '' }} en attente</span>
+{# ── Retour + en-tête ─────────────────────────────────────────────────────── #}
+<a href="{{ path('app_admin_dashboard') }}" class="adm-back">← Tableau de bord</a>
+
+<div class="adm-section-header">
+    <h2 class="adm-section-title">Candidatures Structure</h2>
+    <span class="adm-count-badge">
+        {{ pendingApplications|length }} candidature{{ pendingApplications|length > 1 ? 's' : '' }} en attente
+    </span>
 </div>
 
 {% if pendingApplications is empty %}
-    {# ── Aucune candidature en attente ─────────────────────────────────────────── #}
-    <div class="empty-state">
-        <div class="empty-state__icon">✓</div>
-        Aucune candidature en attente.<br>
-        <small>Les nouvelles demandes apparaîtront ici dès qu'une organisation soumettra sa candidature via <code>/structure/register</code>.</small>
+
+    {# ── File vide — aucune candidature en attente ────────────────────────── #}
+    <div class="adm-empty-state">
+        <span class="adm-empty-state__icon">✓</span>
+        <p class="adm-empty-state__msg">Aucune candidature en attente.</p>
+        <p class="adm-empty-state__sub">
+            Les nouvelles demandes apparaîtront ici dès qu'une organisation déposera<br>
+            sa candidature via <code>/structure/register</code>.
+        </p>
     </div>
 
 {% else %}
+
     {#
-      ── Liste des candidatures ──────────────────────────────────────────────────
-      Triées par date ASC (FIFO) : les dossiers les plus anciens sont traités en premier.
-      C'est la responsabilité du repository (findPendingStructureApplications).
+      ── Liste des candidatures (triées FIFO — les plus anciennes en premier) ──
+      L'ordre est garanti par OrganizationProfileRepository::findPendingStructureApplications()
     #}
     {% for orgProfile in pendingApplications %}
-        <div class="app-card">
+        <article class="adm-struct-card">
 
-            {# En-tête : nom + date de candidature #}
-            <div class="app-card__header">
+            {# En-tête sombre : nom organisation + email du compte + date de candidature #}
+            <div class="adm-struct-card__head">
                 <div>
-                    <div class="app-card__name">{{ orgProfile.name }}</div>
-                    {# Lien vers le compte utilisateur associé #}
-                    <span class="user-badge">👤 {{ orgProfile.user.email }}</span>
+                    <div class="adm-struct-card__name">{{ orgProfile.name }}</div>
+                    {# Email du compte utilisateur associé au profil organisation #}
+                    <div class="adm-struct-card__user">{{ orgProfile.user.email }}</div>
                 </div>
-                <div class="app-card__date">
-                    Candidature soumise le<br>
-                    <strong>{{ orgProfile.structureApplicationAt|date('d/m/Y à H:i') }}</strong>
-                </div>
-            </div>
-
-            {# Grille d'informations structurées #}
-            <div class="info-grid">
-                <div class="info-item">
-                    <div class="info-item__label">Email de contact</div>
-                    <div class="info-item__value">
-                        {% if orgProfile.contactEmail %}
-                            <a href="mailto:{{ orgProfile.contactEmail }}">{{ orgProfile.contactEmail }}</a>
-                        {% else %}
-                            <span style="color:#aaa; font-style:italic;">Non renseigné</span>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-item__label">SIRET</div>
-                    <div class="info-item__value">
-                        {% if orgProfile.siret %}
-                            {{ orgProfile.siret }}
-                        {% else %}
-                            <span style="color:#aaa; font-style:italic;">Non renseigné</span>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-item__label">Localisation</div>
-                    <div class="info-item__value">
-                        {{ orgProfile.location ?? '—' }}
-                    </div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-item__label">Site web</div>
-                    <div class="info-item__value">
-                        {% if orgProfile.websiteUrl %}
-                            <a href="{{ orgProfile.websiteUrl }}" target="_blank" rel="noopener">
-                                {{ orgProfile.websiteUrl|slice(0, 40) }}{% if orgProfile.websiteUrl|length > 40 %}…{% endif %}
-                            </a>
-                        {% else %}
-                            <span style="color:#aaa; font-style:italic;">Non renseigné</span>
-                        {% endif %}
-                    </div>
+                <div class="adm-struct-card__date">
+                    Candidature soumise le
+                    <strong>{{ orgProfile.structureApplicationAt|date('d/m/Y') }}</strong>
+                    à {{ orgProfile.structureApplicationAt|date('H:i') }}
                 </div>
             </div>
 
-            {# Description (si renseignée) #}
-            {% if orgProfile.description %}
-                <div class="app-description">
-                    {#
-                      Tronqué à 400 caractères pour l'affichage liste.
-                      La description complète est accessible sur le profil de l'org.
-                    #}
-                    {{ orgProfile.description|slice(0, 400) }}{% if orgProfile.description|length > 400 %}…{% endif %}
+            <div class="adm-struct-card__body">
+
+                {# Grille d'informations : 4 champs clés de l'organisation #}
+                <div class="adm-info-grid">
+
+                    {# Email de contact (peut différer de l'email du compte) #}
+                    <div>
+                        <div class="adm-info-item__label">Email de contact</div>
+                        <div class="adm-info-item__value">
+                            {% if orgProfile.contactEmail %}
+                                {# Lien mailto direct pour faciliter le travail de l'admin #}
+                                <a href="mailto:{{ orgProfile.contactEmail }}">{{ orgProfile.contactEmail }}</a>
+                            {% else %}
+                                <span class="adm-info-item__empty">Non renseigné</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {# Numéro SIRET — identifiant légal de l'organisation #}
+                    <div>
+                        <div class="adm-info-item__label">SIRET</div>
+                        <div class="adm-info-item__value">
+                            {% if orgProfile.siret %}
+                                {# Le SIRET est affiché en mono pour lisibilité des chiffres #}
+                                <span style="font-family:var(--mono); font-size:13px;">{{ orgProfile.siret }}</span>
+                            {% else %}
+                                <span class="adm-info-item__empty">Non renseigné</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {# Localisation géographique #}
+                    <div>
+                        <div class="adm-info-item__label">Localisation</div>
+                        <div class="adm-info-item__value">{{ orgProfile.location ?? '—' }}</div>
+                    </div>
+
+                    {# Site web officiel #}
+                    <div>
+                        <div class="adm-info-item__label">Site web</div>
+                        <div class="adm-info-item__value">
+                            {% if orgProfile.websiteUrl %}
+                                <a href="{{ orgProfile.websiteUrl }}" target="_blank" rel="noopener noreferrer">
+                                    {{ orgProfile.websiteUrl|slice(0, 40) }}{{ orgProfile.websiteUrl|length > 40 ? '…' : '' }}
+                                </a>
+                            {% else %}
+                                <span class="adm-info-item__empty">Non renseigné</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
                 </div>
-            {% endif %}
 
-            {# ── Boutons d'action : Activer / Rejeter ─────────────────────────── #}
-            {#
-              Chaque bouton est dans son propre <form method="POST"> pour deux raisons :
-                1. Les actions modifient des données → POST obligatoire (REST sémantique)
-                2. Chaque formulaire a son propre token CSRF indépendant (plus granulaire)
+                {# Description de l'organisation (si renseignée) #}
+                {% if orgProfile.description %}
+                    <div class="adm-struct-desc">
+                        {# Tronquée à 400 chars pour la vue liste — la description complète est sur le profil #}
+                        {{ orgProfile.description|slice(0, 400) }}{{ orgProfile.description|length > 400 ? '…' : '' }}
+                    </div>
+                {% endif %}
 
-              Les tokens CSRF sont nommés 'structure_activate_{id}' et 'structure_reject_{id}'.
-              Ils doivent correspondre exactement aux chaînes vérifiées dans AdminController.
+                {# ── Boutons d'action : Activer / Refuser ──────────────────────── #}
+                {#
+                  Chaque action est dans son propre formulaire POST indépendant.
+                  Les tokens CSRF sont distincts pour chaque action et chaque organisation :
+                    - 'structure_activate_{id}' pour l'activation
+                    - 'structure_reject_{id}' pour le rejet
+                  Ces noms sont vérifiés côté PHP dans AdminController.
+                #}
+                <div class="adm-struct-card__actions">
 
-              Le onclick="return confirm(...)" ajoute une confirmation JS avant soumission.
-              Simple, efficace, pas de dépendance externe.
-            #}
-            <div class="action-row">
+                    {# Formulaire ACTIVATION — confirmation obligatoire côté JS #}
+                    <form method="POST" action="{{ path('app_admin_structure_activate', {id: orgProfile.id}) }}"
+                          onsubmit="return confirm('Activer le compte Structure pour « {{ orgProfile.name|e('js') }} » ?\nCette organisation pourra publier ses opportunités directement.')">
+                        <input type="hidden" name="_token" value="{{ csrf_token('structure_activate_' ~ orgProfile.id) }}">
+                        <button type="submit" class="adm-btn-activate">✓ Activer</button>
+                    </form>
 
-                {# Formulaire ACTIVATION #}
-                <form method="POST" action="{{ path('app_admin_structure_activate', {id: orgProfile.id}) }}"
-                      onsubmit="return confirm('Activer le compte Structure pour « {{ orgProfile.name|e('js') }} » ? Cette organisation pourra publier ses opportunités directement.')">
-                    <input type="hidden" name="_token" value="{{ csrf_token('structure_activate_' ~ orgProfile.id) }}">
-                    <button type="submit" class="btn-activate">
-                        ✓ Activer
-                    </button>
-                </form>
+                    {# Formulaire REJET — confirmation avec rappel que l'org peut re-candidater #}
+                    <form method="POST" action="{{ path('app_admin_structure_reject', {id: orgProfile.id}) }}"
+                          onsubmit="return confirm('Refuser la candidature de « {{ orgProfile.name|e('js') }} » ?\nL\'organisation pourra re-candidater ultérieurement.')">
+                        <input type="hidden" name="_token" value="{{ csrf_token('structure_reject_' ~ orgProfile.id) }}">
+                        <button type="submit" class="adm-btn-reject">✗ Refuser</button>
+                    </form>
 
-                {# Formulaire REJET #}
-                <form method="POST" action="{{ path('app_admin_structure_reject', {id: orgProfile.id}) }}"
-                      onsubmit="return confirm('Refuser la candidature de « {{ orgProfile.name|e('js') }} » ? L\'organisation pourra re-candidater ultérieurement.')">
-                    <input type="hidden" name="_token" value="{{ csrf_token('structure_reject_' ~ orgProfile.id) }}">
-                    <button type="submit" class="btn-reject">
-                        ✗ Refuser
-                    </button>
-                </form>
+                    {# Note discrète à droite de la barre #}
+                    <span class="adm-note">Le refus est réversible — l'org peut re-candidater</span>
+
+                </div>
 
             </div>
-
-        </div>
+        </article>
     {% endfor %}
+
 {% endif %}
 
 {% endblock %}

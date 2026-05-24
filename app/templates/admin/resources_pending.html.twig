@@ -1,199 +1,401 @@
 {% extends 'base_admin.html.twig' %}
 
+{#
+ # admin/resources_pending.html.twig — File de modération (ressources en attente)
+ #
+ # Thème : Street
+ # Layout parent : base_admin.html.twig
+ #
+ # Variables disponibles (AdminController::resourcesPending()) :
+ #   - resources : Resource[] — ressources au statut PendingValidation uniquement
+ #
+ # Actions disponibles :
+ #   - Publier : POST /admin/resources/{id}/publish (CSRF : 'resource_action_{id}')
+ #   - Rejeter : POST /admin/resources/{id}/reject  (CSRF : 'resource_action_{id}')
+ #}
+
 {% block title %}File de modération — Admin BazaArt{% endblock %}
-{% block page_title %}File de modération{% endblock %}
+{% block page_title %}Modération{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* Lien retour */
-    .back-link {
-        display: inline-flex; align-items: center; gap: 6px;
-        font-size: 13px; color: var(--color-text-muted); text-decoration: none;
+
+    /* ── Zone de contenu fond sable ─────────────────────────────────────────── */
+    .app-content {
+        background: var(--bg);
+        font-family: var(--body);
+    }
+
+    /* ── Retour dashboard ───────────────────────────────────────────────────── */
+    .adm-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
+        text-decoration: none;
+        margin-bottom: 20px;
+        transition: color var(--transition-fast);
+    }
+    .adm-back:hover { color: var(--ink); }
+
+    /* ── En-tête de section avec badge de compteur ──────────────────────────── */
+    .adm-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .adm-section-title {
+        font-family: var(--display);
+        font-size: 24px;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--ink);
+    }
+    /* Badge orange "X en attente" */
+    .adm-pending-badge {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        padding: 5px 12px;
+        background: var(--accent-2);  /* orange tangerine */
+        color: var(--ink);
+        border: 1px solid var(--ink);
+    }
+
+    /* ── Carte de ressource à modérer — style Street ─────────────────────────── */
+    .adm-mod-card {
+        border: 1px solid var(--ink);
+        background: var(--bg);
         margin-bottom: 20px;
     }
-    .back-link:hover { color: var(--color-text); }
-
-    /* Compteur de ressources en attente */
-    .pending-count-badge {
-        display: inline-flex; align-items: center; height: 24px; padding: 0 12px;
-        background: #fff3cd; color: #856404; border-radius: var(--radius-full);
-        font-size: 11px; font-weight: 700; border: 1px solid #ffc107;
+    /* En-tête de carte : méta-info + badge */
+    .adm-mod-card__head {
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--line-soft);
+        background: var(--bg-alt);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    /* Groupe de chips (type + localisation) */
+    .adm-mod-card__chips {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    /* Chip générique — style Street (bords francs, mono) */
+    .adm-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        color: var(--ink);
+    }
+    /* Chip accent : fond vert acide */
+    .adm-chip--accent {
+        background: var(--accent);
+        border-color: var(--accent);
+    }
+    /* Chip warn : fond orange */
+    .adm-chip--warn {
+        background: var(--accent-2);
+        border-color: var(--accent-2);
+    }
+    /* Date de soumission à droite */
+    .adm-mod-card__date {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .06em;
     }
 
-    /* Carte de ressource à modérer */
-    .mod-card {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-        padding: 24px; margin-bottom: 16px;
+    /* Corps de la carte */
+    .adm-mod-card__body {
+        padding: 20px 18px;
+    }
+    /* Titre en Archivo Black */
+    .adm-mod-card__title {
+        font-family: var(--display);
+        font-size: 22px;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--ink);
+        margin-bottom: 12px;
+        line-height: 1;
+    }
+    /* Description tronquée */
+    .adm-mod-card__desc {
+        font-size: 13px;
+        line-height: 1.7;
+        color: var(--ink-mute);
+        margin-bottom: 14px;
     }
 
-    .mod-card__header {
-        display: flex; justify-content: space-between; align-items: flex-start;
-        flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+    /* Disciplines — chips en ligne */
+    .adm-disciplines {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 14px;
     }
 
-    /* Badge type de ressource */
-    .type-badge {
-        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
-        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
-        background: #e8f0fe; color: #1a5fb4;
+    /* Bloc de méta-données (organisation, deadline, URL) */
+    .adm-mod-card__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+        padding: 12px 0;
+        border-top: 1px solid var(--line-soft);
+        border-bottom: 1px solid var(--line-soft);
+        margin-bottom: 18px;
+    }
+    .adm-mod-card__meta strong { color: var(--ink); font-weight: 700; }
+    .adm-mod-card__meta a {
+        color: var(--accent-2);
+        text-decoration: none;
+        font-weight: 700;
+    }
+    .adm-mod-card__meta a:hover { text-decoration: underline; }
+
+    /* Badge org vérifiée / non vérifiée */
+    .adm-org-ok {
+        background: var(--accent);
+        color: var(--ink);
+        padding: 1px 6px;
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+    .adm-org-warn {
+        background: var(--accent-2);
+        color: var(--ink);
+        padding: 1px 6px;
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
     }
 
-    .mod-card__date { font-size: 11px; color: var(--color-text-light); }
-
-    .mod-card__title {
-        font-family: var(--font-heading); font-size: 20px; font-weight: 700;
-        color: var(--color-text); margin-bottom: 10px;
+    /* ── Barre d'actions en bas de carte ─────────────────────────────────────── */
+    .adm-mod-card__actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
     }
 
-    .mod-card__desc {
-        font-size: 13px; line-height: 1.7; color: var(--color-text-muted); margin-bottom: 14px;
+    /* Bouton Valider — fond vert acide, style Street */
+    .adm-btn-publish {
+        height: 38px;
+        padding: 0 22px;
+        background: var(--accent);
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: box-shadow var(--transition-fast);
+    }
+    .adm-btn-publish:hover { box-shadow: var(--shadow-offset-sm); }
+
+    /* Bouton Rejeter — fond danger, bords francs */
+    .adm-btn-reject {
+        height: 38px;
+        padding: 0 22px;
+        background: var(--danger);
+        color: #fff;
+        border: 2px solid var(--danger);
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: box-shadow var(--transition-fast);
+    }
+    .adm-btn-reject:hover { box-shadow: 4px 4px 0 var(--danger); }
+
+    /* ── État vide ──────────────────────────────────────────────────────────── */
+    .adm-empty-state {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        padding: 56px 48px;
+        text-align: center;
+    }
+    .adm-empty-state__icon {
+        font-family: var(--display);
+        font-size: 48px;
+        color: var(--accent);
+        display: block;
+        margin-bottom: 12px;
+    }
+    .adm-empty-state__msg {
+        font-family: var(--mono);
+        font-size: 13px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
     }
 
-    /* Disciplines */
-    .disciplines-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-    .discipline-pill {
-        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
-        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
-        background: var(--color-green-light); color: var(--color-green);
-        border: 1px solid rgba(28, 58, 47, 0.2);
-    }
-
-    /* Infos supplémentaires (org, deadline, etc.) */
-    .mod-card__meta {
-        display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px;
-        color: var(--color-text-muted); padding: 12px 0;
-        border-top: 1px solid var(--color-border);
-        border-bottom: 1px solid var(--color-border);
-        margin-bottom: 16px;
-    }
-    .mod-card__meta a { color: var(--color-red); text-decoration: none; }
-    .mod-card__meta a:hover { text-decoration: underline; }
-
-    /* Badge organisation vérifiée / non vérifiée */
-    .org-badge-ok   { background: #d4edda; color: #155724; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 700; }
-    .org-badge-warn { background: #fff3cd; color: #856404; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 700; }
-
-    /* Boutons d'action modération */
-    .mod-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-
-    .btn-publish {
-        height: 36px; padding: 0 18px; background: #d4edda; color: #155724;
-        border: 1px solid #c3e6cb; border-radius: var(--radius-sm);
-        font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
-    }
-    .btn-publish:hover { background: #c3e6cb; }
-
-    .btn-reject {
-        height: 36px; padding: 0 18px; background: #f8d7da; color: #721c24;
-        border: 1px solid #f5c6cb; border-radius: var(--radius-sm);
-        font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
-    }
-    .btn-reject:hover { background: #f5c6cb; }
-
-    /* État vide */
-    .empty-state {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); padding: 48px; text-align: center;
-        color: var(--color-text-muted); font-size: 14px;
-    }
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# Ligne d'en-tête : retour + compteur #}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
-    <a href="{{ path('app_admin_dashboard') }}" class="back-link">← Tableau de bord</a>
-    <span class="pending-count-badge">{{ resources|length }} en attente</span>
+{# ── Retour + en-tête ─────────────────────────────────────────────────────── #}
+<a href="{{ path('app_admin_dashboard') }}" class="adm-back">← Tableau de bord</a>
+
+<div class="adm-section-header">
+    <h2 class="adm-section-title">File de modération</h2>
+    {# Badge orange qui affiche le nombre de ressources à traiter #}
+    <span class="adm-pending-badge">{{ resources|length }} en attente</span>
 </div>
 
 {% if resources is empty %}
-    {# Aucune ressource à modérer #}
-    <div class="empty-state">
-        ✅ Toutes les soumissions ont été traitées. Rien en attente.
-    </div>
-{% else %}
-    {# Boucle sur chaque ressource en attente #}
-    {% for resource in resources %}
-        <div class="mod-card">
 
-            {# En-tête : type + date de soumission #}
-            <div class="mod-card__header">
-                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                    {# Badge type de ressource #}
-                    <span class="type-badge">
+    {# ── État vide : tout est traité — bonne nouvelle ! ─────────────────────── #}
+    <div class="adm-empty-state">
+        <span class="adm-empty-state__icon">✓</span>
+        <p class="adm-empty-state__msg">File vide — Toutes les soumissions ont été traitées.</p>
+    </div>
+
+{% else %}
+
+    {# ── Boucle sur les ressources en attente ─────────────────────────────── #}
+    {% for resource in resources %}
+        <article class="adm-mod-card">
+
+            {# En-tête de carte : type + localisation + date de soumission #}
+            <div class="adm-mod-card__head">
+                <div class="adm-mod-card__chips">
+                    {# Chip du type de ressource (ex: Bourse, Résidence…) #}
+                    <span class="adm-chip adm-chip--warn">
                         {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
                     </span>
                     {# Localisation si disponible #}
                     {% if resource.location %}
-                        <span style="font-size:12px; color:var(--color-text-light);">📍 {{ resource.location }}</span>
+                        <span class="adm-chip">📍 {{ resource.location }}</span>
                     {% endif %}
+                    {# Badge "EN ATTENTE" pour rappel visuel dans l'en-tête #}
+                    <span class="adm-chip adm-chip--warn">En attente</span>
                 </div>
-                <span class="mod-card__date">
+                {# Date de soumission en mono à droite #}
+                <span class="adm-mod-card__date">
                     Soumis le {{ resource.createdAt|date('d/m/Y à H:i') }}
                 </span>
             </div>
 
-            {# Titre #}
-            <div class="mod-card__title">{{ resource.title }}</div>
+            {# Corps de la carte #}
+            <div class="adm-mod-card__body">
 
-            {# Description tronquée à 300 caractères #}
-            <p class="mod-card__desc">
-                {{ resource.description|slice(0, 300) }}{{ resource.description|length > 300 ? '...' : '' }}
-            </p>
+                {# Titre de la ressource en Archivo Black #}
+                <h3 class="adm-mod-card__title">{{ resource.title }}</h3>
 
-            {# Disciplines concernées #}
-            {% if resource.disciplines|length > 0 %}
-                <div class="disciplines-list">
-                    {% for discipline in resource.disciplines %}
-                        <span class="discipline-pill">
-                            {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                {#
+                  Description tronquée à 300 caractères.
+                  On n'utilise JAMAIS |raw sur des données utilisateur (risque XSS).
+                  slice() est safe car il ne désactive pas l'échappement automatique de Twig.
+                #}
+                <p class="adm-mod-card__desc">
+                    {{ resource.description|slice(0, 300) }}{{ resource.description|length > 300 ? '…' : '' }}
+                </p>
+
+                {# Disciplines artistiques concernées (si renseignées) #}
+                {% if resource.disciplines|length > 0 %}
+                    <div class="adm-disciplines">
+                        {% for discipline in resource.disciplines %}
+                            <span class="adm-chip">
+                                {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                            </span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                {# Méta-données : organisation, soumetteur, deadline, lien officiel #}
+                <div class="adm-mod-card__meta">
+
+                    {% if resource.organization %}
+                        <span>
+                            ORG <strong>{{ resource.organization.name }}</strong>
+                            {% if resource.organization.isVerified %}
+                                <span class="adm-org-ok">✓ Vérifiée</span>
+                            {% else %}
+                                <span class="adm-org-warn">Non vérifiée</span>
+                            {% endif %}
                         </span>
-                    {% endfor %}
-                </div>
-            {% endif %}
-
-            {# Métadonnées : organisation, soumetteur, deadline, lien #}
-            <div class="mod-card__meta">
-                {% if resource.organization %}
-                <span>
-                    🏢 <strong style="color:var(--color-text);">{{ resource.organization.name }}</strong>
-                    {% if resource.organization.isVerified %}
-                        <span class="org-badge-ok">✓ Vérifiée</span>
-                    {% else %}
-                        <span class="org-badge-warn">Non vérifiée</span>
                     {% endif %}
-                </span>
-                {% endif %}
-                <span>👤 {{ resource.submittedBy.email }}</span>
-                {% if resource.deadline %}
-                    <span>📅 Deadline : {{ resource.deadline|date('d/m/Y') }}</span>
-                {% endif %}
-                {% if resource.externalUrl %}
-                    <a href="{{ resource.externalUrl }}" target="_blank" rel="noopener">
-                        🔗 Lien officiel
-                    </a>
-                {% endif %}
+
+                    <span>PAR <strong>{{ resource.submittedBy.email }}</strong></span>
+
+                    {% if resource.deadline %}
+                        <span>DEADLINE <strong>{{ resource.deadline|date('d/m/Y') }}</strong></span>
+                    {% endif %}
+
+                    {% if resource.externalUrl %}
+                        {# rel="noopener" empêche la page cible d'accéder à window.opener (sécurité) #}
+                        <a href="{{ resource.externalUrl }}" target="_blank" rel="noopener noreferrer">
+                            Lien officiel →
+                        </a>
+                    {% endif %}
+
+                </div>
+
+                {# ── Boutons d'action : Valider / Rejeter ─────────────────────── #}
+                {#
+                  Chaque bouton est dans son propre <form method="POST"> indépendant.
+                  Raisons :
+                   1. Les actions modifient des données → POST obligatoire
+                   2. Chaque formulaire a son propre token CSRF par ressource (resource_action_{id})
+                #}
+                <div class="adm-mod-card__actions">
+
+                    {# Formulaire Valider #}
+                    <form method="post" action="{{ path('app_admin_resource_publish', {id: resource.id}) }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                        <button type="submit" class="adm-btn-publish">✓ Valider</button>
+                    </form>
+
+                    {# Formulaire Rejeter — confirmation JS avant envoi #}
+                    <form method="post" action="{{ path('app_admin_resource_reject', {id: resource.id}) }}"
+                          onsubmit="return confirm('Rejeter « {{ resource.title|e('js') }} » ? Cette action peut être annulée via le bouton Reset dans la liste complète.')">
+                        <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                        <button type="submit" class="adm-btn-reject">✗ Rejeter</button>
+                    </form>
+
+                </div>
+
             </div>
-
-            {# Boutons de modération : Publier / Rejeter #}
-            <div class="mod-actions">
-                <form method="post" action="{{ path('app_admin_resource_publish', {id: resource.id}) }}">
-                    <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
-                    <button type="submit" class="btn-publish">✓ Publier</button>
-                </form>
-
-                <form method="post" action="{{ path('app_admin_resource_reject', {id: resource.id}) }}"
-                      onsubmit="return confirm('Rejeter cette ressource ?')">
-                    <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
-                    <button type="submit" class="btn-reject">✗ Rejeter</button>
-                </form>
-            </div>
-
-        </div>
+        </article>
     {% endfor %}
+
 {% endif %}
 
 {% endblock %}

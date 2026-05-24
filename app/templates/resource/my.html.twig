@@ -1,118 +1,603 @@
 {% extends 'base_app.html.twig' %}
 
-{% block title %}Mes soumissions — BazaArt{% endblock %}
+{#
+ # resource/my.html.twig — Mes ressources soumises
+ #
+ # Thème : Street (app connectée)
+ # Layout : liste verticale compacte avec filtre par statut
+ # Référence : section "Candidatures" du dashboard artiste (screens-dash.jsx, ArtistPrivate)
+ #
+ # Variables Twig disponibles :
+ #   resources      — collection de Resource soumises par l'utilisateur connecté
+ #   statusFilter   — string|null (statut actif pour le filtre : 'pending', 'published', 'rejected', ou null = tous)
+ #}
+
+{% block title %}Mes soumissions — Bazaart{% endblock %}
 {% block page_title %}Mes soumissions{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    .page-toolbar { display:flex; justify-content:flex-end; margin-bottom:20px; }
+    /* ═══════════════════════════════════════════════════════════════════════
+       MES SOUMISSIONS — styles thème Street
+       Liste compacte d'opportunités soumises, avec filtres pills par statut.
+    ═══════════════════════════════════════════════════════════════════════ */
 
-    .submissions-list { display:flex; flex-direction:column; gap:12px; }
+    /* ── Barre d'en-tête (titre + bouton CTA) ──────────────────────────── */
 
+    /* Ligne flex : info à gauche, bouton soumettre à droite */
+    .myresources-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--space-md);
+        flex-wrap: wrap;
+        margin-bottom: var(--space-xl);
+        padding-bottom: var(--space-lg);
+        border-bottom: 1px solid var(--ink);
+    }
+
+    /* Eyebrow au-dessus du titre */
+    .myresources-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-sm);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: var(--space-xs);
+    }
+    .myresources-eyebrow::before {
+        content: '';
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background: var(--accent);
+    }
+
+    /* Titre section */
+    .myresources-title {
+        font-family: var(--display);
+        font-size: clamp(28px, 4vw, 48px);
+        text-transform: uppercase;
+        line-height: .92;
+        color: var(--ink);
+        margin: 0;
+    }
+
+    /* Bouton "Soumettre une nouvelle ressource" en haut à droite */
+    .btn-new-resource {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--btn-padding);
+        background: var(--accent);
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: var(--btn-radius);
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .btn-new-resource:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    /* ── Filtres statut (pills horizontaux) ────────────────────────────── */
+
+    /* Rangée de boutons-filtres = tabs façon jobboard */
+    .status-filters {
+        display: flex;
+        gap: 0;
+        border: 1px solid var(--ink);
+        margin-bottom: var(--space-xl);
+        flex-wrap: wrap;
+    }
+
+    /* Chaque pill = lien GET avec paramètre status dans l'URL */
+    .status-filter-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-xs);
+        padding: var(--btn-padding-sm);
+        background: transparent;
+        color: var(--ink);
+        border: none;
+        border-right: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background var(--transition-fast), color var(--transition-fast);
+        white-space: nowrap;
+    }
+    .status-filter-btn:last-child { border-right: none; }
+
+    /* État actif : fond encre, texte accent = onglet sélectionné */
+    .status-filter-btn--active {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    .status-filter-btn:not(.status-filter-btn--active):hover {
+        background: var(--bg-alt);
+    }
+
+    /* ── Liste de soumissions ──────────────────────────────────────────── */
+
+    /* Tableau bordé : toutes les cartes se touchent, séparées par 1px */
+    .submissions-list {
+        border: 1px solid var(--ink);
+    }
+
+    /* ── Ligne d'en-tête du tableau (style jobboard du prototype) ── */
+    .submissions-header-row {
+        display: grid;
+        grid-template-columns: 1fr 130px 140px 120px;
+        background: var(--ink);
+        color: var(--accent);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+    }
+
+    /* Cachée sur mobile (pas assez de place pour le tableau complet) */
+    @media (max-width: 639px) {
+        .submissions-header-row { display: none; }
+    }
+
+    .submissions-header-row .col {
+        padding: var(--space-sm) var(--space-md);
+        border-right: 1px solid rgba(198, 242, 78, .2);
+    }
+    .submissions-header-row .col:last-child { border-right: none; }
+
+    /* ── Ligne de soumission ── */
+
+    /* La carte est un div flex-colonne sur mobile, grille 4 colonnes sur desktop */
     .submission-card {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card); padding: 16px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-sm);
+        padding: var(--space-md) var(--space-lg);
+        border-top: 1px solid var(--line-soft);
+        background: var(--bg);
+        transition: background var(--transition-fast);
+        position: relative;
+    }
+    .submission-card:first-of-type { border-top: none; }
+    .submission-card:hover { background: var(--bg-alt); }
+
+    /* Grille 4 colonnes sur desktop */
+    @media (min-width: 640px) {
+        .submission-card {
+            display: grid;
+            grid-template-columns: 1fr 130px 140px 120px;
+            align-items: center;
+            gap: 0;
+            padding: 0;
+            flex-direction: unset;
+        }
+
+        .submission-card .card-col {
+            padding: var(--space-md) var(--space-md);
+            border-right: 1px solid var(--line-soft);
+            align-self: stretch;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .submission-card .card-col:last-child { border-right: none; }
     }
 
-    .submission-card__header {
-        display:flex; justify-content:space-between; align-items:flex-start;
-        flex-wrap:wrap; gap:8px; margin-bottom:8px;
+    /* ── Éléments dans chaque colonne ── */
+
+    /* Titre de la ressource : lien si publiée, texte simple sinon */
+    .submission-title-link {
+        font-family: var(--body);
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--ink);
+        text-decoration: none;
+        display: block;
+        transition: color var(--transition-fast);
+    }
+    .submission-title-link:hover { color: var(--accent-2); }
+
+    .submission-title-plain {
+        font-family: var(--body);
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--ink);
     }
 
-    .type-badge {
-        display:inline-flex; align-items:center; height:20px; padding:0 8px;
-        border-radius: var(--radius-full); font-size:10px; font-weight:600;
-        background: var(--color-red-light); color: var(--color-red);
+    /* Type badge compact sous le titre */
+    .submission-type {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
+        margin-top: 3px;
+        text-transform: uppercase;
     }
+
+    /* Badges de statut — les couleurs signalent l'état de manière universelle */
 
     .status-badge {
-        display:inline-flex; align-items:center; height:20px; padding:0 8px;
-        border-radius: var(--radius-full); font-size:10px; font-weight:700;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--chip-padding);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        border-radius: var(--chip-radius);
+        white-space: nowrap;
     }
-    .status-pending   { background:#fff3cd; color:#856404; }
-    .status-published { background:#d4edda; color:#155724; }
-    .status-rejected  { background:#f8d7da; color:#721c24; }
 
-    .submission-title {
-        font-size:14px; font-weight:600; color:var(--color-text); text-decoration:none;
+    /* Publié : fond accent vert lime = statut positif fort */
+    .status-badge--published {
+        background: var(--accent);
+        color: var(--ink);
     }
-    .submission-title:hover { color:var(--color-red); }
 
-    .submission-meta { font-size:11px; color:var(--color-text-light); margin-top:4px; }
+    /* En attente : fond orange = en cours / action requise */
+    .status-badge--pending {
+        background: var(--accent-2);
+        color: var(--ink);
+    }
 
+    /* Rejeté : fond quasi-blanc + couleur danger rouge = attention */
+    .status-badge--rejected {
+        background: rgba(229, 72, 77, .12);
+        color: var(--danger);
+        border: 1px solid var(--danger);
+    }
+
+    /* Brouillon : gris neutre */
+    .status-badge--draft {
+        background: var(--bg-alt);
+        color: var(--ink-mute);
+        border: 1px solid var(--line-soft);
+    }
+
+    /* Ressource archivée : grisée, visiblement inactive */
+    .status-badge--archived {
+        background: var(--bg);
+        color: var(--ink);
+        border: 1px solid var(--line, #ccc);
+        opacity: 0.6;
+    }
+
+    /* Date de soumission */
+    .submission-date {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+
+    /* Actions : lien "Voir" ou "Modifier" */
+    .submission-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .btn-action-sm {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 10px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        text-decoration: none;
+        border: 1px solid var(--line-soft);
+        background: transparent;
+        color: var(--ink-mute);
+        cursor: pointer;
+        border-radius: var(--btn-radius);
+        transition: all var(--transition-fast);
+    }
+    .btn-action-sm:hover {
+        border-color: var(--ink);
+        color: var(--ink);
+    }
+
+    /* Notice inline (en attente ou rejetée) — sur mobile sous la carte */
     .submission-notice {
-        margin-top:10px; padding:8px 12px; border-radius:var(--radius-sm); font-size:12px;
+        padding: var(--space-sm) var(--space-md);
+        font-family: var(--body);
+        font-size: 12px;
+        line-height: 1.5;
+        border-top: 1px solid var(--line-soft);
     }
-    .notice-pending  { background:#fff3cd; color:#856404; }
-    .notice-rejected { background:#f8d7da; color:#721c24; }
+    .submission-notice--pending {
+        background: rgba(255, 107, 44, .06);
+        color: var(--ink-mute);
+    }
+    .submission-notice--rejected {
+        background: rgba(229, 72, 77, .06);
+        color: var(--danger);
+    }
+
+    /* ── État vide ─────────────────────────────────────────────────────── */
 
     .empty-state {
-        background:var(--color-white); border:1px solid var(--color-border);
-        border-radius:var(--radius-md); padding:48px; text-align:center; color:var(--color-text-muted);
+        border: 1px solid var(--ink);
+        padding: var(--space-3xl) var(--space-2xl);
+        text-align: center;
+        background: var(--bg);
+    }
+
+    .empty-state__icon {
+        font-family: var(--display);
+        font-size: 72px;
+        color: var(--ink-mute);
+        opacity: .2;
+        line-height: 1;
+        margin-bottom: var(--space-md);
+    }
+
+    .empty-state__title {
+        font-family: var(--display);
+        font-size: 22px;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin-bottom: var(--space-sm);
+    }
+
+    .empty-state__text {
+        font-family: var(--body);
+        font-size: 14px;
+        color: var(--ink-mute);
+        line-height: 1.6;
+        margin-bottom: var(--space-lg);
+    }
+
+    .empty-state__cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--btn-padding);
+        background: var(--accent);
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .empty-state__cta:hover {
+        background: var(--ink);
+        color: var(--accent);
     }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<div class="page-toolbar">
-    <a href="{{ path('app_resource_submit') }}" class="btn btn-primary">+ Soumettre une ressource</a>
+{# ── En-tête de page ──────────────────────────────────────────────────────── #}
+<div class="myresources-header">
+    <div>
+        <div class="myresources-eyebrow">Mon espace</div>
+        <h1 class="myresources-title">Mes soumissions</h1>
+    </div>
+    {# CTA "Soumettre une nouvelle ressource" — accessible depuis toute la page #}
+    <a href="{{ path('app_resource_submit') }}"
+       class="btn-new-resource"
+       title="Proposer une nouvelle ressource">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+        </svg>
+        Nouvelle soumission
+    </a>
 </div>
 
+{# ── Filtres par statut ───────────────────────────────────────────────────── #}
+{#
+   Filtres = liens GET avec paramètre ?status= dans l'URL.
+   Le statut actif est mis en surbrillance (fond encre).
+   "Toutes" = sans paramètre status (ou status vide).
+   Les libellés correspondent aux valeurs de l'enum ResourceStatus côté back.
+#}
+<nav class="status-filters" aria-label="Filtrer par statut">
+    {# Filtre "Toutes" : pas de paramètre status dans l'URL #}
+    <a href="{{ path('app_resource_my') }}"
+       class="status-filter-btn {{ statusFilter is null or statusFilter == '' ? 'status-filter-btn--active' : '' }}"
+       aria-current="{{ statusFilter is null or statusFilter == '' ? 'page' : 'false' }}">
+        Toutes
+    </a>
+    {# Filtre "Publiées" #}
+    <a href="{{ path('app_resource_my', {status: 'published'}) }}"
+       class="status-filter-btn {{ statusFilter == 'published' ? 'status-filter-btn--active' : '' }}"
+       aria-current="{{ statusFilter == 'published' ? 'page' : 'false' }}">
+        Publiées
+    </a>
+    {# Filtre "En attente" #}
+    <a href="{{ path('app_resource_my', {status: 'pending'}) }}"
+       class="status-filter-btn {{ statusFilter == 'pending' ? 'status-filter-btn--active' : '' }}"
+       aria-current="{{ statusFilter == 'pending' ? 'page' : 'false' }}">
+        En attente
+    </a>
+    {# Filtre "Rejetées" #}
+    <a href="{{ path('app_resource_my', {status: 'rejected'}) }}"
+       class="status-filter-btn {{ statusFilter == 'rejected' ? 'status-filter-btn--active' : '' }}"
+       aria-current="{{ statusFilter == 'rejected' ? 'page' : 'false' }}">
+        Rejetées
+    </a>
+</nav>
+
+{# ── Liste des soumissions ────────────────────────────────────────────────── #}
 {% if resources is empty %}
+
+    {# ── État vide ── #}
     <div class="empty-state">
-        <p>Vous n'avez pas encore soumis de ressource.</p>
-        <a href="{{ path('app_resource_submit') }}"
-           style="display:inline-block;margin-top:10px;color:var(--color-red);font-weight:600;text-decoration:none;">
-            Soumettre ma première ressource →
+        <div class="empty-state__icon">◳</div>
+        <div class="empty-state__title">Aucune soumission</div>
+        <p class="empty-state__text">
+            {% if statusFilter %}
+                Aucune ressource avec ce statut pour l'instant.<br>
+                Essaie un autre filtre ou consulte toutes tes soumissions.
+            {% else %}
+                Tu n'as pas encore soumis de ressource.<br>
+                Partage une opportunité avec la communauté Bazaart.
+            {% endif %}
+        </p>
+        <a href="{{ statusFilter ? path('app_resource_my') : path('app_resource_submit') }}"
+           class="empty-state__cta">
+            {% if statusFilter %}
+                Voir toutes mes soumissions
+            {% else %}
+                Soumettre ma première ressource
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M5 12h14M13 5l7 7-7 7"/>
+                </svg>
+            {% endif %}
         </a>
     </div>
-{% else %}
-    <div class="submissions-list">
-        {% for resource in resources %}
-            <div class="submission-card">
 
-                <div class="submission-card__header">
-                    <span class="type-badge">
+{% else %}
+
+    {# ── Tableau des soumissions ── #}
+    <div class="submissions-list" role="list">
+
+        {# En-tête du tableau — visible sur desktop uniquement #}
+        <div class="submissions-header-row" aria-hidden="true">
+            <div class="col">Ressource</div>
+            <div class="col">Statut</div>
+            <div class="col">Date</div>
+            <div class="col">Actions</div>
+        </div>
+
+        {# ── Boucle sur les soumissions ── #}
+        {% for resource in resources %}
+            <div class="submission-card" role="listitem">
+
+                {# ── Colonne 1 : Titre + type ── #}
+                <div class="card-col">
+                    {# Si publiée, le titre est cliquable (lien vers le détail) #}
+                    {# La méthode isPublished() est définie sur l'entité Resource #}
+                    {% if resource.isPublished() %}
+                        <a href="{{ path('app_resource_show', {id: resource.id}) }}"
+                           class="submission-title-link">
+                            {{ resource.title }}
+                        </a>
+                    {% else %}
+                        <span class="submission-title-plain">{{ resource.title }}</span>
+                    {% endif %}
+
+                    {# Type de ressource en petit sous le titre #}
+                    <span class="submission-type">
                         {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
                     </span>
-                    {# `resource.status` est un enum ResourceStatus depuis la migration enums.
-                       Pour générer le nom de classe CSS, on accède à `.value` (la valeur backed string).
-                       Pour les conditions, on utilise les helpers de l'entité. #}
-                    <span class="status-badge status-{{ resource.status.value }}">
-                        {% if resource.isPending %}En attente
-                        {% elseif resource.isPublished %}Publiée
-                        {% else %}Rejetée{% endif %}
+                </div>
+
+                {# ── Colonne 2 : Badge de statut ── #}
+                {#
+                   resource.status est un enum ResourceStatus (PHP 8.1 backed enum).
+                   .value retourne la chaîne ('pending', 'published', 'rejected', 'draft', etc.)
+                   On l'utilise pour construire la classe CSS et conditionner le texte.
+                #}
+                <div class="card-col">
+                    <span class="status-badge status-badge--{{ resource.status.value }}">
+                        {# Petite puce de statut avant le texte #}
+                        <svg width="6" height="6" viewBox="0 0 6 6" fill="currentColor" aria-hidden="true">
+                            <circle cx="3" cy="3" r="3"/>
+                        </svg>
+                        {% if resource.isPending() %}
+                            En attente
+                        {% elseif resource.isPublished() %}
+                            Publiée
+                        {% elseif resource.isRejected() %}
+                            Rejetée
+                        {% else %}
+                            {{ resource.status.value|capitalize }}
+                        {% endif %}
                     </span>
                 </div>
 
-                {% if resource.isPublished() %}
-                    <a href="{{ path('app_resource_show', {id: resource.id}) }}" class="submission-title">
-                        {{ resource.title }}
-                    </a>
-                {% else %}
-                    <span class="submission-title" style="cursor:default;">{{ resource.title }}</span>
-                {% endif %}
-
-                <div class="submission-meta">
-                    Soumise le {{ resource.createdAt|date('d/m/Y') }}
-                    {% if resource.deadline %} — Deadline : {{ resource.deadline|date('d/m/Y') }}{% endif %}
+                {# ── Colonne 3 : Date de soumission ── #}
+                <div class="card-col">
+                    <span class="submission-date">
+                        {# Soumise le : date de création #}
+                        <span style="display:block;">
+                            {{ resource.createdAt|date('d/m/Y') }}
+                        </span>
+                        {# Deadline si renseignée #}
+                        {% if resource.deadline %}
+                            <span style="display:block; margin-top:2px; color:var(--ink-mute);">
+                                DL : {{ resource.deadline|date('d/m/Y') }}
+                            </span>
+                        {% endif %}
+                    </span>
                 </div>
 
-                {% if resource.isPending %}
-                    <div class="submission-notice notice-pending">
-                        Notre équipe va examiner votre soumission. Vous serez notifié une fois la décision prise.
+                {# ── Colonne 4 : Actions ── #}
+                <div class="card-col">
+                    <div class="submission-actions">
+                        {# Lien "Voir" : visible si la ressource est publiée #}
+                        {% if resource.isPublished() %}
+                            <a href="{{ path('app_resource_show', {id: resource.id}) }}"
+                               class="btn-action-sm">
+                                Voir
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                     stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                                    <path d="M5 12h14M13 5l7 7-7 7"/>
+                                </svg>
+                            </a>
+                        {% endif %}
                     </div>
-                {% elseif resource.isRejected %}
-                    <div class="submission-notice notice-rejected">
-                        Cette ressource a été rejetée. Contactez-nous si vous souhaitez la modifier et la resoumettre.
-                    </div>
-                {% endif %}
+                </div>
 
             </div>
+
+            {# ── Notices informatives (sous la ligne) ── #}
+            {# Ces notices sont des messages contextuels pour aider l'utilisateur
+               à comprendre le statut de sa soumission. #}
+            {% if resource.isPending() %}
+                <div class="submission-notice submission-notice--pending" role="status">
+                    <strong>En cours d'examen.</strong>
+                    Notre équipe va examiner ta soumission. Tu seras notifié·e dès la décision prise.
+                </div>
+            {% elseif resource.isRejected() %}
+                <div class="submission-notice submission-notice--rejected" role="alert">
+                    <strong>Soumission rejetée.</strong>
+                    Contacte-nous si tu souhaites modifier et resoumettre cette ressource.
+                </div>
+            {% endif %}
+
         {% endfor %}
+
     </div>
+
 {% endif %}
 
 {% endblock %}

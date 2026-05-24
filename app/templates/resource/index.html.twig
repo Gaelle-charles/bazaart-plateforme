@@ -1,223 +1,757 @@
 {% extends 'base_app.html.twig' %}
 
-{% block title %}Ressources — BazaArt{% endblock %}
+{#
+ # resource/index.html.twig — Catalogue des ressources / opportunités
+ #
+ # Thème : Street (app connectée)
+ # Polices : Archivo Black (--display) pour les titres, Space Grotesk (--body) pour le reste
+ # Palette : fond var(--bg) sable, accent var(--accent) lime, contours var(--ink) quasi-noir
+ # Design : bords francs (radius 0), grille editoriale, barre de filtres façon tableau de bord
+ #
+ # Variables Twig disponibles :
+ #   resources       — tableau/collection de Resource (paginées ou non)
+ #   types           — tableau de ResourceType pour le select
+ #   disciplines     — tableau de Discipline pour le select
+ #   currentSearch   — string (filtre texte actif)
+ #   currentTypeId   — int|null (filtre type actif)
+ #   currentDisciplineId — int|null (filtre discipline actif)
+ #}
+
+{% block title %}Ressources — Bazaart{% endblock %}
 {% block page_title %}Ressources{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    .page-toolbar {
-        display: flex;
-        justify-content: flex-end;
-        margin-bottom: 20px;
+    /* ═══════════════════════════════════════════════════════════════════════
+       CATALOGUE RESSOURCES — styles thème Street
+       Toutes les valeurs passent par des variables CSS du design-tokens.css.
+       Aucune couleur ou police en dur : on utilise var(--...) pour que
+       le design system puisse évoluer sans toucher aux templates.
+    ═══════════════════════════════════════════════════════════════════════ */
+
+    /* ── En-tête de section ────────────────────────────────────────────── */
+
+    /* Bande supérieure : titre géant + compteur de résultats + bouton CTA */
+    .opp-header {
+        padding: var(--space-xl) 0 var(--space-lg);
+        border-bottom: 1px solid var(--ink);
+        margin-bottom: 0;
     }
 
-    /* ── Barre de filtres ── */
+    /* Ligne flex : titre à gauche, bouton soumettre à droite */
+    .opp-header__row {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: var(--space-lg);
+        flex-wrap: wrap;
+    }
+
+    /* Sur-titre mono (style "eyebrow" du prototype) :
+       point carré accent + texte uppercase → identité graphique forte */
+    .opp-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-sm);
+        font-family: var(--mono);
+        font-size: var(--eyebrow-font-size);
+        font-weight: var(--eyebrow-font-weight);
+        letter-spacing: var(--eyebrow-letter-spacing);
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: var(--space-sm);
+    }
+
+    /* Le petit carré vert = signal graphique "c'est actif / c'est ici" */
+    .opp-eyebrow::before {
+        content: '';
+        display: inline-block;
+        width: var(--eyebrow-dot-size);
+        height: var(--eyebrow-dot-size);
+        background: var(--accent);
+        flex-shrink: 0;
+    }
+
+    /* Titre principal : très grand, uppercase, Archivo Black
+       clamp() = fluid typography : 40px min, 9vw idéal, 80px max */
+    .opp-title {
+        font-family: var(--display);
+        font-size: clamp(40px, 7vw, 80px);
+        line-height: 0.92;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin: 0;
+    }
+
+    /* ── Barre de filtres ──────────────────────────────────────────────── */
+
+    /* Fond légèrement plus foncé que la page = zone fonctionnelle distincte */
     .filter-bar {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        padding: 16px 20px;
+        background: var(--bg-alt);
+        border-bottom: 1px solid var(--ink);
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
-        align-items: flex-end;
-        margin-bottom: 20px;
+        align-items: stretch;
+        gap: 0;
+        margin-bottom: var(--space-xl);
     }
 
-    .filter-group { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
-    .filter-label { font-size: 10px; font-weight: 600; color: var(--color-text-light); text-transform: uppercase; letter-spacing: 0.05em; }
+    /* Chaque groupe filtre = colonne verticale label + champ */
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        padding: var(--space-sm) var(--space-md);
+        border-right: 1px solid var(--ink);
+        flex: 1;
+        min-width: 160px;
+    }
 
-    .filter-input, .filter-select {
-        height: 36px;
-        padding: 0 10px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        font-family: var(--font-body);
+    /* Champ de recherche pleine largeur */
+    .filter-group--search {
+        flex: 2;
+        min-width: 220px;
+    }
+
+    /* Label au-dessus des champs : mono très petit, uppercase = ton éditorial */
+    .filter-label {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    /* Inputs et selects : bords francs, transparent sur fond bg-alt */
+    .filter-input,
+    .filter-select {
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid transparent;
+        padding: var(--space-xs) 0;
+        font-family: var(--body);
         font-size: 13px;
-        background: var(--color-input-bg);
-        color: var(--color-text);
+        font-weight: 500;
+        color: var(--ink);
         outline: none;
+        width: 100%;
+        transition: border-color var(--transition-fast);
+        cursor: text;
     }
-    .filter-input:focus, .filter-select:focus { border-color: var(--color-green); }
+    .filter-select { cursor: pointer; }
+    .filter-input:focus,
+    .filter-select:focus {
+        border-bottom-color: var(--accent);
+    }
 
-    .filter-actions { display: flex; gap: 8px; align-items: flex-end; }
+    /* Zone boutons filtrer / réinitialiser */
+    .filter-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+        padding: var(--space-sm) var(--space-md);
+    }
 
+    /* Bouton "Filtrer" : style primaire Street = fond ink, texte accent au hover */
     .btn-filter {
-        height: 36px; padding: 0 16px;
-        background: var(--color-green); color: white;
-        border: none; border-radius: var(--radius-sm);
-        font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font-body);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--btn-padding-sm);
+        background: var(--ink);
+        color: var(--bg);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        cursor: pointer;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+        white-space: nowrap;
     }
-    .btn-filter:hover { opacity: 0.88; }
-
-    .btn-reset {
-        display: inline-flex; align-items: center; height: 36px; padding: 0 14px;
-        border: 1px solid var(--color-border); border-radius: var(--radius-sm);
-        font-size: 13px; color: var(--color-text-muted); text-decoration: none; background: var(--color-white);
+    .btn-filter:hover {
+        background: var(--accent);
+        color: var(--ink);
+        border-color: var(--ink);
     }
-    .btn-reset:hover { border-color: var(--color-text); color: var(--color-text); }
 
-    .results-count { font-size: 12px; color: var(--color-text-light); margin-bottom: 12px; }
+    /* Bouton "Réinitialiser" : style ghost transparent */
+    .btn-reset-filter {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--btn-padding-sm);
+        background: transparent;
+        color: var(--ink-mute);
+        border: 1px solid var(--line-soft);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        text-decoration: none;
+        cursor: pointer;
+        border-radius: var(--btn-radius);
+        transition: color var(--transition-fast), border-color var(--transition-fast);
+        white-space: nowrap;
+    }
+    .btn-reset-filter:hover {
+        color: var(--ink);
+        border-color: var(--ink);
+    }
 
-    /* ── Carte ressource ── */
-    .resource-list { display: flex; flex-direction: column; gap: 12px; }
+    /* ── Compteur de résultats ─────────────────────────────────────────── */
+    .results-count {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .08em;
+        color: var(--ink-mute);
+        text-transform: uppercase;
+        margin-bottom: var(--space-md);
+    }
 
+    /* ── Bouton soumettre (coin haut droit de l'en-tête) ──────────────── */
+
+    /* Style primaire accent lime */
+    .btn-submit-resource {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--btn-padding);
+        background: var(--accent);
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        white-space: nowrap;
+        flex-shrink: 0;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .btn-submit-resource:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    /* ── Grille de cartes ──────────────────────────────────────────────── */
+
+    /* Grille 3 colonnes desktop, 2 tablet, 1 mobile
+       Les cartes se touchent (gap:0) avec bordures partagées = style éditorial */
+    .resource-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0;
+        border: 1px solid var(--ink);
+    }
+
+    @media (min-width: 640px) {
+        .resource-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (min-width: 1024px) {
+        .resource-grid { grid-template-columns: 1fr 1fr 1fr; }
+    }
+
+    /* ── Carte ressource ───────────────────────────────────────────────── */
+
+    /* Chaque carte est un lien complet (clic sur toute la surface).
+       Bords francs, pas d'ombre, bordure partagée avec les voisines. */
     .resource-card {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 16px 20px;
-        display: flex; flex-direction: column; gap: 8px;
-        transition: border-color 0.15s;
-    }
-    .resource-card:hover { border-color: var(--color-green); }
-
-    .resource-card__header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
-
-    .resource-type-badge {
-        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
-        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
-        background: var(--color-red-light); color: var(--color-red);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-md);
+        padding: var(--space-xl) var(--space-lg);
+        background: var(--bg);
+        border-right: 1px solid var(--ink);
+        border-bottom: 1px solid var(--ink);
+        position: relative;
+        text-decoration: none;
+        color: inherit;
+        transition: background var(--transition-fast);
+        min-height: 260px;
     }
 
-    .deadline-badge { font-size: 11px; color: var(--color-text-light); }
-    .deadline-badge--urgent { color: #856404; background: #fff3cd; padding: 2px 8px; border-radius: var(--radius-full); }
+    /* Survol : fond lime = signal interactif fort (style affiche) */
+    .resource-card:hover {
+        background: var(--accent);
+    }
 
-    .resource-card__org { font-size: 12px; color: var(--color-text-light); }
+    /* ── Ligne du haut : badge type + déadline ── */
+    .resource-card__top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: var(--space-sm);
+        flex-wrap: wrap;
+    }
 
+    /* Badge type = chip style Street : fond accent, bords francs, mono uppercase */
+    .resource-badge-type {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--chip-padding);
+        background: var(--ink);
+        color: var(--bg);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+        border-radius: var(--chip-radius);
+        flex-shrink: 0;
+    }
+
+    /* Sur fond vert au hover, le badge type s'inverse */
+    .resource-card:hover .resource-badge-type {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    /* Badge deadline urgent (< 14 jours) : accent secondaire orange */
+    .resource-badge-deadline {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--ink-mute);
+        white-space: nowrap;
+    }
+
+    /* Moins de 14 jours : passage à l'orange pour signaler l'urgence */
+    .resource-badge-deadline--urgent {
+        color: var(--accent-2);
+        font-weight: 700;
+    }
+
+    /* ── Titre de la carte ── */
     .resource-card__title {
-        font-size: 15px; font-weight: 600; color: var(--color-text); text-decoration: none;
-    }
-    .resource-card__title:hover { color: var(--color-red); }
-
-    .resource-card__desc { font-size: 13px; color: var(--color-text-muted); line-height: 1.5; }
-
-    .resource-card__footer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-
-    .discipline-badge {
-        display: inline-flex; align-items: center; height: 20px; padding: 0 8px;
-        border-radius: var(--radius-full); font-size: 10px;
-        background: var(--color-green-light); color: var(--color-green);
+        font-family: var(--display);
+        font-size: 20px;
+        line-height: 1.05;
+        color: var(--ink);
+        text-decoration: none;
+        /* Limiter à 3 lignes avec ellipse — évite les cartes inégales */
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
 
-    .location-text { font-size: 12px; color: var(--color-text-light); margin-left: auto; }
+    /* ── Méta (organisation) ── */
+    .resource-card__meta {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
 
+    /* ── Description courte ── */
+    .resource-card__desc {
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink-mute);
+        line-height: 1.5;
+        /* 2 lignes max */
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        flex: 1;
+    }
+
+    /* ── Pied de carte : disciplines + flèche ── */
+    .resource-card__footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--space-sm);
+        padding-top: var(--space-sm);
+        border-top: 1px solid var(--line-soft);
+        margin-top: auto;
+    }
+
+    /* Disciplines en petit chip gris */
+    .resource-disc-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 7px;
+        background: var(--bg-alt);
+        border: 1px solid var(--line-soft);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .04em;
+        color: var(--ink-mute);
+        border-radius: var(--chip-radius);
+    }
+
+    /* Zone disciplines flex wrap */
+    .resource-disc-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    /* Flèche "Voir" = indicateur interactif */
+    .resource-card__arrow {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        color: var(--ink);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    /* ── État vide ─────────────────────────────────────────────────────── */
+
+    /* L'état vide emprunte le style d'encadré éditoriale du prototype :
+       fond bg, bordure ink, centré, avec CTA accent */
     .empty-state {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); padding: 48px; text-align: center; color: var(--color-text-muted);
+        border: 1px solid var(--ink);
+        padding: var(--space-3xl) var(--space-2xl);
+        text-align: center;
+        background: var(--bg);
+    }
+
+    /* Grand numéro décoratif style "§00" du prototype */
+    .empty-state__icon {
+        font-family: var(--display);
+        font-size: 80px;
+        color: var(--ink-mute);
+        opacity: .2;
+        line-height: 1;
+        margin-bottom: var(--space-md);
+    }
+
+    .empty-state__title {
+        font-family: var(--display);
+        font-size: 24px;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin-bottom: var(--space-sm);
+    }
+
+    .empty-state__text {
+        font-family: var(--body);
+        font-size: 14px;
+        color: var(--ink-mute);
+        line-height: 1.6;
+        margin-bottom: var(--space-lg);
+    }
+
+    /* Lien CTA dans l'état vide : bouton accent plein */
+    .empty-state__cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--btn-padding);
+        background: var(--accent);
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .empty-state__cta:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    /* ── Pagination ────────────────────────────────────────────────────── */
+
+    /* On surcharge le style par défaut de KnpPaginatorBundle pour le thème Street */
+    .pagination-wrap {
+        margin-top: var(--space-xl);
+        display: flex;
+        justify-content: center;
+    }
+
+    .pagination-wrap .pagination {
+        display: inline-flex;
+        border: 1px solid var(--ink);
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        gap: 0;
+    }
+
+    .pagination-wrap .page-item .page-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 40px;
+        height: 40px;
+        padding: 0 var(--space-sm);
+        border-right: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--ink);
+        text-decoration: none;
+        background: transparent;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+
+    .pagination-wrap .page-item:last-child .page-link {
+        border-right: none;
+    }
+
+    .pagination-wrap .page-item.active .page-link {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    .pagination-wrap .page-item .page-link:hover {
+        background: var(--accent);
+        color: var(--ink);
+    }
+
+    .pagination-wrap .page-item.disabled .page-link {
+        opacity: .35;
+        pointer-events: none;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<div class="page-toolbar">
-    <a href="{{ path('app_resource_submit') }}" class="btn btn-primary">+ Soumettre une ressource</a>
+{# ── En-tête de page ──────────────────────────────────────────────────────── #}
+{#
+   L'en-tête reprend le style "section header" du prototype screens-opps.jsx :
+   sur-titre eyebrow (point carré + compteur), titre géant, CTA soumettre à droite.
+#}
+<div class="opp-header">
+    <div class="opp-header__row">
+        <div>
+            <div class="opp-eyebrow">
+                Opportunités
+                {# Nombre de résultats affiché dans l'eyebrow quand la liste n'est pas vide #}
+                {% if resources is not empty %}
+                    · {{ resources|length }} active{{ resources|length > 1 ? 's' : '' }}
+                {% endif %}
+            </div>
+            <h1 class="opp-title">Ce qui est<br>ouvert.</h1>
+        </div>
+
+        {# Bouton soumettre : visible à droite du titre #}
+        <a href="{{ path('app_resource_submit') }}"
+           class="btn-submit-resource"
+           title="Proposer une ressource à la communauté">
+            {# Signe plus dessiné manuellement en SVG pour cohérence avec les icônes du prototype #}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14"/>
+            </svg>
+            Soumettre une ressource
+        </a>
+    </div>
 </div>
 
-{# ── Filtres ── #}
-<form method="get" class="filter-bar">
-    <div class="filter-group">
-        <label class="filter-label">Recherche</label>
-        <input class="filter-input" type="text" name="q" value="{{ currentSearch }}" placeholder="Titre, mot-clé...">
+{# ── Barre de filtres ─────────────────────────────────────────────────────── #}
+{#
+   Formulaire GET (pas POST) car les filtres doivent être dans l'URL
+   pour permettre le partage de lien et la navigation avec le bouton retour.
+   Pas de token CSRF nécessaire ici (lecture seule).
+#}
+<form method="get" action="{{ path('app_resource_index') }}" class="filter-bar" role="search">
+
+    {# Champ recherche textuelle — flex 2x pour prendre plus de place #}
+    <div class="filter-group filter-group--search">
+        <label class="filter-label" for="q">Recherche</label>
+        <input class="filter-input"
+               type="text"
+               id="q"
+               name="q"
+               value="{{ currentSearch }}"
+               placeholder="Titre, mot-clé, organisateur…"
+               autocomplete="off">
     </div>
+
+    {# Select type de ressource #}
     <div class="filter-group">
-        <label class="filter-label">Type</label>
-        <select class="filter-select" name="type">
+        <label class="filter-label" for="type">Type</label>
+        <select class="filter-select" id="type" name="type">
             <option value="">Tous les types</option>
             {% for type in types %}
-                <option value="{{ type.id }}" {{ currentTypeId == type.id ? 'selected' : '' }}>
+                <option value="{{ type.id }}"
+                        {{ currentTypeId == type.id ? 'selected' : '' }}>
                     {{ type.icon ? type.icon ~ ' ' : '' }}{{ type.name }}
                 </option>
             {% endfor %}
         </select>
     </div>
+
+    {# Select discipline artistique #}
     <div class="filter-group">
-        <label class="filter-label">Discipline</label>
-        <select class="filter-select" name="discipline">
+        <label class="filter-label" for="discipline">Discipline</label>
+        <select class="filter-select" id="discipline" name="discipline">
             <option value="">Toutes les disciplines</option>
             {% for discipline in disciplines %}
-                <option value="{{ discipline.id }}" {{ currentDisciplineId == discipline.id ? 'selected' : '' }}>
+                <option value="{{ discipline.id }}"
+                        {{ currentDisciplineId == discipline.id ? 'selected' : '' }}>
                     {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
                 </option>
             {% endfor %}
         </select>
     </div>
+
+    {# Boutons action : filtrer + réinitialiser si filtres actifs #}
     <div class="filter-actions">
-        <button type="submit" class="btn-filter">Filtrer</button>
+        <button type="submit" class="btn-filter">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M3 5h18M6 12h12M10 19h4"/>
+            </svg>
+            Filtrer
+        </button>
+        {# Lien réinitialiser : visible uniquement quand au moins un filtre est actif #}
         {% if currentSearch or currentTypeId or currentDisciplineId %}
-            <a href="{{ path('app_resource_index') }}" class="btn-reset">Réinitialiser</a>
+            <a href="{{ path('app_resource_index') }}"
+               class="btn-reset-filter"
+               title="Effacer tous les filtres">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18"/>
+                </svg>
+                Effacer
+            </a>
         {% endif %}
     </div>
+
 </form>
 
-{# ── Résultats ── #}
+{# ── Résultats ────────────────────────────────────────────────────────────── #}
 {% if resources is empty %}
+
+    {# ── État vide ── #}
+    {# Deux cas : filtre sans résultat, ou catalogue vide #}
     <div class="empty-state">
+        {# Numéro décoratif style éditorial = esthétique caractéristique du thème Street #}
+        <div class="empty-state__icon">00</div>
+
         {% if currentSearch or currentTypeId or currentDisciplineId %}
-            <p>Aucune ressource ne correspond à vos critères.</p>
-            <a href="{{ path('app_resource_index') }}" style="color:var(--color-red);font-weight:600;text-decoration:none;">
+            <div class="empty-state__title">Aucun résultat</div>
+            <p class="empty-state__text">
+                Aucune ressource ne correspond à vos critères de recherche.<br>
+                Essayez avec des mots-clés différents ou élargissez les filtres.
+            </p>
+            <a href="{{ path('app_resource_index') }}" class="empty-state__cta">
                 Voir toutes les ressources
             </a>
         {% else %}
-            <p>Aucune ressource publiée pour l'instant.</p>
-            <p style="font-size:13px;margin-top:6px;">Soyez le premier à
-                <a href="{{ path('app_resource_submit') }}" style="color:var(--color-red);font-weight:600;text-decoration:none;">soumettre une ressource</a> !
+            <div class="empty-state__title">Pas encore de ressources</div>
+            <p class="empty-state__text">
+                Le catalogue est vide pour l'instant.<br>
+                Soyez le premier à partager une opportunité avec la communauté.
             </p>
+            <a href="{{ path('app_resource_submit') }}" class="empty-state__cta">
+                Soumettre une ressource
+            </a>
         {% endif %}
     </div>
+
 {% else %}
+
+    {# Compteur de résultats sous les filtres (mono uppercase = logique éditorial) #}
     <p class="results-count">
-        {{ resources|length }} ressource{{ resources|length > 1 ? 's' : '' }} trouvée{{ resources|length > 1 ? 's' : '' }}
+        → {{ resources|length }} résultat{{ resources|length > 1 ? 's' : '' }}
+        {# Indication des filtres actifs dans le compteur #}
+        {% if currentSearch %} · "{{ currentSearch }}"{% endif %}
     </p>
 
-    <div class="resource-list">
+    {# ── Grille de cartes ── #}
+    <div class="resource-grid">
         {% for resource in resources %}
-            <div class="resource-card">
+            <a href="{{ path('app_resource_show', {id: resource.id}) }}"
+               class="resource-card"
+               aria-label="Voir {{ resource.title }}">
 
-                <div class="resource-card__header">
-                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                        <span class="resource-type-badge">
-                            {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
-                        </span>
-                        {% if resource.deadline %}
-                            {% set daysLeft = (resource.deadline.timestamp - "now"|date('U')) // 86400 %}
-                            {% if daysLeft >= 0 %}
-                                <span class="deadline-badge {{ daysLeft < 14 ? 'deadline-badge--urgent' : '' }}">
-                                    📅 {{ daysLeft == 0 ? "Aujourd'hui !" : daysLeft ~ 'j restants' }}
-                                </span>
-                            {% endif %}
+                {# ── Ligne badge type + deadline ── #}
+                <div class="resource-card__top">
+
+                    {# Badge type : fond encre foncé, texte crème = chip "dark" du design system #}
+                    <span class="resource-badge-type">
+                        {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
+                    </span>
+
+                    {# Deadline : affiché en compact si disponible #}
+                    {% if resource.deadline %}
+                        {% set daysLeft = (resource.deadline.timestamp - "now"|date('U')) // 86400 %}
+                        {% if daysLeft >= 0 %}
+                            <span class="resource-badge-deadline {{ daysLeft < 14 ? 'resource-badge-deadline--urgent' : '' }}">
+                                {# Icône sablier SVG — plus propre qu'un emoji #}
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                     stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                                    <path d="M5 3h14M5 21h14M7 3v4l5 5-5 5v4M17 3v4l-5 5 5 5v4"/>
+                                </svg>
+                                {% if daysLeft == 0 %}
+                                    Aujourd'hui !
+                                {% elseif daysLeft == 1 %}
+                                    J-1
+                                {% else %}
+                                    J-{{ daysLeft }}
+                                {% endif %}
+                            </span>
                         {% endif %}
-                    </div>
-                    {% if resource.organization %}
-                    <span class="resource-card__org">par <strong>{{ resource.organization.name }}</strong></span>
                     {% endif %}
                 </div>
 
-                <a href="{{ path('app_resource_show', {id: resource.id}) }}" class="resource-card__title">
-                    {{ resource.title }}
-                </a>
+                {# Organisation soumettrice (si disponible) #}
+                {% if resource.organization %}
+                    <div class="resource-card__meta">
+                        {{ resource.organization.name }}
+                    </div>
+                {% endif %}
 
+                {# Titre de la ressource : display, 3 lignes max #}
+                <h2 class="resource-card__title">{{ resource.title }}</h2>
+
+                {# Description tronquée à 150 caractères environ (clip CSS) #}
                 <p class="resource-card__desc">
-                    {{ resource.description|slice(0, 160) }}{{ resource.description|length > 160 ? '...' : '' }}
+                    {{ resource.description|slice(0, 160) }}{{ resource.description|length > 160 ? '…' : '' }}
                 </p>
 
+                {# Pied de carte : disciplines + flèche Voir #}
                 <div class="resource-card__footer">
-                    {% for discipline in resource.disciplines %}
-                        <span class="discipline-badge">
-                            {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
-                        </span>
-                    {% endfor %}
-                    {% if resource.location %}
-                        <span class="location-text">📍 {{ resource.location }}</span>
-                    {% endif %}
+                    <div class="resource-disc-list">
+                        {% for discipline in resource.disciplines|slice(0, 2) %}
+                            <span class="resource-disc-chip">
+                                {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                            </span>
+                        {% endfor %}
+                        {# Si plus de 2 disciplines : indicateur "+N" #}
+                        {% if resource.disciplines|length > 2 %}
+                            <span class="resource-disc-chip">+{{ resource.disciplines|length - 2 }}</span>
+                        {% endif %}
+                    </div>
+                    {# Flèche indicateur de navigation #}
+                    <span class="resource-card__arrow" aria-hidden="true">Voir →</span>
                 </div>
 
-            </div>
+            </a>
         {% endfor %}
     </div>
+
+    {# TODO : Pagination à implémenter après installation de knp-components/knp-paginator-bundle #}
+
 {% endif %}
 
 {% endblock %}

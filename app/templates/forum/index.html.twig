@@ -5,232 +5,509 @@
 
 {% block stylesheets %}
 {{ parent() }}
+{#
+    Styles spécifiques à la page index du forum.
+    Convention de nommage : préfixe ".fi-" (forum-index) pour éviter
+    toute collision avec les classes d'autres pages du module forum.
+
+    Thème Street :
+    - Fond : var(--bg) = #F2EFE6
+    - Encre : var(--ink) = #0D0D0D
+    - Accent : var(--accent) = #C6F24E (lime)
+    - Accent 2 : var(--accent-2) = #FF6B2C (orange)
+    - Police titres : var(--display) = "Archivo Black"
+    - Police corps : var(--body) = "Space Grotesk"
+    - Police méta : var(--mono) = "JetBrains Mono"
+    - Border-radius : 0 partout (style affiche / street art)
+    - Cartes : border 1px solid var(--ink), pas d'ombre
+#}
 <style>
-    /* ── Page header ── */
-    .forum-header {
-        margin-bottom: 28px;
-    }
-    .forum-header__title {
-        font-family: var(--font-heading);
-        font-size: 24px;
-        font-weight: 700;
-        color: var(--color-text);
-        margin-bottom: 6px;
-    }
-    .forum-header__subtitle {
-        font-size: 14px;
-        color: var(--color-text-light);
-    }
 
-    /* ── Grille des catégories ── */
-    .categories-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-        gap: 16px;
-    }
+    /* ══════════════════════════════════════════════════════════════
+       EN-TÊTE DE PAGE
+       Reproduit la section header de screens-forum.jsx :
+       grand titre display + sous-titre mono + CTA à droite.
+    ══════════════════════════════════════════════════════════════ */
 
-    /* ── Carte de catégorie ── */
-    .category-card {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        overflow: hidden;
-        text-decoration: none;
-        color: var(--color-text);
+    .fi-header {
+        /* Séparateur bas épais — marque la limite entre header et contenu */
+        border-bottom: 1px solid var(--ink);
+        padding: 32px 0 20px;
+        margin-bottom: 0;
+
         display: flex;
-        flex-direction: column;
-        transition: box-shadow 0.18s, transform 0.12s;
-    }
-    .category-card:hover {
-        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-        transform: translateY(-1px);
-    }
-
-    /* Bande colorée en haut de la carte (couleur personnalisée par catégorie) */
-    .category-card__stripe {
-        height: 4px;
-        background: var(--category-color, #C8503A);
-    }
-
-    .category-card__body {
-        padding: 18px 20px;
-        flex: 1;
-    }
-
-    .category-card__header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 8px;
-    }
-
-    .category-card__icon {
-        font-size: 22px;
-        flex-shrink: 0;
-    }
-
-    .category-card__name {
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--color-text);
-    }
-
-    .category-card__description {
-        font-size: 13px;
-        color: var(--color-text-light);
-        line-height: 1.5;
-        margin-bottom: 14px;
-    }
-
-    /* ── Aperçu des derniers threads ── */
-    .category-card__threads {
-        border-top: 1px solid var(--color-border);
-        padding-top: 12px;
-        margin-top: auto;
-    }
-
-    .category-card__thread-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 4px 0;
-        font-size: 12px;
-        color: var(--color-text-light);
-    }
-    .category-card__thread-title {
-        color: var(--color-text);
-        font-weight: 500;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        flex: 1;
-    }
-    .category-card__thread-author {
-        flex-shrink: 0;
-    }
-
-    /* Pied de carte avec stats */
-    .category-card__footer {
-        padding: 10px 20px;
-        background: var(--color-bg, #f8f9fa);
-        border-top: 1px solid var(--color-border);
-        display: flex;
-        align-items: center;
+        align-items: flex-end;
         justify-content: space-between;
-        font-size: 12px;
-        color: var(--color-text-light);
+        gap: 24px;
     }
 
-    .category-card__stat {
+    /* Eyebrow : texte mono uppercase avec point carré accent */
+    .fi-eyebrow {
+        font-family: var(--mono);
+        font-size: var(--eyebrow-font-size);
+        font-weight: var(--eyebrow-font-weight);
+        letter-spacing: var(--eyebrow-letter-spacing);
+        text-transform: uppercase;
+        color: var(--ink-mute);
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: var(--eyebrow-gap);
+        margin-bottom: 10px;
+    }
+    /* Point carré caractéristique du thème Street */
+    .fi-eyebrow::before {
+        content: '';
+        display: inline-block;
+        width: var(--eyebrow-dot-size);
+        height: var(--eyebrow-dot-size);
+        background: var(--accent);
+        flex-shrink: 0;
     }
 
-    /* Bouton "Nouveau thread" flottant */
-    .forum-new-btn {
+    /* Titre display géant — "Archivo Black" en grandes capitales */
+    .fi-title {
+        font-family: var(--display);
+        font-size: clamp(48px, 8vw, 96px);
+        line-height: 0.9;
+        margin: 0;
+        text-transform: uppercase;
+        color: var(--ink);
+    }
+
+    /* Sous-titre mono — discret sous le grand titre */
+    .fi-subtitle {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .08em;
+        margin-top: 10px;
+    }
+
+    /* Bouton "Nouveau sujet +" — fond accent lime, bords francs, uppercase */
+    .fi-btn-new {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 8px 16px;
-        background: var(--color-red, #C8503A);
-        color: white;
-        border-radius: var(--radius-sm);
-        font-size: 13px;
-        font-weight: 600;
+        padding: var(--btn-padding);
+        background: var(--btn-primary-bg);
+        color: var(--btn-primary-color);
+        border: none;
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
         text-decoration: none;
-        transition: background 0.15s;
+        cursor: pointer;
+        /* border-radius: 0 — explicite pour Street */
+        border-radius: var(--btn-radius);
+        transition:
+            background var(--transition-fast),
+            color var(--transition-fast),
+            box-shadow var(--transition-fast);
+        white-space: nowrap;
+        flex-shrink: 0;
     }
-    .forum-new-btn:hover {
-        background: #a84232;
+    .fi-btn-new:hover {
+        background: var(--btn-primary-hover-bg);
+        color: var(--btn-primary-hover-color);
+        /* Ombre décalée "affiche" au survol — signature Street */
+        box-shadow: var(--shadow-offset-sm);
     }
 
-    /* Message "forum vide" */
-    .forum-empty {
-        grid-column: 1 / -1;
+    /* ══════════════════════════════════════════════════════════════
+       BARRE STATS HORIZONTALE
+       Fond noir (--ink) sur toute la largeur, texte crème,
+       stats en mono. Inspiré de la tab-bar du prototype.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fi-stats-bar {
+        background: var(--ink);
+        color: var(--bg);
+        display: flex;
+        align-items: center;
+        gap: 0;
+        /* Pas de padding horizontal — les cellules ont leurs propres paddings */
+        margin-bottom: 0;
+        /* Bordure basse pour séparer de la liste de catégories */
+        border-bottom: 1px solid var(--ink);
+    }
+
+    /* Chaque cellule de stat — séparée par border-right */
+    .fi-stats-bar__item {
+        padding: 12px 24px;
+        border-right: 1px solid rgba(242, 239, 230, .2);
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .fi-stats-bar__item:last-child {
+        border-right: none;
+    }
+    /* Valeur numérique en gros — Archivo Black */
+    .fi-stats-bar__value {
+        font-family: var(--display);
+        font-size: 22px;
+        color: var(--accent);
+        line-height: 1;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       GRILLE DE CATÉGORIES
+       Cartes empilées verticalement, séparées par border-bottom 1px.
+       Style "liste de journal" / affiche.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fi-categories {
+        /* Pas de gap — les bordures font le travail */
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--ink);
+    }
+
+    /* Chaque carte occupe toute la largeur, divisée en 2 colonnes */
+    .fi-cat-card {
+        display: grid;
+        /* 40% info catégorie | 60% threads récents */
+        grid-template-columns: 2fr 3fr;
+        border-bottom: 1px solid var(--ink);
+        text-decoration: none;
+        color: var(--ink);
+        background: var(--bg);
+        transition: background var(--transition-fast);
+    }
+    .fi-cat-card:last-child {
+        border-bottom: none;
+    }
+    .fi-cat-card:hover {
+        /* Léger assombrissement au survol — discret sur fond crème */
+        background: var(--bg-alt);
+    }
+    /* Focus clavier accessible */
+    .fi-cat-card:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+    }
+
+    /* ── Colonne gauche : info de la catégorie ──────────────────── */
+
+    .fi-cat-card__info {
+        padding: 28px 24px;
+        /* Séparateur vertical entre les deux colonnes */
+        border-right: 1px solid var(--ink);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    /* Carré accent (lime) contenant l'icône de la catégorie */
+    .fi-cat-card__icon-wrap {
+        width: 48px;
+        height: 48px;
+        background: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        flex-shrink: 0;
+        /* Pas de border-radius — carré franc */
+    }
+
+    /* Nom de la catégorie en Archivo Black grand */
+    .fi-cat-card__name {
+        font-family: var(--display);
+        font-size: 28px;
+        line-height: 1;
+        text-transform: uppercase;
+        margin: 0;
+    }
+
+    .fi-cat-card__description {
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink-mute);
+        line-height: 1.5;
+        margin: 0;
+    }
+
+    /* Compteur de threads en mono — en bas de la colonne gauche */
+    .fi-cat-card__count {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-top: auto;
+        padding-top: 8px;
+    }
+    /* La valeur numérique ressort en couleur accent */
+    .fi-cat-card__count strong {
+        color: var(--ink);
+        font-weight: 700;
+    }
+
+    /* ── Colonne droite : threads récents ───────────────────────── */
+
+    .fi-cat-card__threads {
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* En-tête de la colonne droite — fond alt, label mono */
+    .fi-cat-card__threads-label {
+        padding: 10px 20px;
+        background: var(--bg-alt);
+        border-bottom: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .12em;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    /* Chaque ligne de thread dans la colonne droite */
+    .fi-thread-preview {
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--line-soft);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .fi-thread-preview:last-child {
+        border-bottom: none;
+    }
+
+    .fi-thread-preview__title {
+        font-family: var(--body);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink);
+        /* Tronque le titre sur une ligne */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .fi-thread-preview__meta {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+
+    /* Message "Soyez le premier" quand il n'y a pas encore de threads */
+    .fi-cat-card__empty {
+        padding: 32px 20px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        /* Centré verticalement dans la colonne */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ÉTAT VIDE
+       Message centré quand il n'y a aucune catégorie.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fi-empty {
+        padding: 80px 24px;
         text-align: center;
-        padding: 60px 20px;
-        color: var(--color-text-light);
+        border: 1px dashed var(--ink);
+    }
+    .fi-empty__text {
+        font-family: var(--display);
+        font-size: 28px;
+        text-transform: uppercase;
+        margin: 0 0 8px;
+    }
+    .fi-empty__sub {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       RESPONSIVE
+       Sur mobile (<640px) : passage en colonne unique.
+    ══════════════════════════════════════════════════════════════ */
+
+    @media (max-width: 640px) {
+        .fi-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        .fi-title {
+            font-size: clamp(40px, 14vw, 64px);
+        }
+        /* Les cartes passent en colonne unique */
+        .fi-cat-card {
+            grid-template-columns: 1fr;
+        }
+        /* Supprime le séparateur vertical qui n'a plus de sens */
+        .fi-cat-card__info {
+            border-right: none;
+            border-bottom: 1px solid var(--ink);
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-{# ── En-tête de page ────────────────────────────────────────────────────────── #}
-<div class="forum-header">
-    <h2 class="forum-header__title">Forum de la communauté</h2>
-    <p class="forum-header__subtitle">
-        Échangez, collaborez et partagez avec les artistes de la diaspora afro-atlantique.
-    </p>
+
+{# ── EN-TÊTE DE PAGE ──────────────────────────────────────────────────────────
+   Structure inspirée du ScreenForum du prototype :
+   grand titre display à gauche, bouton CTA à droite.
+   Le bouton "Nouveau sujet" n'est visible que si l'utilisateur est connecté.
+#}
+<div class="fi-header">
+    <div>
+        {# Eyebrow : contexte en mono, point carré accent #}
+        <div class="fi-eyebrow">Forum · communauté · échanges · entraide</div>
+
+        {# Titre principal en Archivo Black — style "affiche" #}
+        <h1 class="fi-title">On se parle.</h1>
+    </div>
+
+    {# Pas de bouton "Nouveau sujet" ici : la route app_forum_new_thread
+       exige un {categorySlug}. L'utilisateur choisit d'abord une catégorie,
+       puis le bouton apparaît dans forum/category.html.twig. #}
 </div>
 
-{# ── Grille des catégories ───────────────────────────────────────────────────── #}
-{% if categories is empty %}
-    <div class="forum-empty">
-        <p style="font-size: 40px; margin-bottom: 12px;">💬</p>
-        <p>Le forum n'a pas encore de catégorie. Revenez bientôt !</p>
+{# ── BARRE STATS ──────────────────────────────────────────────────────────────
+   Fond noir, valeurs en vert acide, labels en mono uppercase.
+   Donne un aperçu rapide de l'activité du forum.
+#}
+<div class="fi-stats-bar" role="region" aria-label="Statistiques du forum">
+    <div class="fi-stats-bar__item">
+        <span class="fi-stats-bar__value">{{ categories|length }}</span>
+        <span>Catégorie{{ categories|length > 1 ? 's' : '' }}</span>
     </div>
+    {# Total de threads calculé depuis latestThreadsByCategory si disponible #}
+    <div class="fi-stats-bar__item">
+        <span class="fi-stats-bar__value">
+            {{- categories|reduce((carry, cat) => carry + cat.threadsCount, 0) -}}
+        </span>
+        <span>Sujets</span>
+    </div>
+</div>
+
+{# ── LISTE DES CATÉGORIES ─────────────────────────────────────────────────────
+   Deux états : liste non vide (grille de cartes) ou message "forum vide".
+#}
+{% if categories is empty %}
+
+    {# État vide — aucune catégorie configurée par l'admin #}
+    <div class="fi-empty" role="status">
+        <p class="fi-empty__text">Bientôt ouvert</p>
+        <p class="fi-empty__sub">Les catégories du forum seront disponibles prochainement.</p>
+    </div>
+
 {% else %}
-    <div class="categories-grid">
+
+    <div class="fi-categories" role="list">
+
         {% for category in categories %}
-            {# Chaque carte est un lien vers la liste des threads de la catégorie #}
+
+            {#
+                Chaque carte est un <a> qui pointe vers la page de la catégorie.
+                ATTENTION : on ne peut pas imbriquer un <a> dans cet <a>.
+                Les liens vers des threads individuels dans la colonne droite
+                sont donc remplacés par du texte simple (pas de lien).
+                Cela est acceptable car cliquer n'importe où sur la carte
+                navigue vers la catégorie.
+            #}
             <a href="{{ path('app_forum_category', { categorySlug: category.slug }) }}"
-               class="category-card"
-               style="--category-color: {{ category.color ?? '#C8503A' }}">
+               class="fi-cat-card"
+               role="listitem"
+               aria-label="{{ category.name }} — {{ category.threadsCount }} sujet{{ category.threadsCount > 1 ? 's' : '' }}">
 
-                {# Bande colorée en haut — couleur personnalisée par catégorie #}
-                <div class="category-card__stripe"></div>
+                {# ── Colonne gauche : infos de la catégorie ── #}
+                <div class="fi-cat-card__info">
 
-                <div class="category-card__body">
-                    {# Header : icône + nom #}
-                    <div class="category-card__header">
-                        {% if category.icon %}
-                            <span class="category-card__icon">{{ category.icon }}</span>
-                        {% endif %}
-                        <span class="category-card__name">{{ category.name }}</span>
-                    </div>
-
-                    {# Description courte #}
-                    {% if category.description %}
-                        <p class="category-card__description">{{ category.description }}</p>
-                    {% endif %}
-
-                    {# Aperçu des derniers threads — latestThreadsByCategory[id] est
-                       peuplé par le controller avec les 3 derniers threads de chaque catégorie #}
-                    {% set latestThreads = latestThreadsByCategory[category.id] ?? [] %}
-                    {% if latestThreads is not empty %}
-                        <div class="category-card__threads">
-                            {% for thread in latestThreads %}
-                                <div class="category-card__thread-item">
-                                    {# Indicateur d'épinglage #}
-                                    {% if thread.pinned %}
-                                        <span title="Épinglé">📌</span>
-                                    {% else %}
-                                        <span style="color: var(--color-text-light); font-size: 10px;">›</span>
-                                    {% endif %}
-                                    <span class="category-card__thread-title">{{ thread.title }}</span>
-                                    <span class="category-card__thread-author">{{ thread.author.email|split('@')|first }}</span>
-                                </div>
-                            {% endfor %}
+                    {# Icône dans carré lime si elle est définie #}
+                    {% if category.icon %}
+                        <div class="fi-cat-card__icon-wrap" aria-hidden="true">
+                            {{ category.icon }}
                         </div>
                     {% endif %}
+
+                    {# Nom en Archivo Black — uppercase automatique via CSS #}
+                    <h2 class="fi-cat-card__name">{{ category.name }}</h2>
+
+                    {# Description courte de la catégorie #}
+                    {% if category.description %}
+                        <p class="fi-cat-card__description">{{ category.description }}</p>
+                    {% endif %}
+
+                    {# Compteur de threads en mono — poussé en bas de la colonne #}
+                    <div class="fi-cat-card__count">
+                        <strong>{{ category.threadsCount }}</strong>
+                        sujet{{ category.threadsCount > 1 ? 's' : '' }}
+                    </div>
                 </div>
 
-                {# Pied de carte : statistiques #}
-                <div class="category-card__footer">
-                    <span class="category-card__stat">
-                        💬 {{ category.threadsCount }} sujet{{ category.threadsCount > 1 ? 's' : '' }}
-                    </span>
-                    {# Lien "Nouveau sujet" — affiché seulement pour les utilisateurs connectés #}
-                    {# Note : on est dans un <a>, donc on ne peut pas imbriquer un autre <a>.
-                       On affiche un indicateur textuel uniquement. #}
-                    <span style="font-size: 11px; color: var(--color-red, #C8503A); font-weight: 600;">
-                        Voir les sujets →
-                    </span>
-                </div>
-            </a>
+                {# ── Colonne droite : 3 derniers threads ── #}
+                <div class="fi-cat-card__threads">
+
+                    {# En-tête de la colonne droite #}
+                    <div class="fi-cat-card__threads-label" aria-hidden="true">
+                        Derniers sujets
+                    </div>
+
+                    {#
+                        latestThreadsByCategory est un tableau indexé par l'id
+                        de la catégorie → on récupère les threads de cette catégorie.
+                        L'opérateur ?? [] garantit un tableau vide si absent.
+                    #}
+                    {% set latestThreads = latestThreadsByCategory[category.id] ?? [] %}
+
+                    {% if latestThreads is empty %}
+                        <div class="fi-cat-card__empty">
+                            Soyez le premier à poster !
+                        </div>
+                    {% else %}
+                        {% for thread in latestThreads %}
+                            <div class="fi-thread-preview">
+                                {# Titre tronqué si trop long #}
+                                <div class="fi-thread-preview__title">
+                                    {% if thread.pinned %}
+                                        {# Indicateur d'épinglage textuel accessible #}
+                                        <span title="Épinglé" aria-label="Épinglé">&#8902;</span>
+                                    {% endif %}
+                                    {{ thread.title }}
+                                </div>
+                                {# Méta : auteur + date en mono #}
+                                <div class="fi-thread-preview__meta">
+                                    {{ thread.author.email|split('@')|first }}
+                                    · {{ thread.createdAt|date('d/m/Y') }}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                </div>{# fin fi-cat-card__threads #}
+
+            </a>{# fin fi-cat-card #}
+
         {% endfor %}
-    </div>
+
+    </div>{# fin fi-categories #}
+
 {% endif %}
+
 {% endblock %}

@@ -180,15 +180,35 @@ class AdminController extends AbstractController
         $statusFilter = $request->query->get('status', 'all');
 
         // Récupère les ressources selon le filtre de statut.
-        // Le filtre arrive de l'URL en tant que string ('pending', 'published'...).
+        // Le filtre arrive de l'URL en tant que string ('pending', 'published', 'rejected'...).
         // On le compare donc à la valeur backed de l'enum (->value).
+        //
+        // IMPORTANT : on applique une limite de 100 sur les requêtes findBy() sans critère
+        // réduit (statut "all" ou "rejected"), pour éviter tout problème mémoire si la table
+        // grossit. findPending() et findPublished() ont leur propre logique dans le repository.
         if ($statusFilter === ResourceStatus::PendingValidation->value) {
+            // Onglet "En attente" — délègue au repository qui charge déjà les relations (évite N+1)
             $resources = $this->resourceRepository->findPending();
         } elseif ($statusFilter === ResourceStatus::Published->value) {
+            // Onglet "Publiées" — même logique, le repository gère l'eager loading
             $resources = $this->resourceRepository->findPublished();
+        } elseif ($statusFilter === ResourceStatus::Rejected->value) {
+            // Onglet "Rejetées" — précédemment non géré, le cas tombait dans le else "toutes"
+            // On utilise findBy() avec une limite de sécurité : les rejetées sont rarement
+            // des centaines, mais on protège quand même contre une table volumineuse.
+            $resources = $this->resourceRepository->findBy(
+                ['status' => ResourceStatus::Rejected],
+                ['createdAt' => 'DESC'],
+                100  // Limite de sécurité mémoire
+            );
         } else {
-            // Toutes les ressources, triées par date décroissante
-            $resources = $this->resourceRepository->findBy([], ['createdAt' => 'DESC']);
+            // Onglet "Toutes" (valeur par défaut ou valeur inconnue) — toutes les ressources,
+            // triées par date décroissante. Limite de 100 pour protéger la mémoire PHP.
+            $resources = $this->resourceRepository->findBy(
+                [],
+                ['createdAt' => 'DESC'],
+                100  // Limite de sécurité mémoire
+            );
         }
 
         return $this->render('admin/resources_all.html.twig', [

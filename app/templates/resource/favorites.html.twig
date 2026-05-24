@@ -1,201 +1,488 @@
 {% extends 'base_app.html.twig' %}
 
-{% block title %}Mes favoris — BazaArt{% endblock %}
+{#
+ # resource/favorites.html.twig — Mes ressources favorites
+ #
+ # Thème : Street (app connectée)
+ # Layout : grille identique à index.html.twig, sans filtres
+ # Référence : OppGrid (screens-opps.jsx) + pattern "mes favoris" du dashboard
+ #
+ # Variables Twig disponibles :
+ #   favorites — collection de ResourceFavorite (accès à la Resource via .resource)
+ #               et à la date d'ajout via .createdAt
+ #}
+
+{% block title %}Mes favoris — Bazaart{% endblock %}
 {% block page_title %}Mes favoris{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* ── En-tête de page avec compteur ── */
-    .page-header {
+    /* ═══════════════════════════════════════════════════════════════════════
+       MES FAVORIS — styles thème Street
+       Réutilise les mêmes patterns que index.html.twig (grille de cartes).
+       Seule différence : le bouton "retirer des favoris" remplace le badge type.
+    ═══════════════════════════════════════════════════════════════════════ */
+
+    /* ── En-tête de page ──────────────────────────────────────────────── */
+
+    .fav-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--space-md);
+        flex-wrap: wrap;
+        margin-bottom: var(--space-xl);
+        padding-bottom: var(--space-lg);
+        border-bottom: 1px solid var(--ink);
+    }
+
+    /* Sur-titre eyebrow */
+    .fav-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-sm);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: var(--space-xs);
+    }
+    .fav-eyebrow::before {
+        content: '';
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background: var(--accent);
+    }
+
+    /* Titre principal */
+    .fav-title {
+        font-family: var(--display);
+        font-size: clamp(28px, 4vw, 48px);
+        text-transform: uppercase;
+        line-height: .92;
+        color: var(--ink);
+        margin: 0;
+    }
+
+    /* Compteur à côté du titre */
+    .fav-count {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
+        margin-top: var(--space-xs);
+    }
+
+    /* Lien "Voir toutes les ressources" */
+    .btn-browse {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--btn-padding);
+        background: transparent;
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        white-space: nowrap;
+        flex-shrink: 0;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .btn-browse:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    /* ── Grille de cartes (identique à index.html.twig) ────────────────── */
+
+    /* 1 → 2 → 3 colonnes selon la largeur d'écran */
+    .resource-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0;
+        border: 1px solid var(--ink);
+    }
+
+    @media (min-width: 640px) {
+        .resource-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (min-width: 1024px) {
+        .resource-grid { grid-template-columns: 1fr 1fr 1fr; }
+    }
+
+    /* ── Carte ressource (identique à index.html.twig, avec bouton retirer) ── */
+
+    /* La carte est relative pour positionner le bouton "retirer" en absolu */
+    .resource-card {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-md);
+        padding: var(--space-xl) var(--space-lg);
+        background: var(--bg);
+        border-right: 1px solid var(--ink);
+        border-bottom: 1px solid var(--ink);
+        position: relative;
+        text-decoration: none;
+        color: inherit;
+        transition: background var(--transition-fast);
+        min-height: 260px;
+    }
+    .resource-card:hover { background: var(--bg-alt); }
+
+    {#
+       Différence avec index : on n'applique PAS le hover vert (var(--accent)) ici.
+       La carte n'est pas un lien cliquable sur toute sa surface — le cœur retirer
+       est en absolu, et le titre est le seul lien vers le détail.
+       Fond bg-alt (clair) au hover = signal plus doux.
+    #}
+
+    /* Ligne supérieure : badge type + cœur retirer */
+    .resource-card__top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: var(--space-sm);
+        flex-wrap: wrap;
+    }
+
+    /* Badge type identique à index */
+    .resource-badge-type {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--chip-padding);
+        background: var(--ink);
+        color: var(--bg);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+        border-radius: var(--chip-radius);
+        flex-shrink: 0;
+    }
+
+    /* ── Bouton "Retirer des favoris" ──────────────────────────────────── */
+
+    {#
+       Ce bouton doit conserver les attributs data-* pour la compatibilité Stimulus.
+       Il est positionné dans le flux de la ligne supérieure (pas en absolu),
+       pour éviter les conflits avec l'accessibilité clavier.
+
+       Fallback sans JS : formulaire POST classique qui recharge la page.
+    #}
+    .btn-unfavorite {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 8px;
+        background: transparent;
+        color: var(--ink-mute);
+        border: 1px solid var(--line-soft);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        cursor: pointer;
+        border-radius: var(--btn-radius);
+        transition: all var(--transition-fast);
+        flex-shrink: 0;
+    }
+    .btn-unfavorite:hover {
+        border-color: var(--danger);
+        color: var(--danger);
+        background: rgba(229, 72, 77, .06);
+    }
+
+    /* Titre de la carte : lien vers le détail */
+    .resource-card__title-link {
+        font-family: var(--display);
+        font-size: 20px;
+        line-height: 1.05;
+        color: var(--ink);
+        text-decoration: none;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        transition: color var(--transition-fast);
+    }
+    .resource-card__title-link:hover { color: var(--accent-2); }
+
+    /* Méta organisation */
+    .resource-card__meta {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+
+    /* Description courte */
+    .resource-card__desc {
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink-mute);
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        flex: 1;
+    }
+
+    /* Pied de carte : disciplines + date d'ajout en favori */
+    .resource-card__footer {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 20px;
-    }
-    .page-header__count {
-        font-size: 13px;
-        color: var(--color-text-muted);
-    }
-
-    /* ── Carte ressource favorite (même style que resource/index) ── */
-    .resource-list { display: flex; flex-direction: column; gap: 12px; }
-
-    .resource-card {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 16px 20px;
-        display: flex; flex-direction: column; gap: 8px;
-        transition: border-color 0.15s;
-        position: relative;
-    }
-    .resource-card:hover { border-color: var(--color-green); }
-
-    .resource-card__header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
-
-    .resource-type-badge {
-        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
-        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
-        background: var(--color-red-light); color: var(--color-red);
+        gap: var(--space-sm);
+        padding-top: var(--space-sm);
+        border-top: 1px solid var(--line-soft);
+        margin-top: auto;
     }
 
-    .resource-card__org { font-size: 12px; color: var(--color-text-light); }
-
-    .resource-card__title {
-        font-size: 15px; font-weight: 600; color: var(--color-text); text-decoration: none;
-    }
-    .resource-card__title:hover { color: var(--color-red); }
-
-    .resource-card__desc { font-size: 13px; color: var(--color-text-muted); line-height: 1.5; }
-
-    .resource-card__footer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-
-    .discipline-badge {
-        display: inline-flex; align-items: center; height: 20px; padding: 0 8px;
-        border-radius: var(--radius-full); font-size: 10px;
-        background: var(--color-green-light); color: var(--color-green);
-    }
-
-    /* Date d'ajout en favori (affiché en bas à droite de la carte) */
-    .favorite-date {
-        font-size: 11px;
-        color: var(--color-text-light);
-        margin-left: auto;
-    }
-
-    /* Bouton retirer des favoris — icône coeur dans le coin de la carte */
-    .btn-unfavorite {
-        position: absolute;
-        top: 12px;
-        right: 14px;
-        background: none;
-        border: none;
-        cursor: pointer;
-        font-size: 18px;
-        line-height: 1;
-        padding: 2px;
-        color: var(--color-red);
-        opacity: 0.7;
-        transition: opacity 0.15s;
-    }
-    .btn-unfavorite:hover { opacity: 1; }
-
-    /* ── État vide ── */
-    .empty-state {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        padding: 64px 48px;
-        text-align: center;
-        color: var(--color-text-muted);
-    }
-    .empty-state__icon { font-size: 40px; margin-bottom: 16px; }
-    .empty-state__title { font-size: 17px; font-weight: 600; color: var(--color-text); margin-bottom: 8px; }
-    .empty-state__text { font-size: 13px; line-height: 1.6; }
-    .empty-state__link {
-        display: inline-block;
-        margin-top: 20px;
-        padding: 10px 20px;
-        background: var(--color-green);
-        color: white;
-        border-radius: var(--radius-sm);
-        text-decoration: none;
-        font-size: 13px;
+    /* Chips disciplines (identique à index) */
+    .resource-disc-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 7px;
+        background: var(--bg-alt);
+        border: 1px solid var(--line-soft);
+        font-family: var(--mono);
+        font-size: 10px;
         font-weight: 600;
+        letter-spacing: .04em;
+        color: var(--ink-mute);
+        border-radius: var(--chip-radius);
     }
-    .empty-state__link:hover { opacity: 0.88; }
+
+    .resource-disc-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    /* Date d'ajout en favori : mono gris, affiché en bas à droite */
+    .fav-date {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    /* ── État vide ─────────────────────────────────────────────────────── */
+
+    .empty-state {
+        border: 1px solid var(--ink);
+        padding: var(--space-3xl) var(--space-2xl);
+        text-align: center;
+        background: var(--bg);
+    }
+
+    /* Grand cœur vide décoratif */
+    .empty-state__icon {
+        font-size: 56px;
+        color: var(--ink-mute);
+        opacity: .2;
+        line-height: 1;
+        margin-bottom: var(--space-md);
+    }
+
+    .empty-state__title {
+        font-family: var(--display);
+        font-size: 22px;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin-bottom: var(--space-sm);
+    }
+
+    .empty-state__text {
+        font-family: var(--body);
+        font-size: 14px;
+        color: var(--ink-mute);
+        line-height: 1.6;
+        margin-bottom: var(--space-lg);
+    }
+
+    .empty-state__cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--btn-padding);
+        background: var(--accent);
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .empty-state__cta:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# ── En-tête de page ── #}
-<div class="page-header">
+{# ── En-tête de page ──────────────────────────────────────────────────────── #}
+<div class="fav-header">
     <div>
+        <div class="fav-eyebrow">Mon espace</div>
+        <h1 class="fav-title">Mes favoris</h1>
+        {# Compteur de favoris (visible uniquement si la liste n'est pas vide) #}
         {% if favorites|length > 0 %}
-            <p class="page-header__count">
-                {{ favorites|length }} ressource{{ favorites|length > 1 ? 's' : '' }} en favori
-            </p>
+            <div class="fav-count">
+                → {{ favorites|length }} ressource{{ favorites|length > 1 ? 's' : '' }} sauvegardée{{ favorites|length > 1 ? 's' : '' }}
+            </div>
         {% endif %}
     </div>
-    <a href="{{ path('app_resource_index') }}" class="btn btn-secondary" style="font-size:13px;">
-        Voir toutes les ressources
+
+    {# Lien vers le catalogue complet #}
+    <a href="{{ path('app_resource_index') }}" class="btn-browse">
+        Explorer le catalogue
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M5 12h14M13 5l7 7-7 7"/>
+        </svg>
     </a>
 </div>
 
-{# ── Liste des favoris ── #}
+{# ── Contenu principal ────────────────────────────────────────────────────── #}
 {% if favorites is empty %}
 
-    {# État vide : l'utilisateur n'a encore aucun favori #}
+    {# ── État vide ── #}
     <div class="empty-state">
-        <div class="empty-state__icon">&#9825;</div>
-        <div class="empty-state__title">Aucun favori pour l'instant</div>
+        {# Cœur vide SVG (représentation graphique de l'état) #}
+        <div class="empty-state__icon" aria-hidden="true">
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
+                <path d="M12 21s-7-4.5-9.5-9C.7 8 3 4 6.5 4 9 4 10.5 5.5 12 7.5 13.5 5.5 15 4 17.5 4 21 4 23.3 8 21.5 12 19 16.5 12 21 12 21z"/>
+            </svg>
+        </div>
+        <div class="empty-state__title">Aucun favori</div>
         <p class="empty-state__text">
-            Cliquez sur le coeur d'une ressource pour la retrouver facilement ici.<br>
-            Vos favoris sont personnels et visibles uniquement par vous.
+            Tu n'as pas encore sauvegardé de ressource.<br>
+            Clique sur le cœur d'une opportunité pour la retrouver ici.
         </p>
-        <a href="{{ path('app_resource_index') }}" class="empty-state__link">
-            Parcourir les ressources
+        <a href="{{ path('app_resource_index') }}" class="empty-state__cta">
+            Explorer les ressources
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M5 12h14M13 5l7 7-7 7"/>
+            </svg>
         </a>
     </div>
 
 {% else %}
 
-    <div class="resource-list">
+    {# ── Grille de cartes favorites ── #}
+    {#
+       Même structure que index.html.twig, avec deux différences :
+       1. Pas de lien sur toute la surface de la carte (le cœur "retirer" doit être cliquable séparément)
+       2. Bouton "retirer des favoris" dans la ligne supérieure
+       3. Date d'ajout en favori affichée dans le pied de carte
+    #}
+    <div class="resource-grid">
         {% for favorite in favorites %}
-            {# Chaque entrée de $favorites est une ResourceFavorite, on accède à la Resource via .resource #}
+            {# ResourceFavorite.resource = la ressource liée #}
             {% set resource = favorite.resource %}
+
             <div class="resource-card">
 
-                {#
-                    Bouton "retirer des favoris" — formulaire POST vers le toggle.
-                    Le coeur rouge indique que la ressource est déjà en favori.
-                    En JavaScript / Stimulus, ce bouton peut déclencher un appel AJAX.
-                    Sans JS, le formulaire HTML fonctionne en fallback.
-                #}
-                <form method="post"
-                      action="{{ path('app_resource_favorite_toggle', {id: resource.id}) }}"
-                      style="display:inline;">
-                    <input type="hidden" name="_token" value="{{ csrf_token('resource_favorite_' ~ resource.id) }}">
-                    <button type="submit" class="btn-unfavorite" title="Retirer des favoris">
-                        &#10084;
-                    </button>
-                </form>
+                {# ── Ligne supérieure : badge type + bouton retirer ── #}
+                <div class="resource-card__top">
 
-                <div class="resource-card__header">
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <span class="resource-type-badge">
-                            {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
-                        </span>
-                    </div>
-                    {% if resource.organization %}
-                        <span class="resource-card__org">par <strong>{{ resource.organization.name }}</strong></span>
-                    {% endif %}
+                    {# Badge type #}
+                    <span class="resource-badge-type">
+                        {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
+                    </span>
+
+                    {# ── Bouton "Retirer des favoris" ── #}
+                    {#
+                       Formulaire POST vers le toggle favoris.
+                       ATTRIBUTS DATA-* CONSERVÉS : indispensables pour Stimulus future.
+                       Le formulaire fonctionne sans JS (fallback POST natif).
+                    #}
+                    <form method="post"
+                          action="{{ path('app_resource_favorite_toggle', {id: resource.id}) }}"
+                          style="display:inline;">
+                        <input type="hidden" name="_token" value="{{ csrf_token('resource_favorite_' ~ resource.id) }}">
+                        <button type="submit"
+                                class="btn-unfavorite"
+                                data-resource-id="{{ resource.id }}"
+                                title="Retirer des favoris"
+                                aria-label="Retirer {{ resource.title }} des favoris">
+                            {# Icône cœur plein + texte "Retirer" #}
+                            <svg width="12" height="12" viewBox="0 0 24 24"
+                                 fill="currentColor" stroke="none" aria-hidden="true">
+                                <path d="M12 21s-7-4.5-9.5-9C.7 8 3 4 6.5 4 9 4 10.5 5.5 12 7.5 13.5 5.5 15 4 17.5 4 21 4 23.3 8 21.5 12 19 16.5 12 21 12 21z"/>
+                            </svg>
+                            Retirer
+                        </button>
+                    </form>
                 </div>
 
-                <a href="{{ path('app_resource_show', {id: resource.id}) }}" class="resource-card__title">
+                {# Organisation soumettrice #}
+                {% if resource.organization %}
+                    <div class="resource-card__meta">
+                        {{ resource.organization.name }}
+                    </div>
+                {% endif %}
+
+                {# Titre cliquable vers le détail (seul lien de la carte) #}
+                <a href="{{ path('app_resource_show', {id: resource.id}) }}"
+                   class="resource-card__title-link"
+                   aria-label="Voir {{ resource.title }}">
                     {{ resource.title }}
                 </a>
 
+                {# Description courte #}
                 <p class="resource-card__desc">
-                    {{ resource.description|slice(0, 160) }}{{ resource.description|length > 160 ? '...' : '' }}
+                    {{ resource.description|slice(0, 160) }}{{ resource.description|length > 160 ? '…' : '' }}
                 </p>
 
+                {# Pied de carte : disciplines + date d'ajout #}
                 <div class="resource-card__footer">
-                    {% for discipline in resource.disciplines %}
-                        <span class="discipline-badge">
-                            {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
-                        </span>
-                    {% endfor %}
-                    {# Date d'ajout en favori — info utile pour l'utilisateur #}
-                    <span class="favorite-date">
-                        Ajouté le {{ favorite.createdAt|date('d/m/Y') }}
+                    {# Chips disciplines (2 max + compteur) #}
+                    <div class="resource-disc-list">
+                        {% for discipline in resource.disciplines|slice(0, 2) %}
+                            <span class="resource-disc-chip">
+                                {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                            </span>
+                        {% endfor %}
+                        {% if resource.disciplines|length > 2 %}
+                            <span class="resource-disc-chip">+{{ resource.disciplines|length - 2 }}</span>
+                        {% endif %}
+                    </div>
+
+                    {# Date d'ajout en favori — info utile pour retrouver une ressource récente #}
+                    <span class="fav-date" title="Ajouté aux favoris le {{ favorite.createdAt|date('d/m/Y') }}">
+                        ♡ {{ favorite.createdAt|date('d/m') }}
                     </span>
                 </div>
 
             </div>
+
         {% endfor %}
     </div>
 

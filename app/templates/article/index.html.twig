@@ -1,170 +1,539 @@
 {% extends 'base_app.html.twig' %}
 
+{#
+ # article/index.html.twig — Catalogue des articles (thème Street)
+ #
+ # Variables transmises par ArticleController::index() :
+ #   - articles : Article[] — liste des articles publiés (findPublished())
+ #
+ # Mise en page "magazine" :
+ #   - 1er article en pleine largeur (hero éditorial)
+ #   - Articles suivants en grille 2 colonnes
+ #   - Séparateurs 1px solid var(--ink), pas d'ombre, bords francs (border-radius:0)
+ #}
+
 {% block title %}Articles — BazaArt{% endblock %}
 {% block page_title %}Articles{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
+{# Styles préfixés .art- pour éviter les collisions avec d'autres pages #}
 <style>
-    /* Barre d'outils en haut de la liste */
-    .page-toolbar {
-        display: flex; justify-content: flex-end; gap: 10px;
-        margin-bottom: 20px; flex-wrap: wrap;
+
+    /* ── En-tête de section ─────────────────────────────────────────────── */
+
+    /*
+     * .art-header : barre titre + sous-titre + bouton admin
+     * Reproduit le motif SectionHeader du prototype (borderBottom, flex, alignItems:flex-end)
+     */
+    .art-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 40px 0 20px;
+        border-bottom: 1px solid var(--ink);
+        margin-bottom: 0;
     }
 
-    /* Liste des articles */
-    .articles-feed { display: flex; flex-direction: column; gap: 16px; }
-
-    /* Carte d'article */
-    .article-card {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-        padding: 20px; display: flex; gap: 20px; align-items: flex-start;
+    .art-header__left {
+        display: flex;
+        align-items: flex-end;
+        gap: 20px;
     }
 
-    /* Image de couverture */
-    .article-cover {
-        width: 160px; height: 110px; border-radius: var(--radius-sm);
-        object-fit: cover; flex-shrink: 0;
+    /* Numéro de section en mono — style §01 du prototype */
+    .art-header__index {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: .1em;
+        color: var(--ink-mute);
     }
 
-    .article-body { flex: 1; min-width: 0; }
-
-    /* Ligne auteur + date */
-    .article-meta {
-        display: flex; align-items: center; gap: 8px;
-        flex-wrap: wrap; margin-bottom: 8px;
+    /* Titre "ARTICLES" en Archivo Black géant */
+    .art-header__title {
+        font-family: var(--display);
+        font-size: 56px;
+        margin: 0;
+        line-height: 1;
+        letter-spacing: -.02em;
+        color: var(--ink);
+        text-transform: uppercase;
     }
 
-    /* Mini avatar auteur */
-    .author-avatar {
-        width: 28px; height: 28px; border-radius: 50%;
-        object-fit: cover; flex-shrink: 0;
-    }
-    .author-avatar-placeholder {
-        width: 28px; height: 28px; border-radius: 50%;
-        background: var(--color-green); color: white;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 11px; font-weight: 700; flex-shrink: 0;
+    /* Sous-titre en Instrument Serif italique — contraste typographique fort */
+    .art-header__sub {
+        font-family: var(--serif);
+        font-size: 18px;
+        font-style: italic;
+        color: var(--ink-mute);
+        padding-bottom: 8px;
     }
 
-    .author-name  { font-size: 13px; font-weight: 600; color: var(--color-text); }
-    .meta-sep     { color: var(--color-border); font-size: 12px; }
-    .article-date { font-size: 12px; color: var(--color-text-light); }
+    /* ── Article hero (premier article, pleine largeur) ─────────────────── */
 
-    /* Titre de l'article */
-    .article-title {
-        font-family: var(--font-heading); font-size: 18px; font-weight: 700;
-        color: var(--color-text); text-decoration: none; line-height: 1.3;
-        margin-bottom: 8px; display: block;
-    }
-    .article-title:hover { color: var(--color-red); }
-
-    /* Extrait */
-    .article-excerpt {
-        font-size: 13px; line-height: 1.7; color: var(--color-text-muted); margin-bottom: 10px;
+    /*
+     * .art-hero : zone pleine largeur avec image si disponible.
+     * Border bottom 1px solid var(--ink) → séparateur "affiche" du thème Street.
+     * min-height : permet à la carte d'avoir de la présence même sans image.
+     */
+    .art-hero {
+        border-bottom: 1px solid var(--ink);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        min-height: 340px;
     }
 
-    /* Lien "Lire l'article" */
-    .read-link {
-        font-size: 12px; font-weight: 600; color: var(--color-red); text-decoration: none;
+    /* Image de couverture hero — couvre toute la cellule gauche */
+    .art-hero__cover {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        border-right: 1px solid var(--ink);
+        /* min-height pour que la grille ne s'effondre pas sans image */
+        min-height: 280px;
     }
-    .read-link:hover { text-decoration: underline; }
 
-    /* État vide */
-    .empty-state {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); padding: 48px; text-align: center;
-        color: var(--color-text-muted);
+    /* Placeholder hachuré si pas d'image (motif du design-tokens.css) */
+    .art-hero__cover-placeholder {
+        background: var(--placeholder-bg);
+        border-right: 1px solid var(--ink);
+        min-height: 280px;
+    }
+
+    /* Corps du hero : padding généreux, flex colonne pour aligner le lien en bas */
+    .art-hero__body {
+        padding: 36px 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        background: var(--bg);
+    }
+
+    /* Eyebrow du hero : point lime + texte mono uppercase */
+    .art-hero__eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--eyebrow-gap);
+        font-family: var(--mono);
+        font-size: var(--eyebrow-font-size);
+        font-weight: var(--eyebrow-font-weight);
+        letter-spacing: var(--eyebrow-letter-spacing);
+        text-transform: uppercase;
+        color: var(--ink);
+    }
+
+    /* Le point carré vert acide — signature visuelle du thème Street */
+    .art-hero__eyebrow::before {
+        content: '';
+        display: inline-block;
+        width: var(--eyebrow-dot-size);
+        height: var(--eyebrow-dot-size);
+        background: var(--accent);
+        flex-shrink: 0;
+    }
+
+    /* Titre hero très grand — effet affiche */
+    .art-hero__title {
+        font-family: var(--display);
+        font-size: clamp(32px, 4vw, 52px);
+        line-height: .95;
+        letter-spacing: -.02em;
+        color: var(--ink);
+        text-decoration: none;
+        text-transform: uppercase;
+        display: block;
+    }
+    .art-hero__title:hover { color: var(--accent-2); }
+
+    /* Chapeau en Instrument Serif — corps éditorial du hero */
+    .art-hero__excerpt {
+        font-family: var(--serif);
+        font-size: 18px;
+        line-height: 1.5;
+        color: var(--ink-mute);
+        margin: 0;
+    }
+
+    /* Méta auteur + date en mono */
+    .art-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
+        text-transform: uppercase;
+    }
+
+    /* Petit cercle avatar mono en lime */
+    .art-meta__avatar {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: var(--ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 700;
+        flex-shrink: 0;
+        font-family: var(--mono);
+    }
+
+    /* Lien "Lire →" dans le style bouton ghost du thème Street */
+    .art-read-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: auto;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink);
+        text-decoration: none;
+        border-bottom: 2px solid var(--accent);
+        padding-bottom: 2px;
+        transition: color var(--transition-fast), border-color var(--transition-fast);
+    }
+    .art-read-link:hover {
+        color: var(--accent-2);
+        border-color: var(--accent-2);
+    }
+
+    /* ── Grille 2 colonnes — articles suivants ───────────────────────────── */
+
+    /*
+     * Grille "magazine" sans gap — les cartes sont séparées par leurs bordures.
+     * border-left sur le conteneur + border-right/bottom sur chaque carte
+     * → crée l'effet de grille du prototype (voir SectionHeader + opportunités).
+     */
+    .art-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border-left: 1px solid var(--ink);
+        border-right: 1px solid var(--ink);
+        border-bottom: 1px solid var(--ink);
+    }
+
+    /* Chaque carte de la grille */
+    .art-card {
+        padding: 28px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-height: 280px;
+        background: var(--bg);
+        /* La bordure droite sépare les colonnes paires/impaires */
+        border-right: 1px solid var(--ink);
+        border-bottom: 1px solid var(--ink);
+        position: relative;
+    }
+
+    /*
+     * On supprime la bordure droite sur les cartes en position paire
+     * pour éviter une double bordure à droite du conteneur.
+     * nth-child(2n) = 2e, 4e, 6e… = colonne droite.
+     */
+    .art-card:nth-child(2n) { border-right: 0; }
+
+    /* Image de couverture dans les cartes grille */
+    .art-card__cover {
+        width: 100%;
+        height: 160px;
+        object-fit: cover;
+        display: block;
+        border: 1px solid var(--ink);
+    }
+
+    .art-card__cover-placeholder {
+        width: 100%;
+        height: 160px;
+        background: var(--placeholder-bg);
+        border: 1px solid var(--ink);
+    }
+
+    /* Titre de carte */
+    .art-card__title {
+        font-family: var(--display);
+        font-size: 22px;
+        line-height: 1;
+        letter-spacing: -.01em;
+        text-transform: uppercase;
+        color: var(--ink);
+        text-decoration: none;
+        display: block;
+    }
+    .art-card__title:hover { color: var(--accent-2); }
+
+    /* Extrait 2 lignes max via line-clamp */
+    .art-card__excerpt {
+        font-family: var(--body);
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--ink-mute);
+        margin: 0;
+        /* Coupe proprement à 2 lignes avec ellipse */
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* ── État vide ───────────────────────────────────────────────────────── */
+
+    .art-empty {
+        border: 1px solid var(--ink);
+        padding: 64px 48px;
+        text-align: center;
+        margin-top: 0;
+    }
+
+    .art-empty__title {
+        font-family: var(--display);
+        font-size: 28px;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin: 0 0 12px;
+    }
+
+    .art-empty__sub {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: .08em;
+        color: var(--ink-mute);
+        margin: 0 0 24px;
+    }
+
+    /* ── Bouton admin "Écrire un article +" ──────────────────────────────── */
+
+    /*
+     * Réutilise les variables --btn-* du thème Street :
+     * bords francs, uppercase, fond accent lime, texte encre.
+     * L'effet décalé (shadow-offset) apparaît au hover.
+     */
+    .art-btn-new {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--btn-padding);
+        background: var(--btn-primary-bg);
+        color: var(--btn-primary-color);
+        border: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .art-btn-new:hover {
+        background: var(--btn-primary-hover-bg);
+        color: var(--btn-primary-hover-color);
+        box-shadow: var(--shadow-offset-sm);
+    }
+
+    /* ── Responsive mobile ───────────────────────────────────────────────── */
+
+    @media (max-width: 768px) {
+        /* Hero passe en colonne unique sur mobile */
+        .art-hero { grid-template-columns: 1fr; }
+        .art-hero__cover,
+        .art-hero__cover-placeholder { border-right: 0; border-bottom: 1px solid var(--ink); }
+
+        /* Grille passe en 1 colonne */
+        .art-grid { grid-template-columns: 1fr; }
+
+        /* Toutes les cartes reprennent leur bordure droite */
+        .art-card:nth-child(2n) { border-right: 1px solid var(--ink); }
+
+        .art-header__title { font-size: 36px; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# Barre d'outils : accès à mes articles + bouton écrire #}
-<div class="page-toolbar">
-    <a href="{{ path('app_article_my') }}" class="btn btn-outline">Mes articles</a>
-    <a href="{{ path('app_article_new') }}" class="btn btn-primary">+ Écrire un article</a>
+{# ── En-tête de section ──────────────────────────────────────────────────── #}
+<div class="art-header">
+    <div class="art-header__left">
+        {# Numéro de section dans le style du prototype §01 #}
+        <span class="art-header__index">§ ARTICLES</span>
+        <h1 class="art-header__title">Articles</h1>
+        <span class="art-header__sub">analyses · décryptages · ressources</span>
+    </div>
+
+    {#
+        Bouton "Écrire un article +" visible uniquement pour les admins.
+        is_granted('ROLE_ADMIN') utilise la hiérarchie de rôles de security.yaml.
+        Note : dans ArticleController, le formulaire de création est accessible
+        à tous les ROLE_USER (route 'app_article_new') — ce bouton est un raccourci.
+    #}
+    {% if is_granted('ROLE_ADMIN') %}
+        <a href="{{ path('app_article_new') }}" class="art-btn-new">
+            + Écrire un article
+        </a>
+    {% endif %}
 </div>
 
-{% if articles is empty %}
-    {# État vide : aucun article publié #}
-    <div class="empty-state">
-        <p>Aucun article publié pour l'instant.</p>
-        <a href="{{ path('app_article_new') }}"
-           style="display:inline-block; margin-top:10px; color:var(--color-red); font-weight:600; text-decoration:none;">
-            Écrire le premier article →
-        </a>
-    </div>
-{% else %}
-    {# Liste des articles publiés #}
-    <div class="articles-feed">
-        {% for article in articles %}
-            <article class="article-card">
+{# ── Contenu ──────────────────────────────────────────────────────────────── #}
 
-                {# Image de couverture cliquable (si elle existe) #}
-                {% if article.coverImagePath %}
-                    <a href="{{ path('app_article_show', {slug: article.slug}) }}" style="flex-shrink:0;">
+{% if articles is empty %}
+
+    {# État vide : aucun article publié #}
+    <div class="art-empty">
+        <p class="art-empty__title">Aucun article pour l'instant</p>
+        <p class="art-empty__sub">les analyses et ressources arrivent bientôt</p>
+        {% if is_granted('ROLE_ADMIN') %}
+            <a href="{{ path('app_article_new') }}" class="art-btn-new">
+                Écrire le premier article →
+            </a>
+        {% endif %}
+    </div>
+
+{% else %}
+
+    {#
+        Article HERO — le premier article occupe toute la largeur.
+        On l'extrait avec le filtre |first, le reste avec |slice(1).
+    #}
+    {% set heroArticle = articles|first %}
+
+    <article class="art-hero" aria-label="Article à la une">
+
+        {# Image de couverture (colonne gauche) — placeholder hachuré si absente #}
+        {% if heroArticle.coverImagePath %}
+            <img src="{{ asset(heroArticle.coverImagePath) }}"
+                 alt="{{ heroArticle.title }}"
+                 class="art-hero__cover">
+        {% else %}
+            <div class="art-hero__cover-placeholder" role="img" aria-label="Pas d'image de couverture"></div>
+        {% endif %}
+
+        {# Corps du hero (colonne droite) #}
+        <div class="art-hero__body">
+
+            {# Eyebrow : "À LA UNE" + date de publication #}
+            <span class="art-hero__eyebrow" aria-hidden="true">
+                À la une
+            </span>
+
+            {# Titre cliquable en Archivo Black — très grand #}
+            <a href="{{ path('app_article_show', {slug: heroArticle.slug}) }}"
+               class="art-hero__title">
+                {{ heroArticle.title }}
+            </a>
+
+            {# Chapeau (excerpt) en Instrument Serif si disponible #}
+            {% if heroArticle.excerpt %}
+                <p class="art-hero__excerpt">{{ heroArticle.excerpt }}</p>
+            {% endif %}
+
+            {# Métadonnées : auteur + date de publication #}
+            <div class="art-meta">
+                {# Avatar cercle avec initiale de l'auteur #}
+                <span class="art-meta__avatar" aria-hidden="true">
+                    {{ heroArticle.author.email|first|upper }}
+                </span>
+
+                {# Nom affiché de l'auteur (nom d'artiste ou email) #}
+                <span>
+                    {% if heroArticle.author.artistProfile %}
+                        {{ heroArticle.author.artistProfile.displayName }}
+                    {% else %}
+                        {{ heroArticle.author.email|split('@')|first }}
+                    {% endif %}
+                </span>
+
+                {# Séparateur visuel #}
+                <span aria-hidden="true">·</span>
+
+                {# Date : publishedAt si publiée, sinon createdAt #}
+                <time datetime="{{ (heroArticle.publishedAt ?? heroArticle.createdAt)|date('Y-m-d') }}">
+                    {{ (heroArticle.publishedAt ?? heroArticle.createdAt)|date('d/m/Y') }}
+                </time>
+            </div>
+
+            {# Lien "Lire →" avec soulignement lime — signature Street #}
+            <a href="{{ path('app_article_show', {slug: heroArticle.slug}) }}"
+               class="art-read-link"
+               aria-label="Lire l'article : {{ heroArticle.title }}">
+                Lire →
+            </a>
+
+        </div>
+    </article>
+
+    {# ── Grille 2 colonnes — articles suivants ────────────────────────────── #}
+    {% set otherArticles = articles|slice(1) %}
+
+    {% if otherArticles is not empty %}
+        <div class="art-grid" role="list" aria-label="Autres articles">
+            {% for article in otherArticles %}
+                <article class="art-card" role="listitem">
+
+                    {# Miniature de couverture #}
+                    {% if article.coverImagePath %}
                         <img src="{{ asset(article.coverImagePath) }}"
                              alt="{{ article.title }}"
-                             class="article-cover">
-                    </a>
-                {% endif %}
+                             class="art-card__cover">
+                    {% else %}
+                        <div class="art-card__cover-placeholder" role="img" aria-label="Pas d'image"></div>
+                    {% endif %}
 
-                <div class="article-body">
-
-                    {# Métadonnées : avatar auteur + nom + date #}
-                    <div class="article-meta">
-                        {# Avatar de l'auteur (photo ou initiale) #}
-                        {% if article.author.artistProfile and article.author.artistProfile.avatarPath %}
-                            <img src="{{ asset(article.author.artistProfile.avatarPath) }}"
-                                 alt="" class="author-avatar">
-                        {% else %}
-                            <div class="author-avatar-placeholder">
-                                {{ article.author.email|first|upper }}
-                            </div>
-                        {% endif %}
-
-                        {# Nom affiché : nom d'artiste ou email par défaut #}
-                        <span class="author-name">
-                            {% if article.author.artistProfile %}
-                                {{ article.author.artistProfile.displayName }}
-                            {% else %}
-                                {{ article.author.email }}
-                            {% endif %}
-                        </span>
-
-                        <span class="meta-sep">•</span>
-
-                        {# Date de publication (ou de création si non publié) #}
-                        <span class="article-date">
-                            {{ article.publishedAt ? article.publishedAt|date('d/m/Y') : article.createdAt|date('d/m/Y') }}
-                        </span>
-                    </div>
-
-                    {# Titre cliquable #}
-                    <a href="{{ path('app_article_show', {slug: article.slug}) }}" class="article-title">
+                    {# Titre de la carte #}
+                    <a href="{{ path('app_article_show', {slug: article.slug}) }}"
+                       class="art-card__title">
                         {{ article.title }}
                     </a>
 
-                    {# Extrait : on utilise l'excerpt s'il existe, sinon le début du contenu #}
-                    <p class="article-excerpt">
+                    {# Méta : auteur + date #}
+                    <div class="art-meta">
+                        <span class="art-meta__avatar" aria-hidden="true">
+                            {{ article.author.email|first|upper }}
+                        </span>
+                        <span>
+                            {% if article.author.artistProfile %}
+                                {{ article.author.artistProfile.displayName }}
+                            {% else %}
+                                {{ article.author.email|split('@')|first }}
+                            {% endif %}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <time datetime="{{ (article.publishedAt ?? article.createdAt)|date('Y-m-d') }}">
+                            {{ (article.publishedAt ?? article.createdAt)|date('d/m/Y') }}
+                        </time>
+                    </div>
+
+                    {# Extrait court (2 lignes via line-clamp CSS) #}
+                    <p class="art-card__excerpt">
                         {% if article.excerpt %}
-                            {{ article.excerpt|slice(0, 200) }}{{ article.excerpt|length > 200 ? '...' : '' }}
+                            {{ article.excerpt }}
                         {% else %}
-                            {{ article.content|slice(0, 200) }}{{ article.content|length > 200 ? '...' : '' }}
+                            {{ article.content|slice(0, 200) }}{{ article.content|length > 200 ? '…' : '' }}
                         {% endif %}
                     </p>
 
-                    <a href="{{ path('app_article_show', {slug: article.slug}) }}" class="read-link">
-                        Lire l'article →
+                    {# Lien de lecture #}
+                    <a href="{{ path('app_article_show', {slug: article.slug}) }}"
+                       class="art-read-link"
+                       aria-label="Lire : {{ article.title }}">
+                        Lire →
                     </a>
 
-                </div>
-            </article>
-        {% endfor %}
-    </div>
+                </article>
+            {% endfor %}
+        </div>
+    {% endif %}
+
 {% endif %}
 
 {% endblock %}

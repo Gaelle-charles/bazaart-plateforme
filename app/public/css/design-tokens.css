@@ -1,0 +1,626 @@
+/* ============================================================
+   BAZAART — Design Tokens V2
+   Extraits du prototype Figma (mai 2026)
+
+   Sources analysées :
+     - maquette-vitrine/Bazaart-template/Bazaart Prototype (Street).html
+     - maquette-vitrine/Bazaart-template/Bazaart Editorial (Cream).html
+     - maquette-vitrine/Bazaart-template/src/ui.jsx
+     - maquette-vitrine/Bazaart-template/src/app.jsx
+
+   Deux thèmes coexistent dans le prototype :
+     1. "Street" — graphique, typographie display (Archivo Black),
+        fond crème ocre, accents acide vert + orange tangerine.
+        C'est le thème de l'APPLICATION (dashboards, forum, ressources).
+     2. "Editorial Cream" — élégant, serif (Fraunces), fond crème doux,
+        vert forêt + terracotta. C'est le thème de la VITRINE publique.
+
+   Usage :
+     - Les tokens communs aux deux thèmes sont dans :root{}
+     - Les tokens spécifiques au thème "Editorial" sont dans
+       :root[data-theme="editorial"] ou .theme-editorial {}
+     - Activer le thème Editorial sur <html data-theme="editorial">
+       (à faire sur les templates de la vitrine publique)
+
+   Ce fichier DOIT être inclus avant tout autre CSS.
+   Il ne contient aucun style, uniquement des custom properties.
+   ============================================================ */
+
+
+/* ============================================================
+   THÈME "STREET" — Application (par défaut)
+   Référence : Bazaart Prototype (Street).html
+   Pages concernées : dashboard, ressources, forum, admin
+   ============================================================ */
+
+:root {
+
+  /* ----------------------------------------------------------
+     COULEURS — Thème Street
+     Palette graphique, contraste fort, accents saturés
+  ---------------------------------------------------------- */
+
+  /* Fond de page */
+  --bg:          #F2EFE6;  /* crème ocre chaud — fond principal */
+  --bg-alt:      #EAE6D9;  /* crème légèrement plus sombre — zones alternées, filter bar */
+
+  /* Encre (texte & bordures) */
+  --ink:         #0D0D0D;  /* quasi-noir — texte principal, bordures structurantes */
+  --ink-mute:    #5b584f;  /* gris chaud — texte secondaire, légendes */
+
+  /* Lignes / bordures */
+  --line:        #0d0d0d;       /* bordure forte — même valeur que --ink */
+  --line-soft:   rgba(13,13,13,.14); /* bordure douce — séparateurs discrets */
+
+  /* Accents principaux (configurables en live dans le prototype) */
+  --accent:      #C6F24E;  /* vert acide — CTA primaire, tag actif, surlignage */
+  --accent-2:    #FF6B2C;  /* orange tangerine — accent secondaire, badges live, urgence */
+
+  /* États fonctionnels */
+  --danger:      #E5484D;  /* rouge erreur */
+  --ok:          #1F8A5B;  /* vert succès */
+
+
+  /* ----------------------------------------------------------
+     TYPOGRAPHIE — Thème Street
+     3 familles + utilitaires de mise en forme
+  ---------------------------------------------------------- */
+
+  /* Famille display : grands titres en capitales, impact graphique */
+  --display:  "Archivo Black", "Anton", Impact, sans-serif;
+
+  /* Famille body : lisible, neutre, moderne */
+  --body:     "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+
+  /* Famille mono : données, labels, métadonnées, chips */
+  --mono:     "JetBrains Mono", ui-monospace, monospace;
+
+  /* Famille serif : textes éditoriaux, citations, sous-titres délicats */
+  --serif:    "Instrument Serif", "Times New Roman", serif;
+
+
+  /* ----------------------------------------------------------
+     ESPACEMENT — Échelle commune
+     Basée sur les paddings observés dans le prototype
+  ---------------------------------------------------------- */
+
+  --space-xs:   4px;
+  --space-sm:   8px;
+  --space-md:   16px;
+  --space-lg:   24px;
+  --space-xl:   32px;
+  --space-2xl:  48px;
+  --space-3xl:  64px;
+
+
+  /* ----------------------------------------------------------
+     LAYOUT — Containers et grilles
+  ---------------------------------------------------------- */
+
+  /* Largeur max du contenu centré */
+  --container-max:   1440px;
+
+  /* Padding horizontal du container */
+  --container-px:    32px;
+
+  /* Hauteur de la barre de navigation */
+  --nav-height:      64px;
+
+
+  /* ----------------------------------------------------------
+     BORDER-RADIUS
+     Le thème Street est essentiellement SHARP (0px)
+     sauf quelques éléments mineurs
+  ---------------------------------------------------------- */
+
+  --radius-none:  0;       /* style affiche — bords francs */
+  --radius-sm:    2px;     /* petits éléments (kbd, badge inline) */
+  --radius-full:  999px;   /* éléments pilule (rare dans Street) */
+
+
+  /* ----------------------------------------------------------
+     OMBRES ET EFFETS
+  ---------------------------------------------------------- */
+
+  /* Ombre décalée "affiche" — utilisée sur hover des boutons */
+  --shadow-offset-sm: 4px 4px 0 var(--ink);
+  --shadow-offset-md: 6px 6px 0 var(--ink);
+
+  /* Pas d'ombre douce dans Street — les bordures 1px font le travail */
+  --shadow-card:  none;
+
+
+  /* ----------------------------------------------------------
+     TRANSITIONS
+  ---------------------------------------------------------- */
+
+  --transition-fast:   .12s ease;
+  --transition-normal: .2s ease;
+  --transition-slow:   .4s ease;
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Navigation
+  ---------------------------------------------------------- */
+
+  /* Logo block (fond sombre dans Street) */
+  --nav-logo-bg:     var(--ink);
+  --nav-logo-color:  var(--accent);
+
+  /* Onglet nav inactif */
+  --nav-tab-bg:      transparent;
+  --nav-tab-color:   var(--ink);
+  --nav-tab-border:  var(--line-soft);
+
+  /* Onglet nav actif */
+  --nav-tab-active-bg:    var(--ink);
+  --nav-tab-active-color: var(--accent);
+
+  /* Champ de recherche dans la nav */
+  --nav-search-bg:   var(--bg-alt);
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Boutons
+     Street : bords francs (0px), uppercase, décalage hover
+  ---------------------------------------------------------- */
+
+  /* Bouton de base */
+  --btn-padding:       11px 16px;
+  --btn-padding-sm:    7px 11px;
+  --btn-font-size:     12px;
+  --btn-font-size-sm:  11px;
+  --btn-font-weight:   700;
+  --btn-letter-spacing:.06em;
+  --btn-radius:        0;     /* bords FRANCS dans Street */
+
+  /* Bouton primaire (accent vert) */
+  --btn-primary-bg:      var(--accent);
+  --btn-primary-color:   var(--ink);
+  --btn-primary-hover-bg:    var(--ink);
+  --btn-primary-hover-color: var(--accent);
+
+  /* Bouton dark (fond noir) */
+  --btn-dark-bg:         var(--ink);
+  --btn-dark-color:      var(--bg);
+  --btn-dark-hover-bg:   var(--accent);
+  --btn-dark-hover-color:var(--ink);
+
+  /* Bouton ghost (transparent) */
+  --btn-ghost-bg:        transparent;
+  --btn-ghost-border:    var(--line-soft);
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Chips / Tags
+     Style mono uppercase, bords francs
+  ---------------------------------------------------------- */
+
+  --chip-padding:       5px 9px;
+  --chip-font-size:     11px;
+  --chip-font-weight:   600;
+  --chip-letter-spacing:.04em;
+  --chip-radius:        0;
+
+  /* Variantes de chip */
+  --chip-default-bg:    var(--bg);
+  --chip-default-color: var(--ink);
+  --chip-accent-bg:     var(--accent);
+  --chip-dark-bg:       var(--ink);
+  --chip-dark-color:    var(--bg);
+  --chip-warn-bg:       var(--accent-2);
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Cartes
+     Street : borde 1px --ink, pas de rayon, fond --bg
+  ---------------------------------------------------------- */
+
+  --card-bg:     var(--bg);
+  --card-border: 1px solid var(--ink);
+  --card-radius: 0;
+  --card-shadow: none;
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Formulaires
+  ---------------------------------------------------------- */
+
+  --input-bg:          var(--bg);
+  --input-border:      1px solid var(--line);
+  --input-border-focus:2px solid var(--accent);
+  --input-padding:     10px 12px;
+  --input-font-size:   13px;
+  --input-radius:      0;   /* bords francs */
+
+  /* Label de formulaire */
+  --label-font-size:   11px;
+  --label-font-weight: 700;
+  --label-letter-spacing: .08em;
+  --label-color:       var(--ink-mute);
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Eyebrow (sur-titre)
+     Point carré + texte mono uppercase
+  ---------------------------------------------------------- */
+
+  --eyebrow-font-size:   11px;
+  --eyebrow-font-weight: 700;
+  --eyebrow-letter-spacing: .12em;
+  --eyebrow-dot-size:    8px;
+  --eyebrow-dot-color:   var(--accent);
+  --eyebrow-gap:         8px;
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Section header
+     Titre display géant avec numéro et séparateur bas
+  ---------------------------------------------------------- */
+
+  --section-title-size:  56px;
+  --section-index-color: var(--ink-mute);
+  --section-border:      1px solid var(--ink);
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Placeholder image (fond hachuré)
+  ---------------------------------------------------------- */
+
+  --placeholder-bg:
+    repeating-linear-gradient(135deg, rgba(13,13,13,.05) 0 1px, transparent 1px 9px),
+    var(--bg-alt);
+
+
+  /* ----------------------------------------------------------
+     ANIMATION — Keyframes nommés
+     Les keyframes eux-mêmes sont déclarés dans le CSS global
+  ---------------------------------------------------------- */
+
+  --anim-marquee-speed:  35s;
+  --anim-pulse-speed:    1.4s;
+
+
+  /* ----------------------------------------------------------
+     MODE SOMBRE — overrides
+     Activé via body[data-theme="dark"]
+     (défini dans le bloc suivant, pas ici)
+  ---------------------------------------------------------- */
+}
+
+
+/* ----------------------------------------------------------
+   MODE SOMBRE (thème Street uniquement)
+   Activé par : <body data-theme="dark">
+---------------------------------------------------------- */
+body[data-theme="dark"] {
+  --bg:          #0E0E0E;
+  --bg-alt:      #1A1A1A;
+  --ink:         #F2EFE6;
+  --ink-mute:    #9a978f;
+  --line:        #F2EFE6;
+  --line-soft:   rgba(242,239,230,.18);
+}
+
+
+/* ============================================================
+   THÈME "EDITORIAL CREAM" — Vitrine publique
+   Référence : Bazaart Editorial (Cream).html
+   Pages concernées : home publique, page association, landing
+   Activé par : <html data-theme="editorial">
+
+   Ce thème est le futur design de la VITRINE bazaart.fr.
+   Il est plus élégant, avec des coins arrondis, des ombres
+   douces, et une typographie serif (Fraunces) pour les titres.
+   ============================================================ */
+
+[data-theme="editorial"] {
+
+  /* ----------------------------------------------------------
+     COULEURS — Thème Editorial Cream
+  ---------------------------------------------------------- */
+
+  /* Fonds */
+  --bg:          #FAF7F1;  /* crème très clair — fond global (--paper dans le proto) */
+  --bg-alt:      #F4EFE6;  /* crème principale (--cream dans le proto) */
+  --bg-deep:     #ECE5D6;  /* crème foncée — fonds alternatifs de cartes */
+
+  /* Vert forêt — couleur structurante principale */
+  --fern:        #1F4030;  /* vert forêt foncé — hero, sections foncées, cartes dark */
+  --fern-deep:   #14352A;  /* vert le plus profond — footer, bandes sombres */
+  --fern-tint:   rgba(31,64,48,.08); /* teinte verte subtile */
+
+  /* Encre */
+  --ink:         #0F1A14;  /* quasi-noir vert — texte principal */
+  --ink-mute:    #5C6B62;  /* gris-vert — texte secondaire */
+  --ink-faint:   #98A39C;  /* gris-vert clair — placeholders, captions */
+
+  /* Accents */
+  --lemon:       #F5E821;  /* jaune citron vif — highlight principal */
+  --lemon-warm:  #E8D516;  /* jaune légèrement plus chaud — hover */
+  --coral:       #D8694F;  /* terracotta — accent secondaire, liens, CTA */
+  --coral-deep:  #B85535;  /* terracotta foncé — hover */
+
+  /* Couleurs de pills (badges doux) */
+  --pill-pink:   #F7D9CD;
+  --pill-mint:   #D6E5CB;
+  --pill-cream:  #EFE6D2;
+  --pill-blue:   #D8E1EE;
+  --pill-grey:   #D9D8D2;
+
+  /* Carte bleue (hub) */
+  --blue-card:   #4B7BC6;
+
+  /* Couleurs spéciales carte */
+  --blue-card-text:  #2A4670;
+  --pill-mint-text:  #2E5A38;
+  --pill-grey-text:  #50524C;
+
+
+  /* ----------------------------------------------------------
+     TYPOGRAPHIE — Thème Editorial Cream
+     Différente du thème Street : serif pour les titres,
+     DM Sans pour le corps (pas Space Grotesk)
+  ---------------------------------------------------------- */
+
+  /* Famille display : gras, serif, lettres serrées */
+  --display:   "Fraunces", "Cormorant Garamond", Georgia, serif;
+
+  /* Famille body : sans-serif moderne, lisible */
+  --body:      "DM Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Mono (commun aux deux thèmes) */
+  --mono:      "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+
+  /* ----------------------------------------------------------
+     LAYOUT — Vitrine
+     Container légèrement plus étroit que l'app
+  ---------------------------------------------------------- */
+
+  --container-max:   1360px;
+  --container-px:    32px;
+  --nav-height:      76px;
+
+
+  /* ----------------------------------------------------------
+     BORDER-RADIUS — Thème Editorial
+     Arrondi généreux, style "moderne doux"
+  ---------------------------------------------------------- */
+
+  --radius-sm:   8px;    /* petits éléments */
+  --radius-md:   14px;   /* cartes standard */
+  --radius-lg:   18px;   /* grandes cartes */
+  --radius-xl:   24px;   /* hub cards, team cards */
+  --radius-full: 999px;  /* pills, boutons CTA */
+
+
+  /* ----------------------------------------------------------
+     OMBRES — Thème Editorial
+     Douces, réalistes (vs Street qui n'en a pas)
+  ---------------------------------------------------------- */
+
+  --shadow-sm:
+    0 1px 0 rgba(15,26,20,.04),
+    0 8px 24px -16px rgba(15,26,20,.18);
+
+  --shadow-md:
+    0 1px 0 rgba(15,26,20,.04),
+    0 22px 50px -22px rgba(15,26,20,.32),
+    0 6px 18px -8px rgba(15,26,20,.18);
+
+  --shadow-lg:
+    0 16px 40px -20px rgba(15,26,20,.28);
+
+  --shadow-card: var(--shadow-sm);
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Navigation (Editorial)
+     Fond translucide + blur = effet vitrine moderne
+  ---------------------------------------------------------- */
+
+  --nav-bg:          rgba(250,247,241,.90);
+  --nav-backdrop:    blur(14px) saturate(140%);
+  --nav-border:      rgba(15,26,20,.08);
+
+  /* Lien nav */
+  --nav-link-color:      var(--ink);
+  --nav-link-hover:      var(--coral);
+  --nav-link-active-bar: var(--coral);
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Boutons (Editorial)
+     Bords arrondis (999px = pilule), style SaaS moderne
+  ---------------------------------------------------------- */
+
+  --btn-radius:        999px;
+  --btn-padding:       12px 22px;
+  --btn-font-size:     14px;
+  --btn-font-weight:   500;
+  --btn-letter-spacing:0;
+
+  /* Bouton coral (CTA principal) */
+  --btn-primary-bg:       var(--coral);
+  --btn-primary-color:    #fff;
+  --btn-primary-border:   var(--coral);
+  --btn-primary-hover-bg: var(--coral-deep);
+
+  /* Bouton lemon (highlight) */
+  --btn-lemon-bg:         var(--lemon);
+  --btn-lemon-color:      var(--ink);
+  --btn-lemon-hover-bg:   var(--lemon-warm);
+
+  /* Bouton outline coral */
+  --btn-outline-bg:       transparent;
+  --btn-outline-color:    var(--coral);
+  --btn-outline-border:   var(--coral);
+
+  /* Bouton cream (neutre) */
+  --btn-cream-bg:         var(--bg);
+  --btn-cream-color:      var(--ink);
+  --btn-cream-border:     rgba(15,26,20,.15);
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Pills (Editorial, à la place des chips)
+     Bords arrondis, fond coloré doux
+  ---------------------------------------------------------- */
+
+  --pill-padding:       7px 14px;
+  --pill-radius:        999px;
+  --pill-font-size:     12px;
+  --pill-font-weight:   600;
+  --pill-letter-spacing:.04em;
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Cartes (Editorial)
+     Fond crème, arrondi généreux, ombre douce
+  ---------------------------------------------------------- */
+
+  --card-bg:     var(--bg);
+  --card-radius: var(--radius-lg);
+  --card-border: none;
+  --card-shadow: var(--shadow-sm);
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Eyebrow (Editorial)
+     Ligne horizontale + texte coral, pas de point carré
+  ---------------------------------------------------------- */
+
+  --eyebrow-color:          var(--coral);
+  --eyebrow-before-width:   28px;
+  --eyebrow-before-height:  2px;
+  --eyebrow-before-bg:      var(--coral);
+  --eyebrow-gap:            12px;
+  --eyebrow-font-size:      11px;
+  --eyebrow-letter-spacing: .14em;
+
+
+  /* ----------------------------------------------------------
+     COMPOSANTS — Formulaires (Editorial)
+     Bords arrondis, focus coral
+  ---------------------------------------------------------- */
+
+  --input-bg:           var(--bg);
+  --input-border:       1px solid rgba(15,26,20,.15);
+  --input-border-focus: 2px solid var(--coral);
+  --input-radius:       var(--radius-sm);
+
+
+  /* ----------------------------------------------------------
+     TYPOGRAPHIE — Échelle de tailles (Editorial)
+  ---------------------------------------------------------- */
+
+  /* Taille corps de texte */
+  --text-base:   16px;
+  --text-sm:     14px;
+  --text-xs:     13px;
+  --text-2xs:    12px;
+
+  /* Taille titres de section */
+  --heading-xl:  clamp(48px, 5.6vw, 80px);
+  --heading-2xl: clamp(64px, 8.4vw, 124px);
+
+  /* Hauteurs de ligne */
+  --leading-tight:  1.0;
+  --leading-snug:   1.12;
+  --leading-normal: 1.55;
+
+
+  /* ----------------------------------------------------------
+     SECTIONS SPÉCIALES — Hubs (fond vert foncé)
+  ---------------------------------------------------------- */
+
+  --hub-section-bg:    var(--fern);
+  --hub-section-color: var(--bg);  /* --paper */
+  --hub-section-sub:   rgba(250,247,241,.7);
+  --hub-border:        rgba(250,247,241,.18);
+
+  /* Stats dans la section hubs */
+  --stat-num-color:    var(--lemon);
+  --stat-label-color:  rgba(250,247,241,.75);
+
+
+  /* ----------------------------------------------------------
+     SECTIONS SPÉCIALES — Team (fond coral)
+  ---------------------------------------------------------- */
+
+  --team-section-bg:    var(--coral);
+  --team-card-bg:       rgba(255,255,255,.10);
+  --team-card-border:   rgba(255,255,255,.18);
+  --team-eyebrow-color: var(--lemon);
+
+
+  /* ----------------------------------------------------------
+     SECTIONS SPÉCIALES — CTA final (fond vert foncé)
+  ---------------------------------------------------------- */
+
+  --cta-section-bg:    var(--fern);
+  --cta-text-color:    var(--bg);
+  --cta-lead-color:    rgba(250,247,241,.72);
+  --cta-pill-bg:       rgba(245,232,33,.10);
+  --cta-pill-border:   rgba(245,232,33,.32);
+  --cta-pill-color:    var(--lemon);
+
+
+  /* ----------------------------------------------------------
+     FOOTER
+  ---------------------------------------------------------- */
+
+  --footer-bg:         #0A1410;  /* noir verdâtre — plus profond que --fern-deep */
+  --footer-text:       var(--bg);
+  --footer-logo-color: rgba(250,247,241,.18);
+  --footer-meta-color: rgba(250,247,241,.6);
+  --footer-copy-color: rgba(250,247,241,.5);
+
+
+  /* ----------------------------------------------------------
+     GRILLE HERO — fond hachuré (grid paper feel)
+  ---------------------------------------------------------- */
+
+  --hero-grid-bg:
+    linear-gradient(rgba(15,26,20,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,26,20,.04) 1px, transparent 1px);
+  --hero-grid-size: 56px 56px;
+
+}
+
+
+/* ============================================================
+   KEYFRAMES GLOBAUX
+   Utilisés par les deux thèmes
+   ============================================================ */
+
+@keyframes marquee-left {
+  from { transform: translateX(0) }
+  to   { transform: translateX(-50%) }
+}
+
+@keyframes marquee-right {
+  from { transform: translateX(-50%) }
+  to   { transform: translateX(0) }
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1 }
+  50%       { opacity: .35 }
+}
+
+@keyframes rotate-slow {
+  from { transform: rotate(0deg) }
+  to   { transform: rotate(360deg) }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px) }
+  to   { opacity: 1; transform: none }
+}
+
+/* Classe utilitaire pour l'animation fadeUp */
+.fade-up {
+  animation: fadeUp .4s ease forwards;
+}

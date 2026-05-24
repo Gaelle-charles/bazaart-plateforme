@@ -83,6 +83,16 @@ class ArticleController extends AbstractController
         $user = $this->getUser();
 
         if ($request->isMethod('POST')) {
+            // Protection CSRF : on vérifie que le token soumis par le formulaire Twig
+            // correspond bien au token généré pour cette action.
+            // Sans cette vérification, un site tiers pourrait déclencher une soumission
+            // à l'insu de l'utilisateur (attaque CSRF).
+            // Le token côté Twig : {{ csrf_token('article_form') }} dans un <input type="hidden" name="_token">
+            if (!$this->isCsrfTokenValid('article_form', $request->request->get('_token'))) {
+                $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+                return $this->redirectToRoute('app_article_new');
+            }
+
             $coverFile = $request->files->get('cover');
             $data      = $request->request->all();
             $result    = $this->articleService->saveArticle($user, $data, $coverFile);
@@ -131,6 +141,16 @@ class ArticleController extends AbstractController
         }
 
         if ($request->isMethod('POST')) {
+            // Protection CSRF — même logique que new() : on vérifie le token avant
+            // tout traitement. On utilise le même identifiant de token ('article_form')
+            // pour que le template form.html.twig puisse partager un seul champ CSRF,
+            // quelle que soit la route (création ou édition).
+            // En cas d'échec, on redirige vers l'édition pour ne pas perdre le contexte.
+            if (!$this->isCsrfTokenValid('article_form', $request->request->get('_token'))) {
+                $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+                return $this->redirectToRoute('app_article_edit', ['id' => $id]);
+            }
+
             $coverFile = $request->files->get('cover');
             $data      = $request->request->all();
             $result    = $this->articleService->saveArticle($user, $data, $coverFile, $article);

@@ -73,18 +73,15 @@ class StructureController extends AbstractController
         // ── Guard : candidature déjà en cours d'examen ───────────────────────
         // Si l'org a déjà candidaté (structureApplicationAt != null) et que la
         // candidature n'est pas encore traitée (isStructurePartner = false),
-        // on informe l'utilisateur et on le redirige.
-        // Pourquoi "dashboard" plutôt que "register" ? Car le dashboard indique
-        // le statut en attente — le formulaire vide serait confusant.
+        // on laisse le code continuer vers le render() sans ajouter de flash.
+        //
+        // Pourquoi ne pas ajouter de flash ici ?
+        // Le template register.html.twig détecte `alreadyApplied = true` et
+        // affiche directement un écran de statut "Demande envoyée" avec son propre
+        // texte explicatif. Ajouter un addFlash('info') ici provoquerait un
+        // double message identique (flash global dans base_app + texte du template).
         if ($orgProfile !== null && $orgProfile->hasPendingStructureApplication()) {
-            $this->addFlash(
-                'info',
-                'Votre candidature est en cours d\'examen par l\'équipe Bazaart. ' .
-                'Vous serez notifié·e dès qu\'une décision sera prise (délai moyen : 48h).'
-            );
-            // On redirige quand même vers le formulaire pour montrer les données
-            // déjà soumises (l'utilisateur peut les lire mais pas re-soumettre
-            // une nouvelle candidature par erreur)
+            // On laisse délibérément passer — le template gère l'affichage du statut.
         }
 
         // ── Traitement POST ───────────────────────────────────────────────────
@@ -120,10 +117,38 @@ class StructureController extends AbstractController
         }
 
         // ── Affichage GET du formulaire ───────────────────────────────────────
+
+        // Calcul : l'utilisateur a-t-il déjà soumis une candidature ?
+        // Une candidature existe si le profil org existe ET que structureApplicationAt est renseigné.
+        $alreadyApplied = $orgProfile !== null && $orgProfile->getStructureApplicationAt() !== null;
+
+        // Calcul du statut de la candidature, utilisé dans le template pour
+        // afficher le bon message (en attente, approuvée, etc.).
+        $applicationStatus = null;
+        if ($alreadyApplied) {
+            if ($orgProfile->isStructurePartner()) {
+                // isStructurePartner() = true → la structure a été validée par l'admin.
+                $applicationStatus = 'approved';
+            } elseif ($orgProfile->getStructureActivatedAt() !== null) {
+                // Double garde : activatedAt renseigné sans isStructurePartner → considéré approuvé.
+                $applicationStatus = 'approved';
+            } else {
+                // La candidature existe (applicationAt renseigné) mais n'est pas encore validée.
+                // En V1 il n'existe pas de champ "rejected" sur l'entité :
+                // une structure refusée reste techniquement "pending" côté BDD.
+                // Ce cas est géré côté admin (message direct à la structure).
+                $applicationStatus = 'pending';
+            }
+        }
+
         return $this->render('structure/register.html.twig', [
-            // On passe le profil existant pour pré-remplir le formulaire.
+            // Profil existant pour pré-remplir les champs du formulaire.
             // null si l'utilisateur n'a jamais créé de profil organisation.
-            'orgProfile' => $orgProfile,
+            'orgProfile'        => $orgProfile,
+            // Booléen : true si une candidature a déjà été soumise.
+            'alreadyApplied'    => $alreadyApplied,
+            // String : 'pending' | 'approved' | null (null si aucune candidature).
+            'applicationStatus' => $applicationStatus,
         ]);
     }
 
@@ -155,18 +180,29 @@ class StructureController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
 
-        // Récupère le profil — garantit non-null ici car le voter l'a déjà vérifié
+        // Récupère le profil — en théorie non-null car le voter l'a déjà vérifié,
+        // mais on se protège en cas d'incohérence de données (ex : rôle attribué
+        // manuellement sans que le profil OrganizationProfile ait été créé).
         $orgProfile = $this->orgRepository->findByUser($user);
 
+        // Garde de sécurité : si le profil est introuvable malgré le voter,
+        // on évite un crash Twig et on informe l'utilisateur.
+        if ($orgProfile === null) {
+            $this->addFlash('error', 'Profil structure introuvable. Contactez l\'administrateur.');
+            return $this->redirectToRoute('app_dashboard');
+        }
+
         // Récupère toutes les ressources soumises par cet utilisateur.
-        // findBySubmittedBy() est une méthode du ResourceRepository qui filtre
-        // par l'utilisateur — voir ResourceRepository.
-        // On utilise findBy() directement car ResourceRepository n'a pas encore
-        // de méthode dédiée ; on trie par date de création décroissante.
-        $resources = $this->resourceRepository->findBy(
-            ['submittedBy' => $user],
-            ['createdAt' => 'DESC']
-        );
+        //
+        // On utilise findByUser() du ResourceRepository plutôt que findBy() natif
+        // de Doctrine, car findByUser() fait un leftJoin sur resourceType avec
+        // addSelect('rt') : cela charge la relation en une seule requête SQL
+        // (eager loading) et évite le problème N+1 dans le template Twig.
+        //
+        // Sans ce join, chaque appel à resource.resourceType.name dans le template
+        // déclencherait une requête SQL séparée — coûteux si la structure a
+        // soumis de nombreuses ressources.
+        $resources = $this->resourceRepository->findByUser($user);
 
         return $this->render('structure/dashboard.html.twig', [
             'orgProfile' => $orgProfile,

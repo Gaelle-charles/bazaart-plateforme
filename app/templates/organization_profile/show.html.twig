@@ -1,196 +1,503 @@
 {% extends 'base_app.html.twig' %}
 
-{% block title %}{{ profile.name }} — BazaArt{% endblock %}
-{% block page_title %}Profil organisation{% endblock %}
+{#
+ # organization_profile/show.html.twig — Profil public d'une organisation (thème Street)
+ #
+ # Variables transmises par OrganizationProfileController::show() :
+ #   - profile : OrganizationProfile — le profil à afficher
+ #     (si null → le contrôleur redirige vers edit, donc on ne gère pas le cas null ici)
+ #
+ # Le contrôleur montre toujours le profil de l'utilisateur connecté (app.user).
+ # Il n'y a pas de page "profil public d'une autre orga" dans V1 — uniquement le sien.
+ # → "isOwnProfile" est donc toujours true ici, on utilise : app.user == profile.user.
+ #
+ # Structure :
+ #   - Hero bande fond var(--ink) : initiales + nom + description courte + badges
+ #   - Section "À propos" (description complète)
+ #   - Section "Contact & informations" (email, site, SIRET)
+ #}
+
+{% block title %}{{ profile.name }} — Organisation — BazaArt{% endblock %}
+{% block page_title %}Mon organisation{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
+{# Styles préfixés .org- pour éviter les collisions avec les pages articles #}
 <style>
-    /* Layout deux colonnes (identique au profil artiste) */
-    .profile-layout {
-        display: grid;
-        grid-template-columns: 280px 1fr;
-        gap: 20px;
-        align-items: start;
+
+    /* ── Hero bande ─────────────────────────────────────────────────────── */
+
+    /*
+     * .org-hero : bande pleine largeur fond encre (--ink).
+     * Reprend le pattern "section sombre" du prototype (SAAS PITCH section).
+     * Les textes passent en --bg (crème) pour le contraste.
+     */
+    .org-hero {
+        background: var(--ink);
+        color: var(--bg);
+        border: 1px solid var(--ink);
+        padding: 40px 36px;
+        margin-bottom: 0;
+        display: flex;
+        align-items: flex-start;
+        gap: 28px;
+        flex-wrap: wrap;
     }
 
-    /* Carte profil gauche */
-    .profile-card {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 24px;
+    /*
+     * .org-hero__initials : carré --accent (lime) avec initiale en Archivo Black.
+     * Bords francs — cohérent avec le thème Street.
+     * Contraste : fond lime + texte encre → WCAG AA large (ratio > 8:1).
+     */
+    .org-hero__initials {
+        width: 72px;
+        height: 72px;
+        background: var(--accent);
+        color: var(--ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--display);
+        font-size: 36px;
+        flex-shrink: 0;
+        /* Pas de border-radius — style affiche Street */
+    }
+
+    /* Si un logo est uploadé, on remplace les initiales par l'image */
+    .org-hero__logo {
+        width: 72px;
+        height: 72px;
+        object-fit: contain;
+        background: var(--bg);
+        flex-shrink: 0;
+        /* Bordure lime pour ancrer l'image dans le fond sombre */
+        border: 2px solid var(--accent);
+        padding: 4px;
+    }
+
+    /* Bloc texte à droite des initiales/logo */
+    .org-hero__body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    /* Nom de l'organisation — Archivo Black grand */
+    .org-hero__name {
+        font-family: var(--display);
+        font-size: 36px;
+        text-transform: uppercase;
+        letter-spacing: -.02em;
+        color: var(--bg);
+        margin: 0 0 8px;
+        line-height: 1;
+    }
+
+    /* Description courte (location + email contact) en mono */
+    .org-hero__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 14px;
+    }
+
+    .org-hero__meta-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: rgba(242, 239, 230, .65);  /* --bg à 65% de transparence */
+    }
+
+    .org-hero__meta-item a {
+        color: var(--accent);
+        text-decoration: none;
+    }
+    .org-hero__meta-item a:hover { text-decoration: underline; }
+
+    /* Zone badges + bouton modifier */
+    .org-hero__actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+    }
+
+    /*
+     * Badge "Partenaire Bazaart" — chip lime sur fond sombre.
+     * Visible uniquement si profile.isStructurePartner() est true.
+     * → Reprend le style .chip.chip-accent du prototype.
+     */
+    .org-badge-partner {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--chip-padding);
+        background: var(--accent);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+        border-radius: var(--chip-radius);
+    }
+
+    /* Badge "Vérifié" — fond blanc sur encre pour éviter d'écraser le badge partner */
+    .org-badge-verified {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--chip-padding);
+        background: transparent;
+        color: var(--bg);
+        border: 1px solid rgba(242, 239, 230, .4);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+    }
+
+    /* Badge "En attente" — orange pour attirer l'attention sans paniquer */
+    .org-badge-pending {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--chip-padding);
+        background: var(--accent-2);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+    }
+
+    /* Bouton "Modifier" dans le hero — ghost clair sur fond sombre */
+    .org-btn-edit {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--btn-padding-sm);
+        background: transparent;
+        color: var(--bg);
+        border: 1px solid rgba(242, 239, 230, .4);
+        font-family: var(--mono);
+        font-size: var(--btn-font-size-sm);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+        margin-left: auto;
+    }
+    .org-btn-edit:hover {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--ink);
+    }
+
+    /* ── Sections de contenu ─────────────────────────────────────────────── */
+
+    .org-sections {
+        display: flex;
+        flex-direction: column;
+        gap: 0;  /* les bordures bottom font les séparations */
+    }
+
+    /*
+     * .org-section : bloc de contenu avec bordure encre.
+     * border-top absent sur le premier → le hero ferme le haut.
+     */
+    .org-section {
+        border: 1px solid var(--ink);
+        border-top: 0;  /* évite la double bordure avec la section précédente */
+        background: var(--bg);
+        padding: 28px 32px;
+    }
+
+    /* Label de section en mono uppercase */
+    .org-section__label {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: 16px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--line-soft);
+    }
+
+    /* Texte de description — Instrument Serif pour l'éditorial */
+    .org-desc {
+        font-family: var(--serif);
+        font-size: 17px;
+        line-height: 1.7;
+        color: var(--ink);
+    }
+
+    /* Message vide dans À propos */
+    .org-desc-empty {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
         text-align: center;
+        padding: 24px 0;
     }
 
-    /* Logo ou initiale */
-    .org-logo-display {
-        width: 80px; height: 80px; border-radius: var(--radius-sm);
-        background: var(--color-green); color: white;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 28px; font-weight: 700;
-        margin: 0 auto 14px;
+    .org-desc-empty a {
+        color: var(--ink);
+        text-decoration: underline;
+        text-underline-offset: 3px;
     }
 
-    .org-name {
-        font-family: var(--font-heading); font-size: 20px; font-weight: 700;
-        color: var(--color-text); margin-bottom: 6px;
+    /* ── Lignes de contact ───────────────────────────────────────────────── */
+
+    /*
+     * .org-link-item : ligne flex avec label fixe + valeur.
+     * border-bottom sauf dernière ligne → séparateurs légers.
+     */
+    .org-link-item {
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--line-soft);
+        font-family: var(--body);
+        font-size: 14px;
+    }
+    .org-link-item:last-child { border-bottom: 0; padding-bottom: 0; }
+
+    /* Label (Email, Site web, SIRET) — mono uppercase min-width pour l'alignement */
+    .org-link-item__key {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        min-width: 72px;
+        flex-shrink: 0;
     }
 
-    .org-location { font-size: 13px; color: var(--color-text-light); margin-bottom: 14px; }
+    .org-link-item__val { color: var(--ink); flex: 1; }
 
-    /* Badges de vérification */
-    .badge-verified {
-        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
-        background: #d4edda; color: #155724; border: 1px solid #c3e6cb;
-        border-radius: var(--radius-full); font-size: 10px; font-weight: 700;
-        margin-bottom: 14px;
+    .org-link-item a {
+        color: var(--ink);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-decoration-color: var(--accent);
     }
-    .badge-pending {
-        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
-        background: #fff3cd; color: #856404; border: 1px solid #ffc107;
-        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
-        margin-bottom: 14px;
-    }
+    .org-link-item a:hover { color: var(--accent-2); }
 
-    /* Bouton modifier (propriétaire) */
-    .btn-edit {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 100%; height: 36px; border: 1.5px solid var(--color-border);
-        border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
-        color: var(--color-text-muted); text-decoration: none; transition: all 0.15s;
-    }
-    .btn-edit:hover { border-color: var(--color-green); color: var(--color-green); }
-
-    /* Colonne droite */
-    .profile-content { display: flex; flex-direction: column; gap: 16px; }
-
-    .content-card {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 24px;
-    }
-
-    .section-label {
-        font-size: 10px; font-weight: 700; color: var(--color-text-light);
-        text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;
-    }
-
-    .desc-text { font-size: 14px; line-height: 1.8; color: var(--color-text-muted); }
-
-    /* Liens de contact */
-    .link-item {
-        display: flex; align-items: center; gap: 10px;
-        padding: 10px 0; border-bottom: 1px solid var(--color-border);
+    /* SIRET : fonte mono pour la lisibilité des chiffres */
+    .org-siret {
+        font-family: var(--mono);
         font-size: 13px;
+        letter-spacing: .06em;
+        color: var(--ink);
     }
-    .link-item:last-child { border-bottom: none; padding-bottom: 0; }
-    .link-item__label { font-weight: 600; color: var(--color-text); min-width: 80px; }
-    .link-item a { color: var(--color-red); text-decoration: none; font-size: 13px; }
-    .link-item a:hover { text-decoration: underline; }
 
-    /* SIRET */
-    .siret-code { font-size: 12px; color: var(--color-text-light); margin-top: 4px; }
+    /* ── Responsive ──────────────────────────────────────────────────────── */
+
+    @media (max-width: 640px) {
+        .org-hero { flex-direction: column; padding: 24px 20px; }
+        .org-btn-edit { margin-left: 0; }
+        .org-section { padding: 20px 16px; }
+        .org-hero__name { font-size: 28px; }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<div class="profile-layout">
+{# ── Hero bande fond encre ────────────────────────────────────────────────── #}
+<div class="org-hero" role="banner">
 
-    {# ── Colonne gauche : carte profil ── #}
-    <div class="profile-card">
+    {# Logo ou initiale de l'organisation #}
+    {% if profile.logoPath %}
+        <img src="{{ asset(profile.logoPath) }}"
+             alt="Logo {{ profile.name }}"
+             class="org-hero__logo">
+    {% else %}
+        {#
+         # Initiale dans un carré lime — très visible sur fond sombre.
+         # profile.name|first retourne le premier caractère du nom de l'orga.
+        #}
+        <div class="org-hero__initials" aria-hidden="true">
+            {{ profile.name|first|upper }}
+        </div>
+    {% endif %}
 
-        {# Logo ou initiale de l'organisation #}
-        {% if profile.logoPath %}
-            <img src="{{ asset(profile.logoPath) }}"
-                 alt="Logo {{ profile.name }}"
-                 style="width:80px;height:80px;border-radius:var(--radius-sm);object-fit:contain;margin:0 auto 14px;display:block;border:1px solid var(--color-border);padding:6px;">
-        {% else %}
-            <div class="org-logo-display">{{ profile.name|first|upper }}</div>
-        {% endif %}
+    {# Corps du hero : nom + métas + badges + bouton modifier #}
+    <div class="org-hero__body">
 
-        <div class="org-name">{{ profile.name }}</div>
+        {# Nom de l'organisation #}
+        <h1 class="org-hero__name">{{ profile.name }}</h1>
 
-        {% if profile.location %}
-            <div class="org-location">📍 {{ profile.location }}</div>
-        {% endif %}
+        {# Métas : localisation + contact email + site web #}
+        <div class="org-hero__meta">
 
-        {# Badge de vérification selon le statut de l'organisation #}
-        {% if profile.isVerified %}
-            <div><span class="badge-verified">✓ Vérifiée</span></div>
-        {% else %}
-            <div><span class="badge-pending">⏳ En attente de vérification</span></div>
-        {% endif %}
+            {% if profile.location %}
+                <span class="org-hero__meta-item">
+                    {# Point comme séparateur visuel — style affiche #}
+                    <span aria-hidden="true">◎</span>
+                    {{ profile.location }}
+                </span>
+            {% endif %}
 
-        {# Bouton modifier — uniquement pour le propriétaire du profil #}
-        {% if app.user == profile.user %}
-            <a href="{{ path('app_org_profile_edit') }}" class="btn-edit">Modifier le profil</a>
-        {% endif %}
+            {% if profile.contactEmail %}
+                <span class="org-hero__meta-item">
+                    <span aria-hidden="true">@</span>
+                    <a href="mailto:{{ profile.contactEmail }}">
+                        {{ profile.contactEmail }}
+                    </a>
+                </span>
+            {% endif %}
+
+            {% if profile.websiteUrl %}
+                <span class="org-hero__meta-item">
+                    <span aria-hidden="true">↗</span>
+                    <a href="{{ profile.websiteUrl }}"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                        {{ profile.websiteUrl|replace({'https://': '', 'http://': ''}) }}
+                    </a>
+                </span>
+            {% endif %}
+
+        </div>
+
+        {# Badges + bouton modifier #}
+        <div class="org-hero__actions">
+
+            {#
+             # Badge "Partenaire Bazaart" — visible si l'organisation est une structure partenaire.
+             # Cela correspond au champ isStructurePartner (booléen sur OrganizationProfile).
+             #
+             # CORRECTION C1 : `profile.isStructurePartner is defined` est TOUJOURS true
+             # en Twig quand on teste une méthode d'objet — `is defined` ne teste que les
+             # variables Twig, pas les propriétés/méthodes d'un objet PHP.
+             # On appelle directement profile.structurePartner : Twig convertit automatiquement
+             # en isStructurePartner() (accesseur booléen) ou getStructurePartner().
+            #}
+            {% if profile.structurePartner %}
+                <span class="org-badge-partner">
+                    ★ Partenaire Bazaart
+                </span>
+            {% endif %}
+
+            {#
+             # Badge de vérification SIRET.
+             # Même logique : isVerified est une propriété booléenne, pas une variable Twig.
+             # On appelle directement profile.verified (→ isVerified() ou getVerified()).
+            #}
+            {% if profile.verified %}
+                <span class="org-badge-verified">✓ Vérifiée</span>
+            {% else %}
+                <span class="org-badge-pending">En attente de vérification</span>
+            {% endif %}
+
+            {#
+             # Bouton "Modifier" — visible uniquement pour le propriétaire.
+             # app.user == profile.user compare les objets User par identité (même entité Doctrine).
+             # C'est la méthode recommandée dans Twig (comparaison d'objets Doctrine par référence).
+            #}
+            {% if app.user == profile.user %}
+                <a href="{{ path('app_org_profile_edit') }}"
+                   class="org-btn-edit">
+                    Modifier
+                </a>
+            {% endif %}
+
+        </div>
 
     </div>
+</div>
 
-    {# ── Colonne droite : contenu détaillé ── #}
-    <div class="profile-content">
+{# ── Sections de contenu ──────────────────────────────────────────────────── #}
+<div class="org-sections">
 
-        {# Description / À propos #}
+    {# ── Section "À propos" ─────────────────────────────────────────────── #}
+    <section class="org-section" aria-labelledby="org-about-label">
+        <div class="org-section__label" id="org-about-label">À propos</div>
+
         {% if profile.description %}
-            <div class="content-card">
-                <div class="section-label">À propos</div>
-                <p class="desc-text">{{ profile.description|nl2br }}</p>
-            </div>
+            {#
+             # |nl2br : respecte les sauts de ligne saisis dans le formulaire.
+             # JAMAIS |raw ici : la description est saisie par l'utilisateur → XSS.
+            #}
+            <div class="org-desc">{{ profile.description|nl2br }}</div>
         {% else %}
-            <div class="content-card">
-                <div class="section-label">À propos</div>
-                <p style="font-size:13px;color:var(--color-text-muted);text-align:center;padding:16px 0;">
-                    Aucune description renseignée.
-                    {% if app.user == profile.user %}
-                        <br><a href="{{ path('app_org_profile_edit') }}"
-                               style="color:var(--color-red);font-weight:600;text-decoration:none;">
-                            Ajouter une description →
-                        </a>
-                    {% endif %}
-                </p>
-            </div>
-        {% endif %}
-
-        {# Contact et liens #}
-        {% if profile.contactEmail or profile.websiteUrl or profile.siret %}
-            <div class="content-card">
-                <div class="section-label">Contact & informations</div>
-
-                {% if profile.contactEmail %}
-                    <div class="link-item">
-                        <span class="link-item__label">Email</span>
-                        <a href="mailto:{{ profile.contactEmail }}">{{ profile.contactEmail }}</a>
-                    </div>
+            <p class="org-desc-empty">
+                Aucune description renseignée.
+                {% if app.user == profile.user %}
+                    <br>
+                    <a href="{{ path('app_org_profile_edit') }}">
+                        Ajouter une description →
+                    </a>
                 {% endif %}
+            </p>
+        {% endif %}
+    </section>
 
-                {% if profile.websiteUrl %}
-                    <div class="link-item">
-                        <span class="link-item__label">Site web</span>
-                        <a href="{{ profile.websiteUrl }}" target="_blank" rel="noopener">
+    {# ── Section "Contact & informations" ───────────────────────────────── #}
+    {#
+     # On n'affiche cette section que s'il y a au moins une donnée à montrer.
+     # Cela évite une carte vide si aucune info de contact n'est renseignée.
+    #}
+    {% if profile.contactEmail or profile.websiteUrl or profile.siret %}
+        <section class="org-section" aria-labelledby="org-contact-label">
+            <div class="org-section__label" id="org-contact-label">Contact & informations</div>
+
+            {% if profile.contactEmail %}
+                <div class="org-link-item">
+                    <span class="org-link-item__key">Email</span>
+                    <span class="org-link-item__val">
+                        <a href="mailto:{{ profile.contactEmail }}">
+                            {{ profile.contactEmail }}
+                        </a>
+                    </span>
+                </div>
+            {% endif %}
+
+            {% if profile.websiteUrl %}
+                <div class="org-link-item">
+                    <span class="org-link-item__key">Site web</span>
+                    <span class="org-link-item__val">
+                        <a href="{{ profile.websiteUrl }}"
+                           target="_blank"
+                           rel="noopener noreferrer">
                             {{ profile.websiteUrl }}
                         </a>
-                    </div>
-                {% endif %}
+                    </span>
+                </div>
+            {% endif %}
 
-                {# SIRET formaté en groupes pour la lisibilité #}
-                {% if profile.siret %}
-                    <div class="link-item">
-                        <span class="link-item__label">SIRET</span>
-                        <span style="font-size:13px; color:var(--color-text-muted); font-family:monospace;">
-                            {{ profile.siret|slice(0,3) }} {{ profile.siret|slice(3,3) }} {{ profile.siret|slice(6,3) }} {{ profile.siret|slice(9,5) }}
+            {% if profile.siret %}
+                <div class="org-link-item">
+                    <span class="org-link-item__key">SIRET</span>
+                    <span class="org-link-item__val">
+                        {#
+                         # Formatage du SIRET en groupes lisibles : 123 456 789 01234
+                         # Le SIRET est un numéro à 14 chiffres (9 SIREN + 5 NIC).
+                         # slice(debut, longueur) — pas slice(debut, fin) en Twig.
+                        #}
+                        <span class="org-siret">
+                            {{ profile.siret|slice(0,3) }}&nbsp;{{ profile.siret|slice(3,3) }}&nbsp;{{ profile.siret|slice(6,3) }}&nbsp;{{ profile.siret|slice(9,5) }}
                         </span>
-                    </div>
-                {% endif %}
-            </div>
-        {% endif %}
+                    </span>
+                </div>
+            {% endif %}
 
-    </div>
+        </section>
+    {% endif %}
 
 </div>
 

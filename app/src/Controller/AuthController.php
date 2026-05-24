@@ -52,6 +52,15 @@ class AuthController extends AbstractController
         $error = null;
 
         if ($request->isMethod('POST')) {
+            // Validation du token CSRF avant tout traitement du formulaire.
+            // isCsrfTokenValid() compare le token soumis avec celui stocké en session,
+            // en utilisant l'identifiant 'registration' défini dans le template Twig.
+            if (!$this->isCsrfTokenValid('registration', $request->request->get('_csrf_token'))) {
+                return $this->render('auth/register.html.twig', [
+                    'error' => 'Token de sécurité invalide. Veuillez recharger la page et réessayer.',
+                ]);
+            }
+
             $dto = RegisterDTO::fromArray($request->request->all());
 
             if ($dto === null) {

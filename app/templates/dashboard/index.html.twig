@@ -1,359 +1,833 @@
 {% extends 'base_app.html.twig' %}
 
 {#
- # dashboard/index.html.twig — Tableau de bord principal
+ # dashboard/index.html.twig — Tableau de bord artiste (thème Street)
  #
- # Hérite du layout base_app.html.twig qui fournit :
- # - La sidebar verte (navigation)
- # - La topbar avec le titre
- # - La zone de contenu principale
+ # Variables transmises par DashboardController::index() :
+ #   - user            : App\Entity\User — l'utilisateur connecté
+ #   - recent_resources: Resource[]     — 5 dernières ressources publiées
+ #   - recent_posts    : Post[]         — 3 derniers posts du fil communauté
+ #   - submissions     : int            — nombre total de soumissions de cet utilisateur
  #
- # Ce template affiche :
- # - Un message de bienvenue personnalisé
- # - 4 cartes statistiques (ressources, membres, articles, soumissions)
- # - 2 widgets : ressources récentes + publications communauté
+ # Design : thème Street
+ #   fond --bg (#F2EFE6), encre --ink (#0D0D0D),
+ #   accent vert acide --accent (#C6F24E), accent orange --accent-2 (#FF6B2C)
+ #   Typographie : Archivo Black (display), Space Grotesk (corps), JetBrains Mono (labels)
+ #   Bords francs : border-radius 0 partout
  #}
 
 {% block title %}Tableau de bord — BazaArt{% endblock %}
-
 {% block page_title %}Tableau de bord{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* ── Grille de statistiques — 4 cartes côte à côte ── */
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 16px;
-        margin-bottom: 24px;
+
+/* ================================================================
+   DASHBOARD ARTISTE — Thème Street
+   Convention de nommage : préfixe .db- pour éviter les collisions
+   avec les classes de base_app.html.twig
+================================================================ */
+
+/* ── Hero bande sombre ──────────────────────────────────────────
+   Reprend le motif du ScreenArtistDashboard de screens-dash.jsx :
+   fond --ink, texte --bg, greeting en Archivo Black géant
+----------------------------------------------------------------- */
+.db-hero {
+    background: var(--ink);
+    color: var(--bg);
+    /* Marge négative pour "déborder" du padding .app-content (28px)
+       et coller aux bords de la zone principale */
+    margin: -28px -28px 32px;
+    padding: 32px 28px 24px;
+    border-bottom: 1px solid var(--ink);
+}
+
+/* Eyebrow : date du jour en mono, texte atténué sur fond sombre */
+.db-hero__eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: rgba(242, 239, 230, .5); /* --bg avec 50% d'opacité */
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Pastille verte devant la date (point d'eyebrow comme dans ui.jsx) */
+.db-hero__eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--accent); /* vert acide */
+    flex-shrink: 0;
+}
+
+/* Nom en Archivo Black géant — style "affiche" */
+.db-hero__greeting {
+    font-family: var(--display); /* Archivo Black */
+    font-size: clamp(42px, 7vw, 96px);
+    line-height: .9;
+    color: var(--bg);
+    text-transform: uppercase;
+    margin: 0 0 16px;
+}
+
+/* Ligne de chips de rôles sous le greeting */
+.db-hero__roles {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Chip générique — style Street mono uppercase, bords francs */
+.db-chip {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    border-radius: 0; /* Street = bords francs */
+}
+
+/* Chip lime (vert acide) — rôle Artiste */
+.db-chip--accent {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+/* Chip orange — rôle Structure */
+.db-chip--accent2 {
+    background: var(--accent-2);
+    color: var(--bg);
+}
+
+/* Chip neutre — rôle par défaut */
+.db-chip--muted {
+    background: rgba(242, 239, 230, .15);
+    color: var(--bg);
+    border: 1px solid rgba(242, 239, 230, .25);
+}
+
+/* ── Bande de stats ─────────────────────────────────────────────
+   Fond vert acide, grille 3 colonnes séparées par --ink
+   Inspirée du "Stats strip" dans screens-dash.jsx
+----------------------------------------------------------------- */
+.db-stats {
+    background: var(--accent);
+    border: 1px solid var(--ink);
+    border-top: 0; /* la hero du dessus a déjà un border-bottom */
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin: -28px -28px 32px; /* remonte pour coller au hero */
+}
+
+.db-stat {
+    padding: 20px 24px;
+    border-right: 1px solid var(--ink);
+}
+
+.db-stat:last-child {
+    border-right: none;
+}
+
+/* Valeur chiffrée en Archivo Black, grande */
+.db-stat__value {
+    font-family: var(--display);
+    font-size: clamp(36px, 4vw, 56px);
+    line-height: .9;
+    color: var(--ink);
+}
+
+/* Label sous la valeur */
+.db-stat__label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin-top: 6px;
+    opacity: .7;
+}
+
+/* ── Grille de widgets ──────────────────────────────────────────
+   2 colonnes sur desktop, 1 sur mobile
+   Convention Street : cartes avec border 1px --ink, pas de shadow
+----------------------------------------------------------------- */
+.db-widgets {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 0; /* pas de gap en Street : les bordures font la séparation */
+    border: 1px solid var(--ink);
+}
+
+/* Widget générique */
+.db-widget {
+    /* Pas de background spécifique : hérite de var(--bg) du body */
+    border-right: 1px solid var(--ink);
+}
+
+.db-widget:last-child {
+    border-right: none;
+}
+
+/* En-tête d'un widget */
+.db-widget__head {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--ink);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+/* Titre du widget en Archivo Black */
+.db-widget__title {
+    font-family: var(--display);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--ink);
+}
+
+/* Lien "Tout voir →" à droite du titre */
+.db-widget__link {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color var(--transition-fast);
+}
+
+.db-widget__link:hover {
+    color: var(--ink);
+}
+
+/* Ligne de ressource dans le widget */
+.db-resource-row {
+    display: block;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line-soft);
+    text-decoration: none;
+    color: var(--ink);
+    transition: background var(--transition-fast);
+}
+
+.db-resource-row:last-child {
+    border-bottom: none;
+}
+
+.db-resource-row:hover {
+    background: var(--bg-alt);
+}
+
+/* Type de ressource en mono */
+.db-resource-row__type {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 4px;
+}
+
+/* Titre + flèche → */
+.db-resource-row__title {
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Deadline en mono */
+.db-resource-row__meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-mute);
+    margin-top: 4px;
+}
+
+/* ── Colonne droite : accès rapides + notifications ──────────── */
+.db-aside {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Grille 2×2 de boutons d'accès rapide */
+.db-quicklinks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    /* Les bordures entre cellules sont simulées par box-shadow pour éviter
+       les doublons entre border-right / border-bottom */
+}
+
+/* Chaque bouton d'accès rapide */
+.db-quicklink {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 20px 12px;
+    text-decoration: none;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    text-align: center;
+    border-right: 1px solid var(--line-soft);
+    border-bottom: 1px solid var(--line-soft);
+    transition: background var(--transition-fast);
+    background: transparent;
+}
+
+.db-quicklink:hover {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+/* Icône SVG dans le bouton accès rapide */
+.db-quicklink svg {
+    display: block;
+    flex-shrink: 0;
+}
+
+/* Supprime la bordure droite sur les cellules en colonne 2 */
+.db-quicklink:nth-child(2n) {
+    border-right: none;
+}
+
+/* Supprime la bordure basse sur les deux dernières cellules */
+.db-quicklink:nth-last-child(-n+2) {
+    border-bottom: none;
+}
+
+/* ── Widget notifications ────────────────────────────────────── */
+.db-notif-widget {
+    margin: 0;
+    padding: 14px 18px;
+    background: var(--accent);
+    border-top: 1px solid var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.db-notif-widget__text {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ink);
+}
+
+/* Bouton "Voir →" dans le widget notif */
+.db-btn-dark {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 7px 14px;
+    background: var(--ink);
+    color: var(--accent);
+    border: 1px solid var(--ink);
+    text-decoration: none;
+    transition: background var(--transition-fast), color var(--transition-fast);
+    white-space: nowrap;
+    border-radius: 0;
+}
+
+.db-btn-dark:hover {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+/* ── Widget communauté (posts récents) ───────────────────────── */
+.db-post-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--line-soft);
+}
+
+.db-post-row:last-child {
+    border-bottom: none;
+}
+
+/* Avatar initiales en carré (Street = pas de cercle) */
+.db-avatar {
+    width: 30px;
+    height: 30px;
+    background: var(--accent);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    /* Street : carré, pas de border-radius */
+}
+
+.db-post-row__content {
+    flex: 1;
+    min-width: 0;
+}
+
+.db-post-row__name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.db-post-row__date {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-mute);
+    display: inline;
+    margin-left: 6px;
+}
+
+.db-post-row__text {
+    font-size: 12px;
+    color: var(--ink-mute);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── État vide ──────────────────────────────────────────────────
+   Affiché quand la liste de ressources est vide
+----------------------------------------------------------------- */
+.db-empty {
+    padding: 32px 18px;
+    text-align: center;
+}
+
+.db-empty__text {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 12px;
+}
+
+.db-empty__link {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 7px 14px;
+    background: var(--ink);
+    color: var(--bg);
+    text-decoration: none;
+    display: inline-block;
+    transition: background var(--transition-fast);
+}
+
+.db-empty__link:hover {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+/* ── Responsive mobile ──────────────────────────────────────────
+   Sur mobile, la sidebar disparaît et la grille passe en 1 colonne
+----------------------------------------------------------------- */
+@media (max-width: 768px) {
+
+    /* La bande hero déborde de 16px (padding réduit sur mobile) */
+    .db-hero {
+        margin: -28px -16px 24px;
+        padding: 24px 16px 18px;
     }
 
-    /* Chaque carte stat */
-    .stat-card {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 16px;
+    .db-stats {
+        margin: -28px -16px 24px;
+        grid-template-columns: 1fr 1fr; /* 2 stats côte à côte au lieu de 3 */
     }
 
-    .stat-card__label {
-        font-size: 10px;
-        font-weight: 600;
-        color: var(--color-text-light);
-        margin-bottom: 8px;
+    /* Troisième stat passe sur 2 colonnes */
+    .db-stat:nth-child(3) {
+        grid-column: 1 / -1;
+        border-top: 1px solid var(--ink);
+        border-right: none;
     }
 
-    .stat-card__value {
-        font-size: 28px;
-        font-weight: 700;
-        color: var(--color-text);
-        margin-bottom: 6px;
-        line-height: 1;
+    /* Grille : 1 colonne sur mobile */
+    .db-widgets {
+        grid-template-columns: 1fr;
     }
 
-    /* Tendance en bas de la carte (ex: "↑ +12 cette semaine") */
-    .stat-card__trend {
-        font-size: 10px;
-        color: var(--color-red);
+    /* Les widgets perdent leur border-right — remplacé par border-bottom */
+    .db-widget {
+        border-right: none;
+        border-bottom: 1px solid var(--ink);
     }
 
-    /* ── Grille des widgets — 2 colonnes ── */
-    .widgets-grid {
-        display: grid;
+    .db-widget:last-child {
+        border-bottom: none;
+    }
+
+    /* Accès rapides : 2×2 conservé (lisible sur mobile) */
+    .db-quicklinks {
         grid-template-columns: 1fr 1fr;
-        gap: 16px;
     }
+}
 
-    /* Chaque widget */
-    .widget {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        overflow: hidden;
-    }
-
-    /* En-tête du widget */
-    .widget__header {
-        padding: 16px 20px 12px;
-        border-bottom: 1px solid var(--color-border);
-    }
-
-    .widget__title {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--color-text);
-        margin-bottom: 2px;
-    }
-
-    .widget__subtitle {
-        font-size: 11px;
-        color: var(--color-text-light);
-    }
-
-    /* Chaque ligne de contenu dans le widget */
-    .widget__row {
-        padding: 12px 20px;
-        border-bottom: 1px solid var(--color-border);
-    }
-    .widget__row:last-child { border-bottom: none; }
-
-    /* Catégorie de la ressource (en rouge, en petites majuscules) */
-    .widget__row-category {
-        font-size: 9px;
-        font-weight: 700;
-        color: var(--color-red);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        margin-bottom: 4px;
-    }
-
-    /* Titre de la ressource avec flèche à droite */
-    .widget__row-title {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--color-text);
-        text-decoration: none;
-    }
-    .widget__row-title:hover { color: var(--color-red); }
-
-    .widget__row-meta {
-        font-size: 11px;
-        color: var(--color-text-light);
-        margin-top: 2px;
-    }
-
-    /* ── Styles pour les lignes du widget Communauté ── */
-    .community-row {
-        padding: 10px 20px;
-        border-bottom: 1px solid var(--color-border);
-        display: flex;
-        gap: 12px;
-        align-items: flex-start;
-    }
-    .community-row:last-child { border-bottom: none; }
-
-    /* Mini avatar avec initiales */
-    .community-avatar {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        background: var(--color-orange);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 9px;
-        font-weight: 700;
-        color: white;
-        flex-shrink: 0;
-        margin-top: 2px;
-    }
-
-    .community-row__content { flex: 1; min-width: 0; }
-
-    .community-row__header {
-        display: flex;
-        align-items: baseline;
-        gap: 6px;
-        margin-bottom: 2px;
-    }
-
-    .community-row__name {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--color-text);
-    }
-
-    .community-row__time {
-        font-size: 11px;
-        color: var(--color-text-light);
-    }
-
-    .community-row__text {
-        font-size: 12px;
-        color: var(--color-text-muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    /* ── Message de bienvenue ── */
-    .welcome-title {
-        font-family: var(--font-heading);
-        font-size: 26px;
-        font-weight: 700;
-        color: var(--color-text);
-        margin-bottom: 6px;
-    }
-
-    .welcome-subtitle {
-        font-size: 13px;
-        color: var(--color-text-light);
-        margin-bottom: 24px;
-    }
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# ── Message de bienvenue personnalisé ── #}
-{# app.user.email contient l'email → on prend la partie avant le @ #}
-{% set username = app.user.email|split('@')|first %}
-<h2 class="welcome-title">Bonjour, {{ username }} ✦</h2>
-<p class="welcome-subtitle">Voici les dernières opportunités et actualités de la communauté.</p>
+{# ── Préparation des données ──────────────────────────────────────────────────
+   On extrait le prénom/pseudo depuis l'email (partie avant @).
+   Twig n'a pas de filtre "ucfirst" natif, donc on utilise |capitalize.
+   Exemple : "marie.dupont@gmail.com" → "Marie.dupont" → on affiche tel quel.
+#}
+{% set username = app.user.email|split('@')|first|upper %}
 
-{# ── GRILLE DE STATISTIQUES ──────────────────────────────────────────────── #}
-<div class="stats-grid">
+{#
+    Récupère le nombre de notifications non lues via la fonction Twig
+    unread_notifications_count() (déclarée dans la Twig Extension du projet).
+    Cela évite d'injecter cette valeur dans chaque contrôleur séparément.
+#}
+{% set notifCount = unread_notifications_count() %}
 
-    {# Stat 1 : Ressources publiées #}
-    <div class="stat-card">
-        <div class="stat-card__label">Ressources publiées</div>
-        <div class="stat-card__value">247</div>
-        <div class="stat-card__trend">↑ +12 cette semaine</div>
-    </div>
+{# ── HÉRO BANDE SOMBRE ────────────────────────────────────────────────────────
+   Fond --ink, greeting géant en Archivo Black, badges de rôles
+#}
+<div class="db-hero">
 
-    {# Stat 2 : Membres actifs #}
-    <div class="stat-card">
-        <div class="stat-card__label">Membres actifs</div>
-        <div class="stat-card__value">1 842</div>
-        <div class="stat-card__trend">↑ +38 ce mois</div>
-    </div>
-
-    {# Stat 3 : Articles publiés #}
-    <div class="stat-card">
-        <div class="stat-card__label">Articles publiés</div>
-        <div class="stat-card__value">93</div>
-    </div>
-
-    {# Stat 4 : Mes soumissions (données réelles de l'utilisateur) #}
-    <div class="stat-card">
-        <div class="stat-card__label">Mes soumissions</div>
+    {# Date du jour avec point vert comme "eyebrow" dans le prototype #}
+    <div class="db-hero__eyebrow">
         {#
-         # submissions est passé par le contrôleur (à implémenter dans DashboardController).
-         # Pour l'instant on affiche 0 en fallback avec le filtre "default".
+            CORRECTION W5 : "d MMMM Y" utilisait des codes ICU (MMMM = mois long, Y = année ISO).
+            Le filtre |date de Twig passe le format à la fonction date() de PHP, qui utilise
+            ses propres codes (différents de ICU) :
+              - F = nom complet du mois en anglais (mais la locale PHP détermine la langue)
+              - d = jour sur 2 chiffres, Y = année sur 4 chiffres
+            En production française sans configuration de locale PHP garantie,
+            le format d/m/Y est plus sûr et lisible partout.
         #}
-        <div class="stat-card__value">{{ submissions|default(0) }}</div>
+        {{ "now"|date("d/m/Y") }}
+    </div>
+
+    {# Greeting en Archivo Black — uppercase comme dans le maquette #}
+    <h1 class="db-hero__greeting">
+        Bonjour,<br>{{ username }}.
+    </h1>
+
+    {# Badges de rôles actifs — utilise is_granted() qui respecte la hiérarchie
+       de rôles déclarée dans security.yaml (ROLE_ADMIN hérite de tout, etc.) #}
+    <div class="db-hero__roles">
+        {% if is_granted('ROLE_ARTIST') %}
+            <span class="db-chip db-chip--accent">Artiste</span>
+        {% endif %}
+        {% if is_granted('ROLE_STRUCTURE') %}
+            <span class="db-chip db-chip--accent2">Structure</span>
+        {% endif %}
+        {% if is_granted('ROLE_ADMIN') %}
+            <span class="db-chip db-chip--muted">Admin</span>
+        {% endif %}
+        {% if not is_granted('ROLE_ARTIST') and not is_granted('ROLE_STRUCTURE') and not is_granted('ROLE_ADMIN') %}
+            <span class="db-chip db-chip--muted">Membre</span>
+        {% endif %}
     </div>
 
 </div>
 
-{# ── GRILLE DES WIDGETS ──────────────────────────────────────────────────── #}
-<div class="widgets-grid">
+{# ── BANDE DE STATS ───────────────────────────────────────────────────────────
+   Fond vert acide (--accent), 3 colonnes séparées par --ink
+   Les valeurs sont partiellement dynamiques selon ce que le contrôleur fournit.
+#}
+<div class="db-stats">
 
-    {# ── Widget 1 : Ressources récentes ── #}
-    <div class="widget">
-        <div class="widget__header">
-            <div class="widget__title">Ressources récentes</div>
-            <div class="widget__subtitle">Dernières opportunités validées</div>
-        </div>
-
-        {#
-         # On affiche les ressources récentes passées par le contrôleur.
-         # Si aucune ressource n'est disponible (variable vide), on affiche
-         # des exemples statiques pour que la page ne soit pas vide.
-        #}
-        {% if recent_resources is defined and recent_resources|length > 0 %}
-            {# Données réelles du serveur #}
-            {% for resource in recent_resources %}
-                <div class="widget__row">
-                    <div class="widget__row-category">{{ resource.resourceType.name|upper }}</div>
-                    <a href="{{ path('app_resource_show', {id: resource.id}) }}" class="widget__row-title">
-                        {{ resource.title }}
-                        <span style="color: var(--color-text-light);">→</span>
-                    </a>
-                    {% if resource.deadline %}
-                        <div class="widget__row-meta">Deadline : {{ resource.deadline|date('d M.') }}</div>
-                    {% endif %}
-                </div>
-            {% endfor %}
-        {% else %}
-            {# Données d'exemple (à remplacer quand le contrôleur passera de vraies données) #}
-            <div class="widget__row">
-                <div class="widget__row-category">Résidence</div>
-                <a href="{{ path('app_resource_index') }}" class="widget__row-title">
-                    Villa Médicis 2025 <span style="color: var(--color-text-light);">→</span>
-                </a>
-                <div class="widget__row-meta">Deadline : 15 avr.</div>
-            </div>
-            <div class="widget__row">
-                <div class="widget__row-category">Financement</div>
-                <a href="{{ path('app_resource_index') }}" class="widget__row-title">
-                    Bourse Fondation Cartier <span style="color: var(--color-text-light);">→</span>
-                </a>
-                <div class="widget__row-meta">Deadline : 30 mars</div>
-            </div>
-            <div class="widget__row">
-                <div class="widget__row-category">Appel à projets</div>
-                <a href="{{ path('app_resource_index') }}" class="widget__row-title">
-                    Festival Off Avignon <span style="color: var(--color-text-light);">→</span>
-                </a>
-                <div class="widget__row-meta">Deadline : 1 mai</div>
-            </div>
-        {% endif %}
+    {# Stat 1 : ressources récentes disponibles #}
+    <div class="db-stat">
+        <div class="db-stat__value">{{ recent_resources|length }}</div>
+        <div class="db-stat__label">Ressources récentes</div>
     </div>
 
-    {# ── Widget 2 : Communauté ── #}
-    <div class="widget">
-        <div class="widget__header">
-            <div class="widget__title">Communauté</div>
-            <div class="widget__subtitle">Publications récentes</div>
+    {# Stat 2 : mes soumissions (compteur personnel) #}
+    <div class="db-stat">
+        <div class="db-stat__value">{{ submissions|default(0) }}</div>
+        <div class="db-stat__label">Mes soumissions</div>
+    </div>
+
+    {# Stat 3 : notifications non lues #}
+    <div class="db-stat">
+        <div class="db-stat__value">{{ notifCount }}</div>
+        <div class="db-stat__label">Notifications</div>
+    </div>
+
+</div>
+
+{# ── GRILLE DE WIDGETS ────────────────────────────────────────────────────────
+   2 colonnes : colonne gauche large (ressources + communauté), droite étroite (rapides + notifs)
+#}
+<div class="db-widgets">
+
+    {# ── COLONNE GAUCHE ─────────────────────────────────────────── #}
+    <div class="db-widget">
+
+        {# Widget A : Mes ressources récentes #}
+        <div class="db-widget__head">
+            <span class="db-widget__title">Ressources récentes</span>
+            <a href="{{ path('app_resource_index') }}" class="db-widget__link">
+                Tout voir →
+            </a>
         </div>
 
-        {# Données réelles si disponibles, sinon exemples #}
+        {# Liste des ressources passées par le contrôleur.
+           Le contrôleur passe "recent_resources" = les 5 dernières publiées.
+           Si la liste est vide, on affiche un CTA pour soumettre. #}
+        {% if recent_resources is defined and recent_resources|length > 0 %}
+
+            {% for resource in recent_resources %}
+                <a href="{{ path('app_resource_show', {id: resource.id}) }}" class="db-resource-row">
+
+                    {# Type / catégorie en mono uppercase #}
+                    <div class="db-resource-row__type">
+                        {#
+                            CORRECTION W4 : `is defined` teste l'existence d'une variable Twig,
+                            pas la valeur d'une propriété d'objet. Sur une propriété d'entité
+                            Doctrine, `is defined` renvoie toujours true (la propriété existe
+                            sur l'objet), même quand la valeur est null.
+                            La bonne façon de tester une valeur absente : `is not null`.
+                        #}
+                        {{ resource.resourceType is not null ? resource.resourceType.name|upper : 'Ressource' }}
+                    </div>
+
+                    {# Titre + flèche alignée à droite #}
+                    <div class="db-resource-row__title">
+                        <span>{{ resource.title }}</span>
+                        <span style="color: var(--ink-mute); flex-shrink: 0;">→</span>
+                    </div>
+
+                    {# Deadline si disponible #}
+                    {# CORRECTION W4 (suite) : même raison — `is defined` → `is not null` #}
+                    {% if resource.deadline is not null %}
+                        <div class="db-resource-row__meta">
+                            Deadline : {{ resource.deadline|date('d M.') }}
+                        </div>
+                    {% endif %}
+
+                </a>
+            {% endfor %}
+
+        {% else %}
+
+            {# État vide : invite à soumettre une ressource #}
+            <div class="db-empty">
+                <div class="db-empty__text">Aucune ressource soumise</div>
+                <a href="{{ path('app_resource_new') }}" class="db-empty__link">
+                    Soumettre une ressource →
+                </a>
+            </div>
+
+        {% endif %}
+
+        {# Widget B : Communauté (posts récents) #}
+        <div class="db-widget__head" style="border-top: 1px solid var(--ink);">
+            <span class="db-widget__title">Communauté</span>
+            <a href="{{ path('app_post_feed') }}" class="db-widget__link">
+                Voir le fil →
+            </a>
+        </div>
+
+        {# Posts récents passés par le contrôleur (max 3).
+           recent_posts contient des objets Post avec .author, .content, .createdAt #}
         {% if recent_posts is defined and recent_posts|length > 0 %}
+
             {% for post in recent_posts %}
-                <div class="community-row">
-                    {# Initiales de l'auteur #}
-                    <div class="community-avatar">
+                <div class="db-post-row">
+
+                    {# Avatar carré avec initiales de l'auteur (Street = carré) #}
+                    <div class="db-avatar">
                         {{ post.author.email|slice(0, 2)|upper }}
                     </div>
-                    <div class="community-row__content">
-                        <div class="community-row__header">
-                            <span class="community-row__name">{{ post.author.email|split('@')|first }}</span>
-                            <span class="community-row__time">· {{ post.createdAt|date('d/m') }}</span>
+
+                    <div class="db-post-row__content">
+                        <div>
+                            <span class="db-post-row__name">
+                                {{ post.author.email|split('@')|first }}
+                            </span>
+                            <span class="db-post-row__date">
+                                · {{ post.createdAt|date('d/m') }}
+                            </span>
                         </div>
-                        <div class="community-row__text">{{ post.content|slice(0, 80) }}…</div>
+                        {# Extrait du post — tronqué à 90 caractères #}
+                        <div class="db-post-row__text">
+                            {{ post.content|slice(0, 90) }}{% if post.content|length > 90 %}…{% endif %}
+                        </div>
                     </div>
+
                 </div>
             {% endfor %}
+
         {% else %}
-            {# Exemples statiques #}
-            <div class="community-row">
-                <div class="community-avatar">JT</div>
-                <div class="community-row__content">
-                    <div class="community-row__header">
-                        <span class="community-row__name">Jean Tamba</span>
-                        <span class="community-row__time">· il y a 2h</span>
-                    </div>
-                    <div class="community-row__text">Quelqu'un a de l'expérience avec les bourses DRAC ?</div>
-                </div>
+
+            {# État vide communauté #}
+            <div class="db-empty" style="padding: 20px 18px;">
+                <div class="db-empty__text">Aucune publication récente</div>
             </div>
-            <div class="community-row">
-                <div class="community-avatar">AL</div>
-                <div class="community-row__content">
-                    <div class="community-row__header">
-                        <span class="community-row__name">Amara Ly</span>
-                        <span class="community-row__time">· il y a 1j</span>
-                    </div>
-                    <div class="community-row__text">Super conférence sur la médiation culturelle ce weekend !</div>
-                </div>
-            </div>
-            <div class="community-row">
-                <div class="community-avatar">PD</div>
-                <div class="community-row__content">
-                    <div class="community-row__header">
-                        <span class="community-row__name">Paula D.</span>
-                        <span class="community-row__time">· il y a 3j</span>
-                    </div>
-                    <div class="community-row__text">J'ai publié un article sur les droits des artistes indépendants.</div>
-                </div>
+
+        {% endif %}
+
+    </div>
+
+    {# ── COLONNE DROITE ─────────────────────────────────────────── #}
+    <div class="db-widget db-aside">
+
+        {# En-tête de la colonne droite #}
+        <div class="db-widget__head">
+            <span class="db-widget__title">Accès rapides</span>
+        </div>
+
+        {# Grille 2×2 de boutons d'accès rapide.
+           Chaque bouton a une icône SVG + label en mono uppercase.
+           Les icônes sont des paths SVG inline — pas de dépendance externe. #}
+        <div class="db-quicklinks">
+
+            {# Bouton 1 : Explorer les ressources #}
+            <a href="{{ path('app_resource_index') }}"
+               class="db-quicklink"
+               title="Explorer les ressources">
+                {# Icône "liste" #}
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true">
+                    <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+                </svg>
+                Ressources
+            </a>
+
+            {# Bouton 2 : Mes favoris #}
+            <a href="{{ path('app_resource_favorites') }}"
+               class="db-quicklink"
+               title="Mes favoris">
+                {# Icône "cœur" #}
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true">
+                    <path d="M12 21s-7-4.5-9.5-9C.7 8 3 4 6.5 4 9 4 10.5 5.5 12 7.5 13.5 5.5 15 4 17.5 4 21 4 23.3 8 21.5 12 19 16.5 12 21 12 21z"/>
+                </svg>
+                Favoris
+            </a>
+
+            {# Bouton 3 : Forum #}
+            <a href="{{ path('app_forum_index') }}"
+               class="db-quicklink"
+               title="Forum">
+                {# Icône "bulle de message" #}
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true">
+                    <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9 8.5 8.5 0 0 1 8.5 8.5z"/>
+                </svg>
+                Forum
+            </a>
+
+            {# Bouton 4 : Messages #}
+            <a href="{{ path('app_messaging_index') }}"
+               class="db-quicklink"
+               title="Messagerie privée">
+                {# Icône "enveloppe / mail" #}
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true">
+                    <path d="M4 4h16v16H4z"/>
+                    <path d="m4 4 8 8 8-8"/>
+                </svg>
+                Messages
+            </a>
+
+        </div>
+
+        {# ── Widget Notifications ──────────────────────────────────
+           Affiché uniquement s'il y a des notifications non lues.
+           Fond vert acide pour attirer l'attention.
+        #}
+        {% if notifCount > 0 %}
+            <div class="db-notif-widget">
+                <span class="db-notif-widget__text">
+                    {# "1 notification" vs "X notifications" #}
+                    {{ notifCount }} notification{{ notifCount > 1 ? 's' : '' }} non lue{{ notifCount > 1 ? 's' : '' }}
+                </span>
+                <a href="{{ path('app_notification_index') }}" class="db-btn-dark">
+                    Voir →
+                </a>
             </div>
         {% endif %}
+
+        {# ── Lien profil artiste ──────────────────────────────────
+           Visible si l'utilisateur a le rôle ROLE_ARTIST.
+           Pour les structures, on pointe vers l'espace structure.
+        #}
+        <div style="padding: 14px 18px; border-top: 1px solid var(--line-soft); margin-top: auto;">
+            {% if is_granted('ROLE_ARTIST') %}
+                <a href="{{ path('app_artist_profile_show') }}"
+                   style="font-family: var(--mono); font-size: 11px; font-weight: 600;
+                          letter-spacing: .04em; text-transform: uppercase;
+                          color: var(--ink); text-decoration: none;
+                          display: flex; align-items: center; gap: 6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <circle cx="12" cy="8" r="4"/>
+                        <path d="M4 21a8 8 0 0 1 16 0"/>
+                    </svg>
+                    Mon profil artiste →
+                </a>
+            {% elseif is_granted('ROLE_STRUCTURE') %}
+                <a href="{{ path('app_structure_dashboard') }}"
+                   style="font-family: var(--mono); font-size: 11px; font-weight: 600;
+                          letter-spacing: .04em; text-transform: uppercase;
+                          color: var(--ink); text-decoration: none;
+                          display: flex; align-items: center; gap: 6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <path d="M3 11 12 4l9 7v9h-6v-6h-6v6H3z"/>
+                    </svg>
+                    Espace Structure →
+                </a>
+            {% else %}
+                <a href="{{ path('app_org_profile_show') }}"
+                   style="font-family: var(--mono); font-size: 11px; font-weight: 600;
+                          letter-spacing: .04em; text-transform: uppercase;
+                          color: var(--ink); text-decoration: none;
+                          display: flex; align-items: center; gap: 6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <circle cx="12" cy="8" r="4"/>
+                        <path d="M4 21a8 8 0 0 1 16 0"/>
+                    </svg>
+                    Mon organisation →
+                </a>
+            {% endif %}
+        </div>
+
     </div>
 
 </div>

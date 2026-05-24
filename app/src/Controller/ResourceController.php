@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Entity\ResourceFavorite;
 use App\Entity\User;
+use App\Enum\ResourceStatus;
 use App\Repository\DisciplineRepository;
 use App\Repository\OrganizationProfileRepository;
 use App\Repository\ResourceAlertRepository;
@@ -118,6 +119,18 @@ class ResourceController extends AbstractController
         $organization = $this->orgRepository->findByUser($user);
 
         if ($request->isMethod('POST')) {
+            // ── Validation CSRF ────────────────────────────────────────────────────
+            // Le token est généré dans le template via {{ csrf_token('resource_submit') }}
+            // et envoyé dans un champ caché nommé "_token".
+            // Si le token ne correspond pas (requête forgée, session expirée...),
+            // on rejette immédiatement AVANT tout traitement des données POST.
+            // isCsrfTokenValid() est fourni par AbstractController — pas d'import requis.
+            if (!$this->isCsrfTokenValid('resource_submit', $request->request->get('_token'))) {
+                $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+                return $this->redirectToRoute('app_resource_submit');
+            }
+            // ──────────────────────────────────────────────────────────────────────
+
             $result = $this->resourceService->createResource($user, $request->request->all());
 
             if (is_string($result)) {
@@ -154,18 +167,47 @@ class ResourceController extends AbstractController
     /**
      * Page "Mes ressources" : liste des ressources soumises par l'utilisateur connecté.
      * Affiche le statut de chaque soumission (en attente, publiée, rejetée).
+     *
+     * Supporte le filtre par statut via le paramètre query ?status=
+     * Valeurs autorisées : draft, pending, published, rejected, archived
+     * (correspondant aux cases de l'enum ResourceStatus).
+     * Toute valeur invalide est silencieusement ignorée → on affiche toutes les ressources.
      */
     #[IsGranted('ROLE_USER')]
     #[Route('/my', name: 'my')]
-    public function my(): Response
+    public function my(Request $request): Response
     {
         /** @var User $user */
         $user = $this->getUser();
 
-        $resources = $this->resourceRepository->findByUser($user);
+        // ── Lecture et validation du filtre de statut ──────────────────────────
+        // On lit ?status= depuis l'URL (ex: /resources/my?status=published).
+        // ResourceStatus::from() lève ValueError si la valeur est inconnue,
+        // donc on utilise un try/catch pour traiter les valeurs arbitraires sans crash.
+        // En cas de valeur invalide, $statusEnum = null → pas de filtre = toutes les ressources.
+        $rawStatus = $request->query->get('status');
+        try {
+            // ResourceStatus::from() valide que la valeur appartient bien à l'enum.
+            // C'est la manière sécurisée d'éviter les injections de valeurs inattendues.
+            $statusEnum = $rawStatus !== null ? ResourceStatus::from($rawStatus) : null;
+            // On conserve la valeur string d'origine pour renvoyer au template (pré-sélection onglet actif).
+            $statusFilter = $statusEnum?->value;
+        } catch (\ValueError) {
+            // Valeur reçue non reconnue par l'enum → on ignore et on affiche tout.
+            $statusEnum   = null;
+            $statusFilter = null;
+        }
+        // ──────────────────────────────────────────────────────────────────────
+
+        // On délègue la requête filtrée au repository.
+        // findByUserWithStatusFilter() retourne toutes les ressources si $statusEnum est null.
+        $resources = $this->resourceRepository->findByUserWithStatusFilter($user, $statusEnum);
 
         return $this->render('resource/my.html.twig', [
-            'resources' => $resources,
+            'resources'    => $resources,
+            // On repasse le filtre actif au template pour que les onglets
+            // puissent afficher l'onglet sélectionné (class CSS active, aria-selected, etc.)
+            'statusFilter' => $statusFilter,
         ]);
     }
 

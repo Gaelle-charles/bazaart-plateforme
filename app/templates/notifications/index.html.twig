@@ -1,205 +1,301 @@
 {% extends 'base_app.html.twig' %}
 
+{#
+ # notifications/index.html.twig — Centre de notifications (thème Street)
+ #
+ # Variables transmises par NotificationController::index() :
+ #   - notifications : Notification[] — liste des notifications (marquées lues au chargement)
+ #   - currentUser   : App\Entity\User — l'utilisateur connecté
+ #
+ # Design : thème Street
+ #   Bords francs, liste bordée 1px --ink, icônes selon le type,
+ #   fond blanc sur non-lu (avec barre latérale orange --accent-2),
+ #   fond --bg-alt sur lu.
+ #}
+
 {% block title %}Mes notifications — BazaArt{% endblock %}
 {% block page_title %}Notifications{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* ── Entête de la page notifications ── */
+
+/* ================================================================
+   NOTIFICATIONS — Centre de notifications (thème Street)
+   Préfixe : .notif- pour éviter toute collision
+================================================================ */
+
+/* ── En-tête de la page ─────────────────────────────────────────
+   Titre Archivo Black + bouton "Tout marquer comme lu"
+----------------------------------------------------------------- */
+.notif-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.notif-header__title {
+    font-family: var(--display); /* Archivo Black */
+    font-size: clamp(28px, 4vw, 40px);
+    text-transform: uppercase;
+    line-height: .9;
+    color: var(--ink);
+}
+
+.notif-header__count {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-top: 8px;
+}
+
+/* Bouton "Tout marquer comme lu" — style ghost avec bordure --ink */
+.notif-btn-mark-all {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    background: transparent;
+    color: var(--ink-mute);
+    border: 1px solid var(--line-soft);
+    border-radius: 0; /* Street : bords francs */
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color var(--transition-fast), color var(--transition-fast);
+    white-space: nowrap;
+}
+
+.notif-btn-mark-all:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+}
+
+/* ── Liste des notifications ────────────────────────────────────
+   Conteneur bordé 1px --ink (style carte Street)
+----------------------------------------------------------------- */
+.notif-list {
+    border: 1px solid var(--ink);
+}
+
+/* ── Item de notification ───────────────────────────────────────
+   Chaque notification est un lien (ou div si pas de lien).
+   Display flex : [icône] [corps] [pastille non-lue]
+----------------------------------------------------------------- */
+.notif-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line-soft);
+    text-decoration: none;
+    color: var(--ink);
+    transition: background var(--transition-fast);
+}
+
+.notif-item:last-child {
+    border-bottom: none;
+}
+
+.notif-item:hover {
+    background: var(--bg-alt);
+}
+
+/* Notification NON LUE :
+   fond blanc + barre latérale orange (accent-2) — signal fort */
+.notif-item--unread {
+    background: #fff;
+    border-left: 3px solid var(--accent-2);
+    padding-left: 15px; /* compense les 3px de bordure */
+}
+
+.notif-item--unread:hover {
+    background: var(--bg-alt);
+}
+
+/* Notification LUE : fond légèrement atténué */
+.notif-item--read {
+    background: var(--bg-alt);
+    opacity: .85;
+}
+
+/* ── Carré d'icône ──────────────────────────────────────────────
+   Carré (Street) contenant l'emoji de type de notification.
+   Fond --bg sur non-lu, fond transparent sur lu.
+----------------------------------------------------------------- */
+.notif-item__icon {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    border: 1px solid var(--line-soft);
+    font-size: 16px;
+    flex-shrink: 0;
+    border-radius: 0; /* Street : carré */
+}
+
+.notif-item--unread .notif-item__icon {
+    background: var(--accent);
+    border-color: var(--ink);
+}
+
+/* ── Corps de la notification ───────────────────────────────────
+   Texte descriptif + date en mono
+----------------------------------------------------------------- */
+.notif-item__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.notif-item__text {
+    font-size: 13px;
+    color: var(--ink);
+    line-height: 1.45;
+}
+
+/* Texte en semi-gras pour les non lues */
+.notif-item--unread .notif-item__text {
+    font-weight: 600;
+}
+
+.notif-item__date {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-mute);
+    letter-spacing: .04em;
+    margin-top: 5px;
+}
+
+/* ── Pastille de non-lu ─────────────────────────────────────────
+   Petit carré orange en haut à droite de la ligne
+----------------------------------------------------------------- */
+.notif-item__dot {
+    width: 8px;
+    height: 8px;
+    background: var(--accent-2); /* orange = urgence */
+    flex-shrink: 0;
+    margin-top: 4px;
+    border-radius: 0; /* Street : carré (pas de pastille ronde) */
+}
+
+/* ── État vide ──────────────────────────────────────────────────
+   Affiché si la liste de notifications est vide
+----------------------------------------------------------------- */
+.notif-empty {
+    border: 1px solid var(--ink);
+    padding: 64px 24px;
+    text-align: center;
+}
+
+.notif-empty__icon {
+    font-size: 40px;
+    line-height: 1;
+    margin-bottom: 16px;
+    opacity: .25;
+    display: block;
+}
+
+.notif-empty__text {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+}
+
+/* ── Responsive mobile ─────────────────────────────────────────
+   L'en-tête bascule en colonne sur petit écran
+----------------------------------------------------------------- */
+@media (max-width: 640px) {
     .notif-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 20px;
-        flex-wrap: wrap;
-        gap: 12px;
-    }
-    .notif-header__title {
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--color-text);
-    }
-    .notif-header__subtitle {
-        font-size: 12px;
-        color: var(--color-text-muted);
-        margin-top: 2px;
-    }
-
-    /* ── Liste des notifications ── */
-    .notif-list {
-        display: flex;
         flex-direction: column;
-        gap: 0;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        overflow: hidden;
-        background: var(--color-white);
-    }
-
-    /* ── Item de notification ── */
-    .notif-item {
-        display: flex;
         align-items: flex-start;
-        gap: 14px;
-        padding: 14px 18px;
-        border-bottom: 1px solid var(--color-border);
-        text-decoration: none;
-        color: inherit;
-        transition: background 0.12s;
-    }
-    .notif-item:last-child {
-        border-bottom: none;
-    }
-    .notif-item:hover {
-        background: #faf9f7;
     }
 
-    /* Notification NON LUE : fond blanc + bordure rouge sur la gauche */
-    .notif-item--unread {
-        background: #fff;
-        border-left: 3px solid var(--color-red);
-        padding-left: 15px; /* compense les 3px de bordure */
+    .notif-item {
+        gap: 10px;
+        padding: 12px 14px;
     }
-    .notif-item--unread:hover {
-        background: #fef8f7;
-    }
+}
 
-    /* Notification LUE : fond légèrement grisé */
-    .notif-item--read {
-        background: #faf9f7;
-        opacity: 0.85;
-    }
-
-    /* Icône du type de notification */
-    .notif-item__icon {
-        font-size: 18px;
-        flex-shrink: 0;
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        background: var(--color-bg);
-    }
-
-    /* Corps textuel de la notification */
-    .notif-item__body {
-        flex: 1;
-        min-width: 0;
-    }
-    .notif-item__text {
-        font-size: 13px;
-        color: var(--color-text);
-        line-height: 1.4;
-    }
-    .notif-item__date {
-        font-size: 11px;
-        color: var(--color-text-light);
-        margin-top: 4px;
-    }
-
-    /* Indicateur visuel de non-lu (pastille rouge) */
-    .notif-item__dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--color-red);
-        flex-shrink: 0;
-        margin-top: 5px;
-    }
-
-    /* ── État vide ── */
-    .notif-empty {
-        text-align: center;
-        padding: 60px 20px;
-        color: var(--color-text-muted);
-    }
-    .notif-empty__icon {
-        font-size: 40px;
-        margin-bottom: 12px;
-        opacity: 0.5;
-    }
-    .notif-empty__text {
-        font-size: 14px;
-    }
-
-    /* ── Bouton "Tout marquer comme lu" ── */
-    .btn-mark-all {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 0 14px;
-        height: 34px;
-        border-radius: var(--radius-sm);
-        font-size: 12px;
-        font-weight: 600;
-        background: var(--color-white);
-        border: 1.5px solid var(--color-border);
-        color: var(--color-text-muted);
-        cursor: pointer;
-        transition: all 0.12s;
-    }
-    .btn-mark-all:hover {
-        border-color: var(--color-green);
-        color: var(--color-green);
-    }
 </style>
 {% endblock %}
 
 {% block content %}
+
+{# ── EN-TÊTE ──────────────────────────────────────────────────────────────────
+   Titre + bouton "Tout marquer comme lu" (formulaire POST + CSRF)
+#}
 <div class="notif-header">
     <div>
-        <div class="notif-header__title">Mes notifications</div>
-        <div class="notif-header__subtitle">
-            {{ notifications|length }} notification{{ notifications|length != 1 ? 's' : '' }} récente{{ notifications|length != 1 ? 's' : '' }}
-        </div>
+        <h2 class="notif-header__title">Notifications</h2>
+        <p class="notif-header__count">
+            {# Pluralisation manuelle (Twig n'a pas de filtre pluralize intégré) #}
+            {{ notifications|length }}
+            notification{{ notifications|length != 1 ? 's' : '' }}
+            récente{{ notifications|length != 1 ? 's' : '' }}
+        </p>
     </div>
 
     {#
-        Bouton "Tout marquer comme lu" — formulaire POST avec jeton CSRF.
-        Le bouton est affiché même si tout est déjà lu (idempotent, pas de dommage).
-        Le jeton CSRF est généré par csrf_token() (fonction Twig Symfony).
-        Il sera vérifié dans NotificationController::markAllRead().
+        Bouton "Tout marquer comme lu" — uniquement si la liste n'est pas vide.
+        Formulaire POST avec token CSRF pour éviter les attaques CSRF
+        (un lien GET serait vulnérable à des attaques de type "image src=").
+        Le contrôleur cible : NotificationController::markAllRead().
     #}
     {% if notifications is not empty %}
         <form method="POST" action="{{ path('app_notification_mark_all_read') }}">
             <input type="hidden" name="_token" value="{{ csrf_token('notification_mark_all_read') }}">
-            <button type="submit" class="btn-mark-all">
+            <button type="submit" class="notif-btn-mark-all">
                 ✓ Tout marquer comme lu
             </button>
         </form>
     {% endif %}
 </div>
 
-{# ── Liste des notifications ──────────────────────────────────────────────── #}
+{# ── LISTE DES NOTIFICATIONS ──────────────────────────────────────────────────
+   Si vide → état vide
+   Sinon → liste de notifications avec lien vers la ressource concernée
+#}
 {% if notifications is empty %}
-    {# État vide : aucune notification #}
-    <div class="notif-empty">
-        <div class="notif-empty__icon">🔔</div>
-        <div class="notif-empty__text">Vous n'avez pas encore de notifications.</div>
-    </div>
-{% else %}
-    <div class="notif-list">
-        {% for notification in notifications %}
-            {#
-                Détermine le lien de destination selon le type d'entité liée.
-                On utilise path() (Twig) plutôt que getLink() (PHP) car on a accès
-                au Router Symfony dans les templates → URLs correctes avec le nom de route.
 
+    {# État vide #}
+    <div class="notif-empty">
+        <span class="notif-empty__icon" aria-hidden="true">🔔</span>
+        <p class="notif-empty__text">Aucune notification pour le moment.</p>
+    </div>
+
+{% else %}
+
+    <div class="notif-list" role="list">
+
+        {% for notification in notifications %}
+
+            {#
+                ── Calcul du lien de destination ───────────────────────────
+                On construit l'URL selon le type d'entité liée à la notification.
                 Convention V1 :
-                  - conversation  → page de la conversation (app_messaging_show)
-                  - forum_thread  → liste du forum (pas de route directe par ID en V1)
-                  - resource      → page de la ressource (app_resource_show)
-                  - autres types  → pas de lien (href="#")
+                  conversation → app_messaging_show
+                  forum_thread → app_forum_index (pas de route par ID en V1)
+                  resource     → app_resource_show
+                  autre/aucun  → href="#" (notification sans destination spécifique)
             #}
             {% set notifLink = '#' %}
             {% if notification.relatedEntityType and notification.relatedEntityId %}
                 {% if notification.relatedEntityType == 'conversation' %}
                     {% set notifLink = path('app_messaging_show', {id: notification.relatedEntityId}) %}
                 {% elseif notification.relatedEntityType == 'forum_thread' %}
-                    {# V1 : pas de route directe vers un thread par son ID — on pointe vers l'index #}
+                    {# En V1, pas de route directe vers un thread par son ID #}
                     {% set notifLink = path('app_forum_index') %}
                 {% elseif notification.relatedEntityType == 'resource' %}
                     {% set notifLink = path('app_resource_show', {id: notification.relatedEntityId}) %}
@@ -207,8 +303,9 @@
             {% endif %}
 
             {#
-                Icône selon le type de notification.
-                Mapping type → emoji pour l'identification visuelle rapide.
+                ── Icône selon le type de notification ─────────────────────
+                Mapping type.value → emoji.
+                Le bloc set n'affiche rien — il initialise juste la variable.
             #}
             {% set notifIcon = '🔔' %}
             {% if notification.type.value == 'new_message' %}
@@ -226,27 +323,33 @@
             {% endif %}
 
             {#
-                Texte descriptif selon le type et les données complémentaires.
-                notification.data contient les infos contextuelles stockées lors de la création
-                (ex: {"senderEmail": "marie@ex.com", "threadTitle": "Recherche graphiste"}).
+                ── Texte descriptif ─────────────────────────────────────────
+                Construit depuis notification.type et notification.data (JSON décodé).
+
+                CORRECTION W6 : suppression des |e dans les blocs {% set %}.
+
+                Pourquoi c'était un problème :
+                  {% set notifText = 'texte' ~ valeur|e %}
+                  Ici, |e échappe la valeur (& → &amp; etc.) AVANT la concaténation.
+                  Puis {{ notifText }} est affiché, et Twig auto-échappe une deuxième fois.
+                  Résultat : &amp; s'affiche au lieu de &, les guillemets deviennent
+                  &quot; dans le rendu visible.
+
+                Solution : laisser Twig auto-escaper seul à l'affichage.
+                  Dans un {% set %}, on concatène des valeurs brutes.
+                  L'auto-escape s'applique UNIQUEMENT au moment du {{ }},
+                  pas dans les {% set %}. C'est le comportement correct et attendu.
             #}
             {% set notifText = notification.type.label() %}
             {% if notification.type.value == 'new_message' %}
                 {% if notification.data and notification.data.senderEmail is defined %}
-                    {#
-                        |e applique l'échappement HTML sur la donnée issue du JSON avant
-                        de la concaténer dans la chaîne — défense en profondeur contre XSS.
-                        Twig auto-échappe {{ notifText }} à l'affichage, mais si un futur
-                        développeur ajoute |raw sur notifText, les données seraient vulnérables
-                        sans ce |e préventif sur la source.
-                    #}
-                    {% set notifText = 'Nouveau message de ' ~ notification.data.senderEmail|e %}
+                    {% set notifText = 'Nouveau message de ' ~ notification.data.senderEmail %}
                 {% else %}
                     {% set notifText = 'Vous avez reçu un nouveau message privé.' %}
                 {% endif %}
             {% elseif notification.type.value == 'new_reply' %}
                 {% if notification.data and notification.data.threadTitle is defined %}
-                    {% set notifText = 'Nouvelle réponse sur votre sujet : "' ~ notification.data.threadTitle|e ~ '"' %}
+                    {% set notifText = 'Nouvelle réponse sur votre sujet : "' ~ notification.data.threadTitle ~ '"' %}
                 {% else %}
                     {% set notifText = 'Quelqu\'un a répondu à votre sujet de forum.' %}
                 {% endif %}
@@ -263,25 +366,41 @@
             {# Classe CSS selon le statut de lecture #}
             {% set itemClass = notification.isRead ? 'notif-item--read' : 'notif-item--unread' %}
 
-            <a href="{{ notifLink }}" class="notif-item {{ itemClass }}">
-                {# Icône du type #}
-                <div class="notif-item__icon">{{ notifIcon }}</div>
+            {#
+                Rendu de la notification.
+                Si notifLink == '#' → lien non cliquable (href="#") mais accessible
+                (pas de cursor: pointer CSS sur ce cas).
+                L'attribut aria-label donne un contexte lisible aux lecteurs d'écran.
+            #}
+            <a href="{{ notifLink }}"
+               class="notif-item {{ itemClass }}"
+               role="listitem"
+               {% if notifLink == '#' %}aria-disabled="true" tabindex="-1"{% endif %}>
 
-                {# Corps de la notification #}
+                {# Carré d'icône — accentué en vert si non lue #}
+                <div class="notif-item__icon" aria-hidden="true">
+                    {{ notifIcon }}
+                </div>
+
+                {# Corps texte + date #}
                 <div class="notif-item__body">
                     <div class="notif-item__text">{{ notifText }}</div>
                     <div class="notif-item__date">
-                        {# Format : "21/05/2026 à 14:30" #}
                         {{ notification.createdAt|date('d/m/Y à H:i') }}
                     </div>
                 </div>
 
-                {# Pastille rouge pour les non lues #}
+                {# Pastille carrée orange si non lue #}
                 {% if not notification.isRead %}
-                    <div class="notif-item__dot"></div>
+                    <div class="notif-item__dot" aria-label="Non lue"></div>
                 {% endif %}
+
             </a>
+
         {% endfor %}
+
     </div>
+
 {% endif %}
+
 {% endblock %}

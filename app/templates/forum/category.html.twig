@@ -5,317 +5,541 @@
 
 {% block stylesheets %}
 {{ parent() }}
+{#
+    Styles spécifiques à la page liste de threads d'une catégorie.
+    Convention de nommage : préfixe ".fc-" (forum-category).
+
+    Thème Street : bords francs, mono, bordures ink, pas de box-shadow.
+    Style "liste de presse" pour les threads (comme un journal).
+#}
 <style>
-    /* ── Breadcrumb ── */
-    .breadcrumb {
+
+    /* ══════════════════════════════════════════════════════════════
+       FIL D'ARIANE (BREADCRUMB)
+       Navigation contextuelle en mono, séparateurs discrets.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fc-breadcrumb {
         display: flex;
         align-items: center;
         gap: 8px;
-        font-size: 13px;
-        color: var(--color-text-light);
-        margin-bottom: 20px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: 24px;
+        flex-wrap: wrap;
     }
-    .breadcrumb a {
-        color: var(--color-text-light);
-        text-decoration: none;
-    }
-    .breadcrumb a:hover { color: var(--color-red, #C8503A); }
-    .breadcrumb__separator { color: var(--color-border); }
-    .breadcrumb__current { color: var(--color-text); font-weight: 500; }
 
-    /* ── En-tête catégorie ── */
-    .category-header {
+    .fc-breadcrumb a {
+        color: var(--ink-mute);
+        text-decoration: none;
+        transition: color var(--transition-fast);
+    }
+    .fc-breadcrumb a:hover {
+        color: var(--ink);
+    }
+    .fc-breadcrumb a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
+    /* Séparateur "›" entre les segments */
+    .fc-breadcrumb__sep {
+        color: var(--line-soft);
+        font-size: 14px;
+    }
+
+    /* Segment courant — plus foncé que les liens */
+    .fc-breadcrumb__current {
+        color: var(--ink);
+        font-weight: 700;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       EN-TÊTE CATÉGORIE
+       Bande noire pleine largeur avec icône, nom et description.
+       Bouton "Nouveau sujet" aligné à droite.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fc-header {
+        background: var(--ink);
+        color: var(--bg);
+        padding: 24px 28px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 20px;
-        padding-bottom: 16px;
-        border-bottom: 2px solid {{ category.color ?? '#C8503A' }};
+        gap: 24px;
+        margin-bottom: 0;
+        /* Pas de border-radius — bords francs Street */
     }
-    .category-header__left {
+
+    .fc-header__left {
         display: flex;
         align-items: center;
-        gap: 12px;
-    }
-    .category-header__icon { font-size: 28px; }
-    .category-header__title {
-        font-family: var(--font-heading);
-        font-size: 20px;
-        font-weight: 700;
-        color: var(--color-text);
-        margin-bottom: 2px;
-    }
-    .category-header__desc {
-        font-size: 13px;
-        color: var(--color-text-light);
+        gap: 16px;
+        min-width: 0;
     }
 
-    /* ── Bouton créer un thread ── */
-    .btn-new-thread {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 9px 18px;
-        background: var(--color-red, #C8503A);
-        color: white;
-        border-radius: var(--radius-sm);
-        font-size: 13px;
-        font-weight: 600;
-        text-decoration: none;
-        white-space: nowrap;
-        transition: background 0.15s;
-    }
-    .btn-new-thread:hover { background: #a84232; }
-
-    /* ── Liste des threads ── */
-    .thread-list {
-        display: flex;
-        flex-direction: column;
-        gap: 1px;
-        background: var(--color-border);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        overflow: hidden;
-    }
-
-    /* ── Ligne de thread ── */
-    .thread-item {
-        background: var(--color-white);
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        padding: 14px 18px;
-        text-decoration: none;
-        color: var(--color-text);
-        transition: background 0.1s;
-    }
-    .thread-item:hover { background: var(--color-bg, #f8f9fa); }
-
-    /* Icône d'état (épinglé / verrouillé / normal) */
-    .thread-item__status {
-        font-size: 16px;
-        flex-shrink: 0;
-        width: 22px;
-        text-align: center;
-    }
-
-    .thread-item__main { flex: 1; min-width: 0; }
-
-    /* Titre du thread */
-    .thread-item__title {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--color-text);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        margin-bottom: 3px;
-    }
-
-    /* Méta : auteur + date */
-    .thread-item__meta {
-        font-size: 11px;
-        color: var(--color-text-light);
-    }
-
-    /* Badges de modération */
-    .badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        padding: 2px 7px;
-        border-radius: 999px;
-        font-size: 10px;
-        font-weight: 600;
-        margin-left: 6px;
-        vertical-align: middle;
-    }
-    .badge--pinned {
-        background: #fff3cd;
-        color: #856404;
-    }
-    .badge--locked {
-        background: #f8d7da;
-        color: #842029;
-    }
-
-    /* Stats du thread (réponses, vues) */
-    .thread-item__stats {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 3px;
-        flex-shrink: 0;
-        font-size: 12px;
-        color: var(--color-text-light);
-        min-width: 80px;
-        text-align: right;
-    }
-
-    /* ── Forum vide ── */
-    .thread-list--empty {
-        background: var(--color-white);
-        border: 1px dashed var(--color-border);
-        border-radius: var(--radius-md);
-        padding: 48px 24px;
-        text-align: center;
-        color: var(--color-text-light);
-    }
-
-    /* ── Pagination ── */
-    .pagination {
+    /* Icône dans un carré accent (lime) */
+    .fc-header__icon-wrap {
+        width: 52px;
+        height: 52px;
+        background: var(--accent);
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
-        margin-top: 24px;
+        font-size: 24px;
+        flex-shrink: 0;
+        /* Carré franc — pas de border-radius */
     }
-    .pagination__btn {
+
+    /* Nom de la catégorie en Archivo Black — sur fond noir */
+    .fc-header__name {
+        font-family: var(--display);
+        font-size: clamp(28px, 4vw, 40px);
+        text-transform: uppercase;
+        line-height: .95;
+        color: var(--bg);
+        margin: 0 0 6px;
+    }
+
+    .fc-header__desc {
+        font-family: var(--body);
+        font-size: 13px;
+        color: rgba(242, 239, 230, .65);
+        margin: 0;
+    }
+
+    /* Bouton "Nouveau sujet" — accent lime sur fond noir */
+    .fc-btn-new {
         display: inline-flex;
         align-items: center;
-        padding: 7px 14px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        background: var(--color-white);
-        color: var(--color-text);
-        font-size: 13px;
+        gap: 6px;
+        padding: var(--btn-padding);
+        background: var(--btn-primary-bg);   /* var(--accent) = lime */
+        color: var(--btn-primary-color);     /* var(--ink) = noir */
+        border: none;
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
         text-decoration: none;
-        transition: border-color 0.1s;
+        border-radius: var(--btn-radius);    /* 0 dans Street */
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition:
+            background var(--transition-fast),
+            color var(--transition-fast),
+            box-shadow var(--transition-fast);
     }
-    .pagination__btn:hover { border-color: var(--color-red, #C8503A); }
-    .pagination__btn--disabled {
-        opacity: 0.4;
+    .fc-btn-new:hover {
+        background: var(--btn-primary-hover-bg);
+        color: var(--btn-primary-hover-color);
+        box-shadow: var(--shadow-offset-sm);
+    }
+    .fc-btn-new:focus-visible {
+        outline: 2px solid var(--bg);
+        outline-offset: 2px;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       LISTE DES THREADS
+       Style "liste de presse" — chaque ligne est un article.
+       Bordure pleine entre chaque thread, pas de gap, pas de carte.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fc-thread-list {
+        border: 1px solid var(--ink);
+        /* La bordure top est fournie par .fc-header en dessous duquel
+           on n'a pas de gap — les threads sont collés à l'en-tête */
+        border-top: none;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Chaque ligne de thread */
+    .fc-thread-item {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--ink);
+        text-decoration: none;
+        color: var(--ink);
+        background: var(--bg);
+        transition: background var(--transition-fast);
+    }
+    .fc-thread-item:last-child {
+        border-bottom: none;
+    }
+    .fc-thread-item:hover {
+        background: var(--bg-alt);
+    }
+    .fc-thread-item:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+    }
+
+    /* Zone principale : badges + titre + métas */
+    .fc-thread-item__main {
+        flex: 1;
+        min-width: 0;
+    }
+
+    /* Rangée de badges (épinglé / verrouillé) — au-dessus du titre */
+    .fc-thread-item__badges {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 6px;
+        flex-wrap: wrap;
+    }
+
+    /* Titre du thread — Archivo Black 20px, tronqué si besoin */
+    .fc-thread-item__title {
+        font-family: var(--display);
+        font-size: 20px;
+        text-transform: uppercase;
+        line-height: 1;
+        color: var(--ink);
+        margin: 0 0 8px;
+        /* Pas de text-overflow ici pour garder tout le titre lisible */
+        word-break: break-word;
+    }
+
+    /* Métas en mono (auteur, date, réponses, vues) */
+    .fc-thread-item__meta {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        align-items: center;
+    }
+
+    /* Séparateur "·" entre chaque méta */
+    .fc-thread-item__meta-sep {
+        color: var(--line-soft);
+    }
+
+    /* ── Badges de modération ──────────────────────────────────── */
+
+    /* Base badge — mono uppercase, bords francs */
+    .fc-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--chip-padding);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+        /* border-radius: 0 — pas d'arrondi */
+        border-radius: var(--chip-radius);
+    }
+    /* Badge "ÉPINGLÉ" — fond lime */
+    .fc-badge--pinned {
+        background: var(--accent);
+        color: var(--ink);
+    }
+    /* Badge "VERROUILLÉ" — fond orange accent-2 */
+    .fc-badge--locked {
+        background: var(--accent-2);
+        color: var(--ink);
+    }
+
+    /* ── Avatar carré (initiales) à droite ────────────────────── */
+
+    .fc-thread-item__avatar {
+        width: 40px;
+        height: 40px;
+        /* border-radius: 0 → avatar CARRÉ dans Street */
+        background: var(--ink);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        flex-shrink: 0;
+        border: 1px solid var(--ink);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ÉTAT VIDE
+       Quand la catégorie n'a pas encore de threads.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fc-empty {
+        padding: 60px 24px;
+        text-align: center;
+        border: 1px dashed var(--ink);
+        border-top: none;
+        background: var(--bg);
+    }
+    .fc-empty__title {
+        font-family: var(--display);
+        font-size: 28px;
+        text-transform: uppercase;
+        margin: 0 0 8px;
+    }
+    .fc-empty__sub {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        margin: 0 0 20px;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PAGINATION
+       Ligne d'actions en bas de la liste, style affiche.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fc-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 0;
+        border-top: 1px solid var(--ink);
+        margin-top: 0;
+    }
+
+    /* Bouton pagination — outline ink, bords francs */
+    .fc-pagination__btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--btn-padding-sm);
+        border: 2px solid var(--ink);
+        background: transparent;
+        color: var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size-sm);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: 0;
+        transition:
+            background var(--transition-fast),
+            color var(--transition-fast);
+    }
+    .fc-pagination__btn:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
+    .fc-pagination__btn--disabled {
+        opacity: .3;
         pointer-events: none;
     }
-    .pagination__info {
-        font-size: 13px;
-        color: var(--color-text-light);
+
+    /* Indicateur "Page X / Y" en mono */
+    .fc-pagination__info {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       RESPONSIVE
+    ══════════════════════════════════════════════════════════════ */
+
+    @media (max-width: 640px) {
+        .fc-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 20px;
+        }
+        .fc-thread-item {
+            padding: 16px;
+        }
+        .fc-thread-item__avatar {
+            display: none; /* On cache l'avatar sur très petit écran */
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-{# ── Breadcrumb ──────────────────────────────────────────────────────────────── #}
-<nav class="breadcrumb">
+
+{# ── FIL D'ARIANE ─────────────────────────────────────────────────────────────
+   Navigation contextuelle : Forum → Nom de la catégorie.
+   Aide l'utilisateur à se repérer et à revenir en arrière.
+#}
+<nav class="fc-breadcrumb" aria-label="Fil d'ariane">
     <a href="{{ path('app_forum_index') }}">Forum</a>
-    <span class="breadcrumb__separator">›</span>
-    <span class="breadcrumb__current">{{ category.name }}</span>
+    <span class="fc-breadcrumb__sep" aria-hidden="true">›</span>
+    <span class="fc-breadcrumb__current" aria-current="page">{{ category.name }}</span>
 </nav>
 
-{# ── En-tête de la catégorie ─────────────────────────────────────────────────── #}
-<div class="category-header">
-    <div class="category-header__left">
+{# ── EN-TÊTE CATÉGORIE ────────────────────────────────────────────────────────
+   Bande noire avec icône, nom et description.
+   Le bouton "Nouveau sujet" n'est visible que pour les utilisateurs connectés.
+   Note : le controller est protégé par #[IsGranted], mais on masque aussi
+   le bouton ici pour une meilleure expérience utilisateur.
+#}
+<div class="fc-header">
+    <div class="fc-header__left">
         {% if category.icon %}
-            <span class="category-header__icon">{{ category.icon }}</span>
+            {# Icône dans un carré lime — visible uniquement si définie #}
+            <div class="fc-header__icon-wrap" aria-hidden="true">
+                {{ category.icon }}
+            </div>
         {% endif %}
         <div>
-            <div class="category-header__title">{{ category.name }}</div>
+            <h2 class="fc-header__name">{{ category.name }}</h2>
             {% if category.description %}
-                <div class="category-header__desc">{{ category.description }}</div>
+                <p class="fc-header__desc">{{ category.description }}</p>
             {% endif %}
         </div>
     </div>
 
-    {# Bouton "Nouveau sujet" — visible pour tout utilisateur connecté (ROLE_USER) #}
-    {# Le controller est protégé par #[IsGranted('ROLE_USER')], mais on garde la vérif
-       ici pour que le bouton n'apparaisse pas si l'utilisateur est déconnecté (cas edge) #}
     {% if is_granted('ROLE_USER') %}
         <a href="{{ path('app_forum_new_thread', { categorySlug: category.slug }) }}"
-           class="btn-new-thread">
-            ✏ Nouveau sujet
+           class="fc-btn-new">
+            + Nouveau sujet
         </a>
     {% endif %}
 </div>
 
-{# ── Liste des threads ───────────────────────────────────────────────────────── #}
+{# ── LISTE DES THREADS ────────────────────────────────────────────────────────
+   Les threads épinglés arrivent en premier (triés côté serveur par le controller).
+   Chaque ligne est un lien vers le thread complet.
+#}
 {% if threads is empty %}
-    <div class="thread-list--empty">
-        <p style="font-size: 32px; margin-bottom: 10px;">💬</p>
-        <p style="font-size: 15px; font-weight: 600; margin-bottom: 6px;">Aucun sujet pour le moment</p>
-        <p style="font-size: 13px;">Soyez le premier à lancer une discussion dans cette catégorie !</p>
+
+    {# État vide — la catégorie existe mais n'a pas encore de discussions #}
+    <div class="fc-empty" role="status">
+        <p class="fc-empty__title">Aucun sujet</p>
+        <p class="fc-empty__sub">Soyez le premier à lancer une discussion ici !</p>
         {% if is_granted('ROLE_USER') %}
             <a href="{{ path('app_forum_new_thread', { categorySlug: category.slug }) }}"
-               class="btn-new-thread"
-               style="margin-top: 16px;">
-                ✏ Créer le premier sujet
+               class="fc-btn-new">
+                + Créer le premier sujet
             </a>
         {% endif %}
     </div>
+
 {% else %}
-    <div class="thread-list">
+
+    <div class="fc-thread-list" role="list">
+
         {% for thread in threads %}
-            {# Chaque ligne est un lien vers le thread complet #}
+
+            {#
+                Chaque ligne est un lien vers le thread.
+                On transmet à la fois categorySlug et threadSlug car le controller
+                utilise les deux paramètres pour identifier le thread de façon unique.
+            #}
             <a href="{{ path('app_forum_thread', { categorySlug: category.slug, threadSlug: thread.slug }) }}"
-               class="thread-item">
+               class="fc-thread-item"
+               role="listitem">
 
-                {# Icône d'état : épinglé > verrouillé > normal #}
-                <div class="thread-item__status">
-                    {% if thread.pinned %}
-                        📌
-                    {% elseif thread.locked %}
-                        🔒
-                    {% else %}
-                        💬
+                {# Zone principale : badges + titre + métas #}
+                <div class="fc-thread-item__main">
+
+                    {# Badges — affichés uniquement si le thread est épinglé ou verrouillé #}
+                    {% if thread.pinned or thread.locked %}
+                        <div class="fc-thread-item__badges">
+                            {% if thread.pinned %}
+                                <span class="fc-badge fc-badge--pinned" aria-label="Sujet épinglé">
+                                    &#9913; Épinglé
+                                </span>
+                            {% endif %}
+                            {% if thread.locked %}
+                                <span class="fc-badge fc-badge--locked" aria-label="Sujet verrouillé">
+                                    &#9746; Verrouillé
+                                </span>
+                            {% endif %}
+                        </div>
                     {% endif %}
-                </div>
 
-                <div class="thread-item__main">
-                    <div class="thread-item__title">
-                        {{ thread.title }}
-                        {# Badges visuels pour les états de modération #}
-                        {% if thread.pinned %}
-                            <span class="badge badge--pinned">📌 Épinglé</span>
-                        {% endif %}
-                        {% if thread.locked %}
-                            <span class="badge badge--locked">🔒 Verrouillé</span>
-                        {% endif %}
-                    </div>
-                    <div class="thread-item__meta">
-                        par <strong>{{ thread.author.email|split('@')|first }}</strong>
-                        — {{ thread.createdAt|date('d/m/Y') }}
-                        {# Si le thread a des réponses, on affiche la date de la dernière #}
+                    {# Titre en Archivo Black — uppercase via CSS #}
+                    <h3 class="fc-thread-item__title">{{ thread.title }}</h3>
+
+                    {# Métas : auteur · date · réponses · vues — tout en mono #}
+                    <div class="fc-thread-item__meta">
+                        <span>par <strong>{{ thread.author.email|split('@')|first }}</strong></span>
+                        <span class="fc-thread-item__meta-sep" aria-hidden="true">·</span>
+                        <span>{{ thread.createdAt|date('d/m/Y') }}</span>
+                        <span class="fc-thread-item__meta-sep" aria-hidden="true">·</span>
+                        <span>{{ thread.repliesCount }} réponse{{ thread.repliesCount > 1 ? 's' : '' }}</span>
+                        <span class="fc-thread-item__meta-sep" aria-hidden="true">·</span>
+                        <span>{{ thread.viewsCount }} vue{{ thread.viewsCount > 1 ? 's' : '' }}</span>
+                        {# Si le thread a reçu une réponse récente, on affiche sa date #}
                         {% if thread.lastReplyAt %}
-                            — dernière réponse le {{ thread.lastReplyAt|date('d/m/Y') }}
+                            <span class="fc-thread-item__meta-sep" aria-hidden="true">·</span>
+                            <span>dernière rép. le {{ thread.lastReplyAt|date('d/m/Y') }}</span>
                         {% endif %}
                     </div>
                 </div>
 
-                {# Statistiques du thread (réponses et vues) #}
-                <div class="thread-item__stats">
-                    <span title="Réponses">💬 {{ thread.repliesCount }}</span>
-                    <span title="Vues">👁 {{ thread.viewsCount }}</span>
+                {# Avatar carré de l'auteur (initiales) — affiché à droite #}
+                {#
+                    On prend les 2 premiers caractères de l'email avant le "@".
+                    Ex : "maïa@bazaart.fr" → "MA"
+                    L'avatar est carré (pas de border-radius) — règle Street.
+                #}
+                <div class="fc-thread-item__avatar" aria-hidden="true">
+                    {{ thread.author.email|split('@')|first|slice(0, 2)|upper }}
                 </div>
+
             </a>
+
         {% endfor %}
-    </div>
+
+    </div>{# fin fc-thread-list #}
+
+    {# ── PAGINATION ─────────────────────────────────────────────────────────── #}
+    {# N'afficher la pagination que s'il y a plus d'une page #}
+    {% if totalPages is defined and totalPages > 1 %}
+        <nav class="fc-pagination" aria-label="Pagination des sujets">
+
+            {# Bouton "Précédent" #}
+            {% if page is defined and page > 1 %}
+                <a href="{{ path('app_forum_category', { categorySlug: category.slug, page: page - 1 }) }}"
+                   class="fc-pagination__btn">
+                    ← Précédent
+                </a>
+            {% else %}
+                <span class="fc-pagination__btn fc-pagination__btn--disabled" aria-disabled="true">
+                    ← Précédent
+                </span>
+            {% endif %}
+
+            {# Indicateur de position : Page X / Y #}
+            <span class="fc-pagination__info" aria-live="polite">
+                Page {{ page ?? 1 }} / {{ totalPages }}
+            </span>
+
+            {# Bouton "Suivant" #}
+            {% if page is defined and page < totalPages %}
+                <a href="{{ path('app_forum_category', { categorySlug: category.slug, page: page + 1 }) }}"
+                   class="fc-pagination__btn">
+                    Suivant →
+                </a>
+            {% else %}
+                <span class="fc-pagination__btn fc-pagination__btn--disabled" aria-disabled="true">
+                    Suivant →
+                </span>
+            {% endif %}
+
+        </nav>
+    {% endif %}
+
 {% endif %}
 
-{# ── Pagination ──────────────────────────────────────────────────────────────── #}
-{# On n'affiche la pagination que s'il y a plus d'une page #}
-{% if totalPages > 1 %}
-    <nav class="pagination">
-        {# Bouton "Précédent" #}
-        {% if page > 1 %}
-            <a href="{{ path('app_forum_category', { categorySlug: category.slug, page: page - 1 }) }}"
-               class="pagination__btn">
-                ← Précédent
-            </a>
-        {% else %}
-            <span class="pagination__btn pagination__btn--disabled">← Précédent</span>
-        {% endif %}
-
-        {# Indicateur de page courante #}
-        <span class="pagination__info">Page {{ page }} / {{ totalPages }}</span>
-
-        {# Bouton "Suivant" #}
-        {% if page < totalPages %}
-            <a href="{{ path('app_forum_category', { categorySlug: category.slug, page: page + 1 }) }}"
-               class="pagination__btn">
-                Suivant →
-            </a>
-        {% else %}
-            <span class="pagination__btn pagination__btn--disabled">Suivant →</span>
-        {% endif %}
-    </nav>
-{% endif %}
 {% endblock %}

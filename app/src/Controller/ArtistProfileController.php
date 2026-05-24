@@ -61,6 +61,15 @@ class ArtistProfileController extends AbstractController
         $profile = $user->getArtistProfile();
 
         if ($request->isMethod('POST')) {
+            // Validation CSRF — protège contre les modifications forgées depuis un autre site
+            // (attaque Cross-Site Request Forgery : un site tiers qui soumet le formulaire
+            // au nom de l'utilisateur connecté sans son consentement).
+            // Le token '_token' doit être présent dans le formulaire Twig via csrf_token('artist_profile_edit').
+            if (!$this->isCsrfTokenValid('artist_profile_edit', $request->request->get('_token'))) {
+                $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+                return $this->redirectToRoute('app_artist_profile_edit');
+            }
+
             // Récupère le fichier avatar s'il a été envoyé
             // files->get() retourne null si aucun fichier n'a été uploadé
             $avatarFile = $request->files->get('avatar');

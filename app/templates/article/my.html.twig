@@ -1,132 +1,389 @@
 {% extends 'base_app.html.twig' %}
 
+{#
+ # article/my.html.twig — Mes articles (thème Street)
+ #
+ # Variables transmises par ArticleController::my() :
+ #   - articles : Article[] — tous les articles de l'utilisateur connecté
+ #                            (brouillons inclus, triés par updatedAt DESC dans findByAuthor)
+ #
+ # Affichage compact : liste de lignes avec statut, titre, date et actions.
+ # Contrairement à index.html.twig (lecture), cette page est orientée gestion.
+ # Le badge de statut reprend les chip du thème Street (bords francs, mono uppercase).
+ #}
+
 {% block title %}Mes articles — BazaArt{% endblock %}
 {% block page_title %}Mes articles{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
+{# Styles préfixés .art-my- pour cette page spécifique #}
 <style>
-    .page-toolbar { display:flex; justify-content:flex-end; margin-bottom:20px; }
 
-    .articles-list { display:flex; flex-direction:column; gap:12px; }
+    /* ── En-tête ──────────────────────────────────────────────────────────── */
 
-    .article-row {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-        padding: 16px 20px; display:flex; gap:14px; align-items:center; flex-wrap:wrap;
+    .art-my-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 40px 0 20px;
+        border-bottom: 1px solid var(--ink);
+        margin-bottom: 0;
+        flex-wrap: wrap;
     }
 
-    /* Miniature de couverture */
-    .article-thumb {
-        width: 72px; height: 50px; border-radius: var(--radius-sm);
-        object-fit: cover; flex-shrink: 0;
+    .art-my-header__title {
+        font-family: var(--display);
+        font-size: 40px;
+        text-transform: uppercase;
+        letter-spacing: -.02em;
+        color: var(--ink);
+        margin: 0;
     }
 
-    .article-thumb-placeholder {
-        width: 72px; height: 50px; border-radius: var(--radius-sm);
-        background: var(--color-bg); display:flex; align-items:center; justify-content:center;
-        font-size: 20px; flex-shrink: 0; border: 1px solid var(--color-border);
+    /* ── Bouton "Nouvel article +" ───────────────────────────────────────── */
+
+    .art-my-btn-new {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--btn-padding);
+        background: var(--btn-primary-bg);
+        color: var(--btn-primary-color);
+        border: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .art-my-btn-new:hover {
+        background: var(--btn-primary-hover-bg);
+        color: var(--btn-primary-hover-color);
+        box-shadow: var(--shadow-offset-sm);
     }
 
-    .article-info { flex:1; min-width:0; }
+    /* ── Liste d'articles ────────────────────────────────────────────────── */
 
-    .article-status-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px; }
-
-    .status-badge {
-        display:inline-flex; align-items:center; height:18px; padding:0 8px;
-        border-radius: var(--radius-full); font-size:10px; font-weight:700;
-    }
-    .status-published { background:#d4edda; color:#155724; }
-    .status-draft     { background:#fff3cd; color:#856404; }
-
-    .article-date-sm { font-size:11px; color:var(--color-text-light); }
-
-    .article-title-sm {
-        font-size:14px; font-weight:600; color:var(--color-text);
-        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    /*
+     * Pas de gap entre les lignes — les bordures bottom font le travail.
+     * border-left + border-right sur le conteneur → grille fermée.
+     */
+    .art-my-list {
+        border-left: 1px solid var(--ink);
+        border-right: 1px solid var(--ink);
+        border-bottom: 1px solid var(--ink);
     }
 
-    .article-row-actions { display:flex; gap:6px; flex-shrink:0; }
-
-    .btn-sm {
-        display:inline-flex; align-items:center; height:28px; padding:0 10px;
-        border-radius: var(--radius-sm); font-size:11px; font-weight:600; text-decoration:none;
-        border: 1px solid var(--color-border); color: var(--color-text-muted); cursor:pointer;
-        font-family: var(--font-body); background: var(--color-white);
+    /* Chaque ligne d'article */
+    .art-my-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--line-soft);
+        background: var(--bg);
+        transition: background var(--transition-fast);
+        flex-wrap: wrap;
     }
-    .btn-sm:hover { border-color: var(--color-green); color: var(--color-green); }
+    .art-my-row:last-child { border-bottom: 0; }
+    .art-my-row:hover { background: var(--bg-alt); }
 
-    .btn-sm-edit { background:#e8f0fe; color:#1a5fb4; border-color:#a8c7fa; }
-    .btn-sm-edit:hover { background:#d0e3fc; }
+    /* ── Miniature de couverture ──────────────────────────────────────────── */
 
-    .btn-sm-delete { background:#f8d7da; color:#721c24; border-color:#f5c6cb; }
-    .btn-sm-delete:hover { background:#f5c6cb; }
+    .art-my-thumb {
+        width: 72px;
+        height: 48px;
+        object-fit: cover;
+        flex-shrink: 0;
+        border: 1px solid var(--ink);
+        /* Pas de border-radius — thème Street */
+    }
 
-    .empty-state {
-        background:var(--color-white); border:1px solid var(--color-border);
-        border-radius:var(--radius-md); padding:48px; text-align:center; color:var(--color-text-muted);
+    /* Placeholder hachuré si pas d'image */
+    .art-my-thumb-placeholder {
+        width: 72px;
+        height: 48px;
+        background: var(--placeholder-bg);
+        border: 1px solid var(--ink);
+        flex-shrink: 0;
+    }
+
+    /* ── Infos de l'article (col principale) ─────────────────────────────── */
+
+    .art-my-info {
+        flex: 1;
+        min-width: 0;  /* évite le débordement du titre sur les petits écrans */
+    }
+
+    /* Ligne statut + date */
+    .art-my-status-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+        flex-wrap: wrap;
+    }
+
+    /*
+     * Badges de statut — style chip Street (mono uppercase, bords francs).
+     * Publié → fond accent lime (--accent) : signal positif lisible.
+     * Brouillon → fond --bg-alt + border : neutre, discret.
+     */
+    .art-my-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: var(--chip-padding);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+        border-radius: var(--chip-radius);
+    }
+
+    /* Publié = lime — même valeur que --accent */
+    .art-my-badge--published {
+        background: var(--accent);
+        color: var(--ink);
+        border: 1px solid var(--ink);
+    }
+
+    /* Brouillon = fond alternatif + bordure douce */
+    .art-my-badge--draft {
+        background: var(--bg-alt);
+        color: var(--ink-mute);
+        border: 1px solid var(--line-soft);
+    }
+
+    /* Date en mono — après le badge */
+    .art-my-date {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    /* Titre de la ligne — tronqué sur une seule ligne */
+    .art-my-title {
+        font-family: var(--body);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* ── Actions (droite) ────────────────────────────────────────────────── */
+
+    .art-my-actions {
+        display: flex;
+        gap: 6px;
+        flex-shrink: 0;
+        flex-wrap: wrap;
+    }
+
+    /* Bouton "Voir" ou "Aperçu" — ghost neutre */
+    .art-my-btn {
+        display: inline-flex;
+        align-items: center;
+        height: 30px;
+        padding: 0 12px;
+        border: 1px solid var(--ink);
+        background: transparent;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink);
+        text-decoration: none;
+        cursor: pointer;
+        font-family: var(--mono);
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .art-my-btn:hover {
+        background: var(--ink);
+        color: var(--bg);
+    }
+
+    /* Bouton "Modifier" — fond bleu ciel très doux pour distinguer de "Voir" */
+    .art-my-btn--edit {
+        background: rgba(198, 242, 78, .18);
+        border-color: var(--accent);
+        color: var(--ink);
+    }
+    .art-my-btn--edit:hover {
+        background: var(--accent);
+        color: var(--ink);
+    }
+
+    /* Bouton "Supprimer" — orange tangerine = signal de danger (≠ rouge agressif) */
+    .art-my-btn--delete {
+        background: transparent;
+        border-color: var(--accent-2);
+        color: var(--accent-2);
+    }
+    .art-my-btn--delete:hover {
+        background: var(--accent-2);
+        color: var(--ink);
+    }
+
+    /* ── État vide ───────────────────────────────────────────────────────── */
+
+    .art-my-empty {
+        border: 1px solid var(--ink);
+        padding: 64px 48px;
+        text-align: center;
+    }
+
+    .art-my-empty__title {
+        font-family: var(--display);
+        font-size: 28px;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin: 0 0 10px;
+    }
+
+    .art-my-empty__sub {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: .08em;
+        color: var(--ink-mute);
+        margin: 0 0 24px;
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────────────── */
+
+    @media (max-width: 640px) {
+        .art-my-row { flex-direction: column; align-items: flex-start; }
+        .art-my-thumb,
+        .art-my-thumb-placeholder { width: 100%; height: 120px; }
+        .art-my-title { white-space: normal; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<div class="page-toolbar">
-    <a href="{{ path('app_article_new') }}" class="btn btn-primary">+ Écrire un article</a>
+{# ── En-tête : titre + bouton "Nouvel article +" ─────────────────────────── #}
+<div class="art-my-header">
+    <h1 class="art-my-header__title">Mes articles</h1>
+    <a href="{{ path('app_article_new') }}" class="art-my-btn-new">
+        + Nouvel article
+    </a>
 </div>
 
+{# ── Contenu ──────────────────────────────────────────────────────────────── #}
+
 {% if articles is empty %}
-    <div class="empty-state">
-        <p>Vous n'avez pas encore écrit d'article.</p>
-        <a href="{{ path('app_article_new') }}"
-           style="display:inline-block;margin-top:10px;color:var(--color-red);font-weight:600;text-decoration:none;">
+
+    {# État vide — premier article à écrire #}
+    <div class="art-my-empty" role="status">
+        <p class="art-my-empty__title">Pas encore d'article</p>
+        <p class="art-my-empty__sub">votre premier article attend d'être écrit</p>
+        <a href="{{ path('app_article_new') }}" class="art-my-btn-new">
             Écrire mon premier article →
         </a>
     </div>
-{% else %}
-    <div class="articles-list">
-        {% for article in articles %}
-            <div class="article-row">
 
-                {# Miniature #}
+{% else %}
+
+    <div class="art-my-list" role="list" aria-label="Mes articles">
+        {% for article in articles %}
+            <div class="art-my-row" role="listitem">
+
+                {# ── Miniature ──────────────────────────────────────────── #}
                 {% if article.coverImagePath %}
-                    <img src="{{ asset(article.coverImagePath) }}" alt="" class="article-thumb">
+                    <img src="{{ asset(article.coverImagePath) }}"
+                         alt=""
+                         class="art-my-thumb">
                 {% else %}
-                    <div class="article-thumb-placeholder">📝</div>
+                    <div class="art-my-thumb-placeholder" role="img" aria-label="Pas de couverture"></div>
                 {% endif %}
 
-                {# Infos article #}
-                <div class="article-info">
-                    <div class="article-status-row">
+                {# ── Infos ─────────────────────────────────────────────── #}
+                <div class="art-my-info">
+
+                    {# Ligne statut + date #}
+                    <div class="art-my-status-row">
+
+                        {# Badge statut : Publié (lime) ou Brouillon (neutre) #}
                         {% if article.isPublished() %}
-                            <span class="status-badge status-published">Publié</span>
-                            <span class="article-date-sm">le {{ article.publishedAt|date('d/m/Y') }}</span>
+                            <span class="art-my-badge art-my-badge--published">Publié</span>
+                            <span class="art-my-date">
+                                le
+                                <time datetime="{{ article.publishedAt|date('Y-m-d') }}">
+                                    {{ article.publishedAt|date('d/m/Y') }}
+                                </time>
+                            </span>
                         {% else %}
-                            <span class="status-badge status-draft">Brouillon</span>
-                            <span class="article-date-sm">modifié le {{ article.updatedAt|date('d/m/Y') }}</span>
+                            <span class="art-my-badge art-my-badge--draft">Brouillon</span>
+                            <span class="art-my-date">
+                                modifié le
+                                {#
+                                 # updatedAt peut être null si l'article vient d'être créé
+                                 # et que le listener Doctrine n'a pas encore renseigné le champ.
+                                 # On replie sur createdAt dans ce cas via l'opérateur de coalescence ??.
+                                #}
+                                <time datetime="{{ (article.updatedAt ?? article.createdAt)|date('Y-m-d') }}">
+                                    {{ (article.updatedAt ?? article.createdAt)|date('d/m/Y') }}
+                                </time>
+                            </span>
                         {% endif %}
+
                     </div>
-                    <div class="article-title-sm">{{ article.title }}</div>
+
+                    {# Titre tronqué #}
+                    <div class="art-my-title">{{ article.title }}</div>
+
                 </div>
 
-                {# Actions #}
-                <div class="article-row-actions">
-                    <a href="{{ path('app_article_show', {slug: article.slug}) }}" class="btn-sm">
+                {# ── Actions ───────────────────────────────────────────── #}
+                <div class="art-my-actions">
+
+                    {# "Voir" si publié, "Aperçu" si brouillon (auteur peut prévisualiser) #}
+                    <a href="{{ path('app_article_show', {slug: article.slug}) }}"
+                       class="art-my-btn"
+                       aria-label="{{ article.isPublished() ? 'Voir' : 'Aperçu' }} : {{ article.title }}">
                         {{ article.isPublished() ? 'Voir' : 'Aperçu' }}
                     </a>
-                    <a href="{{ path('app_article_edit', {id: article.id}) }}" class="btn-sm btn-sm-edit">
+
+                    {# Modifier #}
+                    <a href="{{ path('app_article_edit', {id: article.id}) }}"
+                       class="art-my-btn art-my-btn--edit"
+                       aria-label="Modifier : {{ article.title }}">
                         Modifier
                     </a>
-                    <form method="post" action="{{ path('app_article_delete', {id: article.id}) }}"
-                          onsubmit="return confirm('Supprimer « {{ article.title }} » ?')">
-                        <input type="hidden" name="_token" value="{{ csrf_token('article_delete_' ~ article.id) }}">
-                        <button type="submit" class="btn-sm btn-sm-delete">Supprimer</button>
+
+                    {#
+                     # Supprimer : formulaire POST + token CSRF.
+                     # Le contrôleur vérifie : csrf_token('article_delete_{id}').
+                     # onsubmit → confirmation native avant envoi.
+                    #}
+                    <form method="post"
+                          action="{{ path('app_article_delete', {id: article.id}) }}"
+                          onsubmit="return confirm('Supprimer « {{ article.title|e('js') }} » ? Cette action est irréversible.')">
+                        <input type="hidden" name="_token"
+                               value="{{ csrf_token('article_delete_' ~ article.id) }}">
+                        <button type="submit"
+                                class="art-my-btn art-my-btn--delete"
+                                aria-label="Supprimer : {{ article.title }}">
+                            Supprimer
+                        </button>
                     </form>
+
                 </div>
 
             </div>
         {% endfor %}
     </div>
+
 {% endif %}
 
 {% endblock %}

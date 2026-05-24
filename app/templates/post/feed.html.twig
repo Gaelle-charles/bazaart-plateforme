@@ -1,388 +1,879 @@
 {% extends 'base_app.html.twig' %}
 
+{#
+ # post/feed.html.twig — Fil d'actualité de la communauté
+ #
+ # Thème : Street (--ink, --accent lime, Archivo Black, border-radius 0)
+ # Route : app_post_feed (GET /community)
+ #
+ # Variables reçues du contrôleur (PostController::feed()) :
+ #   - posts      : Post[] (15 posts par page)
+ #   - page       : int (page courante)
+ #   - totalPages : int (total de pages)
+ #
+ # Note : pas de sidebar avec données dynamiques en V1 — le contrôleur
+ # ne passe pas de ressources récentes ni de membres actifs.
+ # La sidebar est simplifiée avec un widget statique + liens contextuels.
+ #
+ # Fonctionnalités AJAX conservées :
+ #   - data-post-id, data-token, data-liked sur les boutons like
+ #   - Le script JS du bas du fichier gère les likes sans rechargement
+ #}
+
 {% block title %}Communauté — BazaArt{% endblock %}
 {% block page_title %}Communauté{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
+{#
+   Préfixe CSS : .feed-
+   Toutes les classes de ce template commencent par .feed- pour isolation.
+#}
 <style>
-    /* ── Layout : fil principal + sidebar ── */
-    .community-layout {
-        display: grid;
-        grid-template-columns: 1fr 280px;
-        gap: 20px;
-        align-items: start;
+
+/* ============================================================
+   LAYOUT PRINCIPAL
+   2 colonnes : 70% contenu / 30% sidebar
+   ============================================================ */
+
+.feed-layout {
+    display: grid;
+    /* 1fr = tout l'espace restant, 280px = sidebar fixe */
+    grid-template-columns: 1fr 280px;
+    gap: var(--space-xl);
+    align-items: start;
+}
+
+/* ============================================================
+   FORMULAIRE DE PUBLICATION
+   Encadré en haut du fil — "Publier dans la communauté"
+   ============================================================ */
+
+.feed-composer {
+    border: 1px solid var(--ink);
+    background: var(--bg);
+    margin-bottom: var(--space-lg);
+    overflow: hidden;   /* pour que le header ait un fond pleine largeur */
+}
+
+/* En-tête du composer : fond noir + texte lime — style "titre de section" */
+.feed-composer__header {
+    background: var(--ink);
+    color: var(--accent);
+    padding: var(--space-sm) var(--space-lg);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+/* Corps du composer */
+.feed-composer__body {
+    padding: var(--space-lg);
+}
+
+/* Textarea du composer */
+.feed-textarea {
+    display: block;
+    width: 100%;
+    padding: var(--input-padding);
+    font-family: var(--body);
+    font-size: 14px;
+    color: var(--ink);
+    background: var(--bg);
+    border: var(--input-border);
+    outline: none;
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.6;
+    box-sizing: border-box;
+    transition: border var(--transition-fast);
+}
+.feed-textarea:focus {
+    border: var(--input-border-focus);  /* 2px solid var(--accent) = lime */
+}
+.feed-textarea::placeholder {
+    color: var(--ink-mute);
+    font-style: italic;
+}
+
+/* Pied de formulaire : compteur + bouton publier */
+.feed-composer__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--space-sm);
+}
+
+/* Compteur de caractères */
+.feed-char-counter {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-mute);
+    letter-spacing: .04em;
+}
+/* Passe en orange/rouge quand on approche la limite */
+.feed-char-counter--warn { color: var(--accent-2); }  /* orange */
+.feed-char-counter--max  { color: var(--danger); }    /* rouge */
+
+/* Bouton "Publier →" — fond lime, texte noir */
+.feed-btn-publish {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: var(--btn-padding-sm);       /* 7px 11px — version compact */
+    font-family: var(--body);
+    font-size: var(--btn-font-size-sm);   /* 11px */
+    font-weight: var(--btn-font-weight);
+    letter-spacing: var(--btn-letter-spacing);
+    text-transform: uppercase;
+    background: var(--accent);
+    color: var(--ink);
+    border: 1px solid var(--ink);
+    cursor: pointer;
+    transition: box-shadow var(--transition-fast);
+}
+.feed-btn-publish:hover {
+    box-shadow: var(--shadow-offset-sm);
+}
+
+/* ============================================================
+   CARTE POST
+   Chaque post est un bloc séparé, bordure 1px tout autour
+   ============================================================ */
+
+.feed-post {
+    border: 1px solid var(--ink);
+    background: var(--bg);
+    margin-bottom: var(--space-md);
+    /* Sans border-radius → bords francs, thème Street */
+}
+
+/* En-tête du post : avatar + nom auteur + date */
+.feed-post__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--line-soft);
+}
+
+/* Zone auteur : avatar carré + infos texte */
+.feed-post__author {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+/* Carré initiales — fond encre, texte lime (inverse de l'accent card) */
+.feed-avatar {
+    width: 36px;
+    height: 36px;
+    background: var(--ink);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    flex-shrink: 0;
+}
+
+/* Nom de l'auteur — gras, Space Grotesk */
+.feed-author-name {
+    font-family: var(--body);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+/* Heure du post — mono atténué */
+.feed-post-time {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-mute);
+    letter-spacing: .04em;
+    margin-top: 2px;
+}
+
+/* Bouton supprimer — discret, rouge au survol */
+.feed-btn-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink-mute);
+    padding: 4px;
+    line-height: 1;
+    transition: color var(--transition-fast);
+}
+.feed-btn-delete:hover { color: var(--danger); }
+
+/* Corps du post — texte principal */
+.feed-post__body {
+    padding: var(--space-md) var(--space-lg);
+}
+
+.feed-post-content {
+    font-family: var(--body);
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--ink);
+    /* white-space: pre-wrap conserve les sauts de ligne du texte brut.
+       Combiné avec nl2br dans Twig : les deux sont compatibles — nl2br
+       insère des <br> et pre-wrap respecte les espaces. On garde pre-wrap
+       pour la cohérence avec le template original. */
+    white-space: pre-wrap;
+    margin: 0;
+}
+
+/* Barre d'actions : like + compteur commentaires */
+.feed-post__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-lg);
+    padding: var(--space-sm) var(--space-lg);
+    border-top: 1px solid var(--line-soft);
+    border-bottom: 1px solid var(--line-soft);
+}
+
+/* Bouton like — état liked = rouge, sinon atténué */
+.feed-btn-like {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    padding: 4px 8px;
+    transition: background var(--transition-fast);
+    color: var(--ink-mute);
+}
+.feed-btn-like:hover {
+    background: rgba(13, 13, 13, .06);
+}
+.feed-btn-like[data-liked="1"] {
+    color: #e0245e;   /* rose vif = liked */
+}
+
+/* Compteur commentaires */
+.feed-comment-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    letter-spacing: .06em;
+}
+
+/* ============================================================
+   COMMENTAIRES
+   Liste compacte sous chaque post
+   ============================================================ */
+
+.feed-comments {
+    display: flex;
+    flex-direction: column;
+    gap: 0;   /* séparateur par border-bottom */
+    padding: var(--space-sm) var(--space-lg);
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--line-soft);
+}
+
+/* Un commentaire = flex : avatar + bulle */
+.feed-comment {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--line-soft);
+}
+.feed-comment:last-child { border-bottom: none; }
+
+/* Petit carré avatar pour les commentaires */
+.feed-comment-avatar {
+    width: 24px;
+    height: 24px;
+    background: var(--ink);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+/* Bulle commentaire */
+.feed-comment-content { flex: 1; }
+
+.feed-comment-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+.feed-comment-author {
+    font-family: var(--body);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink);
+}
+.feed-comment-date {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--ink-mute);
+    letter-spacing: .04em;
+}
+.feed-comment-text {
+    font-family: var(--body);
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--ink);
+    white-space: pre-wrap;
+    margin: 0;
+}
+
+/* ============================================================
+   FORMULAIRE COMMENTAIRE
+   Ligne compacte : avatar + input + bouton envoyer
+   ============================================================ */
+
+.feed-comment-form {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-lg);
+}
+
+/* Champ commentaire — style flat sans bordure (bordure portée par le parent) */
+.feed-comment-input-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--line-soft);
+    background: var(--bg);
+    padding: 4px 4px 4px 10px;
+}
+.feed-comment-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: var(--body);
+    font-size: 12px;
+    color: var(--ink);
+    outline: none;
+}
+.feed-comment-input::placeholder { color: var(--ink-mute); }
+
+.feed-btn-comment {
+    padding: 4px 12px;
+    background: var(--ink);
+    color: var(--accent);
+    border: none;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.feed-btn-comment:hover {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+/* ============================================================
+   PAGINATION
+   Numéros de page à bords francs
+   ============================================================ */
+
+.feed-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0;   /* les boutons sont jointifs — partage de bordures */
+    margin-top: var(--space-xl);
+}
+
+.feed-page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    height: 40px;
+    padding: 0 var(--space-sm);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    border: 1px solid var(--ink);
+    border-right: none;             /* évite le doublement des bordures */
+    color: var(--ink);
+    background: var(--bg);
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+/* Dernier bouton récupère sa bordure droite */
+.feed-page-btn:last-child { border-right: 1px solid var(--ink); }
+
+.feed-page-btn:hover {
+    background: var(--ink);
+    color: var(--accent);
+}
+/* Page active : fond noir + texte lime */
+.feed-page-btn--active {
+    background: var(--ink);
+    color: var(--accent);
+}
+
+/* ============================================================
+   ÉTAT VIDE
+   ============================================================ */
+
+.feed-empty {
+    border: 1px solid var(--ink);
+    padding: var(--space-3xl) var(--space-xl);
+    text-align: center;
+    background: var(--bg);
+}
+.feed-empty__title {
+    font-family: var(--display);
+    font-size: 24px;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin-bottom: var(--space-sm);
+}
+.feed-empty__text {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-mute);
+    letter-spacing: .06em;
+}
+
+/* ============================================================
+   SIDEBAR — Widgets contextuels
+   ============================================================ */
+
+.feed-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+/* Widget générique : bordure 1px, pas de radius */
+.feed-widget {
+    border: 1px solid var(--ink);
+    background: var(--bg);
+    overflow: hidden;
+}
+
+/* En-tête du widget — fond noir, texte lime */
+.feed-widget__header {
+    background: var(--ink);
+    color: var(--accent);
+    padding: var(--space-sm) var(--space-md);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
+
+/* Corps du widget */
+.feed-widget__body {
+    padding: var(--space-md);
+    font-family: var(--body);
+    font-size: 13px;
+    color: var(--ink-mute);
+    line-height: 1.6;
+}
+
+/* Lien dans le widget */
+.feed-widget-link {
+    display: block;
+    margin-top: var(--space-sm);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--ink);
+    border-top: 1px solid var(--line-soft);
+    padding-top: var(--space-sm);
+    transition: color var(--transition-fast);
+}
+.feed-widget-link:hover { color: var(--accent-2); }
+
+/* ============================================================
+   RESPONSIVE
+   Sur mobile : 1 seule colonne (sidebar passe sous le fil)
+   ============================================================ */
+@media (max-width: 768px) {
+    .feed-layout {
+        grid-template-columns: 1fr;
     }
-
-    /* ── Formulaire de publication ── */
-    .post-composer {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 20px;
-        margin-bottom: 16px;
-    }
-
-    .post-composer__inner { display: flex; gap: 12px; align-items: flex-start; }
-
-    .composer-textarea {
-        flex: 1;
-        width: 100%;
-        padding: 10px 14px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        font-family: var(--font-body);
-        font-size: 13px;
-        line-height: 1.5;
-        resize: vertical;
-        background: var(--color-input-bg);
-        color: var(--color-text);
-        outline: none;
-        transition: border-color 0.15s;
-    }
-    .composer-textarea:focus { border-color: var(--color-green); }
-
-    .composer-footer {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-top: 8px; padding-left: 44px;
-    }
-    .char-counter { font-size: 11px; color: var(--color-text-light); }
-
-    /* ── Carte post ── */
-    .post-card {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 20px;
-        margin-bottom: 12px;
-    }
-
-    /* En-tête du post */
-    .post-header {
-        display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;
-    }
-
-    .post-author { display: flex; gap: 10px; align-items: center; }
-
-    .post-avatar {
-        width: 38px; height: 38px; border-radius: 50%;
-        background: var(--color-orange); color: white;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 12px; font-weight: 700; flex-shrink: 0;
-    }
-
-    .post-author-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
-    .post-time { font-size: 11px; color: var(--color-text-light); margin-top: 1px; }
-
-    /* Bouton supprimer */
-    .btn-delete {
-        background: none; border: none; cursor: pointer;
-        color: var(--color-text-light); font-size: 14px; padding: 4px; line-height: 1;
-    }
-    .btn-delete:hover { color: #dc3545; }
-
-    /* Contenu du post */
-    .post-content {
-        font-size: 13px; line-height: 1.7; color: var(--color-text);
-        white-space: pre-wrap; margin-bottom: 14px;
-    }
-
-    /* Barre d'actions : like + commentaires */
-    .post-actions {
-        display: flex; gap: 14px; align-items: center;
-        padding: 10px 0; border-top: 1px solid var(--color-border);
-        border-bottom: 1px solid var(--color-border); margin-bottom: 14px;
-    }
-
-    .like-btn {
-        background: none; border: none; cursor: pointer;
-        display: flex; align-items: center; gap: 5px;
-        font-size: 13px; font-weight: 600; padding: 4px 8px;
-        border-radius: var(--radius-full); transition: background 0.12s;
-        font-family: var(--font-body);
-    }
-    .like-btn:hover { background: var(--color-red-light); }
-
-    .comment-count { font-size: 13px; color: var(--color-text-muted); }
-
-    /* ── Commentaires ── */
-    .comments-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
-
-    .comment {
-        display: flex; gap: 8px; align-items: flex-start;
-    }
-
-    .comment-avatar {
-        width: 28px; height: 28px; border-radius: 50%;
-        background: #6c757d; color: white;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 2px;
-    }
-
-    .comment-bubble {
-        flex: 1; background: var(--color-bg);
-        border-radius: 10px; padding: 8px 12px;
-    }
-
-    .comment-header {
-        display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;
-    }
-
-    .comment-author { font-size: 12px; font-weight: 600; color: var(--color-text); }
-    .comment-date { font-size: 11px; color: var(--color-text-light); }
-    .comment-text { font-size: 12px; line-height: 1.5; color: var(--color-text-muted); white-space: pre-wrap; }
-
-    /* Formulaire commentaire */
-    .comment-form {
-        display: flex; gap: 8px; align-items: center;
-    }
-
-    .comment-input-wrap {
-        flex: 1; display: flex; gap: 6px; align-items: center;
-        background: var(--color-bg); border-radius: var(--radius-full); padding: 4px 4px 4px 12px;
-    }
-
-    .comment-input {
-        flex: 1; border: none; background: transparent; font-size: 12px;
-        outline: none; font-family: var(--font-body); color: var(--color-text);
-    }
-
-    .btn-comment-send {
-        background: var(--color-green); color: white; border: none;
-        border-radius: var(--radius-full); padding: 5px 14px;
-        font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
-        font-family: var(--font-body);
-    }
-    .btn-comment-send:hover { opacity: 0.88; }
-
-    /* ── Pagination ── */
-    .pagination {
-        display: flex; justify-content: center; gap: 6px; margin-top: 16px; flex-wrap: wrap;
-    }
-
-    .page-btn {
-        display: inline-flex; align-items: center; justify-content: center;
-        min-width: 34px; height: 34px; padding: 0 10px;
-        border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
-        text-decoration: none; border: 1px solid var(--color-border); color: var(--color-text-muted);
-    }
-    .page-btn:hover { border-color: var(--color-green); color: var(--color-green); }
-    .page-btn--active { background: var(--color-green); color: white; border-color: var(--color-green); }
-
-    /* ── Sidebar communauté ── */
-    .side-widget {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-        overflow: hidden; margin-bottom: 16px;
-    }
-
-    .side-widget__header {
-        padding: 14px 16px 10px; border-bottom: 1px solid var(--color-border);
-        font-size: 13px; font-weight: 600; color: var(--color-text);
-    }
-
-    .side-widget__body { padding: 14px 16px; font-size: 13px; color: var(--color-text-muted); }
-
-    /* État vide */
-    .empty-feed {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); padding: 48px; text-align: center; color: var(--color-text-muted);
-    }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 
-<div class="community-layout">
+<div class="feed-layout">
 
     {# ── FIL PRINCIPAL ────────────────────────────────────────────────────── #}
     <div>
 
-        {# Formulaire de publication #}
-        <div class="post-composer">
-            <div class="post-composer__inner">
-                {# Avatar de l'utilisateur connecté #}
-                {% set currentUser = app.user %}
-                {% if currentUser.artistProfile and currentUser.artistProfile.avatarPath %}
-                    <img src="{{ asset(currentUser.artistProfile.avatarPath) }}"
-                         alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;">
-                {% else %}
-                    <div class="post-avatar">{{ currentUser.email|first|upper }}</div>
-                {% endif %}
-
-                <form method="post" action="{{ path('app_post_new') }}" style="flex:1;">
+        {# ── Formulaire de publication ── #}
+        <div class="feed-composer">
+            <div class="feed-composer__header">Publier dans la communauté</div>
+            <div class="feed-composer__body">
+                {#
+                   action="{{ path('app_post_new') }}" → route POST /community/post/new
+                   CSRF : le token 'post_new' est validé dans PostController::new()
+                #}
+                <form method="post" action="{{ path('app_post_new') }}">
                     <input type="hidden" name="_token" value="{{ csrf_token('post_new') }}">
+
                     <textarea
-                        class="composer-textarea"
+                        class="feed-textarea"
                         name="content"
                         rows="3"
                         maxlength="2000"
                         placeholder="Partagez une actualité, une question, une découverte..."
-                        oninput="document.getElementById('char-count').textContent = this.value.length"></textarea>
-                    <div class="composer-footer">
-                        <span class="char-counter">
-                            <span id="char-count">0</span> / 2000
+                        aria-label="Contenu de votre publication"
+                        id="composer-textarea"
+                        oninput="feedUpdateCharCount(this)"></textarea>
+
+                    <div class="feed-composer__footer">
+                        {# Compteur de caractères — mis à jour en temps réel par feedUpdateCharCount() #}
+                        <span class="feed-char-counter" id="feed-char-count"
+                              aria-live="polite" aria-atomic="true">
+                            0 / 2000
                         </span>
-                        <button type="submit" class="btn btn-primary" style="height:34px;font-size:12px;">
-                            Publier
+                        <button type="submit" class="feed-btn-publish">
+                            Publier →
                         </button>
                     </div>
                 </form>
             </div>
         </div>
 
-        {# Fil de posts #}
+        {# ── Liste des posts ── #}
         {% if posts is empty %}
-            <div class="empty-feed">
-                <p>Aucune publication pour l'instant.</p>
-                <p style="font-size:13px;margin-top:6px;">Soyez le premier à partager quelque chose !</p>
-            </div>
-        {% else %}
-            {% for post in posts %}
-                <div class="post-card" id="post-{{ post.id }}">
 
-                    {# En-tête #}
-                    <div class="post-header">
-                        <div class="post-author">
-                            {% if post.author.artistProfile and post.author.artistProfile.avatarPath %}
-                                <img src="{{ asset(post.author.artistProfile.avatarPath) }}"
-                                     alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;">
-                            {% else %}
-                                <div class="post-avatar">{{ post.author.email|first|upper }}</div>
-                            {% endif %}
+            <div class="feed-empty">
+                <div class="feed-empty__title">Fil vide</div>
+                <p class="feed-empty__text">
+                    Soyez le premier à publier quelque chose dans la communauté.
+                </p>
+            </div>
+
+        {% else %}
+
+            {% for post in posts %}
+                {#
+                   id="post-{{ post.id }}" permet l'ancrage depuis les redirections
+                   après ajout de commentaire : /community#post-42
+                #}
+                <div class="feed-post" id="post-{{ post.id }}">
+
+                    {# ── En-tête du post ── #}
+                    <div class="feed-post__header">
+
+                        <div class="feed-post__author">
+
+                            {# Carré initiales : première lettre de l'email de l'auteur #}
+                            <div class="feed-avatar" aria-hidden="true">
+                                {{ post.author.email|first|upper }}
+                            </div>
+
                             <div>
-                                <div class="post-author-name">
-                                    {% if post.author.artistProfile %}{{ post.author.artistProfile.displayName }}
-                                    {% elseif post.author.organizationProfile %}{{ post.author.organizationProfile.name }}
-                                    {% else %}{{ post.author.email }}{% endif %}
+                                {# Nom d'affichage : profil artiste > profil orga > email #}
+                                <div class="feed-author-name">
+                                    {% if post.author.artistProfile %}
+                                        {{ post.author.artistProfile.displayName }}
+                                    {% elseif post.author.organizationProfile %}
+                                        {{ post.author.organizationProfile.name }}
+                                    {% else %}
+                                        {{ post.author.email|split('@')|first }}
+                                    {% endif %}
                                 </div>
-                                <div class="post-time">
+
+                                {# Heure relative — recalculée côté Twig (pas de JS) #}
+                                <div class="feed-post-time">
+                                    {#
+                                       Calcul du temps relatif :
+                                       On soustrait le timestamp du post à "maintenant".
+                                       Les opérateurs // effectuent une division entière.
+                                       Limite à 7 jours, au-delà on affiche la date.
+                                    #}
                                     {% set diff = ("now"|date('U')) - post.createdAt.timestamp %}
-                                    {% if diff < 60 %}À l'instant
-                                    {% elseif diff < 3600 %}Il y a {{ (diff // 60) }}min
-                                    {% elseif diff < 86400 %}Il y a {{ (diff // 3600) }}h
-                                    {% elseif diff < 604800 %}Il y a {{ (diff // 86400) }}j
-                                    {% else %}{{ post.createdAt|date('d/m/Y') }}{% endif %}
+                                    {% if diff < 60 %}
+                                        À l'instant
+                                    {% elseif diff < 3600 %}
+                                        Il y a {{ (diff // 60) }}min
+                                    {% elseif diff < 86400 %}
+                                        Il y a {{ (diff // 3600) }}h
+                                    {% elseif diff < 604800 %}
+                                        Il y a {{ (diff // 86400) }}j
+                                    {% else %}
+                                        {{ post.createdAt|date('d/m/Y') }}
+                                    {% endif %}
                                 </div>
                             </div>
+
                         </div>
 
+                        {# Bouton supprimer — visible pour l'auteur ou un admin #}
                         {% if app.user == post.author or is_granted('ROLE_ADMIN') %}
-                            <form method="post" action="{{ path('app_post_delete', {id: post.id}) }}"
-                                  onsubmit="return confirm('Supprimer ce post ?')">
-                                <input type="hidden" name="_token" value="{{ csrf_token('post_delete_' ~ post.id) }}">
-                                <button type="submit" class="btn-delete" title="Supprimer">✕</button>
+                            <form method="post"
+                                  action="{{ path('app_post_delete', {id: post.id}) }}"
+                                  onsubmit="return confirm('Supprimer ce post définitivement ?')">
+                                <input type="hidden" name="_token"
+                                       value="{{ csrf_token('post_delete_' ~ post.id) }}">
+                                <button type="submit" class="feed-btn-delete"
+                                        aria-label="Supprimer ce post">✕</button>
                             </form>
                         {% endif %}
+
+                    </div>
+                    {# /feed-post__header #}
+
+                    {# ── Contenu du post ── #}
+                    <div class="feed-post__body">
+                        {#
+                           |nl2br : convertit les \n en <br> (sauts de ligne utilisateur)
+                           On N'utilise JAMAIS |raw sur du contenu utilisateur — risque XSS.
+                           nl2br est sûr : Twig échappe d'abord le HTML, puis insère les <br>.
+                        #}
+                        <p class="feed-post-content">{{ post.content|nl2br }}</p>
                     </div>
 
-                    {# Contenu #}
-                    <p class="post-content">{{ post.content }}</p>
+                    {# ── Barre d'actions : like + commentaires ── #}
+                    <div class="feed-post__actions">
 
-                    {# Actions #}
-                    <div class="post-actions">
-                        <button class="like-btn"
+                        {#
+                           data-post-id, data-token, data-liked : utilisés par le script AJAX
+                           de gestion des likes (défini dans le bloc javascripts ci-dessous).
+                           On conserve ces attributs data-* pour maintenir la fonctionnalité AJAX.
+                        #}
+                        {#
+                           data-url : URL de l'action like générée par Twig via path().
+                           Avantage : si le préfixe de route change côté Symfony,
+                           cette valeur se met à jour automatiquement — le JS n'a
+                           pas à connaître la structure d'URL. C'est toujours Twig
+                           qui est la source de vérité pour les routes.
+                        #}
+                        <button class="feed-btn-like"
                                 data-post-id="{{ post.id }}"
+                                data-url="{{ path('app_post_like', {id: post.id}) }}"
                                 data-token="{{ csrf_token('like_' ~ post.id) }}"
                                 data-liked="{{ post.isLikedByUser(app.user) ? '1' : '0' }}"
-                                style="color:{{ post.isLikedByUser(app.user) ? '#e0245e' : 'var(--color-text-muted)' }}">
-                            <span class="like-icon">{{ post.isLikedByUser(app.user) ? '❤️' : '🤍' }}</span>
+                                aria-label="J'aime ce post ({{ post.likesCount }} like{{ post.likesCount > 1 ? 's' : '' }})"
+                                aria-pressed="{{ post.isLikedByUser(app.user) ? 'true' : 'false' }}">
+                            <span class="like-icon">
+                                {{ post.isLikedByUser(app.user) ? '♥' : '♡' }}
+                            </span>
                             <span class="like-count">{{ post.likesCount }}</span>
                         </button>
 
-                        <span class="comment-count">
-                            💬 {{ post.comments|length }} commentaire{{ post.comments|length > 1 ? 's' : '' }}
+                        <span class="feed-comment-count">
+                            {{ post.comments|length }}
+                            commentaire{{ post.comments|length > 1 ? 's' : '' }}
                         </span>
+
                     </div>
 
-                    {# Commentaires #}
+                    {# ── Commentaires existants ── #}
                     {% if post.comments|length > 0 %}
-                        <div class="comments-list">
+                        <div class="feed-comments">
                             {% for comment in post.comments %}
-                                <div class="comment">
-                                    {% if comment.author.artistProfile and comment.author.artistProfile.avatarPath %}
-                                        <img src="{{ asset(comment.author.artistProfile.avatarPath) }}"
-                                             alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;margin-top:2px;">
-                                    {% else %}
-                                        <div class="comment-avatar">{{ comment.author.email|first|upper }}</div>
-                                    {% endif %}
+                                <div class="feed-comment">
 
-                                    <div class="comment-bubble">
-                                        <div class="comment-header">
-                                            <span class="comment-author">
-                                                {% if comment.author.artistProfile %}{{ comment.author.artistProfile.displayName }}
-                                                {% elseif comment.author.organizationProfile %}{{ comment.author.organizationProfile.name }}
-                                                {% else %}{{ comment.author.email }}{% endif %}
+                                    {# Petit carré initiales pour les commentaires #}
+                                    <div class="feed-comment-avatar" aria-hidden="true">
+                                        {{ comment.author.email|first|upper }}
+                                    </div>
+
+                                    <div class="feed-comment-content">
+                                        <div class="feed-comment-header">
+
+                                            <span class="feed-comment-author">
+                                                {% if comment.author.artistProfile %}
+                                                    {{ comment.author.artistProfile.displayName }}
+                                                {% elseif comment.author.organizationProfile %}
+                                                    {{ comment.author.organizationProfile.name }}
+                                                {% else %}
+                                                    {{ comment.author.email|split('@')|first }}
+                                                {% endif %}
                                             </span>
-                                            <div style="display:flex;align-items:center;gap:8px;">
-                                                <span class="comment-date">{{ comment.createdAt|date('d/m à H:i') }}</span>
+
+                                            <div style="display:flex;align-items:center;gap:var(--space-sm);">
+                                                <span class="feed-comment-date">
+                                                    {{ comment.createdAt|date('d/m à H:i') }}
+                                                </span>
+                                                {# Bouton supprimer commentaire — auteur ou admin #}
                                                 {% if app.user == comment.author or is_granted('ROLE_ADMIN') %}
-                                                    <form method="post" action="{{ path('app_post_comment_delete', {id: comment.id}) }}"
+                                                    <form method="post"
+                                                          action="{{ path('app_post_comment_delete', {id: comment.id}) }}"
                                                           onsubmit="return confirm('Supprimer ce commentaire ?')">
-                                                        <input type="hidden" name="_token" value="{{ csrf_token('comment_delete_' ~ comment.id) }}">
-                                                        <button type="submit" class="btn-delete" style="font-size:11px;">✕</button>
+                                                        <input type="hidden" name="_token"
+                                                               value="{{ csrf_token('comment_delete_' ~ comment.id) }}">
+                                                        <button type="submit" class="feed-btn-delete"
+                                                                style="font-size:9px;"
+                                                                aria-label="Supprimer ce commentaire">✕</button>
                                                     </form>
                                                 {% endif %}
                                             </div>
+
                                         </div>
-                                        <p class="comment-text">{{ comment.content }}</p>
+
+                                        {# Contenu du commentaire — nl2br, jamais raw #}
+                                        <p class="feed-comment-text">{{ comment.content|nl2br }}</p>
                                     </div>
+
                                 </div>
                             {% endfor %}
                         </div>
                     {% endif %}
+                    {# /commentaires #}
 
-                    {# Ajouter un commentaire #}
-                    <form method="post" action="{{ path('app_post_comment', {id: post.id}) }}" class="comment-form">
-                        <input type="hidden" name="_token" value="{{ csrf_token('comment_' ~ post.id) }}">
-                        {% if app.user.artistProfile and app.user.artistProfile.avatarPath %}
-                            <img src="{{ asset(app.user.artistProfile.avatarPath) }}"
-                                 alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">
-                        {% else %}
-                            <div class="comment-avatar">{{ app.user.email|first|upper }}</div>
-                        {% endif %}
-                        <div class="comment-input-wrap">
-                            <input class="comment-input" type="text" name="content"
-                                   maxlength="1000" placeholder="Écrire un commentaire...">
-                            <button type="submit" class="btn-comment-send">Envoyer</button>
+                    {# ── Formulaire d'ajout de commentaire ── #}
+                    <form method="post"
+                          action="{{ path('app_post_comment', {id: post.id}) }}"
+                          class="feed-comment-form">
+                        <input type="hidden" name="_token"
+                               value="{{ csrf_token('comment_' ~ post.id) }}">
+
+                        {# Petit avatar de l'utilisateur connecté #}
+                        <div class="feed-comment-avatar" aria-hidden="true">
+                            {{ app.user.email|first|upper }}
                         </div>
+
+                        <div class="feed-comment-input-wrap">
+                            <input class="feed-comment-input"
+                                   type="text"
+                                   name="content"
+                                   maxlength="1000"
+                                   placeholder="Ajouter un commentaire..."
+                                   aria-label="Écrire un commentaire sur ce post">
+                            <button type="submit" class="feed-btn-comment">
+                                Envoyer
+                            </button>
+                        </div>
+
                     </form>
 
                 </div>
+                {# /feed-post #}
+
             {% endfor %}
 
-            {# Pagination #}
+            {# ── Pagination ── #}
             {% if totalPages > 1 %}
-                <div class="pagination">
+                <nav class="feed-pagination" aria-label="Navigation entre les pages du fil">
+
+                    {# Lien "page précédente" #}
                     {% if page > 1 %}
-                        <a href="{{ path('app_post_feed', {page: page - 1}) }}" class="page-btn">←</a>
+                        <a href="{{ path('app_post_feed', {page: page - 1}) }}"
+                           class="feed-page-btn"
+                           aria-label="Page précédente">←</a>
                     {% endif %}
+
+                    {# Numéros de page #}
                     {% for p in 1..totalPages %}
                         <a href="{{ path('app_post_feed', {page: p}) }}"
-                           class="page-btn {{ p == page ? 'page-btn--active' : '' }}">{{ p }}</a>
+                           class="feed-page-btn {{ p == page ? 'feed-page-btn--active' : '' }}"
+                           {% if p == page %}aria-current="page"{% endif %}>
+                            {{ p }}
+                        </a>
                     {% endfor %}
+
+                    {# Lien "page suivante" #}
                     {% if page < totalPages %}
-                        <a href="{{ path('app_post_feed', {page: page + 1}) }}" class="page-btn">→</a>
+                        <a href="{{ path('app_post_feed', {page: page + 1}) }}"
+                           class="feed-page-btn"
+                           aria-label="Page suivante">→</a>
                     {% endif %}
-                </div>
+
+                </nav>
             {% endif %}
+
         {% endif %}
+        {# /posts #}
 
     </div>
+    {# /fil principal #}
 
     {# ── SIDEBAR ──────────────────────────────────────────────────────────── #}
-    <div>
-        <div class="side-widget">
-            <div class="side-widget__header">À propos de la communauté</div>
-            <div class="side-widget__body">
-                Échangez avec des artistes francophones, partagez vos expériences et découvrez de nouvelles opportunités.
+    <aside class="feed-sidebar">
+
+        {# Widget : À propos de la communauté #}
+        <div class="feed-widget">
+            <div class="feed-widget__header">La communauté</div>
+            <div class="feed-widget__body">
+                <p>
+                    Échangez avec des artistes de la diaspora afro-atlantique.
+                    Partagez vos actualités, posez des questions, découvrez des opportunités.
+                </p>
+                {#
+                   Lien vers l'annuaire des artistes
+                   (route vérifiée dans ArtistProfileController::directory())
+                #}
+                <a href="{{ path('app_artist_profile_directory') }}" class="feed-widget-link">
+                    Voir l'annuaire →
+                </a>
             </div>
         </div>
-    </div>
+
+        {# Widget : Forum — lien vers le module forum #}
+        <div class="feed-widget">
+            <div class="feed-widget__header">Forum</div>
+            <div class="feed-widget__body">
+                <p>
+                    Discussions thématiques, questions techniques, appels à projets —
+                    le forum va plus loin que le fil.
+                </p>
+                {#
+                   Lien forum — route vérifiée dans base_app.html.twig
+                #}
+                <a href="{{ path('app_forum_index') }}" class="feed-widget-link">
+                    Aller au forum →
+                </a>
+            </div>
+        </div>
+
+        {# Widget : Ressources — lien vers la ressourcerie #}
+        <div class="feed-widget">
+            <div class="feed-widget__header">Ressources</div>
+            <div class="feed-widget__body">
+                <p>
+                    Aides, résidences, appels à projets — découvrez les ressources
+                    pour votre pratique artistique.
+                </p>
+                <a href="{{ path('app_resource_index') }}" class="feed-widget-link">
+                    Parcourir les ressources →
+                </a>
+            </div>
+        </div>
+
+    </aside>
+    {# /sidebar #}
 
 </div>
+{# /feed-layout #}
 
 {% endblock %}
 
@@ -390,32 +881,91 @@
 {{ parent() }}
 <script>
 /**
- * Gestion des likes sans rechargement de page (requête AJAX).
- * fetch() envoie un POST au serveur et met à jour l'icône + compteur.
+ * feedUpdateCharCount(textarea)
+ * ─────────────────────────────
+ * Met à jour le compteur de caractères du formulaire de publication.
+ * Appelé via l'attribut oninput du textarea.
+ *
+ * @param {HTMLTextAreaElement} el - le textarea du composer
+ */
+function feedUpdateCharCount(el) {
+    'use strict';
+    var counter = document.getElementById('feed-char-count');
+    if (!counter) { return; }
+
+    var len  = el.value.length;
+    var max  = parseInt(el.getAttribute('maxlength'), 10) || 2000;
+    var pct  = len / max;
+
+    // Mise à jour du texte
+    counter.textContent = len + ' / ' + max;
+
+    // Changement de couleur selon le remplissage
+    counter.className = 'feed-char-counter';
+    if (pct >= 1)   { counter.className += ' feed-char-counter--max'; }
+    else if (pct >= 0.85) { counter.className += ' feed-char-counter--warn'; }
+}
+
+/**
+ * Gestion des likes sans rechargement de page (requête AJAX fetch).
+ * ─────────────────────────────────────────────────────────────────
+ * On écoute tous les clics sur .feed-btn-like.
+ * On envoie un POST à /community/post/{id}/like avec le token CSRF.
+ * Le serveur retourne { liked: bool, count: int }.
+ * On met à jour l'icône, le compteur, la couleur et l'état aria-pressed.
  */
 document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('.like-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            const postId = btn.dataset.postId;
-            const token  = btn.dataset.token;
+    'use strict';
 
-            const body = new URLSearchParams();
+    document.querySelectorAll('.feed-btn-like').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            // data-post-id conservé sur le bouton pour d'éventuels usages futurs
+            // (tracking, Stimulus...) — on ne l'utilise plus pour construire l'URL.
+            var token  = btn.dataset.token;
+
+            // Construction du corps de la requête (form-urlencoded)
+            var body = new URLSearchParams();
             body.append('_token', token);
 
-            fetch('/community/post/' + postId + '/like', {
+            // URL lue depuis data-url (rendu côté serveur par Twig via path()).
+            // Ne jamais reconstruire cette URL en JS : si la route change,
+            // seul le template Twig doit être mis à jour.
+            var url = btn.dataset.url;
+            fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: body.toString(),
             })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                btn.querySelector('.like-icon').textContent = data.liked ? '❤️' : '🤍';
-                btn.querySelector('.like-count').textContent = data.count;
-                btn.style.color = data.liked ? '#e0245e' : 'var(--color-text-muted)';
-                btn.dataset.liked = data.liked ? '1' : '0';
+            .then(function (res) {
+                // Si le serveur répond autre chose que 200, on arrête
+                if (!res.ok) { throw new Error('Réponse serveur : ' + res.status); }
+                return res.json();
             })
-            .catch(function () {
-                console.error('Erreur lors du like.');
+            .then(function (data) {
+                // Mise à jour de l'icône ♥ / ♡
+                var icon = btn.querySelector('.like-icon');
+                if (icon) { icon.textContent = data.liked ? '♥' : '♡'; }
+
+                // Mise à jour du compteur
+                var count = btn.querySelector('.like-count');
+                if (count) { count.textContent = data.count; }
+
+                // Mise à jour de la couleur (rose = liked, atténué = pas liked)
+                btn.style.color = data.liked ? '#e0245e' : '';
+
+                // Mise à jour des attributs data et aria pour l'accessibilité
+                btn.dataset.liked = data.liked ? '1' : '0';
+                btn.setAttribute('aria-pressed', data.liked ? 'true' : 'false');
+
+                // Mise à jour du aria-label avec le nouveau compteur
+                btn.setAttribute(
+                    'aria-label',
+                    'J\'aime ce post (' + data.count + ' like' + (data.count > 1 ? 's' : '') + ')'
+                );
+            })
+            .catch(function (err) {
+                // Silencieux : le like échoue sans bloquer l'UI
+                console.warn('[Bazaart] Erreur like :', err);
             });
         });
     });

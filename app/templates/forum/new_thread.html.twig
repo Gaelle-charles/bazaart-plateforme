@@ -5,239 +5,502 @@
 
 {% block stylesheets %}
 {{ parent() }}
+{#
+    Styles spécifiques à la page de création d'un nouveau thread.
+    Convention de nommage : préfixe ".fn-" (forum-new).
+
+    Ce formulaire est un formulaire HTML natif (sans Symfony Form Component) :
+    le controller vérifie le token CSRF manuellement avec isCsrfTokenValid().
+    Les erreurs de validation (titre trop court, contenu vide…) sont
+    transmises via les messages flash 'error'.
+
+    Thème Street : bords francs, inputs 1px ink, focus accent lime.
+#}
 <style>
-    /* ── Breadcrumb ── */
-    .breadcrumb {
+
+    /* ══════════════════════════════════════════════════════════════
+       FIL D'ARIANE
+    ══════════════════════════════════════════════════════════════ */
+
+    .fn-breadcrumb {
         display: flex;
         align-items: center;
         gap: 8px;
-        font-size: 13px;
-        color: var(--color-text-light);
-        margin-bottom: 20px;
-    }
-    .breadcrumb a { color: var(--color-text-light); text-decoration: none; }
-    .breadcrumb a:hover { color: var(--color-red, #C8503A); }
-    .breadcrumb__separator { color: var(--color-border); }
-    .breadcrumb__current { color: var(--color-text); font-weight: 500; }
-
-    /* ── Container du formulaire ── */
-    .new-thread-container { max-width: 740px; }
-
-    /* ── Carte formulaire ── */
-    .new-thread-card {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        overflow: hidden;
-    }
-
-    .new-thread-card__header {
-        padding: 18px 24px;
-        border-bottom: 2px solid {{ category.color ?? '#C8503A' }};
-        background: var(--color-bg, #f8f9fa);
-    }
-
-    .new-thread-card__title {
-        font-family: var(--font-heading);
-        font-size: 17px;
-        font-weight: 700;
-        color: var(--color-text);
-        margin-bottom: 4px;
-    }
-
-    .new-thread-card__subtitle {
-        font-size: 13px;
-        color: var(--color-text-light);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .new-thread-card__body { padding: 24px; }
-
-    /* ── Champs du formulaire ── */
-    .form-group { margin-bottom: 20px; }
-
-    .form-label {
-        display: block;
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--color-text);
-        margin-bottom: 6px;
-    }
-
-    .form-label .required { color: var(--color-red, #C8503A); margin-left: 2px; }
-
-    .form-hint {
+        font-family: var(--mono);
         font-size: 11px;
-        color: var(--color-text-light);
-        margin-bottom: 6px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+    .fn-breadcrumb a {
+        color: var(--ink-mute);
+        text-decoration: none;
+        transition: color var(--transition-fast);
+    }
+    .fn-breadcrumb a:hover { color: var(--ink); }
+    .fn-breadcrumb a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+    .fn-breadcrumb__sep { color: var(--line-soft); font-size: 14px; }
+    .fn-breadcrumb__current { color: var(--ink); font-weight: 700; }
+
+    /* ══════════════════════════════════════════════════════════════
+       CONTAINER CENTRÉ (MAX 760PX)
+       Le formulaire de création n'a pas besoin de toute la largeur.
+       max-width: 760px est cohérent avec la lisibilité des longs textes.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fn-container {
+        max-width: 760px;
+        /* Pas de margin auto — l'app-content a déjà son padding */
     }
 
-    .form-input {
-        width: 100%;
-        padding: 10px 14px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        font-family: var(--font-body);
-        font-size: 14px;
-        color: var(--color-text);
-        background: var(--color-input-bg);
-        box-sizing: border-box;
-        transition: border-color 0.15s;
-    }
-    .form-input:focus {
-        outline: none;
-        border-color: var(--color-green);
-        box-shadow: 0 0 0 2px rgba(45, 106, 79, 0.12);
+    /* ══════════════════════════════════════════════════════════════
+       EN-TÊTE DE PAGE
+       Lien retour + titre en Archivo Black.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fn-page-head {
+        margin-bottom: 28px;
     }
 
-    .form-textarea { min-height: 200px; resize: vertical; line-height: 1.6; }
-
-    .char-counter {
-        font-size: 11px;
-        color: var(--color-text-light);
-        text-align: right;
-        margin-top: 4px;
-    }
-
-    /* ── Pied du formulaire ── */
-    .new-thread-card__footer {
-        padding: 16px 24px;
-        border-top: 1px solid var(--color-border);
-        background: var(--color-bg, #f8f9fa);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .btn-submit {
+    /* Lien "← Retour" en mono — discret mais accessible */
+    .fn-back-link {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 10px 22px;
-        background: var(--color-red, #C8503A);
-        color: white;
-        border: none;
-        border-radius: var(--radius-sm);
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s;
-    }
-    .btn-submit:hover { background: #a84232; }
-
-    .btn-cancel {
-        font-size: 13px;
-        color: var(--color-text-light);
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
         text-decoration: none;
-        padding: 8px 12px;
+        margin-bottom: 14px;
+        transition: color var(--transition-fast);
     }
-    .btn-cancel:hover { color: var(--color-text); }
+    .fn-back-link:hover { color: var(--ink); }
+    .fn-back-link:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
+    /* Titre de la page en Archivo Black */
+    .fn-page-title {
+        font-family: var(--display);
+        font-size: clamp(36px, 6vw, 56px);
+        text-transform: uppercase;
+        line-height: .95;
+        color: var(--ink);
+        margin: 0 0 8px;
+    }
+
+    /* Contexte de la catégorie cible en mono */
+    .fn-page-context {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .fn-page-context strong {
+        color: var(--ink);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FORMULAIRE
+       Encadré bordure ink, bords francs.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fn-form-card {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+    }
+
+    .fn-form-card__body {
+        padding: 28px 28px 20px;
+    }
+
+    /* ── Groupe de champ ──────────────────────────────────────────
+       Chaque groupe = label + (hint?) + input/textarea + (compteur?)
+    ─────────────────────────────────────────────────────────────── */
+
+    .fn-field {
+        margin-bottom: 24px;
+    }
+    .fn-field:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Label en mono uppercase — convention Street pour les formulaires */
+    .fn-label {
+        display: block;
+        font-family: var(--body);
+        font-size: var(--label-font-size);
+        font-weight: var(--label-font-weight);
+        letter-spacing: var(--label-letter-spacing);
+        text-transform: uppercase;
+        color: var(--label-color);
+        margin-bottom: 4px;
+    }
+    /* Astérisque obligatoire — en orange pour visibilité */
+    .fn-label__required {
+        color: var(--accent-2);
+        margin-left: 2px;
+    }
+
+    /* Texte d'aide sous le label */
+    .fn-hint {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+    }
+
+    /* Input texte — bords francs, fond crème, focus accent lime */
+    .fn-input {
+        display: block;
+        width: 100%;
+        padding: var(--input-padding);
+        border: var(--input-border);          /* 1px solid var(--line) */
+        border-radius: var(--input-radius);   /* 0 */
+        font-family: var(--body);
+        font-size: var(--input-font-size);
+        color: var(--ink);
+        background: var(--input-bg);
+        box-sizing: border-box;
+        transition: border var(--transition-fast);
+    }
+    .fn-input:focus {
+        outline: none;
+        border: var(--input-border-focus);    /* 2px solid var(--accent) */
+    }
+    /* Placeholder discret */
+    .fn-input::placeholder {
+        color: var(--ink-mute);
+        font-style: italic;
+    }
+
+    /* Textarea — hérite de fn-input + hauteur min */
+    .fn-textarea {
+        min-height: 220px;
+        resize: vertical;
+        line-height: 1.6;
+    }
+
+    /* Select de catégorie (si présent dans le formulaire) */
+    .fn-select {
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230D0D0D' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 36px;
+        cursor: pointer;
+    }
+
+    /* Compteur de caractères pour le titre */
+    .fn-char-counter {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+        text-align: right;
+        margin-top: 4px;
+        transition: color var(--transition-fast);
+    }
+    /* Passe en orange-danger quand on approche de la limite */
+    .fn-char-counter--warn {
+        color: var(--accent-2);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PIED DU FORMULAIRE
+       Bouton "Publier" pleine largeur + lien annuler.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fn-form-card__footer {
+        padding: 20px 28px;
+        border-top: 1px solid var(--ink);
+        background: var(--bg-alt);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    /* Bouton "Publier" — plein accent lime, uppercase, pleine largeur */
+    .fn-btn-submit {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        padding: 14px 24px;
+        background: var(--btn-primary-bg);       /* var(--accent) = lime */
+        color: var(--btn-primary-color);         /* var(--ink) = noir */
+        border: none;
+        font-family: var(--body);
+        font-size: 14px;
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        cursor: pointer;
+        border-radius: 0;
+        transition:
+            background var(--transition-fast),
+            color var(--transition-fast),
+            box-shadow var(--transition-fast);
+    }
+    .fn-btn-submit:hover {
+        background: var(--btn-primary-hover-bg);
+        color: var(--btn-primary-hover-color);
+        box-shadow: var(--shadow-offset-md);
+    }
+    .fn-btn-submit:focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 2px;
+    }
+
+    /* Lien d'annulation — discret, centré */
+    .fn-cancel {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        text-decoration: none;
+        text-align: center;
+        transition: color var(--transition-fast);
+    }
+    .fn-cancel:hover { color: var(--ink); }
+
+    /* ══════════════════════════════════════════════════════════════
+       RESPONSIVE
+    ══════════════════════════════════════════════════════════════ */
+
+    @media (max-width: 640px) {
+        .fn-form-card__body {
+            padding: 20px;
+        }
+        .fn-form-card__footer {
+            padding: 16px 20px;
+        }
+        .fn-page-title {
+            font-size: 36px;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-{# ── Breadcrumb ──────────────────────────────────────────────────────────────── #}
-<nav class="breadcrumb">
+
+{# ── FIL D'ARIANE ─────────────────────────────────────────────────────────────
+   Forum → Catégorie → Nouveau sujet
+#}
+<nav class="fn-breadcrumb" aria-label="Fil d'ariane">
     <a href="{{ path('app_forum_index') }}">Forum</a>
-    <span class="breadcrumb__separator">›</span>
+    <span class="fn-breadcrumb__sep" aria-hidden="true">›</span>
     <a href="{{ path('app_forum_category', { categorySlug: category.slug }) }}">{{ category.name }}</a>
-    <span class="breadcrumb__separator">›</span>
-    <span class="breadcrumb__current">Nouveau sujet</span>
+    <span class="fn-breadcrumb__sep" aria-hidden="true">›</span>
+    <span class="fn-breadcrumb__current" aria-current="page">Nouveau sujet</span>
 </nav>
 
-{# ── Formulaire de création d'un thread ─────────────────────────────────────── #}
-<div class="new-thread-container">
-    <div class="new-thread-card">
+{# ── FORMULAIRE CENTRÉ (MAX 760PX) ────────────────────────────────────────────
+   La largeur réduite améliore la lisibilité pour la saisie de texte long.
+#}
+<div class="fn-container">
 
-        {# En-tête : nom de la catégorie cible #}
-        <div class="new-thread-card__header">
-            <div class="new-thread-card__title">Créer un nouveau sujet</div>
-            <div class="new-thread-card__subtitle">
-                {% if category.icon %}<span>{{ category.icon }}</span>{% endif %}
-                dans <strong>{{ category.name }}</strong>
-            </div>
+    {# En-tête : lien retour + titre de la page #}
+    <div class="fn-page-head">
+        <a href="{{ path('app_forum_category', { categorySlug: category.slug }) }}"
+           class="fn-back-link">
+            ← Retour au forum
+        </a>
+        <h1 class="fn-page-title">Nouveau sujet</h1>
+        {# Contexte : icône + nom de la catégorie cible #}
+        <div class="fn-page-context">
+            dans
+            {% if category.icon %}
+                <span aria-hidden="true">{{ category.icon }}</span>
+            {% endif %}
+            <strong>{{ category.name }}</strong>
         </div>
+    </div>
+
+    {# ── FORMULAIRE ─────────────────────────────────────────────────────────── #}
+    <div class="fn-form-card">
 
         {#
-          Formulaire HTML natif.
-          Convention du projet : on n'utilise pas le Symfony Form Component ici,
-          les formulaires simples sont gérés directement en HTML + token CSRF manuel.
-          Le controller vérifie isCsrfTokenValid('forum_new_thread', ...).
+            Formulaire HTML natif (sans Symfony Form Component).
+            Convention du projet : les formulaires simples du forum utilisent
+            des tokens CSRF manuels vérifiés dans le controller :
+              $this->isCsrfTokenValid('forum_new_thread', $request->request->get('_token'))
+            L'action vide ("") soumet vers l'URL courante (route app_forum_new_thread).
         #}
-        <form method="post" action="">
-            {# Token CSRF — protection contre les attaques Cross-Site Request Forgery #}
+        <form method="post" action="" novalidate>
+
+            {# Token CSRF — protège contre les attaques Cross-Site Request Forgery #}
             <input type="hidden" name="_token" value="{{ csrf_token('forum_new_thread') }}">
 
-            <div class="new-thread-card__body">
+            <div class="fn-form-card__body">
 
-                {# ── Titre du thread ── #}
-                <div class="form-group">
-                    <label for="thread-title" class="form-label">
-                        Titre du sujet <span class="required">*</span>
+                {# ── Titre du sujet ──────────────────────────────────────────── #}
+                <div class="fn-field">
+                    <label for="thread-title" class="fn-label">
+                        Titre du sujet
+                        <span class="fn-label__required" aria-hidden="true">*</span>
                     </label>
-                    <div class="form-hint">Soyez précis et descriptif (5 à 255 caractères)</div>
+                    <div class="fn-hint">Soyez précis et descriptif (5 à 255 caractères)</div>
                     <input type="text"
                            id="thread-title"
                            name="title"
-                           class="form-input"
-                           placeholder="Ex: Recherche d'un graphiste pour une affiche de concert"
+                           class="fn-input"
+                           placeholder="Ex : Recherche graphiste pour affiche de concert"
                            minlength="5"
                            maxlength="255"
                            required
+                           aria-required="true"
+                           aria-describedby="title-counter"
                            {# Pré-rempli si le formulaire a déjà été soumis avec une erreur #}
                            value="{{ formData.title ?? '' }}">
-                    <div class="char-counter" id="title-counter">
+                    {# Compteur de caractères mis à jour en JS #}
+                    <div class="fn-char-counter" id="title-counter" aria-live="polite">
                         {{ (formData.title ?? '')|length }} / 255
                     </div>
                 </div>
 
-                {# ── Contenu du thread ── #}
-                <div class="form-group">
-                    <label for="thread-content" class="form-label">
-                        Contenu <span class="required">*</span>
+                {# ── Catégorie (si select présent dans le formulaire) ─────────
+                   Le controller peut passer un select de catégorie via la variable
+                   "categories" pour permettre à l'utilisateur de changer de catégorie
+                   sans revenir en arrière. On affiche ce select si la variable existe.
+                #}
+                {% if categories is defined and categories|length > 1 %}
+                    <div class="fn-field">
+                        <label for="thread-category" class="fn-label">
+                            Catégorie
+                            <span class="fn-label__required" aria-hidden="true">*</span>
+                        </label>
+                        <select id="thread-category"
+                                name="categoryId"
+                                class="fn-input fn-select"
+                                required
+                                aria-required="true">
+                            {% for cat in categories %}
+                                {#
+                                    Présélectionne la catégorie courante (passée par l'URL).
+                                    category.id correspond à la catégorie ouverte avant
+                                    de cliquer sur "Nouveau sujet".
+                                #}
+                                <option value="{{ cat.id }}"
+                                        {% if cat.id == category.id %}selected{% endif %}>
+                                    {% if cat.icon %}{{ cat.icon }} {% endif %}{{ cat.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                {% else %}
+                    {# Si une seule catégorie ou pas de select → champ caché avec l'id courant #}
+                    <input type="hidden" name="categoryId" value="{{ category.id }}">
+                {% endif %}
+
+                {# ── Contenu du sujet ────────────────────────────────────────── #}
+                <div class="fn-field">
+                    <label for="thread-content" class="fn-label">
+                        Contenu
+                        <span class="fn-label__required" aria-hidden="true">*</span>
                     </label>
-                    <div class="form-hint">Développez votre sujet en détail (minimum 10 caractères)</div>
+                    <div class="fn-hint">
+                        Développez votre sujet, question ou proposition (minimum 10 caractères)
+                    </div>
+                    {#
+                        La valeur est pré-remplie via formData.content si disponible.
+                        formData est passé par le controller en cas d'erreur de validation
+                        pour que l'utilisateur ne perde pas sa saisie.
+                    #}
                     <textarea id="thread-content"
                               name="content"
-                              class="form-input form-textarea"
-                              placeholder="Décrivez votre sujet, votre question ou votre proposition..."
+                              class="fn-input fn-textarea"
+                              placeholder="Décrivez votre sujet, votre question ou votre proposition…"
                               minlength="10"
-                              required>{{ formData.content ?? '' }}</textarea>
+                              required
+                              aria-required="true">{{ formData.content ?? '' }}</textarea>
                 </div>
 
-            </div>{# fin card__body #}
+            </div>{# fin fn-form-card__body #}
 
-            {# Pied de formulaire : Annuler + Publier #}
-            <div class="new-thread-card__footer">
-                <a href="{{ path('app_forum_category', { categorySlug: category.slug }) }}"
-                   class="btn-cancel">
-                    ← Annuler
-                </a>
-                <button type="submit" class="btn-submit">
-                    ✏ Publier le sujet
+            {# ── Pied du formulaire ────────────────────────────────────────────
+               Bouton "Publier" pleine largeur + lien "Annuler".
+            #}
+            <div class="fn-form-card__footer">
+                <button type="submit" class="fn-btn-submit">
+                    Publier le sujet →
                 </button>
+                <a href="{{ path('app_forum_category', { categorySlug: category.slug }) }}"
+                   class="fn-cancel">
+                    Annuler
+                </a>
             </div>
+
         </form>
 
-    </div>
-</div>
+    </div>{# fin fn-form-card #}
 
+</div>{# fin fn-container #}
+
+{% endblock %}{# fin block content #}
+
+{#
+    CORRECTION W7 : le <script> du compteur de caractères était dans {% block content %}.
+    Le bloc correct pour les scripts est {% block javascripts %}, qui est rendu en bas
+    du <body> dans base_app.html.twig (après le chargement des assets Symfony UX).
+
+    Pourquoi c'est important :
+    - base_app.html.twig déclare {{ parent() }} dans son block javascripts pour
+      hériter des scripts Stimulus/Turbo. Placer le script dans content le fait
+      s'exécuter AVANT le chargement du DOM complet dans certains cas.
+    - Turbo (Hotwire) ne re-exécute pas les <script> dans le body entre navigations
+      si le layout est le même. Les scripts dans {% block javascripts %} sont
+      bien ré-évalués à chaque visite de page via Turbo Drive.
+    - Séparer les scripts du contenu respecte le principe de séparation des responsabilités
+      et facilite le débogage (on sait où chercher les scripts).
+#}
+{% block javascripts %}
+{{ parent() }}
 <script>
-/* Compteur de caractères temps réel pour le titre */
+/*
+ * Compteur de caractères en temps réel pour le champ titre.
+ * Passe en orange-danger (classe fn-char-counter--warn) quand on dépasse 220 caractères.
+ * L'attribut aria-live="polite" sur le compteur assure que les lecteurs d'écran
+ * annoncent le changement de valeur sans interrompre la saisie.
+ */
 (function () {
-    const titleInput = document.getElementById('thread-title');
-    const counter    = document.getElementById('title-counter');
+    'use strict';
 
+    var titleInput = document.getElementById('thread-title');
+    var counter    = document.getElementById('title-counter');
+
+    /* Si les éléments ne sont pas dans le DOM, on sort — aucun effet de bord */
     if (!titleInput || !counter) { return; }
 
     titleInput.addEventListener('input', function () {
-        const len = this.value.length;
+        var len = this.value.length;
+
+        /* Met à jour le texte du compteur */
         counter.textContent = len + ' / 255';
-        /* Passe en rouge quand on s'approche de la limite */
-        counter.style.color = len > 220 ? 'var(--color-red, #C8503A)' : '';
+
+        /* Avertissement visuel au-delà de 220 caractères */
+        if (len > 220) {
+            counter.classList.add('fn-char-counter--warn');
+        } else {
+            counter.classList.remove('fn-char-counter--warn');
+        }
     });
 }());
 </script>

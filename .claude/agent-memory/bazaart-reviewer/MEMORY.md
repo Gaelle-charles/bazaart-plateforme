@@ -14,3 +14,5 @@
 - [Module Notifications — patterns et anti-patterns identifiés](feedback_notifications_module_patterns.md) — IDOR silencieux markAsRead, XSS préventif data.threadTitle, PII email en JSON, N+1 Twig extension sans mémoise, getLink() URLs en dur
 - [Fixtures : autoPublished toujours false — incohérence métier](feedback_fixtures_autopublished.md) — autoPublished doit être true pour admin/structure, false uniquement pour artist
 - [Fixtures : validatedAt/validatedBy non-null pour auto-publiées — incohérence](feedback_fixtures_validatedby_structure.md) — ces champs doivent rester null pour les ressources structure/admin
+- [Templates Twig Ressources — patterns et anti-patterns identifiés](feedback_twig_resource_patterns.md) — CSRF absent submit.html.twig, statusFilter non transmis par my(), N+1 disciplines dans favorites, badge--archived sans style, pagination KNP orpheline
+- [Templates Twig Auth + Community — patterns et anti-patterns identifiés](feedback_twig_auth_and_community_patterns.md) — CSRF register ignoré par contrôleur, edit.html.twig sans action= ni CSRF, URL AJAX like en dur dans feed.html.twig

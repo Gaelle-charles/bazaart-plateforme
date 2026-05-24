@@ -1,0 +1,243 @@
+/* ============================================================
+   BAZAART — Déclarations @font-face (polices self-hostées)
+   Fichier maintenu par : agent front-end
+   Dernière mise à jour : mai 2026
+
+   POURQUOI self-héberger ?
+   → Conformité RGPD : Google Fonts envoie l'IP du visiteur à Google
+     à chaque chargement. En hébergeant nous-mêmes, aucune requête
+     externe n'est faite — zéro transfert de données vers un tiers.
+
+   ORGANISATION :
+     1. Thème Street (app connectée) : Archivo Black, Space Grotesk,
+        JetBrains Mono, Instrument Serif
+     2. Thème Editorial Cream (vitrine publique) : Fraunces, DM Sans
+        (JetBrains Mono est partagé entre les deux thèmes)
+
+   FORMAT :
+     Tous les fichiers sont en WOFF2 — format optimal pour le web
+     (meilleure compression, supporté par tous les navigateurs modernes).
+
+   SUBSET :
+     On charge uniquement le subset "latin" (couverture U+0000-00FF +
+     caractères courants). Suffisant pour le français, les noms propres
+     courants, et les quelques mots anglais de l'interface.
+
+   PLACEMENT :
+     Ce fichier doit être chargé APRÈS design-tokens.css et AVANT
+     tout autre CSS — les polices doivent être connues dès que les
+     tokens de typographie sont lus.
+   ============================================================ */
+
+
+/* ============================================================
+   1. ARCHIVO BLACK
+   Usage : --display dans le thème Street (titres en capitales, impact)
+   Graisse unique : 400 (la police n'existe qu'en noir/extrabold)
+   ============================================================ */
+
+@font-face {
+  font-family: 'Archivo Black';
+  font-style:  normal;
+  font-weight: 400;
+  /* font-display: swap — affiche d'abord la police de fallback (Impact),
+     puis la remplace dès qu'Archivo Black est chargée.
+     Alternative "block" causerait un texte invisible pendant le chargement. */
+  font-display: swap;
+  src: url('/fonts/archivo-black-400.woff2') format('woff2');
+}
+
+
+/* ============================================================
+   2. SPACE GROTESK
+   Usage : --body dans le thème Street (texte courant, interface)
+   Graisses : 300 / 400 / 500 / 600 / 700
+   Note : Google Fonts retourne la même police variable latin pour
+   chaque graisse. On déclare quand même chaque @font-face séparément
+   pour que le navigateur sache quelle graisse il peut charger.
+   ============================================================ */
+
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style:  normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/space-grotesk-300.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style:  normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/space-grotesk-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style:  normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/space-grotesk-500.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style:  normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/space-grotesk-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style:  normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/space-grotesk-700.woff2') format('woff2');
+}
+
+
+/* ============================================================
+   3. JETBRAINS MONO
+   Usage : --mono dans les deux thèmes (code, labels, chips, metadata)
+   Graisses : 400 / 500
+   ============================================================ */
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style:  normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style:  normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-500.woff2') format('woff2');
+}
+
+
+/* ============================================================
+   4. INSTRUMENT SERIF
+   Usage : --serif dans le thème Street (citations, sous-titres éditoriaux)
+   Graisses : 400 normal + 400 italic
+   ============================================================ */
+
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style:  normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/instrument-serif-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Instrument Serif';
+  /* font-style: italic — déclare la variante italique séparément.
+     Sans cela, le navigateur générerait un "faux italique" (penchement
+     artificiel du romain), ce qui rendrait mal avec cette police. */
+  font-style:  italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/instrument-serif-400i.woff2') format('woff2');
+}
+
+
+/* ============================================================
+   5. FRAUNCES
+   Usage : --display dans le thème Editorial Cream (grands titres serif)
+   Graisses : 300 / 400 / 600 / 700 normal + 400 italic
+   Note : même fichier latin pour toutes les graisses upright (variable font)
+   ============================================================ */
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style:  normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/fraunces-300.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style:  normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/fraunces-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style:  normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/fraunces-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style:  normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/fraunces-700.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style:  italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/fraunces-400i.woff2') format('woff2');
+}
+
+
+/* ============================================================
+   6. DM SANS
+   Usage : --body dans le thème Editorial Cream (texte courant vitrine)
+   Graisses : 300 / 400 / 500 / 700 normal + 400 italic
+   Note : même fichier latin pour les graisses 300/400/500/700 (variable font)
+   ============================================================ */
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style:  normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/dm-sans-300.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style:  normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/dm-sans-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style:  normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/dm-sans-500.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style:  normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/dm-sans-700.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style:  italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/dm-sans-400i.woff2') format('woff2');
+}

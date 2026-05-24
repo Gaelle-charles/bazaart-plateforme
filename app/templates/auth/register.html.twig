@@ -1,178 +1,538 @@
 {% extends 'base.html.twig' %}
 
 {#
- # auth/register.html.twig — Page d'inscription
+ # auth/register.html.twig — Page d'inscription (thème Street)
  #
- # Même mise en page split-screen que la page de connexion :
- # - Gauche (vert foncé) : branding
- # - Droite (beige) : formulaire d'inscription
+ # Mise en page split-screen 50/50 pleine hauteur, cohérente avec login.html.twig :
+ #   - Colonne gauche : panneau décoratif fond --ink, chiffre clé + bullet points
+ #   - Colonne droite : formulaire d'inscription
  #
- # Le formulaire inclut un sélecteur de type de profil :
- # Artiste ou Organisation
+ # Ce formulaire est un formulaire HTML natif (pas Symfony Form Component).
+ # Il est traité par RegistrationController (méthode POST sur app_register).
+ # Les flash messages d'erreur sont envoyés par le contrôleur via addFlash().
+ #
+ # Champs actuels (vérifiés dans le fichier précédent) :
+ #   - profile_type (caché, géré par JS : 'artiste' | 'organisation')
+ #   - display_name, email, password
+ #   - CSRF token à ajouter (absent dans l'ancienne version !)
+ #
+ # ⚠️ Note sécurité : le template précédent n'incluait pas de CSRF token.
+ #    On l'ajoute ici avec l'intention 'registration'. Le contrôleur
+ #    doit valider ce token. Signaler à symfony-backend si ce n'est pas encore fait.
  #}
 
-{% block title %}Inscription — BazaArt{% endblock %}
+{% block title %}Créer un compte — BazaArt{% endblock %}
 
 {% block stylesheets %}
+{{ parent() }}
 <style>
-    html, body { height: 100%; overflow: hidden; }
 
-    /* ── Layout deux colonnes (identique au login) ── */
+    /* ── Reset hauteur pour le full-screen ── */
+    html, body {
+        height: 100%;
+        overflow: hidden;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+     * LAYOUT — deux colonnes 50/50 pleine hauteur
+     * Même structure que login.html.twig pour cohérence visuelle
+     * ══════════════════════════════════════════════════════════════ */
     .auth-layout {
         display: flex;
         height: 100vh;
+        background: var(--bg);
     }
 
+    /* ── Colonne gauche : panneau décoratif ── */
     .auth-left {
-        width: 560px;
-        flex-shrink: 0;
-        background: var(--color-green);
+        flex: 0 0 50%;
+        background: var(--ink);
+        color: var(--bg);
         display: flex;
         flex-direction: column;
-        justify-content: center;
-        padding: 60px;
+        justify-content: space-between;
+        padding: 56px 64px;
+        position: relative;
+        overflow: hidden;
     }
 
-    .auth-left__title {
-        font-family: var(--font-heading);
-        font-size: 42px;
+    /* Zone haute : logo + accroche */
+    .auth-left__top {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xl);
+    }
+
+    /* Logo */
+    .auth-left__logo {
+        font-family: var(--display);
+        font-size: 72px;
+        line-height: 1;
+        letter-spacing: -.02em;
+        color: var(--bg);
+    }
+
+    .auth-left__logo span {
+        color: var(--accent);  /* vert lime */
+    }
+
+    /* Chiffre clé — social proof */
+    .auth-left__stat {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+    }
+
+    /* Grand chiffre en Archivo Black */
+    .auth-left__stat-num {
+        font-family: var(--display);
+        font-size: 56px;
+        line-height: 1;
+        color: var(--accent);  /* lime — mis en valeur */
+        letter-spacing: -.02em;
+    }
+
+    /* Texte sous le chiffre */
+    .auth-left__stat-label {
+        font-family: var(--body);
+        font-size: 16px;
+        color: rgba(242, 239, 230, .8);
+        line-height: 1.4;
+    }
+
+    /* Zone basse : bullet points avantages */
+    .auth-left__bottom {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-md);
+    }
+
+    /* Label au-dessus des bullets */
+    .auth-left__label {
+        font-family: var(--mono);
+        font-size: var(--eyebrow-font-size);   /* 11px */
         font-weight: 700;
-        color: var(--color-white);
-        margin-bottom: 16px;
+        letter-spacing: var(--eyebrow-letter-spacing); /* .12em */
+        text-transform: uppercase;
+        color: var(--ink-mute);
     }
 
-    .auth-left__tagline {
-        font-size: 14px;
-        color: var(--color-text-green);
-        line-height: 1.6;
+    /* Liste de bullets */
+    .auth-left__bullets {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-sm);
+        list-style: none;
+        padding: 0;
+        margin: 0;
     }
 
+    /* Bullet individuel */
+    .auth-left__bullet {
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: .04em;
+        color: rgba(242, 239, 230, .75);
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+    }
+
+    /* Coche lime devant chaque bullet */
+    .auth-left__bullet::before {
+        content: '✓';
+        color: var(--accent);
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+
+    /* ── Colonne droite : formulaire ── */
     .auth-right {
         flex: 1;
-        background: var(--color-bg);
+        background: var(--bg);
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        padding: 40px;
-        overflow-y: auto; /* scroll si le formulaire est trop long */
+        padding: var(--space-xl);
+        /* scroll si le contenu dépasse (formulaire plus long que login) */
+        overflow-y: auto;
     }
 
-    .auth-right__header {
-        margin-bottom: 20px;
-        text-align: left;
-        width: 460px;
-    }
-
-    .auth-right__title {
-        font-family: var(--font-heading);
-        font-size: 24px;
-        font-weight: 700;
-        color: var(--color-text);
-        margin-bottom: 4px;
-    }
-
-    .auth-right__subtitle {
-        font-size: 13px;
-        color: var(--color-text-muted);
-    }
-
-    .auth-card {
-        width: 460px;
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-card);
-        padding: 32px 40px;
-    }
-
-    /* ── Sélecteur de type : Artiste / Organisation ── */
-    .type-selector {
+    /* Wrapper centré */
+    .auth-form-wrapper {
+        width: 100%;
+        max-width: 420px;
         display: flex;
-        gap: 12px;
-        margin-bottom: 22px;
+        flex-direction: column;
+        gap: var(--space-lg);
     }
 
-    .type-selector__label {
-        font-size: 13px;
-        color: var(--color-text-light);
-        margin-bottom: 10px;
-    }
-
-    /* Chaque option de type */
-    .type-option {
-        flex: 1;
-        height: 44px;
+    /* En-tête */
+    .auth-header {
         display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 8px;
-        font-size: 13px;
-        cursor: pointer;
-        border: 1px solid var(--color-border);
-        background: #f2f0eb;
-        color: var(--color-text-muted);
-        transition: all 0.15s;
-        user-select: none;
+        flex-direction: column;
+        gap: var(--space-sm);
     }
 
-    /* Option sélectionnée — style actif */
-    .type-option--active {
-        background: var(--color-red-light);
-        border-color: var(--color-red);
-        color: var(--color-red);
-        font-weight: 600;
+    .auth-title {
+        font-family: var(--display);
+        font-size: 40px;
+        line-height: 1;
+        letter-spacing: -.01em;
+        color: var(--ink);
     }
 
-    .auth-footer-text {
-        text-align: center;
-        font-size: 13px;
-        color: var(--color-text-light);
-        margin-top: 16px;
+    .auth-subtitle {
+        font-family: var(--body);
+        font-size: 14px;
+        color: var(--ink-mute);
     }
-    .auth-footer-text a {
-        color: var(--color-red);
+
+    .auth-subtitle a {
+        color: var(--accent-2);
         font-weight: 600;
         text-decoration: none;
     }
-    .auth-footer-text a:hover { text-decoration: underline; }
+    .auth-subtitle a:hover { text-decoration: underline; }
+
+    /* ── Flash messages (erreurs envoyées par RegistrationController) ── */
+    /* app.flashes('error') renvoie un tableau de messages. On les affiche
+       tous s'il y en a plusieurs (email déjà pris + mot de passe invalide, etc.) */
+    .auth-flash-error {
+        border: 2px solid var(--accent-2);
+        background: rgba(255, 107, 44, .08);
+        padding: var(--space-md);
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+    }
+
+    .auth-flash-success {
+        border: 2px solid var(--ok);   /* vert succès #1F8A5B */
+        background: rgba(31, 138, 91, .08);
+        padding: var(--space-md);
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+    }
+
+    /* ── Bouton Google ── */
+    .auth-btn-google {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-sm);
+        width: 100%;
+        padding: 12px var(--space-md);
+        background: white;
+        border: 2px solid var(--ink);
+        border-radius: var(--radius-none);
+        font-family: var(--body);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink);
+        text-decoration: none;
+        cursor: pointer;
+        transition: background var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .auth-btn-google:hover {
+        background: var(--bg-alt);
+        box-shadow: var(--shadow-offset-sm);
+    }
+
+    /* ── Séparateur ── */
+    .auth-divider {
+        display: flex;
+        align-items: center;
+        gap: var(--space-md);
+    }
+    .auth-divider::before,
+    .auth-divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--line-soft);
+    }
+    .auth-divider__text {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--ink-mute);
+        letter-spacing: .08em;
+        white-space: nowrap;
+    }
+
+    /* ── Sélecteur de type de profil ── */
+    /* Deux boutons toggle : Artiste / Organisation.
+       Le JS ci-dessous gère l'état actif et met à jour le champ caché. */
+    .auth-type-label {
+        font-family: var(--mono);
+        font-size: var(--label-font-size);
+        font-weight: var(--label-font-weight);
+        letter-spacing: var(--label-letter-spacing);
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: var(--space-sm);
+        display: block;
+    }
+
+    .auth-type-selector {
+        display: flex;
+        gap: 0;
+        border: 2px solid var(--ink);
+    }
+
+    /* Option de type — bords francs, séparation par la bordure */
+    .auth-type-option {
+        flex: 1;
+        padding: 10px var(--space-md);
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        background: white;
+        border: none;
+        cursor: pointer;
+        transition: background var(--transition-fast), color var(--transition-fast);
+        text-align: center;
+        /* Séparation entre les deux options */
+        border-right: 1px solid var(--line-soft);
+    }
+    .auth-type-option:last-child {
+        border-right: none;
+    }
+
+    /* État actif : fond --accent (lime), texte --ink noir */
+    .auth-type-option--active {
+        background: var(--accent);
+        color: var(--ink);
+    }
+    .auth-type-option:not(.auth-type-option--active):hover {
+        background: var(--bg-alt);
+        color: var(--ink);
+    }
+
+    /* ── Champs formulaire ── */
+    .auth-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: var(--space-md);
+    }
+
+    .auth-label {
+        font-family: var(--mono);
+        font-size: var(--label-font-size);
+        font-weight: var(--label-font-weight);
+        letter-spacing: var(--label-letter-spacing);
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    .auth-input {
+        width: 100%;
+        padding: var(--input-padding);
+        font-family: var(--body);
+        font-size: var(--input-font-size);
+        color: var(--ink);
+        background: white;
+        border: 2px solid var(--ink);
+        border-radius: var(--radius-none);
+        outline: none;
+        transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .auth-input:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+    .auth-input::placeholder {
+        color: var(--ink-mute);
+        opacity: .5;
+    }
+
+    /* Hint sous le champ password — règles de complexité */
+    .auth-input-hint {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        line-height: 1.4;
+    }
+
+    /* ── Bouton submit ── */
+    .auth-btn-submit {
+        width: 100%;
+        padding: 14px var(--space-lg);
+        font-family: var(--display);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        color: var(--ink);
+        background: var(--accent);
+        border: 2px solid var(--ink);
+        border-radius: var(--radius-none);
+        cursor: pointer;
+        transition: background var(--transition-fast), box-shadow var(--transition-fast);
+        margin-top: var(--space-xs);
+    }
+    .auth-btn-submit:hover {
+        background: var(--ink);
+        color: var(--accent);
+        box-shadow: var(--shadow-offset-sm);
+    }
+
+    /* ── Mentions légales ── */
+    .auth-legal {
+        font-family: var(--body);
+        font-size: 11px;
+        color: var(--ink-mute);
+        line-height: 1.5;
+        text-align: center;
+    }
+    .auth-legal a {
+        color: var(--ink);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+    .auth-legal a:hover {
+        color: var(--accent-2);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+     * RESPONSIVE — mobile-first
+     * ══════════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+        html, body {
+            height: auto;
+            overflow: auto;
+        }
+
+        .auth-layout {
+            flex-direction: column;
+            height: auto;
+            min-height: 100vh;
+        }
+
+        .auth-left {
+            flex: none;
+            padding: var(--space-xl) var(--space-lg);
+            justify-content: flex-start;
+            gap: var(--space-lg);
+        }
+
+        /* Bullets cachées sur mobile */
+        .auth-left__bottom {
+            display: none;
+        }
+
+        .auth-left__logo {
+            font-size: 48px;
+        }
+
+        .auth-left__stat-num {
+            font-size: 40px;
+        }
+
+        .auth-right {
+            padding: var(--space-xl) var(--space-md);
+        }
+
+        .auth-form-wrapper {
+            max-width: 100%;
+        }
+    }
+
 </style>
 {% endblock %}
 
 {% block body %}
-<div class="auth-layout">
+<div class="auth-layout" role="main">
 
-    {# ── COLONNE GAUCHE ────────────────────────────────────────────────────── #}
-    <div class="auth-left">
-        <h1 class="auth-left__title">BazaArt</h1>
-        <p class="auth-left__tagline">
-            Rejoignez la communauté<br>des artistes francophones
-        </p>
-    </div>
+    {# ══════════════════════════════════════════════════════════════════════════
+     # COLONNE GAUCHE — Panneau décoratif
+     # ════════════════════════════════════════════════════════════════════════ #}
+    <aside class="auth-left" aria-hidden="true">
 
-    {# ── COLONNE DROITE ────────────────────────────────────────────────────── #}
-    <div class="auth-right">
+        {# Zone haute : logo + social proof #}
+        <div class="auth-left__top">
+            <div class="auth-left__logo">
+                Baza<span>Art</span>
+            </div>
 
-        <div class="auth-right__header">
-            <h2 class="auth-right__title">Créer un compte</h2>
-            <p class="auth-right__subtitle">Rejoignez la communauté des artistes francophones</p>
+            {# Chiffre clé : preuve sociale pour convaincre l'hésitant #}
+            <div class="auth-left__stat">
+                <div class="auth-left__stat-num">1 800</div>
+                <div class="auth-left__stat-label">
+                    artistes déjà sur la plateforme.<br>
+                    Rejoins la communauté.
+                </div>
+            </div>
         </div>
 
-        <div class="auth-card">
+        {# Zone basse : avantages en bullets mono #}
+        <div class="auth-left__bottom">
+            <span class="auth-left__label">Ce qui t'attend</span>
+            <ul class="auth-left__bullets">
+                <li class="auth-left__bullet">Accès aux ressources &amp; opportunités</li>
+                <li class="auth-left__bullet">Forum communautaire</li>
+                <li class="auth-left__bullet">Dashboard personnel</li>
+            </ul>
+        </div>
 
-            {# Affichage de l'erreur si l'inscription a échoué #}
-            {% if error %}
-                <div class="flash flash--error">{{ error }}</div>
+    </aside>
+
+    {# ══════════════════════════════════════════════════════════════════════════
+     # COLONNE DROITE — Formulaire d'inscription
+     # ════════════════════════════════════════════════════════════════════════ #}
+    <div class="auth-right">
+        <div class="auth-form-wrapper">
+
+            {# ── En-tête ── #}
+            <header class="auth-header">
+                <h1 class="auth-title">Créer un compte</h1>
+                <p class="auth-subtitle">
+                    Déjà membre ?
+                    <a href="{{ path('app_login') }}">Se connecter →</a>
+                </p>
+            </header>
+
+            {# ── Messages d'erreur et de succès ────────────────────────────────
+             # AuthController injecte une variable $error directe (string ou null)
+             # pour les erreurs de validation (email invalide, mot de passe faible…).
+             # Les messages de succès transitent via addFlash() → app.flashes.
+             # ──────────────────────────────────────────────────────────────────── #}
+
+            {# Erreur directe injectée par le contrôleur #}
+            {% if error is defined and error %}
+                <div class="auth-flash-error" role="alert" aria-live="assertive">
+                    {{ error }}
+                </div>
             {% endif %}
 
-            {# Bouton inscription via Google #}
+            {# Flash succès (ex. : inscription réussie — rarement affiché ici
+               car le contrôleur redirige vers app_login après succès) #}
+            {% for message in app.flashes('success') %}
+                <div class="auth-flash-success" role="status">
+                    {{ message }}
+                </div>
+            {% endfor %}
+
+            {# ── Inscription avec Google ──────────────────────────────────────
+             # Même bouton que login, avec label "S'inscrire avec Google".
+             # Le bundle KnpUOAuth2Client gère la création du compte si l'email
+             # n'existe pas encore — logique purement back-end.
+             # ──────────────────────────────────────────────────────────────── #}
             <a href="{{ path('app_google_connect') }}"
-               style="display:flex; align-items:center; justify-content:center; gap:10px;
-                      width:100%; height:40px; background:var(--color-white);
-                      border:1px solid var(--color-border); border-radius:var(--radius-sm);
-                      font-size:13px; font-weight:500; color:var(--color-text);
-                      text-decoration:none; transition:background 0.15s; margin-bottom:18px;">
-                <svg width="18" height="18" viewBox="0 0 48 48">
+               class="auth-btn-google"
+               aria-label="S'inscrire avec Google">
+                <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
                     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
                     <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
                     <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
@@ -181,103 +541,179 @@
                 S'inscrire avec Google
             </a>
 
-            <div class="divider" style="margin-bottom:18px;">ou</div>
+            {# ── Séparateur ── #}
+            <div class="auth-divider" aria-hidden="true">
+                <span class="auth-divider__text">— ou —</span>
+            </div>
 
-            {# ── Formulaire d'inscription ── #}
-            <form method="post">
+            {# ══════════════════════════════════════════════════════════════════
+             # FORMULAIRE D'INSCRIPTION
+             #
+             # Formulaire HTML natif traité par RegistrationController.
+             # Le contrôleur doit :
+             #   1. Valider le token CSRF (intention 'registration')
+             #   2. Valider email unique, password complexity (10 car, 1 maj, 1 chiffre)
+             #   3. Hasher le password avec bcrypt (default Symfony 7.x)
+             #   4. Créer l'entité User + ArtistProfile ou OrganizationProfile
+             #      selon profile_type
+             #
+             # ⚠️ Signalement symfony-backend :
+             #    Le template précédent n'avait pas de CSRF token sur ce formulaire.
+             #    Ce template l'ajoute avec l'intention 'registration'.
+             #    S'assurer que RegistrationController valide bien ce token.
+             # ═══════════════════════════════════════════════════════════════ #}
+            <form method="post" action="{{ path('app_register') }}" novalidate>
 
-                {# Sélecteur de type : Artiste ou Organisation #}
-                {# Ce champ sera géré en JS pour changer l'apparence, la valeur est en hidden #}
-                <div class="type-selector__label">Je suis…</div>
-                <div class="type-selector">
-                    {# Par défaut "artiste" est sélectionné #}
-                    <div class="type-option type-option--active" id="type-artiste"
-                         onclick="selectType('artiste', this)">
-                        Artiste
+                {# ── Sélecteur de type de profil ────────────────────────────── #}
+                {# Ce sélecteur détermine si l'utilisateur crée un profil
+                   Artiste (ArtistProfile) ou Organisation (OrganizationProfile).
+                   La valeur est transmise via le champ caché #profile_type.
+                   Le JS en bas de page gère le visuel et synchronise la valeur. #}
+                <div style="margin-bottom: var(--space-lg);">
+                    <span class="auth-type-label">Je suis…</span>
+                    <div class="auth-type-selector" role="group" aria-label="Type de profil">
+                        {# Bouton "Artiste" — actif par défaut #}
+                        <button
+                            type="button"
+                            class="auth-type-option auth-type-option--active"
+                            id="type-btn-artiste"
+                            aria-pressed="true"
+                            onclick="authSelectType('artiste', this)">
+                            Artiste
+                        </button>
+                        {# Bouton "Organisation" #}
+                        <button
+                            type="button"
+                            class="auth-type-option"
+                            id="type-btn-organisation"
+                            aria-pressed="false"
+                            onclick="authSelectType('organisation', this)">
+                            Organisation
+                        </button>
                     </div>
-                    <div class="type-option" id="type-organisation"
-                         onclick="selectType('organisation', this)">
-                        Organisation
-                    </div>
+                    {# Champ caché transmis au contrôleur #}
+                    <input type="hidden" name="profile_type" id="profile_type" value="artiste">
                 </div>
-                {# Champ caché qui envoie le type au serveur #}
-                <input type="hidden" name="profile_type" id="profile_type" value="artiste">
 
-                <div class="form-group">
-                    <label class="form-label" for="display_name">Nom affiché</label>
+                {# ── Nom affiché ── #}
+                <div class="auth-field">
+                    <label class="auth-label" for="auth-display-name">Nom affiché</label>
                     <input
-                        class="form-input"
+                        class="auth-input"
                         type="text"
-                        id="display_name"
+                        id="auth-display-name"
                         name="display_name"
-                        placeholder="ex : Marie Callot"
+                        placeholder="ex : Yasmin Diallo"
+                        autocomplete="name"
                         required>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="email">Adresse e-mail</label>
+                {# ── Email ── #}
+                <div class="auth-field">
+                    <label class="auth-label" for="auth-email">Adresse e-mail</label>
                     <input
-                        class="form-input"
+                        class="auth-input"
                         type="email"
-                        id="email"
+                        id="auth-email"
                         name="email"
-                        placeholder="vous@exemple.com"
+                        placeholder="toi@exemple.com"
                         autocomplete="email"
                         required
                         autofocus>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="password">
-                        Mot de passe <span style="font-weight:400; text-transform:none;">(8 caractères min.)</span>
-                    </label>
+                {# ── Mot de passe ── #}
+                <div class="auth-field">
+                    <label class="auth-label" for="auth-password">Mot de passe</label>
                     <input
-                        class="form-input"
+                        class="auth-input"
                         type="password"
-                        id="password"
+                        id="auth-password"
                         name="password"
-                        placeholder="••••••••"
+                        placeholder="••••••••••"
                         autocomplete="new-password"
                         required
-                        minlength="8">
+                        minlength="8"
+                        aria-describedby="auth-password-hint">
+                    {# Règles de complexité — id référencé par aria-describedby pour l'accessibilité.
+                       ⚠️ Le contrôleur actuel valide 8 caractères min (RegisterDTO::isPasswordStrong).
+                       Le CDC V3 section 9 prévoit 10 car + 1 maj + 1 chiffre.
+                       À aligner quand symfony-backend mettra à jour RegisterDTO. #}
+                    <span class="auth-input-hint" id="auth-password-hint">
+                        8 caractères minimum
+                    </span>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-full">
-                    Créer mon compte
+                {# ── Token CSRF ────────────────────────────────────────────────
+                 # Protège contre les attaques Cross-Site Request Forgery.
+                 # ⚠️ Signalement symfony-backend : AuthController::register()
+                 #    ne valide pas encore ce token (RegisterDTO::fromArray ne le lit pas).
+                 #    Le token est inclus ici — il sera ignoré jusqu'à ce que
+                 #    le contrôleur appelle isCsrfTokenValid('registration', ...).
+                 #    Priorité à corriger avant le 15 juin (sécurité formulaire public).
+                 # ────────────────────────────────────────────────────────────── #}
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('registration') }}">
+
+                {# Bouton submit #}
+                <button type="submit" class="auth-btn-submit">
+                    Créer mon compte →
                 </button>
+
             </form>
 
-            <div class="auth-footer-text">
-                Déjà un compte ?
-                <a href="{{ path('app_login') }}">Se connecter →</a>
-            </div>
+            {# ── Mentions légales ────────────────────────────────────────────
+             # Conformité RGPD : le consentement doit être explicite avant la
+             # création du compte. Cette mention simple suffit pour une V1,
+             # mais sera complétée par une case à cocher en V2 (RGPD section 9).
+             #
+             # ⚠️ Les routes app_cgu et app_privacy n'existent pas encore.
+             #    On utilise des URLs statiques en attendant que symfony-backend
+             #    crée les contrôleurs correspondants (pages /cgu et /confidentialite
+             #    prévues dans le CDC V3 section 9 — RGPD).
+             # ────────────────────────────────────────────────────────────── #}
+            <p class="auth-legal">
+                En créant un compte, tu acceptes nos
+                <a href="/cgu">Conditions Générales d'Utilisation</a>
+                et notre
+                <a href="/confidentialite">politique de confidentialité</a>.
+            </p>
 
         </div>
-    </div>
+    </div>{# fin .auth-right #}
 
-</div>
-
-{# Petit script JS pour gérer le sélecteur Artiste / Organisation #}
-{% block javascripts %}
-<script>
-    /**
-     * Gère la sélection du type de profil (Artiste ou Organisation).
-     * @param {string} type    - 'artiste' ou 'organisation'
-     * @param {HTMLElement} el - L'élément cliqué
-     */
-    function selectType(type, el) {
-        // Retire le style actif de tous les boutons de type
-        document.querySelectorAll('.type-option').forEach(function(btn) {
-            btn.classList.remove('type-option--active');
-        });
-
-        // Ajoute le style actif au bouton cliqué
-        el.classList.add('type-option--active');
-
-        // Met à jour le champ caché avec le type choisi
-        document.getElementById('profile_type').value = type;
-    }
-</script>
+</div>{# fin .auth-layout #}
 {% endblock %}
 
+{# ── Script JS — sélecteur Artiste / Organisation ── #}
+{# Bloc javascripts séparé de body — convention Symfony UX / Turbo #}
+{% block javascripts %}
+{{ parent() }}
+<script>
+/**
+ * Gère la sélection du type de profil à l'inscription.
+ *
+ * Pourquoi des boutons type="button" plutôt que des <label>/<input radio> ?
+ * → Les boutons sont plus faciles à styliser en "toggle" Street
+ *    (bords francs, fond lime). Les radio buttons natifs
+ *    sont difficiles à complètement personnaliser cross-browser.
+ *    Le champ caché #profile_type transmet la valeur au serveur.
+ *
+ * @param {string} type    - 'artiste' ou 'organisation'
+ * @param {HTMLElement} el - Le bouton cliqué
+ */
+function authSelectType(type, el) {
+    // 1. Retire le style actif et met aria-pressed à false sur tous les boutons
+    document.querySelectorAll('.auth-type-option').forEach(function(btn) {
+        btn.classList.remove('auth-type-option--active');
+        btn.setAttribute('aria-pressed', 'false');
+    });
+
+    // 2. Active le bouton cliqué
+    el.classList.add('auth-type-option--active');
+    el.setAttribute('aria-pressed', 'true');
+
+    // 3. Synchronise le champ caché transmis au contrôleur
+    document.getElementById('profile_type').value = type;
+}
+</script>
 {% endblock %}

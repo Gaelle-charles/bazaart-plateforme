@@ -1,204 +1,574 @@
 {% extends 'base_app.html.twig' %}
 
-{% block title %}{{ article.title }} — BazaArt{% endblock %}
+{#
+ # article/show.html.twig — Lecture d'un article (thème Street)
+ #
+ # Variables transmises par ArticleController::show() :
+ #   - article  : Article — l'article à afficher (publié ou brouillon si auteur/admin)
+ #   - isPreview : bool — true si l'auteur visualise son propre brouillon
+ #
+ # Structure :
+ #   - Bandeau brouillon si isPreview = true
+ #   - Breadcrumb Articles → [Titre]
+ #   - Layout 70/30 : corps de l'article à gauche, sidebar à droite
+ #   - Corps : Instrument Serif 18px, line-height 1.7 — lecture longue
+ #   - Sidebar : À propos de l'auteur + bouton retour
+ #}
+
+{% block title %}{{ article.title }} — Articles — BazaArt{% endblock %}
 {% block page_title %}Articles{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
+{# Styles préfixés .art- (articles) et .art-show- pour les éléments spécifiques à cette page #}
 <style>
-    .back-link {
-        display: inline-flex; align-items: center; gap: 6px;
-        font-size: 13px; color: var(--color-text-muted); text-decoration: none; margin-bottom: 20px;
-    }
-    .back-link:hover { color: var(--color-text); }
 
-    /* ── Bannière brouillon ── */
-    .draft-banner {
-        background: #fff3cd; border: 1px solid #ffc107; border-radius: var(--radius-sm);
-        padding: 10px 16px; margin-bottom: 16px;
-        display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
-        font-size: 13px; font-weight: 600; color: #856404;
+    /* ── Bandeau brouillon ──────────────────────────────────────────────── */
+
+    /*
+     * .art-draft-banner : avertissement visible uniquement en mode aperçu.
+     * Fond encre (--ink) + texte acide (--accent) → contraste maximal,
+     * impossible à rater avant de partager un lien.
+     */
+    .art-draft-banner {
+        background: var(--ink);
+        color: var(--accent);
+        border-bottom: 1px solid var(--ink);
+        padding: 10px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 20px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
     }
 
-    /* ── Layout article ── */
-    .article-layout {
+    .art-draft-banner a {
+        color: var(--accent);
+        text-decoration: underline;
+        font-size: 11px;
+    }
+
+    /* ── Breadcrumb ─────────────────────────────────────────────────────── */
+
+    /*
+     * Navigation fil d'Ariane : Articles → [Titre tronqué]
+     * Mono + muted → discret mais lisible.
+     */
+    .art-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 24px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    .art-breadcrumb a {
+        color: var(--ink-mute);
+        text-decoration: none;
+    }
+    .art-breadcrumb a:hover { color: var(--ink); text-decoration: underline; }
+
+    .art-breadcrumb__sep { color: var(--line-soft); }
+
+    /* Titre tronqué dans le breadcrumb */
+    .art-breadcrumb__current {
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 360px;
+    }
+
+    /* ── Layout principal 70/30 ─────────────────────────────────────────── */
+
+    .art-layout {
         display: grid;
-        grid-template-columns: 1fr 260px;
-        gap: 20px;
+        grid-template-columns: 1fr 280px;
+        gap: 24px;
         align-items: start;
     }
 
-    /* ── Article principal ── */
-    .article-main {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
+    /* ── Colonne principale — corps de l'article ────────────────────────── */
+
+    /*
+     * .art-main : pas de rayon, bordure 1px ink → style affiche.
+     * Contrairement à l'ancien template qui utilisait var(--color-white),
+     * on utilise ici var(--bg) (crème #F2EFE6) — cohérent avec le fond page.
+     */
+    .art-main {
+        border: 1px solid var(--ink);
+        background: var(--bg);
         overflow: hidden;
     }
 
-    .article-cover {
-        width: 100%; max-height: 320px; object-fit: cover; display: block;
+    /* Image de couverture — bande visuelle pleine largeur en haut */
+    .art-main__cover {
+        width: 100%;
+        max-height: 360px;
+        object-fit: cover;
+        display: block;
+        border-bottom: 1px solid var(--ink);
     }
 
-    .article-body { padding: 28px; }
+    .art-main__body { padding: 36px 32px; }
 
-    .article-title {
-        font-family: var(--font-heading); font-size: 26px; font-weight: 700;
-        color: var(--color-green); line-height: 1.2; margin-bottom: 12px;
+    /* Titre H1 en Archivo Black — très grand, uppercase */
+    .art-main__title {
+        font-family: var(--display);
+        font-size: clamp(28px, 4vw, 52px);
+        line-height: .95;
+        letter-spacing: -.02em;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin: 0 0 16px;
     }
 
-    .article-excerpt {
-        font-size: 15px; color: var(--color-text-muted); line-height: 1.6;
-        font-style: italic; margin-bottom: 16px;
+    /* Excerpt / Chapeau : Instrument Serif, italic, legèrement muted */
+    .art-main__excerpt {
+        font-family: var(--serif);
+        font-size: 20px;
+        font-style: italic;
+        color: var(--ink-mute);
+        line-height: 1.5;
+        margin: 0 0 24px;
     }
 
-    /* Auteur + date */
-    .article-meta {
-        display: flex; justify-content: space-between; align-items: center;
-        flex-wrap: wrap; gap: 10px;
-        padding: 14px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border);
-        margin-bottom: 24px;
+    /* ── Bloc méta (auteur + date + temps lecture + actions) ─────────────── */
+
+    .art-meta-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 16px 0;
+        border-top: 1px solid var(--ink);
+        border-bottom: 1px solid var(--ink);
+        margin-bottom: 32px;
     }
 
-    .article-author { display: flex; align-items: center; gap: 10px; }
-
-    .author-avatar {
-        width: 38px; height: 38px; border-radius: 50%;
-        background: var(--color-green); color: white;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 13px; font-weight: 700; flex-shrink: 0;
+    /* Bloc auteur : avatar + nom + date */
+    .art-meta-bar__author {
+        display: flex;
+        align-items: center;
+        gap: 12px;
     }
 
-    .author-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
-    .article-date { font-size: 11px; color: var(--color-text-light); margin-top: 1px; }
-
-    /* Boutons modifier/supprimer */
-    .article-actions { display: flex; gap: 6px; }
-
-    .btn-edit-sm {
-        display: inline-flex; align-items: center; height: 30px; padding: 0 12px;
-        border: 1px solid var(--color-border); border-radius: var(--radius-sm);
-        font-size: 12px; font-weight: 600; color: var(--color-text-muted); text-decoration: none;
-    }
-    .btn-edit-sm:hover { border-color: var(--color-green); color: var(--color-green); }
-
-    .btn-delete-sm {
-        display: inline-flex; align-items: center; height: 30px; padding: 0 12px;
-        border: 1px solid #f5c6cb; border-radius: var(--radius-sm);
-        font-size: 12px; font-weight: 600; color: #721c24; background: #f8d7da; cursor: pointer;
-        font-family: var(--font-body);
-    }
-    .btn-delete-sm:hover { background: #f5c6cb; }
-
-    /* Contenu de l'article */
-    .article-content {
-        font-size: 14px; line-height: 1.85; color: var(--color-text-muted);
+    /*
+     * Avatar encré : carré (pas de radius) en Archivo Black.
+     * La couleur de fond --accent (lime) + --ink (texte) = contraste WCAG AA.
+     */
+    .art-meta-bar__avatar {
+        width: 40px;
+        height: 40px;
+        background: var(--accent);
+        color: var(--ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--display);
+        font-size: 18px;
+        flex-shrink: 0;
+        /* Bords francs — thème Street, pas de border-radius */
     }
 
-    /* ── Sidebar ── */
-    .side-card {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-        padding: 20px; margin-bottom: 16px;
+    .art-meta-bar__name {
+        font-family: var(--body);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--ink);
     }
 
-    .side-label {
-        font-size: 10px; font-weight: 700; color: var(--color-text-light);
-        text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;
+    .art-meta-bar__date {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-top: 2px;
+    }
+
+    /* Bloc méta droite : temps de lecture estimé */
+    .art-meta-bar__reading {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    /* ── Actions admin (Modifier / Supprimer) ───────────────────────────── */
+
+    .art-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--line-soft);
+    }
+
+    /* Bouton "Modifier" — ghost avec bordure encre */
+    .art-btn-edit {
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 14px;
+        border: 1px solid var(--ink);
+        background: transparent;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink);
+        text-decoration: none;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .art-btn-edit:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    /* Bouton "Supprimer" — accent-2 (orange) comme signal de danger */
+    .art-btn-delete {
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 14px;
+        border: 1px solid var(--ink);
+        background: var(--accent-2);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        /* font-family dupliqué car <button> ne l'hérite pas toujours */
+        font-family: var(--mono);
+        transition: background var(--transition-fast);
+    }
+    .art-btn-delete:hover { background: var(--ink); color: var(--accent-2); }
+
+    /* ── Corps de l'article — lecture longue ────────────────────────────── */
+
+    /*
+     * .art-content : typographie optimisée pour la lecture longue.
+     * Instrument Serif (--serif) + 18px + line-height 1.7 = standard éditorial.
+     * Couleur : --ink (quasi-noir) pour le texte principal — meilleur contraste.
+     * |nl2br est appliqué dans le template (jamais |raw pour raisons de sécurité XSS).
+     */
+    .art-content {
+        font-family: var(--serif);
+        font-size: 18px;
+        line-height: 1.7;
+        color: var(--ink);
+    }
+
+    /* ── Sidebar ────────────────────────────────────────────────────────── */
+
+    .art-sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+    /*
+     * .art-side-card : carte sidebar avec bordure 1px ink.
+     * Même motif que les cartes de la grille — cohérence visuelle.
+     */
+    .art-side-card {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        padding: 20px;
+    }
+
+    /* Label de carte sidebar (ex: "À PROPOS DE L'AUTEUR") */
+    .art-side-label {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--line-soft);
+    }
+
+    /* Bloc auteur dans la sidebar */
+    .art-side-author {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+    }
+
+    /* Avatar sidebar — même style que dans la méta bar */
+    .art-side-avatar {
+        width: 36px;
+        height: 36px;
+        background: var(--accent);
+        color: var(--ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--display);
+        font-size: 16px;
+        flex-shrink: 0;
+    }
+
+    .art-side-author__name {
+        font-family: var(--body);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink);
+    }
+    .art-side-author__role {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-top: 2px;
+    }
+
+    /* Bouton "Retour aux articles" — ghost */
+    .art-back-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 16px;
+        border: 1px solid var(--ink);
+        background: transparent;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink);
+        text-decoration: none;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .art-back-btn:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    /* ── Responsive ─────────────────────────────────────────────────────── */
+
+    @media (max-width: 900px) {
+        .art-layout {
+            grid-template-columns: 1fr;
+        }
+        /* La sidebar passe sous l'article sur mobile */
+        .art-sidebar { order: -1; }
+    }
+
+    @media (max-width: 600px) {
+        .art-main__body { padding: 20px 16px; }
+        .art-main__title { font-size: 28px; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# Bannière aperçu brouillon #}
+{#
+ # Bannière brouillon : visible uniquement si l'auteur prévisualise son brouillon.
+ # isPreview est passé par ArticleController::show() quand l'article n'est pas publié.
+ #}
 {% if isPreview %}
-    <div class="draft-banner">
-        🔒 Aperçu — Cet article est encore un brouillon (non visible par les autres)
-        <a href="{{ path('app_article_edit', {id: article.id}) }}"
-           style="color:#856404;font-size:12px;text-decoration:underline;">Modifier</a>
+    <div class="art-draft-banner" role="alert">
+        <span>APERÇU — Cet article est en brouillon. Non visible par les autres membres.</span>
+        <a href="{{ path('app_article_edit', {id: article.id}) }}">Modifier →</a>
     </div>
 {% endif %}
 
-<a href="{{ path('app_article_index') }}" class="back-link">← Retour aux articles</a>
+{# Fil d'Ariane : Articles → Titre de l'article #}
+<nav class="art-breadcrumb" aria-label="Fil d'Ariane">
+    <a href="{{ path('app_article_index') }}">Articles</a>
+    <span class="art-breadcrumb__sep" aria-hidden="true">›</span>
+    <span class="art-breadcrumb__current" aria-current="page">
+        {{ article.title|slice(0, 60) }}{{ article.title|length > 60 ? '…' : '' }}
+    </span>
+</nav>
 
-<div class="article-layout">
+{# Layout principal 70/30 #}
+<div class="art-layout">
 
-    {# ── Article ── #}
-    <div class="article-main">
+    {# ── Colonne principale — article ────────────────────────────────────── #}
+    <main class="art-main" id="main-content">
+
+        {# Image de couverture (si disponible) #}
         {% if article.coverImagePath %}
-            <img src="{{ asset(article.coverImagePath) }}" alt="{{ article.title }}" class="article-cover">
+            <img src="{{ asset(article.coverImagePath) }}"
+                 alt="{{ article.title }}"
+                 class="art-main__cover">
         {% endif %}
 
-        <div class="article-body">
-            <h1 class="article-title">{{ article.title }}</h1>
+        <div class="art-main__body">
 
+            {# Titre H1 #}
+            <h1 class="art-main__title">{{ article.title }}</h1>
+
+            {# Chapeau / excerpt en serif si disponible #}
             {% if article.excerpt %}
-                <p class="article-excerpt">{{ article.excerpt }}</p>
+                <p class="art-main__excerpt">{{ article.excerpt }}</p>
             {% endif %}
 
-            <div class="article-meta">
-                <div class="article-author">
+            {# ── Barre de métadonnées ──────────────────────────────────── #}
+            <div class="art-meta-bar">
+
+                {# Auteur : avatar + nom + date #}
+                <div class="art-meta-bar__author">
+                    {#
+                     # Avatar : photo si disponible, sinon carré lime avec initiale.
+                     # On utilise le profil artiste pour avoir le displayName.
+                    #}
                     {% if article.author.artistProfile and article.author.artistProfile.avatarPath %}
                         <img src="{{ asset(article.author.artistProfile.avatarPath) }}"
-                             alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover;">
+                             alt=""
+                             style="width:40px;height:40px;object-fit:cover;border:1px solid var(--ink);">
                     {% else %}
-                        <div class="author-avatar">{{ article.author.email|first|upper }}</div>
-                    {% endif %}
-                    <div>
-                        <div class="author-name">
-                            {% if article.author.artistProfile %}{{ article.author.artistProfile.displayName }}
-                            {% else %}{{ article.author.email }}{% endif %}
+                        <div class="art-meta-bar__avatar" aria-hidden="true">
+                            {{ article.author.email|first|upper }}
                         </div>
-                        <div class="article-date">
-                            Publié le {{ (article.publishedAt ?? article.createdAt)|date('d/m/Y') }}
-                            {% if article.updatedAt > article.createdAt %}
-                                · modifié le {{ article.updatedAt|date('d/m/Y') }}
+                    {% endif %}
+
+                    <div>
+                        <div class="art-meta-bar__name">
+                            {% if article.author.artistProfile %}
+                                {{ article.author.artistProfile.displayName }}
+                            {% else %}
+                                {{ article.author.email|split('@')|first }}
+                            {% endif %}
+                        </div>
+                        <div class="art-meta-bar__date">
+                            Publié le
+                            <time datetime="{{ (article.publishedAt ?? article.createdAt)|date('Y-m-d') }}">
+                                {{ (article.publishedAt ?? article.createdAt)|date('d/m/Y') }}
+                            </time>
+                            {#
+                             # On compare updatedAt à createdAt : si modifié après création,
+                             # on affiche la date de modification.
+                             # Twig ne supporte pas != directement pour des objets DateTime
+                             # → on compare les timestamps via |date('U').
+                            #}
+                            {% if article.updatedAt|date('U') > article.createdAt|date('U') %}
+                                · modifié le
+                                <time datetime="{{ article.updatedAt|date('Y-m-d') }}">
+                                    {{ article.updatedAt|date('d/m/Y') }}
+                                </time>
                             {% endif %}
                         </div>
                     </div>
                 </div>
 
-                {% if app.user == article.author or is_granted('ROLE_ADMIN') %}
-                    <div class="article-actions">
-                        <a href="{{ path('app_article_edit', {id: article.id}) }}" class="btn-edit-sm">Modifier</a>
-                        <form method="post" action="{{ path('app_article_delete', {id: article.id}) }}"
-                              onsubmit="return confirm('Supprimer définitivement cet article ?')">
-                            <input type="hidden" name="_token" value="{{ csrf_token('article_delete_' ~ article.id) }}">
-                            <button type="submit" class="btn-delete-sm">Supprimer</button>
-                        </form>
-                    </div>
-                {% endif %}
+                {#
+                 # Temps de lecture estimé : 200 mots/minute est la vitesse moyenne.
+                 # article.content|split(' ')|length compte les mots approximativement.
+                 # max(1) évite d'afficher "0 min".
+                #}
+                {% set wordCount = article.content|split(' ')|length %}
+                {% set readingTime = max(1, (wordCount / 200)|round) %}
+                <div class="art-meta-bar__reading">
+                    {{ readingTime }} min de lecture
+                </div>
+
             </div>
 
-            <div class="article-content">{{ article.content|nl2br }}</div>
-        </div>
-    </div>
+            {#
+             # Actions admin/auteur : Modifier + Supprimer
+             # On teste app.user en premier (guard) : si personne n'est connecté,
+             # app.user est null et la comparaison `null == article.author` lèverait
+             # une erreur (appel de méthodes sur null côté Doctrine).
+             # is_granted() est sûr même sans utilisateur connecté (retourne false).
+            #}
+            {% if app.user and (app.user == article.author or is_granted('ROLE_ADMIN')) %}
+                <div class="art-actions">
 
-    {# ── Sidebar ── #}
-    <div>
-        <div class="side-card">
-            <div class="side-label">À propos de l'auteur</div>
-            <div style="display:flex;gap:10px;align-items:center;">
+                    <a href="{{ path('app_article_edit', {id: article.id}) }}"
+                       class="art-btn-edit">
+                        Modifier
+                    </a>
+
+                    {#
+                     # Formulaire de suppression : POST obligatoire (pas GET) pour
+                     # respecter la sémantique HTTP et se protéger du CSRF.
+                     # Le token CSRF (article_delete_{id}) est vérifié dans ArticleController::delete().
+                    #}
+                    <form method="post"
+                          action="{{ path('app_article_delete', {id: article.id}) }}"
+                          onsubmit="return confirm('Supprimer définitivement cet article ?')">
+                        <input type="hidden" name="_token"
+                               value="{{ csrf_token('article_delete_' ~ article.id) }}">
+                        <button type="submit" class="art-btn-delete">
+                            Supprimer
+                        </button>
+                    </form>
+
+                </div>
+            {% endif %}
+
+            {#
+             # Corps de l'article.
+             # |nl2br : convertit les sauts de ligne (\n) en <br> — sans markup HTML.
+             # JAMAIS |raw ici : le contenu est saisi par l'utilisateur → risque XSS.
+             # La police --serif + 18px + line-height:1.7 = standard confort de lecture.
+            #}
+            <div class="art-content">
+                {{ article.content|nl2br }}
+            </div>
+
+        </div>
+    </main>
+
+    {# ── Sidebar droite ──────────────────────────────────────────────────── #}
+    <aside class="art-sidebar" aria-label="Informations complémentaires">
+
+        {# Carte "À propos de l'auteur" #}
+        <div class="art-side-card">
+            <div class="art-side-label">À propos de l'auteur</div>
+            <div class="art-side-author">
+
+                {# Avatar auteur #}
                 {% if article.author.artistProfile and article.author.artistProfile.avatarPath %}
                     <img src="{{ asset(article.author.artistProfile.avatarPath) }}"
-                         alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+                         alt=""
+                         style="width:36px;height:36px;object-fit:cover;border:1px solid var(--ink);flex-shrink:0;">
                 {% else %}
-                    <div class="author-avatar" style="width:36px;height:36px;font-size:11px;">
+                    <div class="art-side-avatar" aria-hidden="true">
                         {{ article.author.email|first|upper }}
                     </div>
                 {% endif %}
+
                 <div>
-                    <div style="font-size:13px;font-weight:600;color:var(--color-text);">
-                        {% if article.author.artistProfile %}{{ article.author.artistProfile.displayName }}
-                        {% else %}{{ article.author.email }}{% endif %}
+                    <div class="art-side-author__name">
+                        {% if article.author.artistProfile %}
+                            {{ article.author.artistProfile.displayName }}
+                        {% else %}
+                            {{ article.author.email|split('@')|first }}
+                        {% endif %}
                     </div>
-                    <div style="font-size:11px;color:var(--color-text-light);">Artiste</div>
+                    <div class="art-side-author__role">Membre BazaArt</div>
                 </div>
+
             </div>
         </div>
-    </div>
+
+        {# Bouton retour à la liste #}
+        <a href="{{ path('app_article_index') }}" class="art-back-btn">
+            ← Retour aux articles
+        </a>
+
+    </aside>
 
 </div>
 

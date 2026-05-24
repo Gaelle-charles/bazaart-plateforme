@@ -5,12 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}BazaArt{% endblock %}</title>
 
-    {# ── Polices Google Fonts ──────────────────────────────────────────────── #}
-    {# Playfair Display : pour les titres (élégant, serif)                     #}
-    {# Inter            : pour le corps de texte (moderne, lisible)            #}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    {# ── Polices self-hostées — thème Editorial Cream (vitrine publique) ───── #}
+    {#
+        POURQUOI rel="preload" ?
+        Le preload dit au navigateur : "charge ce fichier en priorité haute,
+        même avant d'avoir analysé le CSS". Sans preload, la police n'est
+        demandée qu'une fois que le CSS est parsé et la règle @font-face
+        atteinte — ce qui peut causer un Flash Of Invisible Text (FOIT)
+        ou Flash Of Unstyled Text (FOUT) perceptible.
+
+        On ne preload QUE les polices "above the fold" critiques :
+        - Fraunces 700 → titres hero et sections
+        - DM Sans 400  → corps de texte principal
+
+        Les graisses secondaires (300, 500, etc.) se chargent en fond.
+
+        crossorigin : OBLIGATOIRE même pour les polices en self-hosting.
+        Le navigateur charge les polices via une requête CORS anonyme
+        (fetch mode) — sans cet attribut, le preload est ignoré.
+
+        POLICES ANCIENNEMENT CHARGÉES VIA GOOGLE FONTS :
+        Playfair Display et Inter ont été remplacées par Fraunces et DM Sans
+        (thème Editorial Cream) ainsi que Archivo Black et Space Grotesk
+        (thème Street). Ces nouvelles polices sont auto-hébergées pour
+        conformité RGPD — aucune requête externe à Google.
+    #}
+    <link rel="preload" href="{{ asset('fonts/fraunces-700.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="{{ asset('fonts/dm-sans-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+
+    {# ── Design tokens V2 ──────────────────────────────────────────────────── #}
+    {# Ce fichier doit être chargé EN PREMIER : il déclare toutes les          #}
+    {# custom properties CSS (--color-*, --font-*, etc.) utilisées partout.    #}
+    {# Ne jamais écrire de valeurs CSS "en dur" dans les templates Twig :      #}
+    {# utiliser toujours var(--nom-du-token) à la place.                       #}
+    <link rel="stylesheet" href="{{ asset('css/design-tokens.css') }}">
+
+    {# ── Polices self-hostées (@font-face declarations) ───────────────────── #}
+    {# Chargé APRÈS design-tokens.css car les tokens de typographie (--display, #}
+    {# --body, --mono, --serif) référencent les noms de famille déclarés ici.   #}
+    <link rel="stylesheet" href="{{ asset('css/fonts.css') }}">
 
     <style>
         /* ══════════════════════════════════════════════════════════════════
@@ -38,19 +71,58 @@
             --color-text-muted:  #6b6860;   /* gris chaud — texte secondaire */
             --color-text-light:  #a9a6a0;   /* gris clair — texte placeholder/caption */
             --color-text-green:  #718f84;   /* vert doux — texte footer */
+            --color-yellow:      #f0c040;   /* jaune ambre — liens admin sidebar */
 
-            /* Typographie */
-            --font-heading: 'Playfair Display', Georgia, serif;
-            --font-body:    'Inter', system-ui, sans-serif;
+            /*
+             * Typographie — alignée sur le design system V2
+             *
+             * Ces tokens "compat" --font-heading / --font-body sont conservés
+             * pour ne pas casser les templates existants qui les utilisent.
+             * Ils sont mappés sur les nouvelles polices du design system V2 :
+             *   - Thème Street (app) : titres = Archivo Black, corps = Space Grotesk
+             *   - Thème Editorial (vitrine) : titres = Fraunces, corps = DM Sans
+             *
+             * À terme, migrer les usages de --font-heading → var(--display)
+             * et --font-body → var(--body) pour utiliser directement les tokens V2.
+             *
+             * POLICES SUPPRIMÉES : Playfair Display, Inter (ancienne identité V1)
+             * → elles n'étaient pas dans le design system V2 extrait du prototype.
+             */
+            --font-heading: 'Archivo Black', Impact, sans-serif; /* thème Street — titres display */
+            --font-body:    'Space Grotesk', system-ui, sans-serif; /* thème Street — corps de texte */
 
-            /* Ombres */
-            --shadow-card: 0 2px 16px rgba(0, 0, 0, 0.06);
+            /*
+             * OMBRES — alignées sur design-tokens.css
+             *
+             * Thème Street (app) : pas d'ombre douce, les bordures 1px font
+             * le travail visuel (voir --card-border dans design-tokens.css).
+             * → var(--shadow-card) = none dans le thème Street.
+             *
+             * Thème Editorial (vitrine) : var(--shadow-card) est surchargé
+             * dans [data-theme="editorial"] avec une ombre douce réaliste.
+             * Ce bloc hérite donc automatiquement la bonne valeur selon le thème.
+             *
+             * ANCIENNE VALEUR SUPPRIMÉE : "0 2px 16px rgba(0,0,0,0.06)"
+             * Cette valeur surchargée ici entrait en collision avec les tokens V2
+             * et ignorait le système de thème. Elle est désormais gérée par
+             * design-tokens.css uniquement.
+             */
+            /* --shadow-card est défini dans design-tokens.css (valeur : none pour le thème Street). */
+            /* On ne le redéfinit pas ici pour éviter la référence circulaire var(--x, var(--x)). */
 
-            /* Rayons de bordure */
-            --radius-sm:  6px;
-            --radius-md:  12px;
-            --radius-lg:  16px;
-            --radius-full: 999px;
+            /*
+             * BORDER-RADIUS — alignés sur design-tokens.css
+             *
+             * Thème Street : design très carré, --radius-sm = 2px maximum.
+             * ANCIENNE VALEUR SUPPRIMÉE pour --radius-sm : 6px
+             * → 6px entrait en collision avec les 2px des tokens V2 Street.
+             * Le thème Editorial redéfinit ses propres rayons (8px, 14px, etc.)
+             * dans [data-theme="editorial"] dans design-tokens.css.
+             */
+            --radius-sm:  2px;   /* Street : petits éléments, bords presque francs */
+            --radius-md:  12px;  /* utilisé dans le layout vitrine / cartes */
+            --radius-lg:  16px;  /* grandes cartes */
+            --radius-full: 999px; /* éléments pilule (badges, avatars) */
         }
 
         /* ══════════════════════════════════════════════════════════════════
@@ -180,6 +252,19 @@
             background: #f8d7da;
             border: 1px solid #f5c6cb;
             color: #721c24;
+        }
+        /*
+         * Flash info — messages neutres / informatifs.
+         * Pas de token bleu dans le design system V2 actuel,
+         * on utilise donc des valeurs CSS directes inspirées du
+         * registre sémantique "info" (bleu neutre WCAG AA).
+         * Si un token --info-bg est créé dans design-tokens.css,
+         * remplacer ces valeurs par var(--info-bg), etc.
+         */
+        .flash--info {
+            background: #dbeafe;
+            border: 1px solid #93c5fd;
+            color: #1e40af;
         }
 
         /* ── Séparateur avec texte ── */

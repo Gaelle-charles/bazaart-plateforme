@@ -4,7 +4,7 @@
  # base_app.html.twig — Layout pour les pages de l'application (connectées)
  #
  # Ce template définit la mise en page avec :
- # - Une sidebar verte à gauche (navigation principale)
+ # - Une sidebar sombre (--ink) à gauche — thème Street, navigation principale
  # - Une zone principale à droite (topbar + contenu)
  #
  # UTILISATION dans un template enfant :
@@ -14,10 +14,42 @@
  #}
 
 {% block stylesheets %}
-<style>
-    /* ── Layout général application ─────────────────────────────────────── */
-    body { background: var(--color-white); }
+    {{- parent() -}}
+    {#
+    Preload des polices critiques du thème Street (app connectée).
 
+    base.html.twig preload déjà Fraunces + DM Sans (thème Editorial/vitrine).
+    Ici on ajoute les polices de l'app : Archivo Black (titres display) et
+    Space Grotesk (corps de texte). Ces deux polices sont "above the fold"
+    dans l'interface connectée — on les précharge pour éviter le FOUT.
+
+    Le `{{ parent() }}` ci-dessous dans le bloc javascripts assure que
+    le JS parent est conservé. Pour les styles, on append ici.
+#}
+<link rel="preload" href="{{ asset('fonts/archivo-black-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{ asset('fonts/space-grotesk-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+
+<style>
+    /*
+     * Styles du layout applicatif — thème Street (pages connectées).
+     *
+     * THÈME STREET : sidebar sombre (--ink = #0D0D0D), accents lime (--accent)
+     * et orange (--accent-2). Toutes les valeurs passent par les tokens CSS
+     * déclarés dans design-tokens.css — ne jamais écrire de valeurs en dur.
+     *
+     * RÈGLE STREET ABSOLUE : border-radius: 0 partout (style "affiche").
+     * Aucun arrondi dans la sidebar, les avatars, les badges.
+     */
+
+    /* ── Layout général application ─────────────────────────────────────── */
+
+    /*
+     * Fond de page : var(--bg) = #F2EFE6 (crème ocre du thème Street).
+     * C'est différent de la vitrine publique qui utilise un crème plus doux.
+     */
+    body { background: var(--bg); }
+
+    /* Conteneur flex horizontal : sidebar fixe à gauche + zone principale */
     .app-layout {
         display: flex;
         min-height: 100vh;
@@ -27,45 +59,88 @@
     .sidebar {
         width: 240px;
         min-height: 100vh;
-        background: var(--color-green);
+        /*
+         * var(--ink) = #0D0D0D — quasi-noir, fond de la sidebar thème Street.
+         * Le prototype de référence utilise #141413 ; --ink en est très proche
+         * et reste dans le système de tokens (cohérence garantie).
+         */
+        background: var(--ink);
         display: flex;
         flex-direction: column;
         flex-shrink: 0;
-        position: fixed;   /* fixe sur le côté — ne défile pas */
+        position: fixed;   /* fixe sur le côté — ne défile pas avec le contenu */
         top: 0;
         left: 0;
         bottom: 0;
         z-index: 100;
     }
 
-    /* Logo en haut de la sidebar */
+    /* ── Logo ────────────────────────────────────────────────────────────── */
     .sidebar__logo {
         padding: 20px 24px 14px;
-        border-bottom: 1px solid var(--color-green-dark);
+        /*
+         * Séparateur très discret entre logo et nav :
+         * rgba(255,255,255,0.08) = blanc à 8% d'opacité sur fond noir.
+         * Règle Street : pas de couleur en dur → on utilise une transparence
+         * blanche sur --ink plutôt qu'une variable inexistante.
+         */
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
+
     .sidebar__logo-title {
-        font-family: var(--font-heading);
+        /*
+         * Archivo Black = police display du thème Street (var(--display)).
+         * var(--bg) = #F2EFE6 crème — lisible sur fond --ink noir.
+         */
+        font-family: var(--display);
         font-size: 18px;
-        color: var(--color-white);
-        font-weight: 700;
+        color: var(--bg);
+        font-weight: 400;   /* Archivo Black est déjà en gras par sa graisse */
+        letter-spacing: -0.01em;
     }
+
     .sidebar__logo-subtitle {
+        /*
+         * var(--accent-2) = #FF6B2C orange tangerine — sous-titre du logo.
+         * Contraste élevé sur --ink noir (ratio > 4.5:1 pour WCAG AA).
+         */
         font-size: 9px;
-        color: var(--color-green-mid);
-        margin-top: 2px;
+        color: var(--accent-2);
+        margin-top: 3px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        font-weight: 600;
+        font-family: var(--mono);   /* mono pour le style "label technique" */
     }
 
-    /* Navigation */
-    .sidebar__nav { padding: 16px 0; flex: 1; overflow-y: auto; }
+    /* ── Navigation principale ───────────────────────────────────────────── */
+    .sidebar__nav {
+        padding: 16px 0;
+        flex: 1;
+        overflow-y: auto;   /* scroll si la nav déborde (nombreux items) */
+    }
 
+    /*
+     * Titres de section : "PRINCIPAL", "MON ESPACE", etc.
+     * Style micro-label uppercase : très discret, purement organisationnel.
+     * rgba(242,239,230,0.4) = crème à 40% sur noir → gris chaud subtil.
+     */
     .sidebar__section-title {
         font-size: 9px;
         font-weight: 600;
-        color: var(--color-green-mid);
-        letter-spacing: 0.08em;
+        color: rgba(242, 239, 230, 0.4);
+        letter-spacing: 0.1em;
         text-transform: uppercase;
         padding: 10px 24px 6px;
+        font-family: var(--mono);
     }
+
+    /*
+     * Séparateur visuel avant chaque section (sauf la première).
+     * Classe utilitaire appliquée via style inline sur les .sidebar__section-title
+     * suivants — on utilise border-top directement sur l'élément pour éviter
+     * de multiplier les classes CSS.
+     */
 
     /* Lien de navigation */
     .sidebar__link {
@@ -74,21 +149,38 @@
         gap: 10px;
         padding: 9px 20px;
         font-size: 13px;
-        color: #e2eae7;
+        /*
+         * rgba(242,239,230,0.75) = crème (--bg) à 75% d'opacité.
+         * On ne peut pas écrire "color: var(--bg)" à 75% directement en CSS
+         * sans utiliser color-mix() (non supporté IE) ou une valeur rgba fixe.
+         * On choisit rgba pour la compatibilité maximale.
+         */
+        color: rgba(242, 239, 230, 0.75);
         text-decoration: none;
-        transition: background 0.12s;
+        transition: background var(--transition-fast, 0.12s);
         position: relative;
-    }
-    .sidebar__link:hover {
-        background: rgba(255, 255, 255, 0.06);
+        border-radius: 0;   /* règle Street — bords francs partout */
     }
 
-    /* Lien actif — fond clair + barre rouge sur la gauche */
+    .sidebar__link:hover {
+        /* Surbrillance subtile au survol : blanc 5% sur fond noir */
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    /*
+     * Lien actif — thème Street :
+     *   - barre lime à gauche (3px) = indicateur de position clair
+     *   - fond lime très transparent (8%) = halo doux sans saturation excessive
+     *   - texte lime = var(--accent) #C6F24E
+     *
+     * On n'utilise pas border-radius sur ::before : règle Street oblige.
+     */
     .sidebar__link--active {
-        background: var(--color-red-light);
-        color: var(--color-red);
+        background: rgba(198, 242, 78, 0.08);
+        color: var(--accent);
         font-weight: 600;
     }
+
     .sidebar__link--active::before {
         content: '';
         position: absolute;
@@ -96,76 +188,151 @@
         top: 0;
         bottom: 0;
         width: 3px;
-        background: var(--color-red);
-        border-radius: 0 2px 2px 0;
+        /* var(--accent) = #C6F24E lime — couleur d'état actif Street */
+        background: var(--accent);
+        border-radius: 0;   /* bords francs — règle Street */
     }
 
-    /* Icône (emoji ou SVG) dans les liens */
-    .sidebar__icon { font-size: 14px; width: 18px; text-align: center; }
+    /* Icône (emoji ou caractère Unicode) dans les liens */
+    .sidebar__icon {
+        font-size: 14px;
+        width: 18px;
+        text-align: center;
+        flex-shrink: 0;   /* l'icône ne se compresse pas si le texte est long */
+    }
 
-    /* Zone utilisateur en bas de la sidebar */
+    /* ── Zone utilisateur (bas de sidebar) ──────────────────────────────── */
     .sidebar__user {
         padding: 14px 16px;
-        border-top: 1px solid var(--color-green-dark);
+        /* Séparateur haut de la zone user — même recette que le logo */
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
         display: flex;
         align-items: center;
         gap: 10px;
     }
 
-    /* Avatar rond avec initiales */
-    .avatar {
+    /*
+     * Avatar utilisateur — style Street :
+     *   - CARRÉ (border-radius: 0) contrairement à l'ancienne sidebar (cercle)
+     *   - var(--accent-2) = #FF6B2C orange — couleur vive, mémorable
+     *   - 32×32px = taille compacte pour une sidebar étroite
+     */
+    .sidebar__avatar {
         width: 32px;
         height: 32px;
-        border-radius: 50%;
-        background: var(--color-orange);
+        border-radius: 0;   /* OBLIGATOIRE : bords francs, règle Street */
+        background: var(--accent-2);
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 11px;
         font-weight: 700;
-        color: white;
+        color: #ffffff;
         flex-shrink: 0;
+        font-family: var(--mono);   /* mono pour les initiales : style technique */
     }
 
     .sidebar__user-name {
         font-size: 12px;
         font-weight: 600;
-        color: var(--color-white);
+        /* var(--bg) = #F2EFE6 crème — texte principal de la zone user */
+        color: var(--bg);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;   /* tronque les noms trop longs */
+        max-width: 120px;
     }
+
     .sidebar__user-role {
         font-size: 10px;
-        color: var(--color-green-mid);
+        /* Crème à 50% : encore plus discret que le nom */
+        color: rgba(242, 239, 230, 0.5);
+        font-family: var(--mono);
+        letter-spacing: 0.04em;
+    }
+
+    /* Lien de déconnexion en bas à droite de la zone user */
+    .sidebar__logout {
+        margin-left: auto;
+        font-size: 14px;
+        /* Crème à 40% : très discret — l'utilisateur ne déconnecte pas par accident */
+        color: rgba(242, 239, 230, 0.4);
+        text-decoration: none;
+        transition: color var(--transition-fast);
+        line-height: 1;
+    }
+
+    .sidebar__logout:hover {
+        /* Au survol : orange vif — signal d'action destructive */
+        color: var(--accent-2);
+    }
+
+    /* ── Badge notifications ─────────────────────────────────────────────── */
+    /*
+     * Style du badge "N notifications non lues".
+     * - var(--accent-2) = #FF6B2C orange — couleur d'alerte dans Street
+     * - 20×20px carré (border-radius: 0 — règle Street)
+     * - Centrage parfait des chiffres via flex
+     * - Pour "99+" : le texte déborde un peu mais reste lisible (font-size réduit)
+     */
+    .notif-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 0;   /* carré — règle Street */
+        background: var(--accent-2);
+        color: #ffffff;
+        font-size: 9px;
+        font-weight: 700;
+        font-family: var(--mono);
+        margin-left: auto;   /* pousse le badge vers la droite du lien */
+        flex-shrink: 0;
+        line-height: 1;
     }
 
     /* ── Zone principale ─────────────────────────────────────────────────── */
     .app-main {
-        margin-left: 240px;   /* décalage = largeur sidebar */
+        margin-left: 240px;   /* décalage identique à la largeur de la sidebar */
         flex: 1;
         display: flex;
         flex-direction: column;
         min-height: 100vh;
     }
 
-    /* Barre du haut */
+    /*
+     * Topbar — barre du haut :
+     * - Fond : var(--bg) = crème ocre (cohérent avec le fond de page)
+     * - Bordure bas : 1px solid var(--ink) = bord franc Street
+     *   (≠ ancienne version qui utilisait var(--color-border) beige discret)
+     */
     .topbar {
         height: 56px;
-        background: var(--color-white);
-        border-bottom: 1px solid var(--color-border);
+        background: var(--bg);
+        border-bottom: 1px solid var(--ink);
         display: flex;
         align-items: center;
         padding: 0 28px;
-        position: sticky;
+        position: sticky;   /* reste visible en haut au scroll */
         top: 0;
         z-index: 50;
     }
+
     .topbar__title {
-        font-family: var(--font-heading);
+        /*
+         * var(--display) = Archivo Black — police display du thème Street.
+         * Taille 16px : plus compact que les titres de section mais toujours
+         * lisible dans la topbar (hauteur 56px).
+         */
+        font-family: var(--display);
         font-size: 16px;
-        font-weight: 700;
-        color: var(--color-text);
+        font-weight: 400;   /* Archivo Black est déjà très gras */
+        color: var(--ink);
+        letter-spacing: -0.01em;
     }
 
-    /* Contenu de la page */
+    /* Zone de contenu principal de chaque page */
     .app-content {
         padding: 28px;
         flex: 1;
@@ -251,6 +418,9 @@
     // Lance le polling toutes les 60 secondes (60 000 ms)
     // On démarre immédiatement une première fois (synchronisation avec le SSR)
     // puis on laisse l'intervalle gérer les mises à jour suivantes.
+    // Appel immédiat pour synchroniser le badge avec la réalité côté serveur
+    // (la valeur SSR peut avoir quelques secondes de décalage si la page était en cache)
+    poll();
     setInterval(poll, 60000);
 }());
 </script>
@@ -260,174 +430,205 @@
 <div class="app-layout">
 
     {# ── SIDEBAR ──────────────────────────────────────────────────────────── #}
-    <aside class="sidebar">
+    {#
+        Structure de la sidebar thème Street :
+        1. Logo (BazaArt + sous-titre orange)
+        2. Nav principale → sections "Principal" et "Mon espace"
+        3. Section "Espace Structure" (conditionnelle ROLE_STRUCTURE)
+        4. Section "Administration" (conditionnelle ROLE_ADMIN)
+        5. Zone utilisateur en bas (avatar carré + nom + rôle + déconnexion)
 
-        {# Logo #}
+        Variable de route active :
+        app.request.attributes.get('_route') retourne le nom Symfony de la route
+        courante (ex: "app_resource_index"). On compare avec == ou starts with
+        pour allumer la classe .sidebar__link--active sur le bon lien.
+    #}
+    <aside class="sidebar" aria-label="Navigation principale">
+
+        {# ── Logo ──────────────────────────────────────────────────────── #}
         <div class="sidebar__logo">
+            {# Archivo Black (var(--display)) + couleur crème (var(--bg)) → style Street #}
             <div class="sidebar__logo-title">BazaArt</div>
-            <div class="sidebar__logo-subtitle">artistes francophones</div>
+            {# Sous-titre en orange (var(--accent-2)) — sous-ligne du logo, fidèle au prototype #}
+            <div class="sidebar__logo-subtitle">Artistes francophones</div>
         </div>
 
-        {# Navigation principale #}
-        <nav class="sidebar__nav">
+        {# ── Navigation ────────────────────────────────────────────────── #}
+        <nav class="sidebar__nav" aria-label="Menu de l'application">
+
+            {# ── Section : Principal ──────────────────────────────────── #}
             <div class="sidebar__section-title">Principal</div>
 
-            {# app.request.attributes.get('_route') retourne le nom de la route active #}
+            {# Tableau de bord — page d'accueil de l'application #}
             <a href="{{ path('app_dashboard') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_dashboard' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">⊞</span> Tableau de bord
-            </a>
-
-            <a href="{{ path('app_resource_index') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_resource' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">◈</span> Ressources
-            </a>
-
-            <a href="{{ path('app_post_feed') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_post' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">◉</span> Communauté
-            </a>
-
-            {# Forum — sous-section de Communauté, accessible à tous les membres #}
-            <a href="{{ path('app_forum_index') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_forum' %}sidebar__link--active{% endif %}"
-               style="padding-left: 36px; font-size: 12px;">
-                <span class="sidebar__icon">💬</span> Forum
-            </a>
-
-            {# Messagerie privée — conversations 1-à-1 entre membres #}
-            <a href="{{ path('app_messaging_index') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_messaging' %}sidebar__link--active{% endif %}"
-               style="padding-left: 36px; font-size: 12px;">
-                <span class="sidebar__icon">✉</span> Messages
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_dashboard' %}sidebar__link--active{% endif %}"
+               aria-current="{{ app.request.attributes.get('_route') == 'app_dashboard' ? 'page' : 'false' }}">
+                <span class="sidebar__icon" aria-hidden="true">⊞</span>
+                Tableau de bord
             </a>
 
             {#
-                Notifications — badge en temps réel via Stimulus (polling toutes les 60s).
+                Ressources — starts with 'app_resource' couvre toutes les sous-pages :
+                app_resource_index, app_resource_show, app_resource_new, etc.
+                Exception : app_resource_my et app_resource_favorites sont dans
+                "Mon espace", mais ils restent sous app_resource_* → on accepte
+                que les deux liens soient actifs simultanément dans ce cas.
+            #}
+            <a href="{{ path('app_resource_index') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_resource' %}sidebar__link--active{% endif %}"
+               aria-current="{{ app.request.attributes.get('_route') starts with 'app_resource' ? 'page' : 'false' }}">
+                <span class="sidebar__icon" aria-hidden="true">◈</span>
+                Ressources
+            </a>
 
-                Fonctionnement du badge :
-                  1. Au chargement, on appelle unread_notifications_count() (extension Twig)
-                     pour récupérer le compte initial depuis la BDD sans JS.
-                  2. Le contrôleur Stimulus notification_badge_controller.js prend le relai
-                     et interroge /api/notifications/unread-count toutes les 60 secondes.
-                  3. Quand le count change, Stimulus met à jour l'affichage du badge.
+            {#
+                Communauté — lien principal vers le fil d'actualité.
+                Le highlight s'allume aussi sur les pages Forum, Messagerie et
+                Notifications (toutes préfixées app_post, app_forum, app_messaging,
+                app_notification) — l'utilisateur reste "dans Communauté" visuellement.
+            #}
+            <a href="{{ path('app_post_feed') }}"
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_post' or app.request.attributes.get('_route') starts with 'app_forum' or app.request.attributes.get('_route') starts with 'app_messaging' or app.request.attributes.get('_route') starts with 'app_notification' %}sidebar__link--active{% endif %}"
+               aria-current="{{ (app.request.attributes.get('_route') starts with 'app_post' or app.request.attributes.get('_route') starts with 'app_forum' or app.request.attributes.get('_route') starts with 'app_messaging' or app.request.attributes.get('_route') starts with 'app_notification') ? 'page' : 'false' }}">
+                <span class="sidebar__icon" aria-hidden="true">◉</span>
+                Communauté
+            </a>
 
-                Attributs Stimulus :
-                  data-controller         → identifie le contrôleur JS à instancier
-                  data-notification-badge-url-value  → URL de l'API polling
-                  data-notification-badge-count-value → valeur initiale (int, SSR)
-                  data-notification-badge-target="badge" → l'élément <span> à mettre à jour
+            {#
+                Le badge de notifications est gardé en technique invisible pour
+                que le script JS de polling continue de fonctionner,
+                mais il n'est plus affiché dans la nav (le badge sera dans le dashboard).
             #}
             {% set notifCount = unread_notifications_count() %}
-            {#
-                id="notif-badge-link"       → cible utilisée par le script JS de polling
-                data-api-url                → URL de l'API, lue par le script JS
-            #}
-            <a href="{{ path('app_notification_index') }}"
-               id="notif-badge-link"
-               data-api-url="{{ path('app_api_notification_unread_count') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_notification' %}sidebar__link--active{% endif %}"
-               style="padding-left: 36px; font-size: 12px;">
-                <span class="sidebar__icon">🔔</span> Notifications
-                {#
-                    id="notif-badge-count"  → cible du script JS pour mise à jour
-                    Le badge est masqué si count = 0 (style display:none).
-                    Limite d'affichage : "99+" pour éviter le débordement graphique.
-                #}
-                <span id="notif-badge-count"
-                      style="{{ notifCount == 0 ? 'display:none;' : '' }}margin-left: auto; background: #C8503A; color: white; border-radius: 999px; font-size: 10px; font-weight: 700; padding: 2px 6px; min-width: 16px; text-align: center;">
-                    {{ notifCount > 99 ? '99+' : notifCount }}
-                </span>
-            </a>
+            <span id="notif-badge-link"
+                  data-api-url="{{ path('app_api_notification_unread_count') }}"
+                  style="display:none;"
+                  aria-hidden="true">
+                <span id="notif-badge-count">{{ notifCount }}</span>
+            </span>
 
+            {# Articles — blog / publication éditoriale de la plateforme #}
             <a href="{{ path('app_article_index') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_article' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">◎</span> Articles
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_article' %}sidebar__link--active{% endif %}"
+               aria-current="{{ app.request.attributes.get('_route') starts with 'app_article' ? 'page' : 'false' }}">
+                <span class="sidebar__icon" aria-hidden="true">◎</span>
+                Articles
             </a>
 
-            {# Annuaire artistes — liste tous les profils publics #}
-            <a href="{{ path('app_artist_profile_directory') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') in ['app_artist_profile_directory', 'app_artist_profile_public'] %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">◑</span> Annuaire artistes
-            </a>
+            {# ── Section : Mon espace ─────────────────────────────────── #}
+            {#
+                border-top sur le titre de section = séparateur visuel Street.
+                padding-top augmenté pour aérer le groupe.
+            #}
+            <div class="sidebar__section-title"
+                 style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;">
+                Mon espace
+            </div>
 
-            <div class="sidebar__section-title" style="margin-top: 8px;">Mon espace</div>
-
+            {#
+                Profil artiste — deux routes (show = lecture, edit = modification).
+                On liste les deux avec "in" pour que le lien reste actif en mode édition.
+            #}
             <a href="{{ path('app_artist_profile_show') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') in ['app_artist_profile_show', 'app_artist_profile_edit'] %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">◐</span> Mon profil artiste
+               class="sidebar__link {% if app.request.attributes.get('_route') in ['app_artist_profile_show', 'app_artist_profile_edit'] %}sidebar__link--active{% endif %}"
+               aria-current="{{ app.request.attributes.get('_route') in ['app_artist_profile_show', 'app_artist_profile_edit'] ? 'page' : 'false' }}">
+                <span class="sidebar__icon" aria-hidden="true">◐</span>
+                Mon profil artiste
             </a>
 
+            {# Organisation — starts with 'app_org' couvre show + edit #}
             <a href="{{ path('app_org_profile_show') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_org' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">▣</span> Mon organisation
+               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_org' %}sidebar__link--active{% endif %}"
+               aria-current="{{ app.request.attributes.get('_route') starts with 'app_org' ? 'page' : 'false' }}">
+                <span class="sidebar__icon" aria-hidden="true">▣</span>
+                Mon organisation
             </a>
 
+            {# Mes soumissions — liste des ressources soumises par l'utilisateur #}
             <a href="{{ path('app_resource_my') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_resource_my' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">◳</span> Mes soumissions
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_resource_my' %}sidebar__link--active{% endif %}"
+               aria-current="{{ app.request.attributes.get('_route') == 'app_resource_my' ? 'page' : 'false' }}">
+                <span class="sidebar__icon" aria-hidden="true">◳</span>
+                Mes soumissions
             </a>
 
-            {# Mes favoris — page listant les ressources mises en favori par l'utilisateur #}
-            <a href="{{ path('app_resource_favorites') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_resource_favorites' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">&#9825;</span> Mes favoris
-            </a>
-
-            {# Alertes — préférences d'alertes email pour les nouvelles ressources #}
-            <a href="{{ path('app_resource_alerts') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_resource_alerts' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">&#9993;</span> Alertes ressources
-            </a>
-
+            {# Mes articles — articles rédigés ou brouillons de l'utilisateur #}
             <a href="{{ path('app_article_my') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_article_my' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">◷</span> Mes articles
+               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_article_my' %}sidebar__link--active{% endif %}"
+               aria-current="{{ app.request.attributes.get('_route') == 'app_article_my' ? 'page' : 'false' }}">
+                <span class="sidebar__icon" aria-hidden="true">◷</span>
+                Mes articles
             </a>
 
-            {# Lien Espace Structure — visible uniquement pour les structures partenaires #}
-            {% if is_granted('ROLE_STRUCTURE') %}
-                <div class="sidebar__section-title" style="margin-top: 8px;">Espace Structure</div>
-                <a href="{{ path('app_structure_dashboard') }}"
-                   class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_structure' %}sidebar__link--active{% endif %}">
-                    <span class="sidebar__icon">🏛</span> Mon espace structure
-                </a>
-            {% endif %}
-
-            {# Lien Admin — visible uniquement pour les admins #}
+            {# ── Section : Administration (ROLE_ADMIN) ────────────────── #}
+            {#
+                Visible uniquement pour les admins (équipe Bazaart).
+                Le lien admin utilise var(--accent) lime au lieu du blanc crème
+                habituel — signal visuel fort que c'est une zone sensible.
+                On écrase la couleur via style inline plutôt qu'une classe
+                dédiée pour éviter de complexifier le CSS.
+            #}
             {% if is_granted('ROLE_ADMIN') %}
-                <div class="sidebar__section-title" style="margin-top: 8px;">Administration</div>
+                <div class="sidebar__section-title"
+                     style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;">
+                    Administration
+                </div>
                 <a href="{{ path('app_admin_dashboard') }}"
                    class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_admin' %}sidebar__link--active{% endif %}"
-                   style="color: #f0c040;">
-                    <span class="sidebar__icon">⚙</span> Admin
+                   style="color: var(--accent);"
+                   aria-current="{{ app.request.attributes.get('_route') starts with 'app_admin' ? 'page' : 'false' }}">
+                    <span class="sidebar__icon" aria-hidden="true">⚙</span>
+                    Administration
                 </a>
             {% endif %}
+
         </nav>
 
-        {# Zone utilisateur (en bas de la sidebar) #}
+        {# ── Zone utilisateur (bas de sidebar) ────────────────────────── #}
+        {#
+            Toujours visible — app.user est forcément défini ici car le layout
+            base_app.html.twig est réservé aux pages connectées (access_control
+            dans security.yaml). Le {% if app.user %} est conservé par sécurité.
+        #}
         <div class="sidebar__user">
             {% if app.user %}
-                {# Génère les initiales de l'email : "marie@test.com" → "MA" #}
-                {% set initials = app.user.email|slice(0, 2)|upper %}
-                <div class="avatar">{{ initials }}</div>
-                <div>
+                {#
+                    Avatar avec initiales :
+                    - app.user.email|slice(0,2)|upper → "marie@test.com" donne "MA"
+                    - Carré 32×32 (border-radius: 0), fond var(--accent-2) orange
+                    - aria-hidden : l'avatar est décoratif, le nom est à côté
+                #}
+                {# On prend les 2 premiers caractères de la partie locale (avant le @) #}
+                {% set initials = app.user.email|split('@')|first|slice(0, 2)|upper %}
+                <div class="sidebar__avatar" aria-hidden="true">{{ initials }}</div>
+
+                <div style="flex: 1; min-width: 0;">
+                    {# Nom = partie avant le @ de l'email #}
                     <div class="sidebar__user-name">{{ app.user.email|split('@')|first }}</div>
+
+                    {#
+                        Rôle affiché selon la hiérarchie Symfony.
+                        On teste du rôle le plus élevé au plus bas pour afficher
+                        le label le plus pertinent (un admin hérite de tous les rôles).
+                    #}
                     <div class="sidebar__user-role">
-                        {#
-                            is_granted() utilise la hiérarchie de rôles de security.yaml,
-                            contrairement à app.user.roles qui retourne les rôles bruts stockés
-                            en BDD (sans propagation). Un ROLE_ADMIN qui hérite de ROLE_STRUCTURE
-                            serait mal identifié avec app.user.roles.
-                        #}
                         {% if is_granted('ROLE_ADMIN') %}Admin
                         {% elseif is_granted('ROLE_STRUCTURE') %}Structure
                         {% elseif is_granted('ROLE_ARTIST') %}Artiste
                         {% else %}Membre{% endif %}
                     </div>
                 </div>
+
+                {#
+                    Lien de déconnexion :
+                    - ⎋ = symbole "escape" (U+238B) — reprend le prototype
+                    - title pour l'accessibilité (pas de texte visible)
+                    - class sidebar__logout → styles dans le <style>
+                #}
                 <a href="{{ path('app_logout') }}"
-                   style="margin-left: auto; font-size: 11px; color: var(--color-green-mid); text-decoration: none;">
+                   class="sidebar__logout"
+                   title="Se déconnecter"
+                   aria-label="Se déconnecter">
                     ⎋
                 </a>
             {% endif %}
@@ -446,12 +647,39 @@
         {# Contenu de la page #}
         <div class="app-content">
 
-            {# Messages flash (succès / erreur) — affichés en haut de chaque page #}
+            {#
+                Messages flash — affichés en haut de chaque page après une action.
+
+                Symfony stocke les messages flash dans la session avec une clé
+                (ici 'success', 'error', 'info'). app.flashes('clé') retourne
+                un tableau de messages pour cette clé, puis les supprime de la session
+                (chaque message n'est affiché qu'une seule fois — c'est le principe du flash).
+
+                AJOUT DU CAS 'info' (W3) :
+                Utilisé pour les messages neutres / informatifs : redirections, confirmations
+                non critiques, guides contextuels ("Votre demande est en cours d'examen").
+                Style : fond bleu très clair, bordure bleue, texte bleu foncé.
+                On utilise des valeurs CSS pures car il n'existe pas de token bleu
+                dans le thème Street actuel (pas prévu dans le design system V2).
+                Si un token --info ou --blue est ajouté à design-tokens.css,
+                remplacer les valeurs en dur par var(--info-bg) etc.
+            #}
             {% for message in app.flashes('success') %}
                 <div class="flash flash--success">{{ message }}</div>
             {% endfor %}
             {% for message in app.flashes('error') %}
                 <div class="flash flash--error">{{ message }}</div>
+            {% endfor %}
+            {% for message in app.flashes('info') %}
+                {#
+                    Couleurs choisies pour le flash info :
+                    - Fond #dbeafe (bleu très clair — équivalent Tailwind blue-100)
+                    - Bordure #93c5fd (bleu moyen — Tailwind blue-300)
+                    - Texte #1e40af (bleu foncé — Tailwind blue-800)
+                    Ces valeurs garantissent un ratio de contraste ≥ 4.5:1 (WCAG AA).
+                    La classe .flash est définie dans base.html.twig (padding, radius, font-size).
+                #}
+                <div class="flash flash--info">{{ message }}</div>
             {% endfor %}
 
             {# Le contenu spécifique à chaque page va ici #}

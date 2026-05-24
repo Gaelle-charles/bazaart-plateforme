@@ -3,278 +3,677 @@
 {#
  # structure/register.html.twig — Formulaire de candidature Structure partenaire
  #
- # Variables disponibles :
- #   - orgProfile : OrganizationProfile|null — profil existant pour pré-remplissage
+ # Thème : Street (application connectée)
  #
- # Ce formulaire crée/met à jour l'OrganizationProfile de l'utilisateur ET
- # renseigne structureApplicationAt = now() via StructureService::applyAsStructure().
+ # Variables disponibles :
+ #   - orgProfile        : OrganizationProfile|null — profil de l'organisation de l'utilisateur
+ #   - alreadyApplied    : bool — true si une candidature a déjà été soumise
+ #   - applicationStatus : string|null — 'approved', 'pending', ou null si jamais candidaté
+ #
+ # Note : ce template n'utilise PAS de FormView Symfony (pas de form_start/form_row).
+ # Le formulaire est en HTML pur ; le token CSRF est géré manuellement via csrf_token().
+ # Le contrôleur traite la requête POST via $request->request->all() dans StructureService.
  #}
 
-{% block title %}Devenir Structure partenaire — BazaArt{% endblock %}
+{% block title %}Rejoindre le réseau Bazaart en tant que structure — BazaArt{% endblock %}
 {% block page_title %}Candidature Structure partenaire{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* Contrainte largeur pour les formulaires */
-    .form-container { max-width: 720px; }
+    /* =========================================================
+       REGISTER STRUCTURE — Thème Street
+       Règles : 0 radius partout, bordures 2px solid ink,
+       boutons uppercase bold, typo Archivo Black pour les titres.
+    ========================================================= */
 
-    /* Bloc explicatif en haut de page — contexte et attentes */
-    .info-banner {
-        background: var(--color-green-light);
-        border: 1px solid rgba(28, 58, 47, 0.2);
-        border-radius: var(--radius-md);
-        padding: 20px 24px;
-        margin-bottom: 28px;
-    }
-    .info-banner__title {
-        font-family: var(--font-heading);
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--color-green);
-        margin-bottom: 8px;
-    }
-    .info-banner__text {
-        font-size: 13px;
-        line-height: 1.7;
-        color: var(--color-green);
-        opacity: 0.85;
-    }
-    .info-banner__points {
-        margin: 10px 0 0 0;
-        padding-left: 18px;
-        font-size: 13px;
-        color: var(--color-green);
-        opacity: 0.85;
-    }
-    .info-banner__points li { margin-bottom: 4px; }
 
-    /* Bannière "candidature en cours" — avertissement si déjà soumis */
-    .status-banner {
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        padding: 16px 20px;
-        border-radius: var(--radius-md);
-        margin-bottom: 24px;
-        font-size: 13px;
+    /* ── Conteneur centré ────────────────────────────────────────────────────
+       On limite la largeur à 680px (centré) pour les formulaires :
+       ça améliore la lisibilité et les input ne s'étirent pas trop.
+    ────────────────────────────────────────────────────────────────────────── */
+    .reg-wrap {
+        max-width: 680px;
+        /* margin: 0 auto → centre le bloc dans la zone de contenu disponible */
+    }
+
+
+    /* ── Hero court ─────────────────────────────────────────────────────────
+       Bandeau sombre avec titre en Archivo Black + chapeau explicatif.
+       Même logique que le str-hero du dashboard, en version compacte.
+    ────────────────────────────────────────────────────────────────────────── */
+    .reg-hero {
+        background: var(--ink);
+        color: var(--bg);
+        padding: var(--space-xl) var(--space-xl) var(--space-lg);
+        margin-bottom: var(--space-xl);
+    }
+    /* Sur-titre eyebrow — point carré + texte mono uppercase */
+    .reg-hero__eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--eyebrow-gap);
+        font-family: var(--mono);
+        font-size: var(--eyebrow-font-size);
+        font-weight: var(--eyebrow-font-weight);
+        letter-spacing: var(--eyebrow-letter-spacing);
+        text-transform: uppercase;
+        color: rgba(242, 239, 230, 0.5);
+        margin-bottom: var(--space-sm);
+    }
+    .reg-hero__eyebrow::before {
+        content: '';
+        display: inline-block;
+        width: var(--eyebrow-dot-size);
+        height: var(--eyebrow-dot-size);
+        background: var(--accent);
+        flex-shrink: 0;
+    }
+    .reg-hero__title {
+        font-family: var(--display);
+        font-size: clamp(28px, 4vw, 48px);
+        line-height: 0.95;
+        letter-spacing: -.01em;
+        text-transform: uppercase;
+        color: var(--bg);
+        margin: 0 0 var(--space-md);
+    }
+    .reg-hero__lead {
+        font-family: var(--body);
+        font-size: 14px;
         line-height: 1.6;
+        color: rgba(242, 239, 230, 0.75); /* atténué pour ne pas concurrencer le titre */
+        margin: 0 0 var(--space-md);
     }
-    .status-banner--pending {
-        background: #fff3cd;
-        border: 1px solid #ffc107;
-        color: #856404;
+    /* Liste des avantages sous le chapeau */
+    .reg-hero__benefits {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
     }
-    .status-banner__icon { font-size: 20px; flex-shrink: 0; }
+    .reg-hero__benefit {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: .04em;
+        color: rgba(242, 239, 230, 0.7);
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+    }
+    /* Petite puce accent avant chaque avantage */
+    .reg-hero__benefit::before {
+        content: '';
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        background: var(--accent);
+        flex-shrink: 0;
+    }
 
-    /* Section de formulaire dans une carte */
-    .form-card {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 24px;
-        margin-bottom: 14px;
+
+    /* ── Écran de confirmation (alreadyApplied = true) ───────────────────────
+       Quand la demande a déjà été envoyée, on remplace le formulaire
+       par un bloc d'état avec icône, titre et texte explicatif.
+    ────────────────────────────────────────────────────────────────────────── */
+    .status-screen {
+        border: 2px solid var(--ink);
+        padding: var(--space-2xl) var(--space-xl);
+        background: white;
+        text-align: center;
     }
-    .form-card__title {
-        font-size: 13px;
+    /*
+       Carré d'icône — même convention que le carré d'initiales du dashboard.
+       La couleur varie selon le statut (accent = approuvée, accent-2 = en attente, danger = refusée).
+    */
+    .status-screen__icon {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto var(--space-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--mono);
+        font-size: 24px;
         font-weight: 700;
-        color: var(--color-text);
-        margin-bottom: 16px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid var(--color-border);
+    }
+    /* Variantes de couleur du carré d'icône */
+    .status-screen__icon--pending  { background: var(--accent-2); color: white; }
+    .status-screen__icon--approved { background: var(--accent);   color: var(--ink); }
+    .status-screen__icon--rejected { background: var(--danger);   color: white; }
+    .status-screen__icon--default  { background: var(--bg-alt);   color: var(--ink-mute); }
+
+    .status-screen__title {
+        font-family: var(--display);
+        font-size: 28px;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin: 0 0 var(--space-sm);
+    }
+    .status-screen__text {
+        font-family: var(--body);
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--ink-mute);
+        margin: 0 auto var(--space-xl);
+        max-width: 420px;
+    }
+    /* Date de soumission — mono discret */
+    .status-screen__date {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
+        text-transform: uppercase;
+        margin-bottom: var(--space-xl);
+        opacity: 0.7;
+    }
+    /* Actions (boutons de retour) */
+    .status-screen__actions {
+        display: flex;
+        gap: var(--space-md);
+        justify-content: center;
+        flex-wrap: wrap;
     }
 
-    /* Message flash personnalisé info (bleu) */
-    .flash--info {
-        background: #d1ecf1;
-        color: #0c5460;
-        border: 1px solid #bee5eb;
-        padding: 12px 16px;
-        border-radius: var(--radius-sm);
-        margin-bottom: 16px;
-        font-size: 13px;
-        font-weight: 500;
+
+    /* ── Blocs de sections du formulaire ─────────────────────────────────────
+       Chaque section (infos, légal, présentation) est dans un bloc distinct.
+       Pas d'ombre ni d'arrondi — juste une bordure et un fond blanc.
+    ────────────────────────────────────────────────────────────────────────── */
+    .form-section {
+        border: 2px solid var(--ink);
+        background: white;
+        margin-bottom: var(--space-md);
+    }
+    /* En-tête de chaque section : fond bg-alt, titre mono uppercase */
+    .form-section__head {
+        background: var(--bg-alt);
+        border-bottom: 1px solid var(--ink);
+        padding: var(--space-sm) var(--space-md);
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+    }
+    /* Numéro de section — mono gras, couleur muted */
+    .form-section__num {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--ink-mute);
+        letter-spacing: .08em;
+    }
+    .form-section__title {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink);
+    }
+    .form-section__body {
+        padding: var(--space-lg);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-md);
+    }
+
+
+    /* ── Champs de formulaire (styles globaux) ───────────────────────────────
+       On réutilise les tokens --input-* de design-tokens.css.
+       Le focus utilise la bordure accent pour guider l'attention.
+
+       Le formulaire est en HTML pur (pas de FormType Symfony) car le contrôleur
+       traite la requête POST manuellement. On stylise label, input, select et
+       textarea directement — pas de classes générées par Symfony à cibler.
+    ────────────────────────────────────────────────────────────────────────── */
+    .reg-wrap label {
+        display: block;
+        font-family: var(--mono);
+        font-size: var(--label-font-size);
+        font-weight: var(--label-font-weight);
+        letter-spacing: var(--label-letter-spacing);
+        text-transform: uppercase;
+        color: var(--label-color);
+        margin-bottom: var(--space-xs);
+    }
+    .reg-wrap input[type="text"],
+    .reg-wrap input[type="email"],
+    .reg-wrap input[type="url"],
+    .reg-wrap input[type="tel"],
+    .reg-wrap select,
+    .reg-wrap textarea {
+        display: block;
+        width: 100%;
+        padding: var(--input-padding);
+        background: var(--input-bg);
+        border: var(--input-border);
+        border-radius: var(--input-radius); /* = 0 dans Street */
+        font-family: var(--body);
+        font-size: var(--input-font-size);
+        color: var(--ink);
+        box-sizing: border-box;
+        transition: border var(--transition-fast);
+        /* resize: vertical sur textarea uniquement — défini plus bas */
+    }
+    .reg-wrap input:focus,
+    .reg-wrap select:focus,
+    .reg-wrap textarea:focus {
+        outline: none;
+        border: var(--input-border-focus); /* bordure accent au focus */
+    }
+    .reg-wrap textarea {
+        resize: vertical;
+        min-height: 120px;
+    }
+    /* Texte d'aide sous un champ — mono discret */
+    .reg-wrap small {
+        display: block;
+        margin-top: var(--space-xs);
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+    /* Erreurs de validation — le contrôleur utilise addFlash('error', ...) pour
+       les messages globaux. Ces classes .is-invalid / .invalid-feedback sont
+       disponibles si on veut ajouter une mise en évidence par champ plus tard. */
+    .reg-wrap .is-invalid {
+        border-color: var(--danger) !important;
+    }
+    .reg-wrap .invalid-feedback {
+        color: var(--danger);
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .04em;
+        margin-top: var(--space-xs);
+    }
+
+
+    /* ── Boutons d'action du formulaire ──────────────────────────────────────
+       Réutilise les mêmes règles que dans dashboard.html.twig.
+    ────────────────────────────────────────────────────────────────────────── */
+    .btn-street {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-sm);
+        padding: var(--btn-padding);
+        background: var(--btn-primary-bg);
+        color: var(--btn-primary-color);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .btn-street:hover {
+        background: var(--btn-primary-hover-bg);
+        color: var(--btn-primary-hover-color);
+        box-shadow: var(--shadow-offset-sm);
+    }
+    /* Bouton outline */
+    .btn-street--outline {
+        background: transparent;
+        color: var(--ink);
+        border: 2px solid var(--ink);
+    }
+    .btn-street--outline:hover {
+        background: var(--ink);
+        color: var(--accent);
+        box-shadow: var(--shadow-offset-sm);
+    }
+    /* Bouton désactivé (candidature déjà en cours) */
+    .btn-street:disabled {
+        background: var(--bg-alt);
+        color: var(--ink-mute);
+        cursor: not-allowed;
+        box-shadow: none;
+    }
+    .btn-street:disabled:hover {
+        background: var(--bg-alt);
+        color: var(--ink-mute);
+    }
+
+    /* Pied de formulaire : actions + retour */
+    .form-actions {
+        display: flex;
+        gap: var(--space-md);
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: var(--space-sm);
+    }
+
+    @media (max-width: 640px) {
+        .form-actions { flex-direction: column; }
+        .form-actions .btn-street { width: 100%; justify-content: center; }
+        .status-screen__actions { flex-direction: column; }
+        .status-screen__actions .btn-street { width: 100%; justify-content: center; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="form-container">
+<div class="reg-wrap">
 
-    {# ── Messages flash info (candidature déjà soumise) ─────────────────────── #}
-    {% for message in app.flashes('info') %}
-        <div class="flash flash--info">{{ message }}</div>
-    {% endfor %}
+{# ══════════════════════════════════════════════════════════════════════════════
+   CAS 1 : CANDIDATURE DÉJÀ SOUMISE
+   On remplace le formulaire par un écran de statut adapté selon applicationStatus.
+══════════════════════════════════════════════════════════════════════════════ #}
+{% if alreadyApplied %}
 
-    {# ── Bannière d'information — contexte et bénéfices ─────────────────────── #}
-    {#
-      Cette bannière est affichée à TOUS les visiteurs de la page,
-      même ceux qui ont déjà une candidature en cours — pour rappel du processus.
-    #}
-    <div class="info-banner">
-        <div class="info-banner__title">Rejoindre le réseau Structure partenaire de BazaArt</div>
-        <p class="info-banner__text">
-            En vous inscrivant comme structure partenaire, vous bénéficiez d'avantages exclusifs :
-        </p>
-        <ul class="info-banner__points">
-            <li><strong>Publication directe</strong> de vos opportunités sans validation manuelle</li>
-            <li><strong>Visibilité accrue</strong> dans l'annuaire des structures partenaires</li>
-            <li><strong>Accès prioritaire</strong> aux outils de mise en relation avec les artistes</li>
-        </ul>
-        <p class="info-banner__text" style="margin-top: 10px;">
-            Votre demande sera examinée par l'équipe BazaArt sous <strong>48h ouvrées</strong>.
-        </p>
+    {# Hero compact : conservé même sur l'écran de statut pour la cohérence visuelle #}
+    <div class="reg-hero">
+        <span class="reg-hero__eyebrow">Candidature structure</span>
+        <h1 class="reg-hero__title">Rejoindre le réseau Bazaart</h1>
     </div>
 
-    {# ── Bannière si candidature déjà en cours ───────────────────────────────── #}
     {#
-      On affiche une bannière distincte si l'utilisateur a déjà une candidature
-      en attente. Le formulaire reste visible pour montrer les données soumises,
-      mais le bouton de soumission est désactivé.
+       Écran de statut — le contenu et la couleur changent selon applicationStatus.
+       Valeurs possibles transmises par le controller :
+         'pending'  → en cours d'examen
+         'approved' → acceptée (structure activée)
+         'rejected' → refusée
+         null       → statut inconnu (fallback)
     #}
-    {% if orgProfile is not null and orgProfile.hasPendingStructureApplication() %}
-        <div class="status-banner status-banner--pending">
-            <span class="status-banner__icon">⏳</span>
-            <div>
-                <strong>Votre candidature est en cours d'examen.</strong><br>
-                L'équipe BazaArt traitera votre dossier dans les 48h ouvrées.
+    <div class="status-screen" role="status" aria-live="polite">
+
+        {# Icône-carré colorée selon le statut #}
+        {% if applicationStatus == 'approved' %}
+            <div class="status-screen__icon status-screen__icon--approved" aria-hidden="true">✓</div>
+        {% elseif applicationStatus == 'rejected' %}
+            <div class="status-screen__icon status-screen__icon--rejected" aria-hidden="true">✗</div>
+        {% elseif applicationStatus == 'pending' %}
+            <div class="status-screen__icon status-screen__icon--pending" aria-hidden="true">⏳</div>
+        {% else %}
+            <div class="status-screen__icon status-screen__icon--default" aria-hidden="true">?</div>
+        {% endif %}
+
+        {# Titre principal #}
+        {% if applicationStatus == 'approved' %}
+            <h2 class="status-screen__title">Demande approuvée</h2>
+        {% elseif applicationStatus == 'rejected' %}
+            <h2 class="status-screen__title">Demande refusée</h2>
+        {% else %}
+            <h2 class="status-screen__title">Demande envoyée</h2>
+        {% endif %}
+
+        {# Texte explicatif selon le statut #}
+        {% if applicationStatus == 'approved' %}
+            <p class="status-screen__text">
+                Votre structure a été validée par l'équipe BazaArt.
+                Vous avez maintenant accès à votre espace structure et pouvez
+                publier des opportunités directement.
+            </p>
+        {% elseif applicationStatus == 'rejected' %}
+            <p class="status-screen__text">
+                Votre demande n'a pas été retenue pour le moment.
+                Contactez l'équipe BazaArt à <strong>contact@bazaart.fr</strong>
+                si vous souhaitez plus d'informations sur les critères de sélection.
+            </p>
+        {% else %}
+            {# Statut 'pending' ou inconnu — message générique d'attente #}
+            <p class="status-screen__text">
+                Votre candidature est en cours d'examen par l'équipe BazaArt.
                 Vous recevrez un email de confirmation dès qu'une décision sera prise.
-                <br>
-                <small style="opacity: 0.8;">Date de soumission : {{ orgProfile.structureApplicationAt|date('d/m/Y à H:i') }}</small>
-            </div>
+                Délai habituel : <strong>48h ouvrées</strong>.
+            </p>
+        {% endif %}
+
+        {# Date de soumission si disponible (orgProfile non null) #}
+        {% if orgProfile is not null and orgProfile.structureApplicationAt is defined %}
+            <p class="status-screen__date">
+                Soumis le {{ orgProfile.structureApplicationAt|date('d/m/Y à H:i') }}
+            </p>
+        {% endif %}
+
+        {# Boutons de navigation contextuelle #}
+        <div class="status-screen__actions">
+            {% if applicationStatus == 'approved' %}
+                {# Approuvée → accès direct au dashboard structure #}
+                <a href="{{ path('app_structure_dashboard') }}" class="btn-street">
+                    Accéder à mon espace structure →
+                </a>
+            {% else %}
+                {# Toute autre situation → retour au tableau de bord général #}
+                <a href="{{ path('app_dashboard') }}" class="btn-street">
+                    Retour au tableau de bord
+                </a>
+                <a href="{{ path('app_org_profile_show') }}" class="btn-street btn-street--outline">
+                    Voir mon profil organisation
+                </a>
+            {% endif %}
         </div>
-    {% endif %}
 
-    {# ── Formulaire de candidature ────────────────────────────────────────────── #}
+    </div>
+
+{% else %}
+
+{# ══════════════════════════════════════════════════════════════════════════════
+   CAS 2 : FORMULAIRE DE CANDIDATURE (pas encore soumis)
+══════════════════════════════════════════════════════════════════════════════ #}
+
+    {# ── Hero : titre + chapeau explicatif ────────────────────────────────── #}
+    <div class="reg-hero">
+        <span class="reg-hero__eyebrow">Espace Structure</span>
+        <h1 class="reg-hero__title">
+            Rejoindre le réseau<br>Bazaart en tant que structure
+        </h1>
+        <p class="reg-hero__lead">
+            Accédez à des outils dédiés pour diffuser vos opportunités auprès
+            d'artistes de la diaspora afro-atlantique. Votre dossier sera examiné
+            sous 48h ouvrées.
+        </p>
+        {# Liste des avantages du compte structure #}
+        <ul class="reg-hero__benefits" aria-label="Avantages du compte structure">
+            <li class="reg-hero__benefit">
+                Publication directe de vos opportunités sans validation manuelle
+            </li>
+            <li class="reg-hero__benefit">
+                Visibilité accrue dans l'annuaire des structures partenaires
+            </li>
+            <li class="reg-hero__benefit">
+                Dashboard dédié avec statistiques de vos publications
+            </li>
+        </ul>
+    </div>
+
     {#
-      Le formulaire est soumis en POST vers cette même URL (register).
-      Le token CSRF est vérifié côté controller avant tout traitement.
-      Si la candidature est en cours, le bouton est désactivé pour éviter la double soumission.
+       NOTE C3 — Les flashes 'info' (et tous les autres : 'success', 'error') sont
+       déjà rendus globalement dans base_app.html.twig.
+       On ne recrée PAS de boucle ici : cela viderait le tableau de session
+       avant que le layout puisse l'afficher, causant un double-affichage ou
+       une disparition silencieuse du message.
     #}
-    <form method="POST" action="{{ path('app_structure_register') }}">
 
-        {# Token CSRF — protège contre les attaques Cross-Site Request Forgery #}
+    {# ── Formulaire HTML manuel ───────────────────────────────────────────── #}
+    {#
+       POURQUOI un formulaire HTML pur ici (et non form_start/form_row Symfony) ?
+
+       Le contrôleur StructureController::register() traite la requête POST
+       manuellement via $request->request->all(). Il n'instancie aucun FormType
+       Symfony : utiliser form_start(form) provoquerait une erreur Twig car la
+       variable 'form' n'existe pas dans le contexte (le contrôleur ne la passe pas).
+
+       Le token CSRF est validé manuellement par isCsrfTokenValid('structure_register', ...).
+       On doit donc :
+         1. Nommer le champ '_token' (convention Symfony)
+         2. Passer l'identifiant 'structure_register' à la fonction csrf_token()
+       Ces deux valeurs doivent correspondre exactement à ce que le contrôleur attend.
+
+       Chaque champ est nommé selon la clé lue dans $data par StructureService::applyAsStructure() :
+         name, contactEmail, siret, description, websiteUrl, location
+
+       Pré-remplissage : on utilise app.request.request.get() pour conserver les
+       valeurs saisies après une soumission invalide (évite de retaper tout le formulaire).
+       Si le profil org existe déjà (orgProfile non null), on pré-remplit aussi depuis
+       l'entité — priorité à la valeur POST (redirection POST > données BDD).
+    #}
+    <form method="post"
+          action="{{ path('app_structure_register') }}"
+          novalidate
+          class="reg-form">
+
+        {# Token CSRF — champ caché obligatoire, vérifié côté serveur avant tout traitement #}
         <input type="hidden" name="_token" value="{{ csrf_token('structure_register') }}">
 
-        {# ── Section 1 : Informations de la structure (obligatoires) ─────────── #}
-        <div class="form-card">
-            <div class="form-card__title">Informations de la structure *</div>
-
-            <div class="form-group">
-                <label for="name">Nom de la structure *</label>
-                <input type="text"
-                       id="name"
-                       name="name"
-                       required
-                       maxlength="200"
-                       placeholder="Ex: Association Les Arts Vivants, Galerie Moderna..."
-                       value="{{ orgProfile is not null ? orgProfile.name : '' }}">
-                {# Aide : le nom doit être le nom officiel pour faciliter l'identification admin #}
-                <small style="color:var(--color-text-light); margin-top:4px; display:block;">
-                    Utilisez le nom officiel tel qu'il apparaît dans vos statuts.
-                </small>
+        {# ── Section 1 — Informations de la structure (champs obligatoires) ─ #}
+        <div class="form-section">
+            <div class="form-section__head">
+                <span class="form-section__num">01</span>
+                <span class="form-section__title">Informations de la structure *</span>
             </div>
+            <div class="form-section__body">
 
-            <div class="form-group" style="margin-bottom:0;">
-                <label for="contactEmail">Email de contact public *</label>
-                <input type="email"
-                       id="contactEmail"
-                       name="contactEmail"
-                       required
-                       maxlength="180"
-                       placeholder="contact@mastructure.fr"
-                       value="{{ orgProfile is not null ? orgProfile.contactEmail : '' }}">
                 {#
-                  Différent de l'email de connexion : c'est l'email visible publiquement
-                  sur les fiches opportunités soumises par la structure.
+                   Champ "name" — obligatoire (StructureService rejette si vide).
+                   Pré-remplissage : valeur POST d'abord, puis profil BDD si disponible.
+                   app.request.request.get('name', '') retourne '' si la clé est absente.
                 #}
-                <small style="color:var(--color-text-light); margin-top:4px; display:block;">
-                    Cet email sera visible publiquement sur vos publications. Différent de votre email de connexion.
-                </small>
+                <div>
+                    <label for="field_name">Nom de la structure *</label>
+                    <input type="text"
+                           id="field_name"
+                           name="name"
+                           maxlength="200"
+                           placeholder="Ex : Association Les Arts Vivants, Galerie Moderna..."
+                           value="{{ app.request.request.get('name', orgProfile ? orgProfile.name : '') }}"
+                           required>
+                    <small>Utilisez le nom officiel tel qu'il apparaît dans vos statuts.</small>
+                </div>
+
+                {#
+                   Champ "contactEmail" — obligatoire, format email vérifié par le service.
+                   C'est l'email public de la structure, différent de l'email de compte.
+                #}
+                <div>
+                    <label for="field_contact_email">Email de contact public *</label>
+                    <input type="email"
+                           id="field_contact_email"
+                           name="contactEmail"
+                           maxlength="180"
+                           placeholder="contact@mastructure.fr"
+                           value="{{ app.request.request.get('contactEmail', orgProfile ? orgProfile.contactEmail : '') }}"
+                           required>
+                    <small>Cet email sera visible publiquement sur vos publications. Différent de votre email de connexion.</small>
+                </div>
+
             </div>
         </div>
 
-        {# ── Section 2 : Informations légales (optionnelles) ─────────────────── #}
-        <div class="form-card">
-            <div class="form-card__title">Informations légales</div>
+        {# ── Section 2 — Informations légales (optionnelles) ──────────────── #}
+        <div class="form-section">
+            <div class="form-section__head">
+                <span class="form-section__num">02</span>
+                <span class="form-section__title">Informations légales</span>
+            </div>
+            <div class="form-section__body">
 
-            <div class="form-group" style="margin-bottom:0;">
-                <label for="siret">Numéro SIRET</label>
-                <input type="text"
-                       id="siret"
-                       name="siret"
-                       maxlength="17"
-                       placeholder="123 456 789 01234"
-                       value="{{ orgProfile is not null ? orgProfile.siret : '' }}">
-                {# Le SIRET est optionnel pour les structures étrangères #}
-                <small style="color:var(--color-text-light); margin-top:4px; display:block;">
-                    14 chiffres (format SIREN + NIC). Facultatif pour les structures étrangères.
-                </small>
+                {#
+                   Champ "siret" — optionnel, mais si renseigné le service valide
+                   qu'il contient bien 14 chiffres (espaces et tirets tolérés à la saisie).
+                   On utilise type="text" (pas type="number") : les SIRET peuvent commencer
+                   par 0 et number supprimerait le zéro initial.
+                #}
+                <div>
+                    <label for="field_siret">Numéro SIRET</label>
+                    <input type="text"
+                           id="field_siret"
+                           name="siret"
+                           maxlength="17"
+                           placeholder="123 456 789 01234"
+                           value="{{ app.request.request.get('siret', orgProfile ? orgProfile.siret : '') }}"
+                           inputmode="numeric"
+                           pattern="[\d\s\-]{9,17}">
+                    <small>14 chiffres (format SIREN + NIC). Facultatif pour les structures étrangères.</small>
+                </div>
+
             </div>
         </div>
 
-        {# ── Section 3 : Présentation (optionnelle) ───────────────────────────── #}
-        <div class="form-card">
-            <div class="form-card__title">Présentation de votre structure</div>
-
-            <div class="form-group">
-                <label for="description">Description</label>
-                <textarea id="description"
-                          name="description"
-                          rows="5"
-                          placeholder="Décrivez la mission de votre structure, vos activités, votre lien avec les arts de la diaspora afro-atlantique...">{{ orgProfile is not null ? orgProfile.description : '' }}</textarea>
-                <small style="color:var(--color-text-light); margin-top:4px; display:block;">
-                    Cette description sera visible dans l'annuaire des structures partenaires.
-                </small>
+        {# ── Section 3 — Présentation (optionnelle) ───────────────────────── #}
+        <div class="form-section">
+            <div class="form-section__head">
+                <span class="form-section__num">03</span>
+                <span class="form-section__title">Présentation</span>
             </div>
+            <div class="form-section__body">
 
-            <div class="form-group">
-                <label for="websiteUrl">Site web</label>
-                <input type="url"
-                       id="websiteUrl"
-                       name="websiteUrl"
-                       maxlength="255"
-                       placeholder="https://www.mastructure.fr"
-                       value="{{ orgProfile is not null ? orgProfile.websiteUrl : '' }}">
-            </div>
+                {#
+                   Champ "description" — optionnel, texte long.
+                   Le textarea n'a pas d'attribut value : son contenu se place
+                   entre les balises ouvrante et fermante.
+                   On utilise |e('html') pour échapper les caractères spéciaux (< > & etc.)
+                   qui seraient interprétés comme du HTML sinon.
+                #}
+                <div>
+                    <label for="field_description">Description</label>
+                    <textarea id="field_description"
+                              name="description"
+                              rows="5"
+                              placeholder="Décrivez la mission de votre structure, vos activités, votre lien avec les arts de la diaspora afro-atlantique...">{{ app.request.request.get('description', orgProfile ? orgProfile.description : '')|e('html') }}</textarea>
+                    <small>Cette description sera visible dans l'annuaire des structures partenaires.</small>
+                </div>
 
-            <div class="form-group" style="margin-bottom:0;">
-                <label for="location">Localisation</label>
-                <input type="text"
-                       id="location"
-                       name="location"
-                       maxlength="150"
-                       placeholder="Ex: Paris, Martinique, Bruxelles..."
-                       value="{{ orgProfile is not null ? orgProfile.location : '' }}">
+                {#
+                   Champ "websiteUrl" — optionnel, type url pour la validation navigateur.
+                   Le service stocke la valeur brute ; la validation d'URL est côté navigateur
+                   uniquement en V1 (le service ne valide pas le format d'URL).
+                #}
+                <div>
+                    <label for="field_website_url">Site web</label>
+                    <input type="url"
+                           id="field_website_url"
+                           name="websiteUrl"
+                           maxlength="255"
+                           placeholder="https://www.mastructure.fr"
+                           value="{{ app.request.request.get('websiteUrl', orgProfile ? orgProfile.websiteUrl : '') }}">
+                </div>
+
+                {#
+                   Champ "location" — optionnel, texte libre (ville, région, pays).
+                   Pas de liste déroulante en V1 pour éviter la complexité de maintenance.
+                #}
+                <div>
+                    <label for="field_location">Localisation</label>
+                    <input type="text"
+                           id="field_location"
+                           name="location"
+                           maxlength="150"
+                           placeholder="Ex : Paris, Martinique, Bruxelles..."
+                           value="{{ app.request.request.get('location', orgProfile ? orgProfile.location : '') }}">
+                </div>
+
             </div>
         </div>
 
-        {# ── Bouton de soumission ─────────────────────────────────────────────── #}
-        <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
+        {# ── Actions du formulaire ────────────────────────────────────────── #}
+        <div class="form-actions">
 
             {#
-              Le bouton est désactivé si une candidature est déjà en cours.
-              Pourquoi ? Pour éviter la double soumission qui ne ferait que
-              mettre à jour le profil sans changer la date de candidature
-              (le service ne la réinitialise pas si elle est déjà renseignée).
-              L'utilisateur doit attendre la décision admin.
+               Bouton submit — actif uniquement si on est dans le cas 2 (pas de candidature
+               en cours). Le cas 1 (alreadyApplied = true) affiche l'écran de statut
+               à la place du formulaire, donc ce bouton n'est jamais rendu si alreadyApplied.
             #}
-            {% if orgProfile is not null and orgProfile.hasPendingStructureApplication() %}
-                <button type="submit" class="btn btn-primary" disabled
-                        title="Votre candidature est déjà en cours d'examen">
-                    Candidature en attente d'examen
-                </button>
-            {% else %}
-                <button type="submit" class="btn btn-primary">
-                    Soumettre ma candidature
-                </button>
-            {% endif %}
+            <button type="submit" class="btn-street">
+                Envoyer ma demande →
+            </button>
 
-            <a href="{{ path('app_dashboard') }}" class="btn btn-outline">Retour au tableau de bord</a>
+            {# Lien retour vers le tableau de bord général #}
+            <a href="{{ path('app_dashboard') }}" class="btn-street btn-street--outline">
+                Retour au tableau de bord
+            </a>
+
         </div>
 
     </form>
+
+{% endif %}
 
 </div>
 {% endblock %}

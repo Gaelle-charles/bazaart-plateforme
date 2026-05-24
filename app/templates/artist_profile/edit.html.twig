@@ -1,128 +1,487 @@
 {% extends 'base_app.html.twig' %}
 
-{% block title %}Mon profil artiste — BazaArt{% endblock %}
-{% block page_title %}{{ profile ? 'Modifier mon profil' : 'Créer mon profil artiste' }}{% endblock %}
+{#
+ # artist_profile/edit.html.twig — Formulaire d'édition du profil artiste
+ #
+ # Thème : Street (--ink, --accent lime, Archivo Black, border-radius 0)
+ # Utilisé pour :
+ #   - La création initiale du profil (profile = null)
+ #   - La modification d'un profil existant (profile = ArtistProfile)
+ #
+ # Attention : ce formulaire est "natif" (pas de Symfony Form Component).
+ # Les champs sont du HTML brut — pas de form_start/form_widget.
+ # Le contrôleur lit les données via $request->request->all().
+ # CSRF : token _token présent, à valider dans ArtistProfileController::edit()
+ # via isCsrfTokenValid('artist_profile_edit', $token).
+ #
+ # Variables reçues du contrôleur :
+ #   - profile : ArtistProfile|null (null = création)
+ #}
+
+{% block title %}{{ profile ? 'Modifier mon profil' : 'Créer mon profil artiste' }} — BazaArt{% endblock %}
+{% block page_title %}{{ profile ? 'Modifier mon profil artiste' : 'Créer mon profil artiste' }}{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
+{#
+   Préfixe CSS : .ap- (artist-profile), commun avec show.html.twig
+   pour les composants partagés (section-label, card...).
+   Les classes spécifiques à ce formulaire sont préfixées .ap-edit-.
+#}
 <style>
-    /* Contrainte de largeur pour les formulaires */
-    .form-container { max-width: 680px; }
 
-    /* Section de formulaire dans une carte */
-    .form-card {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-        padding: 24px; margin-bottom: 16px;
-    }
+/* ============================================================
+   CONTENEUR PRINCIPAL
+   Formulaire centré, max 720px — confort de lecture optimal
+   pour les formulaires longs (recommandation UX).
+   ============================================================ */
 
-    .form-card__title {
-        font-size: 13px; font-weight: 700; color: var(--color-text);
-        margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border);
-    }
+.ap-edit-container {
+    max-width: 720px;
+    /* margin: 0 auto centrerait le container si la page avait un
+       padding symétrique — ici l'app-content gère l'alignement */
+}
 
-    /* Avatar actuel */
-    .current-avatar {
-        width: 80px; height: 80px; border-radius: 50%;
-        object-fit: cover; display: block; margin-bottom: 14px;
+/* Titre principal du formulaire */
+.ap-edit-title {
+    font-family: var(--display);     /* Archivo Black */
+    font-size: clamp(28px, 4vw, 42px);
+    text-transform: uppercase;
+    line-height: .95;
+    color: var(--ink);
+    margin-bottom: var(--space-xl);
+    letter-spacing: -.01em;
+}
+
+/* ============================================================
+   SECTIONS DE FORMULAIRE
+   Chaque groupe thématique dans une carte bordée 1px
+   ============================================================ */
+
+/* Carte de section — même esthétique que les ap-card de show.html.twig */
+.ap-edit-section {
+    border: 1px solid var(--ink);
+    background: var(--bg);
+    margin-bottom: var(--space-lg);
+    /* overflow hidden pour que le header ait un fond pleine largeur */
+    overflow: hidden;
+}
+
+/* En-tête de section : fond noir, texte crème, mono uppercase */
+.ap-edit-section__header {
+    background: var(--ink);
+    color: var(--accent);            /* lime sur noir = lisible et graphique */
+    padding: var(--space-sm) var(--space-lg);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+/* Corps de la section */
+.ap-edit-section__body {
+    padding: var(--space-lg);
+}
+
+/* ============================================================
+   COMPOSANTS DE FORMULAIRE
+   Labels + inputs dans le style Street :
+   bords francs, focus lime, labels mono uppercase
+   ============================================================ */
+
+/* Groupe label + champ */
+.ap-field {
+    margin-bottom: var(--space-lg);
+}
+.ap-field:last-child { margin-bottom: 0; }
+
+/* Label en mono uppercase — même style que les eyebrow labels */
+.ap-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: var(--label-font-size);          /* 11px */
+    font-weight: var(--label-font-weight);      /* 700 */
+    letter-spacing: var(--label-letter-spacing); /* .08em */
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: var(--space-xs);
+}
+
+/* Champ texte / url */
+.ap-input {
+    display: block;
+    width: 100%;
+    padding: var(--input-padding);             /* 10px 12px */
+    font-family: var(--body);
+    font-size: var(--input-font-size);         /* 13px */
+    color: var(--ink);
+    background: var(--input-bg);              /* var(--bg) = crème */
+    border: var(--input-border);              /* 1px solid var(--line) */
+    /* border-radius: 0 → bords francs */
+    outline: none;
+    transition: border var(--transition-fast);
+    box-sizing: border-box;
+}
+.ap-input:focus {
+    /* Bordure lime au focus — indicateur visuel clair (accessibilité WCAG AA) */
+    border: var(--input-border-focus);         /* 2px solid var(--accent) */
+}
+.ap-input::placeholder {
+    color: var(--ink-mute);
+    opacity: .6;
+}
+
+/* Textarea — même style que input, hauteur variable */
+.ap-textarea {
+    /* Héritage complet des styles .ap-input */
+    display: block;
+    width: 100%;
+    padding: var(--input-padding);
+    font-family: var(--body);
+    font-size: var(--input-font-size);
+    color: var(--ink);
+    background: var(--input-bg);
+    border: var(--input-border);
+    outline: none;
+    transition: border var(--transition-fast);
+    box-sizing: border-box;
+    /* resize vertical uniquement — évite de casser le layout en horizontal */
+    resize: vertical;
+    line-height: 1.65;
+    min-height: 120px;
+}
+.ap-textarea:focus {
+    border: var(--input-border-focus);
+}
+.ap-textarea::placeholder {
+    color: var(--ink-mute);
+    opacity: .6;
+}
+
+/* Champ file — style minimal cohérent avec le thème */
+.ap-input-file {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    cursor: pointer;
+}
+.ap-input-file::file-selector-button {
+    padding: 6px 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    background: var(--ink);
+    color: var(--accent);
+    border: none;
+    cursor: pointer;
+    margin-right: var(--space-sm);
+}
+.ap-input-file::file-selector-button:hover {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+/* Note d'aide sous un champ */
+.ap-field-hint {
+    margin-top: var(--space-xs);
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-mute);
+    letter-spacing: .04em;
+}
+
+/* ============================================================
+   BOUTONS D'ACTION
+   ============================================================ */
+
+/* Zone de validation en bas du formulaire */
+.ap-edit-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    margin-top: var(--space-xl);
+}
+
+/* Bouton principal — fond lime, texte noir, pleine largeur sur mobile */
+.ap-btn-save {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--btn-padding);
+    font-family: var(--body);
+    font-size: var(--btn-font-size);
+    font-weight: var(--btn-font-weight);
+    letter-spacing: var(--btn-letter-spacing);
+    text-transform: uppercase;
+    background: var(--accent);      /* lime */
+    color: var(--ink);
+    border: 1px solid var(--ink);
+    cursor: pointer;
+    transition: box-shadow var(--transition-fast), background var(--transition-fast);
+    /* flex-grow pour occuper l'espace sur mobile */
+}
+.ap-btn-save:hover {
+    box-shadow: var(--shadow-offset-sm);   /* décalage "affiche" au hover */
+}
+
+/* Lien "Annuler" — discret, juste du texte */
+.ap-btn-cancel {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--ink-mute);
+    border-bottom: 1px solid var(--line-soft);
+    padding-bottom: 1px;
+    transition: color var(--transition-fast);
+}
+.ap-btn-cancel:hover { color: var(--ink); }
+
+/* ============================================================
+   APERÇU AVATAR ACTUEL
+   ============================================================ */
+.ap-avatar-preview {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    display: block;
+    margin-bottom: var(--space-md);
+    border: 1px solid var(--ink);
+}
+
+/* Carré initiales (fallback quand pas d'avatar) */
+.ap-avatar-initials {
+    width: 56px;
+    height: 56px;
+    background: var(--accent);
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: var(--space-md);
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 640px) {
+    .ap-btn-save {
+        width: 100%;
     }
+    .ap-edit-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="form-container">
+<div class="ap-edit-container">
 
-    {# enctype="multipart/form-data" est OBLIGATOIRE pour l'upload de fichiers #}
-    <form method="post" enctype="multipart/form-data">
+    {# Titre principal H2 (le H1 est dans la topbar via page_title) #}
+    <h2 class="ap-edit-title">
+        {{ profile ? 'Mon profil' : 'Créer mon profil' }}
+    </h2>
 
-        {# ── Section 1 : Informations générales ── #}
-        <div class="form-card">
-            <div class="form-card__title">Informations générales</div>
+    {#
+       IMPORTANT : enctype="multipart/form-data" est OBLIGATOIRE pour l'upload
+       d'un fichier (avatar). Sans cet attribut, le fichier ne serait pas
+       envoyé au serveur — le champ $_FILES resterait vide.
+    #}
+    {#
+       action= est requis pour que le formulaire cible la bonne route.
+       Sans action=, le navigateur poste sur l'URL courante, ce qui
+       peut poser problème si la route change ou si le formulaire
+       est inclus depuis un autre chemin.
+    #}
+    <form method="post"
+          action="{{ path('app_artist_profile_edit') }}"
+          enctype="multipart/form-data"
+          novalidate>
 
-            <div class="form-group">
-                <label for="displayName">Nom d'affichage public *</label>
-                <input type="text" id="displayName" name="displayName" required
-                       value="{{ profile ? profile.displayName : '' }}"
-                       placeholder="Ex: Marie Dupont, DJ Kévin...">
-            </div>
+        {# Token CSRF — validé par ArtistProfileController::edit()
+           avec isCsrfTokenValid('artist_profile_edit', ...).
+           Sans ce champ, le contrôleur doit rejeter la requête (403).
+           Convention Symfony : champ caché _token, valeur générée
+           par la fonction Twig csrf_token(). #}
+        <input type="hidden" name="_token" value="{{ csrf_token('artist_profile_edit') }}">
 
-            <div class="form-group">
-                <label for="bio">Biographie</label>
-                {# Utilisez textarea pour les textes longs multi-lignes #}
-                <textarea id="bio" name="bio" rows="5"
-                          placeholder="Parlez de votre parcours, votre pratique artistique...">{{ profile ? profile.bio : '' }}</textarea>
-            </div>
+        {# ── Section 1 : Identité ── #}
+        <div class="ap-edit-section">
+            <div class="ap-edit-section__header">01 — Identité</div>
+            <div class="ap-edit-section__body">
 
-            <div class="form-group" style="margin-bottom:0;">
-                <label for="location">Localisation</label>
-                <input type="text" id="location" name="location"
-                       value="{{ profile ? profile.location : '' }}"
-                       placeholder="Ex: Paris, France">
+                <div class="ap-field">
+                    {# for="..." doit correspondre à l'id du champ — accessibilité clavier #}
+                    <label class="ap-label" for="displayName">
+                        Nom d'affichage public <span aria-hidden="true">*</span>
+                    </label>
+                    <input
+                        class="ap-input"
+                        type="text"
+                        id="displayName"
+                        name="displayName"
+                        required
+                        aria-required="true"
+                        value="{{ profile ? profile.displayName : '' }}"
+                        placeholder="Ex : Maïa Koma, DJ Félix...">
+                </div>
+
+                <div class="ap-field">
+                    <label class="ap-label" for="bio">Biographie</label>
+                    {#
+                       Le contenu de la textarea doit être entre les balises
+                       (pas dans value=) et correctement échappé par Twig (|e).
+                       profile.bio peut contenir des retours à la ligne
+                       ou des caractères spéciaux — Twig les échappe automatiquement.
+                    #}
+                    <textarea
+                        class="ap-textarea"
+                        id="bio"
+                        name="bio"
+                        rows="6"
+                        placeholder="Parlez de votre parcours, votre pratique artistique, vos influences...">{{ profile ? profile.bio : '' }}</textarea>
+                    <p class="ap-field-hint">Jusqu'à 1 000 caractères. Les sauts de ligne sont conservés.</p>
+                </div>
+
+                <div class="ap-field">
+                    <label class="ap-label" for="location">Ville</label>
+                    <input
+                        class="ap-input"
+                        type="text"
+                        id="location"
+                        name="location"
+                        value="{{ profile ? profile.location : '' }}"
+                        placeholder="Ex : Paris, Martinique, Dakar...">
+                </div>
+
             </div>
         </div>
 
         {# ── Section 2 : Liens & portfolio ── #}
-        <div class="form-card">
-            <div class="form-card__title">Liens & portfolio</div>
+        <div class="ap-edit-section">
+            <div class="ap-edit-section__header">02 — Liens & portfolio</div>
+            <div class="ap-edit-section__body">
 
-            <div class="form-group">
-                <label for="websiteUrl">Site web</label>
-                <input type="url" id="websiteUrl" name="websiteUrl"
-                       value="{{ profile ? profile.websiteUrl : '' }}"
-                       placeholder="https://monsite.com">
-            </div>
+                <div class="ap-field">
+                    <label class="ap-label" for="websiteUrl">Site web</label>
+                    <input
+                        class="ap-input"
+                        type="url"
+                        id="websiteUrl"
+                        name="websiteUrl"
+                        value="{{ profile ? profile.websiteUrl : '' }}"
+                        placeholder="https://monsite.com">
+                </div>
 
-            <div class="form-group" style="margin-bottom:0;">
-                <label for="portfolioUrl">Portfolio</label>
-                <input type="url" id="portfolioUrl" name="portfolioUrl"
-                       value="{{ profile ? profile.portfolioUrl : '' }}"
-                       placeholder="https://behance.net/...">
+                <div class="ap-field">
+                    <label class="ap-label" for="portfolioUrl">Portfolio</label>
+                    <input
+                        class="ap-input"
+                        type="url"
+                        id="portfolioUrl"
+                        name="portfolioUrl"
+                        value="{{ profile ? profile.portfolioUrl : '' }}"
+                        placeholder="https://behance.net/... ou https://www.artstation.com/...">
+                </div>
+
             </div>
         </div>
 
         {# ── Section 3 : Réseaux sociaux ── #}
-        <div class="form-card">
-            <div class="form-card__title">Réseaux sociaux</div>
+        <div class="ap-edit-section">
+            <div class="ap-edit-section__header">03 — Réseaux sociaux</div>
+            <div class="ap-edit-section__body">
 
-            {# Boucle sur les réseaux pour éviter la répétition #}
-            {% for network in ['instagram', 'linkedin', 'twitter', 'facebook', 'youtube'] %}
-                <div class="form-group {{ loop.last ? 'mb-0' : '' }}" style="{{ loop.last ? 'margin-bottom:0' : '' }}">
-                    <label for="social_{{ network }}">{{ network|capitalize }}</label>
-                    <input type="url" id="social_{{ network }}" name="social_{{ network }}"
-                           value="{{ profile and profile.socialLinks ? (profile.socialLinks[network] ?? '') : '' }}"
-                           placeholder="https://{{ network }}.com/...">
-                </div>
-            {% endfor %}
+                {#
+                   On boucle sur les réseaux connus pour éviter de répéter
+                   le même bloc HTML 5 fois. loop.last permet de supprimer
+                   la marge basse sur le dernier champ.
+                #}
+                {% for network in ['instagram', 'linkedin', 'twitter', 'facebook', 'youtube'] %}
+                    <div class="ap-field {{ loop.last ? '' : '' }}">
+                        <label class="ap-label" for="social_{{ network }}">
+                            {{ network|capitalize }}
+                        </label>
+                        <input
+                            class="ap-input"
+                            type="url"
+                            id="social_{{ network }}"
+                            name="social_{{ network }}"
+                            value="{{ profile and profile.socialLinks ? (profile.socialLinks[network] ?? '') : '' }}"
+                            placeholder="https://{{ network }}.com/...">
+                    </div>
+                {% endfor %}
+
+            </div>
         </div>
 
         {# ── Section 4 : Avatar ── #}
-        <div class="form-card">
-            <div class="form-card__title">Avatar</div>
+        <div class="ap-edit-section">
+            <div class="ap-edit-section__header">04 — Avatar</div>
+            <div class="ap-edit-section__body">
 
-            {# Afficher l'avatar actuel si disponible #}
-            {% if profile and profile.avatarPath %}
-                <img src="{{ asset(profile.avatarPath) }}"
-                     alt="Avatar actuel"
-                     class="current-avatar">
-            {% endif %}
+                {# Afficher l'avatar actuel ou les initiales #}
+                {% if profile and profile.avatarPath %}
+                    {# avatar-path = chemin relatif depuis /public (ex: uploads/avatars/xxx.jpg) #}
+                    <img
+                        src="{{ asset(profile.avatarPath) }}"
+                        alt="Avatar actuel de {{ profile.displayName }}"
+                        class="ap-avatar-preview">
+                {% elseif profile %}
+                    {# Pas d'avatar — afficher les initiales en attendant #}
+                    <div class="ap-avatar-initials" aria-hidden="true">
+                        {{ profile.displayName|slice(0, 2)|upper }}
+                    </div>
+                {% endif %}
 
-            <div class="form-group" style="margin-bottom:0;">
-                <label for="avatar">
-                    Changer l'avatar
-                    <small style="font-weight:normal; color:var(--color-text-light);">(JPG, PNG — max 2Mo)</small>
-                </label>
-                <input type="file" id="avatar" name="avatar" accept="image/jpeg,image/png,image/webp">
+                <div class="ap-field">
+                    <label class="ap-label" for="avatar">
+                        {{ profile and profile.avatarPath ? 'Changer l\'avatar' : 'Choisir un avatar' }}
+                    </label>
+                    {#
+                       accept= liste les types MIME acceptés — double protection
+                       avec la validation côté serveur dans ArtistProfileService.
+                       (La validation navigateur n'est pas fiable seule.)
+                    #}
+                    <input
+                        class="ap-input-file"
+                        type="file"
+                        id="avatar"
+                        name="avatar"
+                        accept="image/jpeg,image/png,image/webp">
+                    <p class="ap-field-hint">JPG, PNG ou WebP — 2 Mo maximum</p>
+                </div>
+
             </div>
         </div>
 
         {# ── Boutons de validation ── #}
-        <div style="display:flex; gap:12px; align-items:center;">
-            <button type="submit" class="btn btn-primary">Enregistrer</button>
+        <div class="ap-edit-actions">
+            <button type="submit" class="ap-btn-save">
+                Enregistrer →
+            </button>
+            {# Bouton Annuler uniquement si un profil existe déjà #}
             {% if profile %}
-                <a href="{{ path('app_artist_profile_show') }}" class="btn btn-outline">Annuler</a>
+                <a href="{{ path('app_artist_profile_show') }}" class="ap-btn-cancel">
+                    Annuler
+                </a>
             {% endif %}
         </div>
 
     </form>
+
 </div>
 {% endblock %}

@@ -1,370 +1,550 @@
 {% extends 'base_admin.html.twig' %}
 
+{#
+ # admin/dashboard.html.twig — Tableau de bord admin (vue d'ensemble)
+ #
+ # Thème : Street (tokens CSS depuis design-tokens.css)
+ # Layout parent : base_admin.html.twig (sidebar ardoise fixe)
+ #
+ # Variables disponibles (injectées par AdminController::dashboard()) :
+ #   - pendingCount    : int   — nombre de ressources en attente de modération
+ #   - publishedCount  : int   — nombre de ressources publiées
+ #   - totalUsers      : int   — nombre total d'utilisateurs
+ #   - totalOrgs       : int   — nombre total d'organisations
+ #   - verifiedOrgs    : int   — nombre d'organisations vérifiées
+ #   - pendingResources : Resource[] — les 5 premières ressources en attente (max 5)
+ #}
+
 {% block title %}Administration — BazaArt{% endblock %}
-{% block page_title %}Vue d'ensemble{% endblock %}
+{% block page_title %}Cockpit admin{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
+{# ── Styles spécifiques au dashboard admin — préfixe .adm- pour éviter les conflits ── #}
 <style>
-    /* ── Intro ── */
-    .admin-intro {
-        margin-bottom: 28px;
+
+    /* ── Zone de contenu : fond sable Street ───────────────────────────────── */
+    .app-content {
+        background: var(--bg);         /* #F2EFE6 — sable chaud du thème Street */
+        font-family: var(--body);      /* Space Grotesk */
     }
-    .admin-intro__title {
-        font-family: var(--font-heading);
-        font-size: 24px;
-        font-weight: 700;
-        color: var(--color-text);
+
+    /* ── En-tête de page : bandeau ink sur fond sable ──────────────────────── */
+    .adm-page-header {
+        background: var(--ink);        /* quasi-noir — même style que la topbar du prototype */
+        color: var(--bg);
+        padding: 20px 0 18px;
+        margin: -28px -28px 28px;      /* compense le padding app-content pour aller bord à bord */
+        border-bottom: 1px solid var(--ink);
+    }
+    .adm-page-header__inner {
+        padding: 0 28px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .adm-page-header__eyebrow {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .12em;
+        color: var(--accent);          /* vert acide */
+        text-transform: uppercase;
         margin-bottom: 4px;
     }
-    .admin-intro__sub {
-        font-size: 13px;
-        color: var(--color-text-light);
+    .adm-page-header__title {
+        font-family: var(--display);   /* Archivo Black */
+        font-size: 28px;
+        line-height: .95;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--bg);
+    }
+    .adm-page-header__meta {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: rgba(242,239,230,.55);  /* sable transparent sur fond noir */
+        text-align: right;
+    }
+    .adm-page-header__meta strong {
+        color: var(--accent);
+        font-weight: 700;
     }
 
-    /* ── Grille de stats — 4 cartes ── */
-    .stats-grid {
+    /* ── Grille KPI — 4 cases bordures partagées (style tableur Street) ─────── */
+    .adm-kpi-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 16px;
-        margin-bottom: 28px;
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        margin-bottom: 24px;
     }
-
-    .stat-card {
-        background: #fff;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 20px;
+    /* Chaque case */
+    .adm-kpi-cell {
+        padding: 20px 22px;
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 5px;
+        /* Séparateur vertical entre les cellules (sauf la dernière) */
+        border-right: 1px solid var(--ink);
     }
-
-    /* Carte en alerte (ressources en attente) */
-    .stat-card--alert {
-        border-color: #f5c6cb;
-        background: #fff8f8;
+    .adm-kpi-cell:last-child {
+        border-right: none;
     }
-
-    .stat-card__icon {
-        font-size: 20px;
-        margin-bottom: 6px;
+    /* Cas alerte (ressources en attente > 0) */
+    .adm-kpi-cell--alert {
+        background: rgba(255,107,44,.08);  /* teinte orange tangerine discrète */
     }
-
-    .stat-card__label {
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--color-text-light);
+    .adm-kpi-label {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .1em;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
+        color: var(--ink-mute);
     }
-
-    .stat-card__value {
-        font-size: 32px;
-        font-weight: 800;
-        color: var(--color-text);
-        line-height: 1;
-        margin: 4px 0;
+    .adm-kpi-value {
+        font-family: var(--display);   /* Archivo Black — nombre imposant */
+        font-size: 52px;
+        line-height: .9;
+        color: var(--ink);
     }
-
-    .stat-card--alert .stat-card__value { color: #c0392b; }
-
-    .stat-card__link {
+    /* En alerte, le chiffre passe en orange tangerine */
+    .adm-kpi-cell--alert .adm-kpi-value {
+        color: var(--accent-2);        /* #FF6B2C */
+    }
+    .adm-kpi-link {
+        font-family: var(--mono);
         font-size: 11px;
-        color: #c8503a;
+        font-weight: 700;
+        color: var(--accent);          /* vert acide */
         text-decoration: none;
-        font-weight: 600;
+        letter-spacing: .04em;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        transition: opacity var(--transition-fast);
     }
-    .stat-card__link:hover { text-decoration: underline; }
-
-    .stat-card__note {
+    .adm-kpi-link:hover { opacity: .75; }
+    .adm-kpi-note {
+        font-family: var(--mono);
         font-size: 11px;
-        color: var(--color-text-light);
+        color: var(--ink-mute);
+        margin-top: 4px;
     }
 
-    /* ── Grille de raccourcis d'actions ── */
-    .actions-grid {
+    /* ── Grille deux colonnes : accès rapides + file d'attente ─────────────── */
+    .adm-two-col {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 16px;
-        margin-bottom: 28px;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-bottom: 24px;
     }
 
-    .action-card {
-        background: #fff;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        padding: 20px;
-        text-decoration: none;
+    /* ── Bloc générique : border Street ────────────────────────────────────── */
+    .adm-block {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+    }
+    .adm-block__header {
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--ink);
         display: flex;
         align-items: center;
-        gap: 14px;
-        transition: box-shadow 0.15s, transform 0.15s;
-        box-shadow: var(--shadow-card);
+        justify-content: space-between;
+        gap: 10px;
     }
-    .action-card:hover {
-        box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-        transform: translateY(-2px);
+    .adm-block__heading {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: var(--ink-mute);
     }
 
-    .action-card__icon {
-        font-size: 24px;
-        width: 44px;
-        height: 44px;
-        background: #f4f5f7;
-        border-radius: var(--radius-sm);
+    /* ── Liens rapides (grille 2×3) ─────────────────────────────────────────── */
+    .adm-shortcuts {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+    /* Chaque raccourci : case cliquable */
+    .adm-shortcut {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 18px;
+        text-decoration: none;
+        color: var(--ink);
+        border-right: 1px solid var(--line-soft);
+        border-bottom: 1px solid var(--line-soft);
+        transition: background var(--transition-fast);
+    }
+    /* On retire la bordure droite pour les cases de droite */
+    .adm-shortcut:nth-child(2n) { border-right: none; }
+    /* On retire la bordure basse pour les deux dernières cases */
+    .adm-shortcut:nth-last-child(-n+2) { border-bottom: none; }
+    .adm-shortcut:hover {
+        background: var(--bg-alt);
+    }
+    /* En alerte : fond légèrement orangé */
+    .adm-shortcut--alert { background: rgba(255,107,44,.06); }
+    .adm-shortcut--alert:hover { background: rgba(255,107,44,.12); }
+
+    .adm-shortcut__icon {
+        width: 36px;
+        height: 36px;
+        border: 1px solid var(--ink);
+        background: var(--bg-alt);
         display: flex;
         align-items: center;
         justify-content: center;
+        font-size: 16px;
         flex-shrink: 0;
     }
-
-    .action-card__title {
-        font-size: 14px;
+    .adm-shortcut__label {
+        font-size: 13px;
         font-weight: 700;
-        color: var(--color-text);
+        color: var(--ink);
         margin-bottom: 2px;
     }
-    .action-card__desc {
-        font-size: 11px;
-        color: var(--color-text-light);
+    /* En alerte, le libellé passe en orange */
+    .adm-shortcut--alert .adm-shortcut__label { color: var(--accent-2); }
+    .adm-shortcut__desc {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
     }
 
-    /* Action en alerte (modération) */
-    .action-card--alert .action-card__icon { background: #fff0ee; }
-    .action-card--alert .action-card__title { color: #c0392b; }
-
-    /* ── Widget ressources en attente ── */
-    .section-title {
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--color-text-light);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin-bottom: 12px;
-    }
-
-    .pending-widget {
-        background: #fff;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        overflow: hidden;
-    }
-
-    .pending-widget__header {
-        padding: 14px 20px;
-        border-bottom: 1px solid var(--color-border);
+    /* ── File d'attente : liste de ressources en attente ───────────────────── */
+    .adm-queue-row {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 18px;
+        border-top: 1px solid var(--line-soft);
     }
-
-    .pending-widget__title {
-        font-size: 13px;
-        font-weight: 700;
-        color: var(--color-text);
+    /* Pastille de statut */
+    .adm-queue-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent-2);   /* orange — "en attente" */
+        flex-shrink: 0;
     }
-
-    .pending-widget__link {
-        font-size: 11px;
-        color: #c8503a;
-        text-decoration: none;
-        font-weight: 600;
+    .adm-queue-info {
+        flex: 1;
+        min-width: 0;
     }
-    .pending-widget__link:hover { text-decoration: underline; }
-
-    .pending-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 12px 20px;
-        border-bottom: 1px solid var(--color-border);
-    }
-    .pending-row:last-child { border-bottom: none; }
-
-    .pending-row__info { flex: 1; min-width: 0; }
-    .pending-row__title {
+    .adm-queue-title {
         font-size: 13px;
         font-weight: 600;
-        color: var(--color-text);
-        margin-bottom: 3px;
+        color: var(--ink);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    .pending-row__meta { font-size: 11px; color: var(--color-text-light); }
-
-    .pending-row__actions { display: flex; gap: 6px; flex-shrink: 0; }
-
-    .btn-publish {
-        height: 28px; padding: 0 12px;
-        background: #d4edda; color: #155724;
-        border: 1px solid #c3e6cb; border-radius: var(--radius-sm);
-        font-size: 11px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+    .adm-queue-meta {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        margin-top: 2px;
+        letter-spacing: .04em;
     }
-    .btn-publish:hover { background: #c3e6cb; }
-
-    .btn-reject {
-        height: 28px; padding: 0 12px;
-        background: #f8d7da; color: #721c24;
-        border: 1px solid #f5c6cb; border-radius: var(--radius-sm);
-        font-size: 11px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+    .adm-queue-actions {
+        display: flex;
+        gap: 6px;
+        flex-shrink: 0;
     }
-    .btn-reject:hover { background: #f5c6cb; }
 
-    .empty-state {
-        padding: 32px;
-        text-align: center;
+    /* ── Boutons d'action Street ────────────────────────────────────────────── */
+    /* Valider : fond vert acide */
+    .adm-btn-ok {
+        width: 28px;
+        height: 28px;
+        background: var(--accent);
+        border: 1px solid var(--ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
         font-size: 13px;
-        color: var(--color-text-muted);
+        font-weight: 700;
+        color: var(--ink);
+        padding: 0;
+        transition: box-shadow var(--transition-fast);
     }
+    .adm-btn-ok:hover { box-shadow: var(--shadow-offset-sm); }
+
+    /* Rejeter : fond blanc / bordure ink */
+    .adm-btn-ko {
+        width: 28px;
+        height: 28px;
+        background: var(--bg);
+        border: 1px solid var(--ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--danger);
+        padding: 0;
+        transition: box-shadow var(--transition-fast);
+    }
+    .adm-btn-ko:hover {
+        background: var(--danger);
+        color: var(--bg);
+        box-shadow: var(--shadow-offset-sm);
+    }
+
+    /* ── Lien "Voir toutes" en bas de la file ───────────────────────────────── */
+    .adm-queue-footer {
+        display: block;
+        width: 100%;
+        padding: 13px 18px;
+        border-top: 1px solid var(--ink);
+        background: var(--ink);
+        color: var(--accent);
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .1em;
+        font-weight: 700;
+        text-decoration: none;
+        text-align: center;
+        text-transform: uppercase;
+        transition: opacity var(--transition-fast);
+    }
+    .adm-queue-footer:hover { opacity: .8; }
+
+    /* ── État vide : message si aucune ressource en attente ─────────────────── */
+    .adm-empty {
+        padding: 32px 18px;
+        text-align: center;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink-mute);
+        letter-spacing: .06em;
+    }
+    .adm-empty__icon {
+        font-size: 24px;
+        display: block;
+        margin-bottom: 8px;
+    }
+
+    /* ── Badge "EN ATTENTE" affiché dans l'en-tête de la file ──────────────── */
+    .adm-badge-warn {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        padding: 3px 9px;
+        background: var(--accent-2);
+        color: var(--ink);
+        text-transform: uppercase;
+    }
+
+    /* ── Responsive : sur petits écrans, passage en 2 colonnes pour les KPI ─── */
+    @media (max-width: 900px) {
+        .adm-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+        .adm-two-col  { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+        .adm-kpi-grid { grid-template-columns: 1fr; }
+    }
+
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# ── Intro ── #}
-<div class="admin-intro">
-    <h2 class="admin-intro__title">Bonjour, {{ app.user.email|split('@')|first }} ✦</h2>
-    <p class="admin-intro__sub">{{ "now"|date('d/m/Y') }} — Panneau d'administration BazaArt</p>
+{# ── En-tête de page : bandeau noir avec eyebrow + titre display ───────────── #}
+<div class="adm-page-header">
+    <div class="adm-page-header__inner">
+        <div>
+            {# Eyebrow : sur-titre mono uppercase avec point acide — convention Street #}
+            <div class="adm-page-header__eyebrow">● Espace admin · accès restreint</div>
+            <div class="adm-page-header__title">Cockpit BazaArt</div>
+        </div>
+        <div class="adm-page-header__meta">
+            {{ "now"|date('d/m/Y') }}<br>
+            Connecté comme <strong>{{ app.user.email|split('@')|first|upper }}</strong>
+        </div>
+    </div>
 </div>
 
-{# ── Statistiques clés ── #}
-<div class="stats-grid">
+{# ── Grille de statistiques clés (4 cases, bordures partagées) ───────────────── #}
+{# Style "tableur" : les bordures sont portées par la grille elle-même, pas les cellules #}
+<div class="adm-kpi-grid">
 
-    <div class="stat-card {{ pendingCount > 0 ? 'stat-card--alert' : '' }}">
-        <div class="stat-card__icon">📋</div>
-        <div class="stat-card__label">En attente</div>
-        <div class="stat-card__value">{{ pendingCount }}</div>
-        <a href="{{ path('app_admin_resources_pending') }}" class="stat-card__link">
+    {# Ressources en attente — en alerte si > 0 #}
+    <div class="adm-kpi-cell {{ pendingCount > 0 ? 'adm-kpi-cell--alert' : '' }}">
+        <div class="adm-kpi-label">En attente de validation</div>
+        <div class="adm-kpi-value">{{ pendingCount }}</div>
+        <a href="{{ path('app_admin_resources_pending') }}" class="adm-kpi-link">
             {{ pendingCount > 0 ? 'Modérer →' : 'Tout traité ✓' }}
         </a>
     </div>
 
-    <div class="stat-card">
-        <div class="stat-card__icon">◈</div>
-        <div class="stat-card__label">Opportunités publiées</div>
-        <div class="stat-card__value">{{ publishedCount }}</div>
-        <a href="{{ path('app_admin_resources_all', {status: 'published'}) }}" class="stat-card__link">Voir →</a>
+    {# Opportunités publiées #}
+    <div class="adm-kpi-cell">
+        <div class="adm-kpi-label">Opportunités publiées</div>
+        <div class="adm-kpi-value">{{ publishedCount }}</div>
+        <a href="{{ path('app_admin_resources_all', {status: 'published'}) }}" class="adm-kpi-link">Voir →</a>
     </div>
 
-    <div class="stat-card">
-        <div class="stat-card__icon">👥</div>
-        <div class="stat-card__label">Utilisateurs</div>
-        <div class="stat-card__value">{{ totalUsers }}</div>
-        <a href="{{ path('app_admin_users') }}" class="stat-card__link">Gérer →</a>
+    {# Utilisateurs inscrits #}
+    <div class="adm-kpi-cell">
+        <div class="adm-kpi-label">Utilisateurs inscrits</div>
+        <div class="adm-kpi-value">{{ totalUsers }}</div>
+        <a href="{{ path('app_admin_users') }}" class="adm-kpi-link">Gérer →</a>
     </div>
 
-    <div class="stat-card">
-        <div class="stat-card__icon">🏛</div>
-        <div class="stat-card__label">Organisations</div>
-        <div class="stat-card__value">{{ totalOrgs }}</div>
-        <div class="stat-card__note">{{ verifiedOrgs }} vérifiée{{ verifiedOrgs > 1 ? 's' : '' }}</div>
+    {# Organisations #}
+    <div class="adm-kpi-cell">
+        <div class="adm-kpi-label">Organisations</div>
+        <div class="adm-kpi-value">{{ totalOrgs }}</div>
+        <div class="adm-kpi-note">
+            {{ verifiedOrgs }} vérifiée{{ verifiedOrgs > 1 ? 's' : '' }} sur {{ totalOrgs }}
+        </div>
     </div>
 
 </div>
 
-{# ── Accès rapides ── #}
-<p class="section-title">Accès rapides</p>
-<div class="actions-grid">
+{# ── Grille 2 colonnes : accès rapides + file de validation ──────────────────── #}
+<div class="adm-two-col">
 
-    <a href="{{ path('app_admin_resources_pending') }}" class="action-card {{ pendingCount > 0 ? 'action-card--alert' : '' }}">
-        <div class="action-card__icon">📋</div>
-        <div>
-            <div class="action-card__title">
-                File de modération
-                {% if pendingCount > 0 %}({{ pendingCount }}){% endif %}
-            </div>
-            <div class="action-card__desc">Valider ou rejeter les soumissions</div>
+    {# ── Colonne gauche : accès rapides ──────────────────────────────────────── #}
+    <div class="adm-block">
+        <div class="adm-block__header">
+            <span class="adm-block__heading">Accès rapides</span>
         </div>
-    </a>
+        <div class="adm-shortcuts">
 
-    <a href="{{ path('app_admin_users') }}" class="action-card">
-        <div class="action-card__icon">👥</div>
-        <div>
-            <div class="action-card__title">Gestion des utilisateurs</div>
-            <div class="action-card__desc">Créer, modifier, attribuer des rôles</div>
-        </div>
-    </a>
-
-    <a href="{{ path('app_article_index') }}" class="action-card">
-        <div class="action-card__icon">📝</div>
-        <div>
-            <div class="action-card__title">Articles</div>
-            <div class="action-card__desc">Consulter et gérer les publications</div>
-        </div>
-    </a>
-
-    <a href="{{ path('app_admin_resources_all') }}" class="action-card">
-        <div class="action-card__icon">◈</div>
-        <div>
-            <div class="action-card__title">Toutes les opportunités</div>
-            <div class="action-card__desc">Tous statuts — filtrage par état</div>
-        </div>
-    </a>
-
-    <a href="{{ path('app_resource_submit') }}" class="action-card">
-        <div class="action-card__icon">＋</div>
-        <div>
-            <div class="action-card__title">Ajouter une opportunité</div>
-            <div class="action-card__desc">Soumettre directement en tant qu'admin</div>
-        </div>
-    </a>
-
-    <a href="{{ path('app_artist_profile_directory') }}" class="action-card">
-        <div class="action-card__icon">◑</div>
-        <div>
-            <div class="action-card__title">Annuaire artistes</div>
-            <div class="action-card__desc">Voir tous les profils publics</div>
-        </div>
-    </a>
-
-</div>
-
-{# ── Dernières soumissions en attente ── #}
-<p class="section-title">Dernières soumissions en attente</p>
-<div class="pending-widget">
-    <div class="pending-widget__header">
-        <span class="pending-widget__title">
-            {{ pendingCount }} soumission{{ pendingCount > 1 ? 's' : '' }} en attente
-        </span>
-        {% if pendingCount > 5 %}
-            <a href="{{ path('app_admin_resources_pending') }}" class="pending-widget__link">
-                Voir toutes ({{ pendingCount }}) →
+            {# File de modération — en alerte si des ressources attendent #}
+            <a href="{{ path('app_admin_resources_pending') }}"
+               class="adm-shortcut {{ pendingCount > 0 ? 'adm-shortcut--alert' : '' }}">
+                <div class="adm-shortcut__icon">📋</div>
+                <div>
+                    <div class="adm-shortcut__label">
+                        File de modération{% if pendingCount > 0 %} ({{ pendingCount }}){% endif %}
+                    </div>
+                    <div class="adm-shortcut__desc">Valider · Rejeter</div>
+                </div>
             </a>
-        {% endif %}
+
+            {# Structures en attente #}
+            <a href="{{ path('app_admin_structures_pending') }}" class="adm-shortcut">
+                <div class="adm-shortcut__icon">🏛</div>
+                <div>
+                    <div class="adm-shortcut__label">Structures</div>
+                    <div class="adm-shortcut__desc">Candidatures en attente</div>
+                </div>
+            </a>
+
+            {# Toutes les ressources #}
+            <a href="{{ path('app_admin_resources_all') }}" class="adm-shortcut">
+                <div class="adm-shortcut__icon">◈</div>
+                <div>
+                    <div class="adm-shortcut__label">Toutes les ressources</div>
+                    <div class="adm-shortcut__desc">Tous statuts · filtrable</div>
+                </div>
+            </a>
+
+            {# Opportunités scrapées #}
+            <a href="{{ path('app_admin_scraped_opportunities') }}" class="adm-shortcut">
+                <div class="adm-shortcut__icon">🔍</div>
+                <div>
+                    <div class="adm-shortcut__label">Scraping Sheets</div>
+                    <div class="adm-shortcut__desc">Vérifier · Publier</div>
+                </div>
+            </a>
+
+            {# Utilisateurs #}
+            <a href="{{ path('app_admin_users') }}" class="adm-shortcut">
+                <div class="adm-shortcut__icon">👥</div>
+                <div>
+                    <div class="adm-shortcut__label">Utilisateurs</div>
+                    <div class="adm-shortcut__desc">{{ totalUsers }} inscrits</div>
+                </div>
+            </a>
+
+            {# Articles (route externe au contrôleur admin) #}
+            <a href="{{ path('app_article_index') }}" class="adm-shortcut">
+                <div class="adm-shortcut__icon">📝</div>
+                <div>
+                    <div class="adm-shortcut__label">Articles</div>
+                    <div class="adm-shortcut__desc">Gérer les publications</div>
+                </div>
+            </a>
+
+        </div>
     </div>
 
-    {% if pendingResources is not empty %}
-        {% for resource in pendingResources %}
-            <div class="pending-row">
-                <div class="pending-row__info">
-                    <div class="pending-row__title">{{ resource.title }}</div>
-                    <div class="pending-row__meta">
-                        {{ resource.resourceType.name }}
-                        · par <strong>{{ resource.organization ? resource.organization.name : 'Sans organisation' }}</strong>
-                        · {{ resource.createdAt|date('d/m/Y') }}
+    {# ── Colonne droite : file de validation (les 5 premières en attente) ─────── #}
+    <div class="adm-block">
+        {# En-tête de la file : couleur accent-2 si en attente, fond ink sinon #}
+        <div class="adm-block__header"
+             style="{{ pendingCount > 0 ? 'background:var(--accent-2);' : 'background:var(--bg-alt);' }}">
+            <span class="adm-block__heading">
+                ⚠ File de validation
+            </span>
+            {% if pendingCount > 0 %}
+                <span class="adm-badge-warn">{{ pendingCount }} en attente</span>
+            {% endif %}
+        </div>
+
+        {% if pendingResources is empty %}
+            {# État vide : bonne nouvelle, rien à traiter #}
+            <div class="adm-empty">
+                <span class="adm-empty__icon">✓</span>
+                Aucune soumission en attente.<br>Tout est traité.
+            </div>
+        {% else %}
+            {# Boucle sur les 5 premières ressources en attente #}
+            {% for resource in pendingResources %}
+                <div class="adm-queue-row">
+                    {# Pastille orange "en attente" #}
+                    <div class="adm-queue-dot"></div>
+
+                    <div class="adm-queue-info">
+                        <div class="adm-queue-title">{{ resource.title }}</div>
+                        <div class="adm-queue-meta">
+                            {# Nom du type + organisation + date #}
+                            {{ resource.resourceType.name|upper }}
+                            · {{ resource.organization ? resource.organization.name|upper : 'SANS ORG' }}
+                            · {{ resource.createdAt|date('d/m/Y') }}
+                        </div>
+                    </div>
+
+                    <div class="adm-queue-actions">
+                        {# Formulaire Valider — token CSRF nommé 'resource_action_{id}' #}
+                        <form method="post" action="{{ path('app_admin_resource_publish', {id: resource.id}) }}">
+                            <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                            <button type="submit" class="adm-btn-ok" title="Publier cette ressource">✓</button>
+                        </form>
+
+                        {# Formulaire Rejeter — même token CSRF (granularité par resource.id) #}
+                        <form method="post" action="{{ path('app_admin_resource_reject', {id: resource.id}) }}"
+                              onsubmit="return confirm('Rejeter cette ressource ?')">
+                            <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                            <button type="submit" class="adm-btn-ko" title="Rejeter cette ressource">✗</button>
+                        </form>
                     </div>
                 </div>
-                <div class="pending-row__actions">
-                    <form method="post" action="{{ path('app_admin_resource_publish', {id: resource.id}) }}" style="display:inline;">
-                        <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
-                        <button type="submit" class="btn-publish">✓ Publier</button>
-                    </form>
-                    <form method="post" action="{{ path('app_admin_resource_reject', {id: resource.id}) }}" style="display:inline;">
-                        <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
-                        <button type="submit" class="btn-reject">✗ Rejeter</button>
-                    </form>
-                </div>
-            </div>
-        {% endfor %}
-    {% else %}
-        <div class="empty-state">✅ Aucune soumission en attente de modération.</div>
-    {% endif %}
+            {% endfor %}
+
+            {# Lien "Voir toutes" si plus de 5 ressources en attente #}
+            {% if pendingCount > 5 %}
+                <a href="{{ path('app_admin_resources_pending') }}" class="adm-queue-footer">
+                    Ouvrir la file complète ({{ pendingCount }}) →
+                </a>
+            {% endif %}
+        {% endif %}
+
+    </div>
 
 </div>
 

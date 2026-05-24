@@ -1,807 +1,2367 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BazaArt — Hub Artistique Pluridisciplinaire</title>
+{#
+    Page d'accueil publique — bazaart.fr
+    Route : /  (app_home)
+    Thème : Street (tokens :root par défaut — PAS de data-theme)
 
-{# Favicon #}
-<link rel="icon" type="image/svg+xml" href="{{ asset('uploads/logos/favicon.svg') }}">
+    Cette page traduit le composant LandingManifesto du prototype JSX
+    (src/screens-public.jsx) en HTML/CSS pur Twig. Elle est la vitrine
+    principale de l'association et de la plateforme. Elle ne reçoit
+    aucune variable du contrôleur (contenu 100 % statique en dur).
 
-{# Google Fonts — Playfair Display, Bebas Neue, Inter #}
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    Sections produites :
+      1. Navbar sticky (hamburger CSS pur)
+      2. Hero géant (H1 + sous-titre serif + 2 CTAs)
+      3. Marquee bande défilante (CSS pur, pause au survol)
+      4. Hubs (3 colonnes, bordures partagées)
+      5. SaaS pitch (fond --ink, liste de features)
+      6. Opportunités (3 cartes statiques, aperçu du flux)
+      7. Communauté (live fictif + fils de discussion)
+      8. CTA inscription (fond --accent = lime)
+      9. Footer
 
-{# CSS vitrine — tout le design est dans ce fichier #}
-{# Le ?v=... force le navigateur à recharger le CSS quand on change la version (cache-busting) #}
-<link rel="stylesheet" href="{{ asset('css/vitrine.css') }}?v=20260508-3">
+    Polices : Archivo Black (--display) + Space Grotesk (--body)
+              + JetBrains Mono (--mono) + Instrument Serif (--serif)
+    Pas de Tailwind, pas de classes Symfony UX, pas de data-theme Cream.
+    Tous les styles sont dans le bloc {% block stylesheets %}.
+    Préfixe CSS : .lp- (landing page) pour éviter toute collision.
+#}
+{% extends 'base.html.twig' %}
 
-{# Google Analytics #}
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-T8SSQV9S6X"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-T8SSQV9S6X');
-</script>
-</head>
-<body>
+{# ── TITRE DE L'ONGLET ──────────────────────────────────────────────────────── #}
+{% block title %}Bazaart — La plateforme des artistes de la diaspora afro-atlantique{% endblock %}
 
-{# ── BANNER ──────────────────────────────────────────── #}
-<div class="top-banner">
-  {# Version desktop — texte complet #}
-  <span class="banner-desktop">
-    <span class="banner-tag">Programmation</span>
-    DIMÉ — Transmettre, créer et faire circuler les mémoires
-    <span class="banner-sep">·</span> Mai 2026
-    <span class="banner-sep">·</span> Paris
-    <span class="banner-sep">·</span>
-    <a href="#dime-programmation" class="banner-link">Voir la programmation</a>
-  </span>
-  {# Version mobile — texte raccourci #}
-  <span class="banner-mobile">
-    <span class="banner-tag">Programmation</span>
-    DIMÉ — Mémoires afro-descendantes
-    <span class="banner-sep">·</span> Mai 2026
-    <span class="banner-sep">·</span>
-    <a href="#dime-programmation" class="banner-link">Voir le programme</a>
-  </span>
-</div>
+{# ── CSS SPÉCIFIQUE À LA PAGE D'ACCUEIL ─────────────────────────────────────── #}
+{#
+    {{ parent() }} est OBLIGATOIRE ici : il injecte design-tokens.css + fonts.css
+    déclarés dans base.html.twig. Sans lui, aucun token CSS (--ink, --accent…)
+    ne serait disponible et la page serait sans style.
+#}
+{% block stylesheets %}
+{{ parent() }}
+<style>
+/* =====================================================================
+   LANDING PAGE — Styles propres à la page d'accueil (thème Street)
+   Préfixe : .lp- pour éviter toute collision avec les styles de base.html.twig
 
-{# ── NAV ─────────────────────────────────────────────── #}
-<nav class="nav">
-  <a class="nav-logo" href="{{ path('app_home') }}">
-    <img src="{{ asset('uploads/logos/BazaArt-noir.svg') }}" alt="BazaArt" height="24">
-  </a>
+   Thème Street actif par défaut (tokens :root de design-tokens.css) :
+     --bg        : #F2EFE6  (fond sable)
+     --ink       : #0D0D0D  (quasi-noir)
+     --accent    : #C6F24E  (lime)
+     --accent-2  : #FF6B2C  (orange)
+     --display   : 'Archivo Black'
+     --body      : 'Space Grotesk'
+     --mono      : 'JetBrains Mono'
+     --serif     : 'Instrument Serif'
+   ===================================================================== */
 
-  <ul class="nav-links">
-    <li><a href="#presentation">Présentation</a></li>
-    <li><a href="#projets">Projets</a></li>
-    <li><a href="#equipe">L'équipe</a></li>
-    <li><a href="#partenaires">Partenaires</a></li>
-    {# Boutons CTA — visibles uniquement dans le menu mobile (cachés sur desktop via CSS) #}
-    <li class="nav-mobile-actions">
-      <button id="openHaOverlayMobile" class="btn-nav-don">❤ Faire un don</button>
-      <a href="https://www.helloasso.com/associations/bazaart" target="_blank" rel="noopener" class="btn-primary">Rejoindre</a>
-    </li>
-  </ul>
 
-  {# Bouton hamburger — visible uniquement sur mobile (via CSS) #}
-  <button class="nav-hamburger" aria-label="Ouvrir le menu">
-    <span></span>
-    <span></span>
-    <span></span>
-  </button>
+/* ──────────────────────────────────────────────────────────────────────
+   UTILITAIRES LOCAUX
+────────────────────────────────────────────────────────────────────── */
 
-  <div class="nav-actions">
-    <button id="openHaOverlay" class="btn-nav-don">❤ Faire un don</button>
-    <a href="https://www.helloasso.com/associations/bazaart" target="_blank" rel="noopener" class="btn-primary">Rejoindre</a>
-  </div>
-</nav>
+/* Masquage visuel accessible (lecteurs d'écran uniquement).
+   clip-path:inset(50%) est la forme moderne, non dépréciée de clip:rect(0,0,0,0).
+   white-space:nowrap empêche le contenu de créer une zone cliquable invisible. */
+.sr-only {
+    position:   absolute;
+    width:      1px;
+    height:     1px;
+    padding:    0;
+    margin:     -1px;
+    overflow:   hidden;
+    clip-path:  inset(50%);
+    white-space: nowrap;
+    border:     0;
+}
 
-{# ── HERO ────────────────────────────────────────────── #}
-<section class="hero" id="presentation">
-  {# Lettre décorative en arrière-plan #}
-  <div class="deco-letter">B</div>
 
-  <div class="hero-left">
-    <div class="hero-pill">
-      <span class="hero-pill-dot"></span>
-      Hub Artistique Pluridisciplinaire · Guadeloupe
-    </div>
+/* ──────────────────────────────────────────────────────────────────────
+   RACINE DE LA PAGE
+   On n'utilise PAS data-theme="editorial". Le thème Street (:root) est
+   le thème par défaut — il s'applique sans attribut supplémentaire.
+────────────────────────────────────────────────────────────────────── */
 
-    <h1 class="hero-h1">
-      Créer,<br>
-      diffuser,<br>
-      <em>transmettre.</em>
-    </h1>
+.lp-root {
+    /* --body est 'Space Grotesk' dans le thème Street */
+    font-family: var(--body);
+    background:  var(--bg);     /* #F2EFE6 — sable */
+    color:       var(--ink);    /* #0D0D0D — quasi-noir */
+    min-height:  100vh;
+    font-size:   15px;
+    line-height: 1.5;
+    /* Surcharge du body déclaré dans base.html.twig (font-size: 14px)
+       pour cette page spécifique, sans toucher au body global. */
+}
 
-    <p class="hero-desc">
-      BazaArt est un hub culturel et créatif ancré en Guadeloupe, connectant artistes, structures et territoires — de la Caraïbe vers le monde.
-    </p>
+/* Conteneur centré — max 1440px, padding horizontal 32px (tokens Street) */
+.lp-container {
+    max-width:     var(--container-max);  /* 1440px */
+    margin-inline: auto;
+    padding-inline: var(--container-px); /* 32px */
+}
 
-    <div class="hero-btns">
-      <a href="mailto:bonjourbazaart@gmail.com" class="btn-hero-main">
-        Nous contacter →
-      </a>
-      <a href="#projets" class="btn-hero-sec">Voir nos projets</a>
-    </div>
 
-    <div class="hero-flow">
-      <span class="flow-chip">Recherche</span>
-      <span class="flow-chip">Production</span>
-      <span class="flow-chip">Création</span>
-      <span class="flow-chip">Diffusion</span>
-      <span class="flow-chip">Médiation</span>
-    </div>
-  </div>
+/* ──────────────────────────────────────────────────────────────────────
+   1. NAVBAR STICKY
+   Fond --ink sombre (cohérence avec la sidebar de l'app connectée).
+   Border-bottom très subtile (blanc 8 % d'opacité) pour séparer
+   visuellement sans alourdir — même approche que la sidebar.
+────────────────────────────────────────────────────────────────────── */
 
-  {# Cartes flottantes — côté droit du hero #}
-  <div class="hero-right">
+.lp-nav {
+    position:       sticky;
+    top:            0;
+    z-index:        100;
+    height:         var(--nav-height);  /* 64px */
+    background:     var(--ink);                        /* #0D0D0D — fond sombre */
+    border-bottom:  1px solid rgba(255,255,255,0.08);  /* séparateur discret */
+    display:        flex;
+    align-items:    center;
+}
 
-    {# Cartes texte #}
-    <div class="floating-card fc-main">
-      <span class="fc-badge fc-badge-sage">Résidence</span>
-      <div class="fc-title">Résidence internationale — Brésil 2025</div>
-      <div class="fc-meta">Collectif Masonn · 2 mois<br>Partenaire : Arapuca Arte Cultura</div>
-      <div class="fc-tags">Arts visuels · Musique · Performance</div>
-    </div>
+.lp-nav__inner {
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    width:           100%;
+}
 
-    <div class="floating-card fc-small">
-      <span class="fc-badge fc-badge-terra">Exposition</span>
-      <div class="fc-title">Institut Français d'Abidjan</div>
-      <div class="fc-meta">Côte d'Ivoire — Avril 2025</div>
-    </div>
+/* Logo — "BazaArt" en Archivo Black, crème sur fond sombre.
+   Ancré à l'extrémité gauche via justify-content:space-between sur .lp-nav__inner. */
+.lp-nav__logo {
+    font-family:     var(--display);
+    font-size:       22px;
+    font-weight:     400;
+    color:           var(--bg);
+    text-decoration: none;
+    letter-spacing:  -.02em;
+    flex-shrink:     0;
+}
 
-    <div class="floating-card fc-extra">
-      <span class="fc-badge fc-badge-sage">Résidence</span>
-      <div class="fc-title">Estação Cabo Branco — Brésil</div>
-      <div class="fc-meta">Septembre 2025 – Janvier 2026<br>Saison France-Brésil</div>
-    </div>
-
-    <div class="floating-card fc-tiny">
-      <span class="fc-badge fc-badge-tan">Nouveau projet</span>
-      <div class="fc-title">Tiers-lieu en Guadeloupe</div>
-      <div class="fc-meta">En cours de développement</div>
-    </div>
-
-    {# Cartes photo — style polaroid #}
-    <div class="fc-photo-card fc-photo-1">
-      <img src="/uploads/photos/4A4A9795.jpg" alt="Résidence Brésil 2025">
-      <div class="fc-photo-label">Résidence · Brésil 2025</div>
-    </div>
-
-    <div class="fc-photo-card fc-photo-2">
-      <img src="/uploads/photos/4A4A9818.jpg" alt="Institut Français Abidjan">
-      <div class="fc-photo-label">Abidjan · Avril 2025</div>
-    </div>
-
-    <div class="fc-photo-card fc-photo-3">
-      <img src="/uploads/photos/vlcsnap-2024-08-16-11h01m17s358.png" alt="Estação Cabo Branco">
-      <div class="fc-photo-label">Estação Cabo Branco · 2025</div>
-    </div>
-
-  </div>
-</section>
-
-{# ── ÉVÉNEMENTS ──────────────────────────────────────── #}
-<div style="background: #fff;">
-  <section id="dime-programmation" style="padding: 6rem 3rem;">
-
-    {# Titre de la section #}
-    <div style="margin-bottom: 3.5rem;">
-      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.8rem;">
-        <div style="width: 32px; height: 1px; background: var(--terra);"></div>
-        <span style="font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--terra); font-weight: 500;">Programmation</span>
-      </div>
-      <h2 class="sec-title">Nos <em>événements</em></h2>
-    </div>
-
-    {# ═══ Grille : 3 événements côte à côte (responsive 1024px → 2 col, 768px → 1 col) ═══ #}
-    <div class="events-duo">
-
-      {# ── SPEED DATING CULTUREL — Événement en cours (Guadeloupe, 30 mai 2026) ── #}
-      <div class="event-block">
-        <span class="event-tag event-tag-live">En cours</span>
-        <span class="event-tag event-tag-location">Guadeloupe</span>
-        <div class="event-main-img">
-          <img src="{{ asset('uploads/photos/affiche_Speed_Dating_insta_fb.jpg') }}" alt="Speed Dating Culturel — affiche">
-        </div>
-
-        <h3 class="event-block-title">Speed Dating Culturel</h3>
-        <p style="font-family: 'Inter', sans-serif; font-size: 13px; color: var(--muted); margin-bottom: 12px;">
-          En partenariat avec <strong style="color: var(--dark); font-weight: 500;">Les Bonnifieurs</strong>, <strong style="color: var(--dark); font-weight: 500;">Loys</strong> et <strong style="color: var(--dark); font-weight: 500;">Annul'Impôts</strong>
-        </p>
-        <p class="event-block-desc">
-          Le <strong>30 mai 2026</strong> en Guadeloupe, une journée professionnelle dédiée aux artistes, auteurs et intermittents du spectacle, autour de la fiscalité et du networking.
-        </p>
-
-        {# Les 2 sous-events (atelier + conférence/speed dating) — même structure que les RDV DIMÉ.
-           cursor:default sur la card car elle n'est pas cliquable globalement (pas d'image à swap). #}
-        <div class="dime-rdv-list">
-          <div class="dime-rdv" style="cursor: default;">
-            <div class="dime-rdv-badge">Atelier</div>
-            <div class="dime-rdv-content">
-              <strong>14h30 à 15h30</strong> · Atelier spécialisé sur la fiscalité des artistes, auteurs et intermittents du spectacle.
-              <br><span class="dime-rdv-lieu">Les Bonnifieurs · Bd de la Pointe Jarry, Guadeloupe</span>
-              {% if date() <= date('2026-05-30 23:59:59') %}
-                <br><a href="https://www.helloasso.com/associations/bazaart/evenements/conference-et-speed-dating-culturel" target="_blank" rel="noopener" class="dime-rdv-btn">Réserver ma place →</a>
-              {% endif %}
-            </div>
-          </div>
-          <div class="dime-rdv" style="cursor: default;">
-            {# Badge plus large via inline style — width:auto pour contenir "Conf. + SD" #}
-            <div class="dime-rdv-badge" style="width: auto; min-width: 90px;">Conf. + SD</div>
-            <div class="dime-rdv-content">
-              {# Deux créneaux en bullet points : conférence puis speed dating #}
-              <ul style="margin: 0 0 0.4rem 0; padding-left: 1.1rem; list-style: disc;">
-                <li><strong>16h à 17h</strong> · Conférence professionnelle</li>
-                <li><strong>17h à 19h</strong> · Speed dating pour rencontrer de nouveaux collaborateurs et bâtir des partenariats artistiques</li>
-              </ul>
-              <span class="dime-rdv-lieu">Les Bonnifieurs · Bd de la Pointe Jarry, Guadeloupe</span>
-              {% if date() <= date('2026-05-30 23:59:59') %}
-                <br><a href="https://www.helloasso.com/associations/bazaart/evenements/conference-et-speed-dating-culturel" target="_blank" rel="noopener" class="dime-rdv-btn">Réserver ma place →</a>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {# ── DIMÉ — Événement en cours ── #}
-      <div class="event-block">
-        <span class="event-tag event-tag-live">En cours</span>
-        <span class="event-tag event-tag-location">Paris</span>
-        <div class="event-main-img">
-          <img id="dime-main-img" src="{{ asset('uploads/photos/dimè.png') }}" alt="DIMÉ — Transmettre, créer et faire circuler les mémoires">
-        </div>
-        {# 4 miniatures sous le visuel principal #}
-        <div class="event-thumbnails">
-          <button class="event-thumb active" onclick="switchDimeImg(this, '{{ asset('uploads/photos/dimè.png') }}')">
-            <img src="{{ asset('uploads/photos/dimè.png') }}" alt="Visuel DIMÉ">
-          </button>
-          <button class="event-thumb" onclick="switchDimeImg(this, '{{ asset('uploads/photos/2.png') }}')">
-            <img src="{{ asset('uploads/photos/2.png') }}" alt="Ciné/Talk — 7 mai">
-          </button>
-          <button class="event-thumb" onclick="switchDimeImg(this, '{{ asset('uploads/photos/3.png') }}')">
-            <img src="{{ asset('uploads/photos/3.png') }}" alt="Takeover Rinse — 10 mai">
-          </button>
-          <button class="event-thumb" onclick="switchDimeImg(this, '{{ asset('uploads/photos/4.png') }}')">
-            <img src="{{ asset('uploads/photos/4.png') }}" alt="Atelier — 27 mai">
-          </button>
-        </div>
-
-        {# Descriptif #}
-        <h3 class="event-block-title">DIMÉ — Transmettre, créer et faire circuler les mémoires</h3>
-        <p style="font-family: 'Inter', sans-serif; font-size: 13px; color: var(--muted); margin-bottom: 12px;">
-          <a href="https://www.instagram.com/evokproject__?igsh=MWpvamtxZmd2OGoyNA==" target="_blank" rel="noopener" style="color: var(--terra); text-decoration: underline; text-underline-offset: 3px; font-weight: 500;">Evok Project</a> × Bazaart
-        </p>
-        <p class="event-block-desc">
-          En mai 2026, Evok Project et Bazaart s'associent pour une programmation dédiée aux mémoires afro-descendantes — trois rendez-vous à Paris, avec le soutien de la <a href="https://memoire-esclavage.org/" target="_blank" rel="noopener" style="color: var(--terra); text-decoration: underline; text-underline-offset: 3px; font-weight: 500;">Fondation pour la Mémoire de l'Esclavage</a>.
-        </p>
-
-        {# Les 3 rendez-vous #}
-        <div class="dime-rdv-list">
-          <div class="dime-rdv" data-img="{{ asset('uploads/photos/2.png') }}" onclick="switchDimeFromRdv(this)">
-            <div class="dime-rdv-badge">Ciné/Talk</div>
-            <div class="dime-rdv-content">
-              <strong>7 mai — 19h30</strong> · Projection de <em>Lapo Chapé</em> de Mélissandre Monatus, suivie d'un débat public sur les identités post-esclavagistes en France, 25 ans après la loi Taubira, animé par Kévi Donat, de "Le Paris Noir".
-              <br><span class="dime-rdv-lieu"><a href="https://maisondelaconversation.org/" target="_blank" rel="noopener" style="color: var(--terra); text-decoration: underline; text-underline-offset: 3px;">Maison de la Conversation</a>, 75018 Paris — Gratuit</span>
-              <br><span class="dime-rdv-complet">Complet</span>
-            </div>
-          </div>
-          <div class="dime-rdv" data-img="{{ asset('uploads/photos/3.png') }}" onclick="switchDimeFromRdv(this)">
-            <div class="dime-rdv-badge">Radio</div>
-            <div class="dime-rdv-content">
-              <strong>10 mai — 14h à 20h</strong> · Takeover Rinse France : talks, musique et archives pour faire entendre les voix afro-descendantes. <em>Visibilité. Transmission. Inclusion.</em>
-              <br><span class="dime-rdv-lieu">En direct sur <a href="https://www.rinse.fm/channels/france" target="_blank" rel="noopener" style="color: var(--terra); text-decoration: underline; text-underline-offset: 3px;">rinse.fm</a></span>
-            </div>
-          </div>
-          <div class="dime-rdv" data-img="{{ asset('uploads/photos/4.png') }}" onclick="switchDimeFromRdv(this)">
-            <div class="dime-rdv-badge">Atelier</div>
-            <div class="dime-rdv-content">
-              <strong>27 mai — 15h à 17h</strong> · Ateliers de création artistique parents-enfants avec l'artiste <em>Shadem</em>, autour de la beauté des peaux et des couleurs. À partir de 7 ans.
-              <br><span class="dime-rdv-lieu"><a href="https://maisondelaconversation.org/" target="_blank" rel="noopener" style="color: var(--terra); text-decoration: underline; text-underline-offset: 3px;">Maison de la Conversation</a>, 75018 Paris</span>
-              {% if date() <= date('2026-05-27 23:59:59') %}
-                <br><a href="https://www.helloasso.com/associations/bazaart/evenements/dime-atelier-de-creation-artistique-de-mediation-culturelle" target="_blank" rel="noopener" class="dime-rdv-btn">Réserver ma place →</a>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {# ── MANSA × BAZAART — Événement passé (design et wording originaux conservés) ── #}
-      <div class="event-block event-block-past">
-        <span class="event-tag event-tag-past">Passé</span>
-        <span class="event-tag event-tag-location">Guadeloupe</span>
-        <div style="position: relative;">
-          <div class="event-main-img">
-            <img src="{{ asset('uploads/photos/Guadeloupe_Carre.png') }}" alt="Mansa en Guadeloupe — affiche">
-          </div>
-        </div>
-
-        <h3 style="font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; line-height: 1.2; color: var(--forest); margin-bottom: 20px;">
-          Entreprendre, innover et se structurer dans les industries culturelles et créatives en Guadeloupe
-        </h3>
-
-        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--terra); flex-shrink: 0;"></span>
-            <span style="font-family: 'Inter', sans-serif; font-size: 14px; color: #444;"><strong style="font-weight: 500; color: var(--dark);">Jeudi 16 avril 2026</strong></span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--terra); flex-shrink: 0;"></span>
-            <span style="font-family: 'Inter', sans-serif; font-size: 14px; color: #444;">Mémorial ACTe · Pointe-à-Pitre</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--terra); flex-shrink: 0;"></span>
-            <span style="font-family: 'Inter', sans-serif; font-size: 14px; color: #444;">Table ronde 19h–21h · DJ Set 21h–23h</span>
-          </div>
-        </div>
-
-        <p style="font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.75; color: #444;">
-          En partenariat avec MansA – Maison des Mondes Africains, Bazaart vous invite à une table ronde sur la structuration des filières culturelles en Guadeloupe : accès aux financements, mise en réseau régionale, et articulation avec les marchés internationaux. La soirée se prolonge avec un cocktail et DJ set pour favoriser les rencontres.
-        </p>
-      </div>
-
-    </div>
-
-  </section>
-</div>
-
-{# ── NOS HUBS ────────────────────────────────────────── #}
-<section class="section-hubs">
-  <div class="section-header">
-    <div class="sec-eyebrow">Notre structure</div>
-    <h2 class="sec-title">Nos <em>hubs</em></h2>
-    <p class="sec-desc">Trois espaces complémentaires pour accompagner les artistes à chaque étape de leur parcours.</p>
-  </div>
-  <div class="hubs-grid">
-    <div class="hub-card hub-card-1">
-      <div>
-        <div class="hub-num">01</div>
-        <div class="hub-name">Bazaart Lab</div>
-        <div class="hub-desc">Ingénierie culturelle, recherche et accompagnement. Nous outillons les artistes sur les enjeux économiques, juridiques et organisationnels.</div>
-      </div>
-      <div class="hub-icon">
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M14 2L25 8.5V21.5L14 28L3 21.5V8.5L14 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-          <circle cx="14" cy="15" r="3" stroke="currentColor" stroke-width="1.5"/>
-          <line x1="14" y1="2" x2="14" y2="12" stroke="currentColor" stroke-width="1.5"/>
-        </svg>
-      </div>
-    </div>
-    <div class="hub-card hub-card-2">
-      <div>
-        <div class="hub-num">02</div>
-        <div class="hub-name">Bazaart Studio</div>
-        <div class="hub-desc">Ateliers d'artistes, résidences locales et internationales, accompagnement à la production d'œuvres et de projets artistiques.</div>
-      </div>
-      <div class="hub-icon">
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="14" cy="14" r="11" stroke="currentColor" stroke-width="1.5"/>
-          <path d="M9 14 Q11 10 14 14 Q17 18 20 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-          <circle cx="14" cy="6" r="1.5" fill="currentColor"/>
-        </svg>
-      </div>
-    </div>
-    <div class="hub-card hub-card-3">
-      <div>
-        <div class="hub-num">03</div>
-        <div class="hub-name">Bazaart Events</div>
-        <div class="hub-desc">Programmation artistique, expositions et événements culturels. Un espace de rencontre et de rayonnement entre artistes et publics.</div>
-      </div>
-      <div class="hub-icon">
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="3" y="7" width="22" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/>
-          <line x1="3" y1="12" x2="25" y2="12" stroke="currentColor" stroke-width="1.5"/>
-          <line x1="9" y1="3" x2="9" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="19" y1="3" x2="19" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <circle cx="14" cy="19" r="2" fill="currentColor"/>
-        </svg>
-      </div>
-    </div>
-  </div>
-</section>
-
-{# ── STATS BAR ───────────────────────────────────────── #}
-<div class="stats-bar">
-  <div class="stat-item">
-    <div class="stat-n">+15</div>
-    <div class="stat-l">ans d'activités</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-n">4</div>
-    <div class="stat-l">Territoires d'actions</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-n">+30</div>
-    <div class="stat-l">Projets accompagnés</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-n">6</div>
-    <div class="stat-l">Expositions internationales</div>
-  </div>
-</div>
-
-{# ── DISCIPLINES ─────────────────────────────────────── #}
-<section class="section section-discs">
-  <div class="section-header" style="max-width:100%; text-align:center; margin-bottom:0;">
-    <div class="sec-eyebrow" style="justify-content:center;">Champs artistiques</div>
-    <h2 class="sec-title">Pluridisciplinaire <em>par nature</em></h2>
-  </div>
-  <div class="disc-grid">
-    <div class="disc-card">
-      <div class="disc-icon">
-        {# Arts visuels — cadre avec pinceau #}
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="3" y="3" width="26" height="20" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
-          <circle cx="10" cy="11" r="2.5" stroke="currentColor" stroke-width="1.5"/>
-          <polyline points="3,23 10,15 16,20 22,13 29,23" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
-          <line x1="8" y1="29" x2="24" y2="29" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="16" y1="23" x2="16" y2="29" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <div class="disc-label">01</div>
-      <div class="disc-name">Arts Visuels</div>
-    </div>
-    <div class="disc-card">
-      <div class="disc-icon">
-        {# Cinéma — bobine de film #}
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="1.5"/>
-          <circle cx="16" cy="16" r="4" stroke="currentColor" stroke-width="1.5"/>
-          <circle cx="16" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-          <circle cx="16" cy="27" r="2" stroke="currentColor" stroke-width="1.5"/>
-          <circle cx="5" cy="16" r="2" stroke="currentColor" stroke-width="1.5"/>
-          <circle cx="27" cy="16" r="2" stroke="currentColor" stroke-width="1.5"/>
-          <circle cx="8.5" cy="8.5" r="2" stroke="currentColor" stroke-width="1.5"/>
-          <circle cx="23.5" cy="23.5" r="2" stroke="currentColor" stroke-width="1.5"/>
-          <circle cx="23.5" cy="8.5" r="2" stroke="currentColor" stroke-width="1.5"/>
-          <circle cx="8.5" cy="23.5" r="2" stroke="currentColor" stroke-width="1.5"/>
-        </svg>
-      </div>
-      <div class="disc-label">02</div>
-      <div class="disc-name">Cinéma</div>
-    </div>
-    <div class="disc-card">
-      <div class="disc-icon">
-        {# Musique — onde sonore #}
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <line x1="16" y1="4" x2="16" y2="28" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="11" y1="8" x2="11" y2="24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="6" y1="12" x2="6" y2="20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="21" y1="8" x2="21" y2="24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="26" y1="12" x2="26" y2="20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <div class="disc-label">03</div>
-      <div class="disc-name">Musique</div>
-    </div>
-    <div class="disc-card">
-      <div class="disc-icon">
-        {# Performance — silhouette en mouvement #}
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="16" cy="5" r="2.5" stroke="currentColor" stroke-width="1.5"/>
-          <line x1="16" y1="7.5" x2="16" y2="18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <polyline points="8,12 16,15 24,12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <polyline points="16,18 11,27" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <polyline points="16,18 21,27" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <div class="disc-label">04</div>
-      <div class="disc-name">Performance</div>
-    </div>
-  </div>
-</section>
-
-{# ── PROJETS ─────────────────────────────────────────── #}
-<section class="section section-projets" id="projets">
-  <div class="section-header">
-    <div class="sec-eyebrow">Portfolio</div>
-    <h2 class="sec-title">Nos projets <em>phares</em></h2>
-    <p class="sec-desc">Résidences, expositions, événements et médiations — une activité intense entre la Caraïbe, l'Afrique et le Brésil.</p>
-  </div>
-  <div class="projets-grid">
-
-    {# Projet mis en avant #}
-    <div class="projet-card projet-card-featured">
-      <span class="projet-num">01</span>
-      <div class="projet-body">
-        <span class="projet-tag">Résidences Internationales</span>
-        <div class="projet-name">Collectif Masonn — 3 résidences de co-création</div>
-        <div class="projet-detail">Brésil (2024, 2025) · Côte d'Ivoire (2025) — Arts visuels, Musique, Performance</div>
-      </div>
-      <div class="proj-count">3</div>
-    </div>
-
-    <div class="projet-card">
-      <span class="projet-num">02</span>
-      <div class="projet-body">
-        <span class="projet-tag">Expositions</span>
-        <div class="projet-name">6 expositions internationales</div>
-        <div class="projet-detail">Brésil · Côte d'Ivoire · Gorée · Guadeloupe</div>
-      </div>
-    </div>
-
-    <div class="projet-card">
-      <span class="projet-num">03</span>
-      <div class="projet-body">
-        <span class="projet-tag">Événements culturels</span>
-        <div class="projet-name">Awe Party & Arty Afterwork</div>
-        <div class="projet-detail">Paris — 6 éditions · Artistes féminines & illustratrices</div>
-      </div>
-    </div>
-
-    <div class="projet-card">
-      <span class="projet-num">04</span>
-      <div class="projet-body">
-        <span class="projet-tag">Audiovisuel</span>
-        <div class="projet-name">Production de contenus audiovisuels</div>
-        <div class="projet-detail">Web-série Reine du Jour · 2 saisons · 16 épisodes · Femmes afrodescendantes</div>
-        <div class="projet-detail">2 vidéos clips pour le collectif Masonn · 2024</div>
-      </div>
-    </div>
-
-    <div class="projet-card">
-      <span class="projet-num">05</span>
-      <div class="projet-body">
-        <span class="projet-tag">Médiation culturelle</span>
-        <div class="projet-name">Actions de médiation culturelle</div>
-        <div class="projet-detail">Ateliers de pratiques artistiques et interventions pédagogiques en partenariat avec des institutions culturelles et éducatives, à destination de publics variés (scolaires, étudiants, adultes et acteurs associatifs) autour de l'image, du collage, de la création contemporaine et des récits culturels afro-diasporiques — en Guadeloupe, au Brésil et en France hexagonale.</div>
-      </div>
-    </div>
-
-    <div class="projet-card">
-      <span class="projet-num">06</span>
-      <div class="projet-body">
-        <span class="projet-tag">Ateliers & Formations</span>
-        <div class="projet-name">Les RDVs FANMTECH</div>
-        <div class="projet-detail">Cycle mensuel d'ateliers et de conférences dédiés aux femmes dans la Tech · 20 éditions sur 2 saisons · Paris & Guadeloupe</div>
-      </div>
-    </div>
-
-    <div class="projet-card">
-      <span class="projet-num">07</span>
-      <div class="projet-body">
-        <span class="projet-tag">En développement</span>
-        <div class="projet-name">Tiers-lieu culturel en Guadeloupe</div>
-        <div class="projet-detail">Espace de création, recherche et transmission — ouverture prochaine</div>
-      </div>
-    </div>
-
-  </div>
-</section>
-
-{# ── PARTENAIRES ─────────────────────────────────────── #}
-<section class="section section-partners" id="partenaires">
-  <div class="section-header">
-    <div class="sec-eyebrow">Ils nous font confiance</div>
-    <h2 class="sec-title">Nos <em>partenaires</em></h2>
-  </div>
-
-  {# Carrousel infini — la piste est dupliquée pour créer une boucle seamless #}
-  <div class="carousel-wrapper">
-    <div class="carousel-track">
-
-      {# ── Piste 1 (originale) ── #}
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/institut-francais.jpg') }}" alt="Institut Français">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/cnm.png') }}" alt="Centre National de la Musique">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/region-guadeloupe.png') }}" alt="Région Guadeloupe">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/departement-guadeloupe.png') }}" alt="Département Guadeloupe">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/air-caraibes.png') }}" alt="Air Caraïbes">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/maison-mondes-africains.png') }}" alt="Maison des Mondes Africains">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/estacao-cabo-branco.png') }}" alt="Estação Cabo Branco">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/monde-en-vues.png') }}" alt="Monde en Vues">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/officina-brennand.jpg') }}" alt="Officina Francisco Brennand">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/kafes-arawak.png') }}" alt="Les Kafes de l'Arawak">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/partner-1.png') }}" alt="Partenaire">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/partner-2.png') }}" alt="Partenaire">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/partner-3.png') }}" alt="Partenaire">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/partner-4.png') }}" alt="Partenaire">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/partner-5.png') }}" alt="Partenaire">
-      </div>
-      <div class="carousel-item">
-        <img src="{{ asset('images/logos/partner-6.png') }}" alt="Partenaire">
-      </div>
-
-      {# ── Piste 2 (copie — pour la boucle infinie) ── #}
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/institut-francais.jpg') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/cnm.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/region-guadeloupe.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/departement-guadeloupe.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/air-caraibes.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/maison-mondes-africains.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/estacao-cabo-branco.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/monde-en-vues.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/officina-brennand.jpg') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/kafes-arawak.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/partner-1.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/partner-2.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/partner-3.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/partner-4.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/partner-5.png') }}" alt="">
-      </div>
-      <div class="carousel-item" aria-hidden="true">
-        <img src="{{ asset('images/logos/partner-6.png') }}" alt="">
-      </div>
-
-    </div>{# fin .carousel-track #}
-  </div>{# fin .carousel-wrapper #}
-</section>
-
-{# ── ÉQUIPE ──────────────────────────────────────────── #}
-<section class="section-equipe" id="equipe">
-  <div class="section-header">
-    <div class="sec-eyebrow">Gouvernance collégiale</div>
-    <h2 class="sec-title">L'<em>équipe</em></h2>
-    <p class="sec-desc">Un bureau partagé où chacune porte collectivement les décisions stratégiques, artistiques et opérationnelles.</p>
-  </div>
-  <div class="equipe-grid">
-    <div class="membre-card">
-      <div class="avatar">LC</div>
-      <div class="membre-name">Laure Chanteur</div>
-      <div class="membre-role">Responsable administrative & financière · Coordinatrice</div>
-    </div>
-    <div class="membre-card">
-      <div class="avatar">LB</div>
-      <div class="membre-name">Laetitia Charles-Belamour</div>
-      <div class="membre-role">Directrice artistique · Coordinatrice</div>
-    </div>
-    <div class="membre-card">
-      <div class="avatar">GB</div>
-      <div class="membre-name">Gaelle Charles-Belamour</div>
-      <div class="membre-role">Responsable projets web · Coordinatrice</div>
-    </div>
-    <div class="membre-card">
-      <div class="avatar">WZ</div>
-      <div class="membre-name">Wendie Zahibo</div>
-      <div class="membre-role">Chargée de projets & production · Coordinatrice</div>
-    </div>
-  </div>
-</section>
-
-{# ── CONTACT ─────────────────────────────────────────── #}
-<section class="section-contact" id="contact">
-  <div class="contact-inner">
-    <div class="contact-pill">✦ Plateforme en cours de développement</div>
-    <h2 class="contact-title">
-      Travaillons<br><em>ensemble.</em>
-    </h2>
-    <p class="contact-sub">
-      Pour toute demande de collaboration, partenariat ou résidence.
-    </p>
-    <a href="mailto:bonjourbazaart@gmail.com" class="btn-contact">
-      bonjourbazaart@gmail.com →
-    </a>
-  </div>
-</section>
-
-{# ── FOOTER ──────────────────────────────────────────── #}
-<footer class="footer">
-  <div class="footer-logo">
-    <img src="{{ asset('uploads/logos/BazaArt-blanc.svg') }}" alt="BazaArt" height="40">
-  </div>
-  <div class="footer-copy">Hub Artistique Pluridisciplinaire · Guadeloupe, Caraïbes</div>
-  <div class="footer-site">© 2025 BazaArt</div>
-</footer>
-
-{# JS vitrine — scroll reveal, navbar, hamburger #}
-<script src="{{ asset('js/vitrine.js') }}"></script>
-
-{# ── MODAL DON HELLOASSO ──────────────────────────────────────────── #}
-{# Overlay affiché quand l'utilisateur clique sur "Faire un don" #}
-<div id="haWidgetModal" style="
-  position: fixed;
-  inset: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(15px) brightness(0.5);
-  z-index: 2147483647;
-">
-  {# Bouton de fermeture #}
-  <button id="closeHaWidgetBtn" style="
-    position: absolute;
-    top: 20px;
-    right: 24px;
-    background: rgba(255,255,255,0.15);
-    border: 1px solid rgba(255,255,255,0.3);
-    color: #fff;
-    font-size: 1.6rem;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
+/* Liens centraux de navigation */
+.lp-nav__links {
+    display:     flex;
     align-items: center;
+    gap:         32px;
+    list-style:  none;
+    margin:      0;
+    padding:     0;
+}
+
+.lp-nav__links a {
+    font-family:    var(--body);
+    font-size:      13px;
+    font-weight:    500;
+    color:          rgba(242,239,230,0.75); /* crème légèrement atténué — repos visuel */
+    text-decoration: none;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    transition:     color var(--transition-fast);
+}
+
+.lp-nav__links a:hover,
+.lp-nav__links a:focus-visible {
+    color: var(--accent); /* lime #C6F24E au survol — cohérent avec l'état actif sidebar */
+}
+
+/* Groupe de boutons CTA (connexion + rejoindre) */
+.lp-nav__ctas {
+    display:     flex;
+    align-items: center;
+    gap:         10px;
+    flex-shrink: 0;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   COMPOSANT BOUTON — Thème Street
+   Bords FRANCS (border-radius: 0), uppercase, décalage hover.
+   Les token --btn-* Street sont déjà dans design-tokens.css.
+────────────────────────────────────────────────────────────────────── */
+
+.lp-btn {
+    display:         inline-flex;
+    align-items:     center;
     justify-content: center;
-    transition: background 0.2s;
-  " aria-label="Fermer">✕</button>
+    gap:             8px;
+    padding:         var(--btn-padding);       /* 11px 16px */
+    border-radius:   var(--btn-radius);        /* 0 dans Street */
+    font-family:     var(--body);
+    font-size:       var(--btn-font-size);     /* 12px */
+    font-weight:     var(--btn-font-weight);   /* 700 */
+    letter-spacing:  var(--btn-letter-spacing); /* .06em */
+    text-transform:  uppercase;
+    text-decoration: none;
+    border:          1px solid transparent;
+    cursor:          pointer;
+    white-space:     nowrap;
+    transition:      background var(--transition-fast),
+                     color      var(--transition-fast),
+                     box-shadow var(--transition-fast),
+                     transform  var(--transition-fast);
+}
 
-  {# Iframe HelloAsso #}
-  <div style="
-    width: min(680px, 95vw);
-    height: min(750px, 90vh);
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
-  ">
-    <iframe
-      id="haWidget"
-      src="https://www.helloasso.com/associations/bazaart/formulaires/2/widget?view=overlay"
-      style="width: 100%; height: 100%; border: none;"
-      title="Faire un don à BazaArt via HelloAsso"
-    ></iframe>
-  </div>
-</div>
+/* Bouton outline ink : bordure noire, fond transparent.
+   Utilisé pour "Connexion" dans la nav. */
+.lp-btn--outline {
+    background:   transparent;
+    color:        var(--ink);
+    border-color: var(--ink);
+}
+.lp-btn--outline:hover {
+    background:   var(--ink);
+    color:        var(--bg);
+    /* Décalage hover "affiche" — caractéristique du design Street */
+    box-shadow:   var(--shadow-offset-sm); /* 4px 4px 0 var(--ink) */
+    transform:    translate(-2px, -2px);
+}
 
+/* Bouton dark ink : fond noir, texte sable.
+   Utilisé pour "Rejoindre" dans la nav et les CTAs principaux. */
+.lp-btn--dark {
+    background:   var(--btn-dark-bg);    /* var(--ink) */
+    color:        var(--btn-dark-color); /* var(--bg) */
+    border-color: var(--ink);
+}
+.lp-btn--dark:hover {
+    background:   var(--btn-dark-hover-bg);    /* var(--accent) */
+    color:        var(--btn-dark-hover-color); /* var(--ink) */
+}
+
+/* ── Surcharges contextuelles navbar (fond sombre) ─────────────────────
+   Ces règles s'appliquent UNIQUEMENT dans .lp-nav (selector de contexte).
+   Elles n'affectent pas les boutons du même type ailleurs sur la page.
+
+   .lp-btn--outline dans la nav :
+     Sur fond sombre, la bordure noire disparaît — on la rend crème.
+     Le hover inverse : fond crème, texte encre (même inversion qu'avant,
+     mais avec les bonnes couleurs pour le contexte sombre). */
+.lp-nav .lp-btn--outline {
+    color:        var(--bg);                  /* crème — lisible sur fond sombre */
+    border-color: rgba(242,239,230,0.5);      /* bordure crème semi-transparente */
+}
+.lp-nav .lp-btn--outline:hover {
+    background:   var(--bg);                  /* fond crème au survol */
+    color:        var(--ink);                 /* texte encre — bon contraste */
+    box-shadow:   none;                       /* supprime l'effet décalé (hors contexte ici) */
+    transform:    none;
+}
+
+/* .lp-btn--dark dans la nav :
+   Sur fond sombre, le bouton "Rejoindre" (noir sur fond noir) serait
+   invisible. On le convertit en bouton lime pour qu'il ressort. */
+.lp-nav .lp-btn--dark {
+    background:   var(--accent);             /* lime #C6F24E — CTA principal */
+    color:        var(--ink);                /* texte encre — contraste maximal */
+    border-color: var(--accent);
+}
+.lp-nav .lp-btn--dark:hover {
+    background:   var(--bg);                 /* fond crème au survol */
+    color:        var(--ink);
+    border-color: var(--bg);
+}
+
+/* Bouton accent (lime) : fond vert acide, texte ink.
+   Utilisé pour les CTAs mis en avant (explorer les opps…) */
+.lp-btn--accent {
+    background:   var(--btn-primary-bg);    /* var(--accent) = lime */
+    color:        var(--btn-primary-color); /* var(--ink) */
+    border-color: var(--accent);
+}
+.lp-btn--accent:hover {
+    background: var(--btn-primary-hover-bg);    /* var(--ink) */
+    color:      var(--btn-primary-hover-color); /* var(--accent) */
+}
+
+/* Bouton ghost : transparent, bordure douce */
+.lp-btn--ghost {
+    background:   transparent;
+    color:        var(--ink);
+    border-color: var(--line-soft);
+}
+.lp-btn--ghost:hover {
+    border-color: var(--ink);
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   MENU MOBILE — Technique "checkbox trick" (CSS pur, sans JS)
+   La checkbox (invisible) contrôle l'affichage du menu via :checked.
+   Le <label> sert de bouton hamburger visible et focusable.
+
+   POURQUOI ce pattern ?
+   → Fiable partout, accessible Tab + Espace, aucun JS nécessaire.
+     On ajoute quand même un petit JS dans le bloc 'javascripts' (en bas du fichier)
+     pour fermer au clic sur un lien et à la touche Échap.
+────────────────────────────────────────────────────────────────────── */
+
+/* La checkbox est invisible mais doit rester dans le DOM pour le :checked */
+.lp-nav__mobile-toggle {
+    display:  none;
+    position: absolute;
+}
+
+/* Icône hamburger — masquée sur desktop, visible en mobile via @media */
+.lp-nav__hamburger {
+    display:        none;
+    flex-direction: column;
+    gap:            5px;
+    cursor:         pointer;
+    padding:        8px;
+    border:         none;
+    background:     transparent;
+}
+
+/* Les 3 barres du hamburger — passent en crème sur fond sombre */
+.lp-nav__hamburger span {
+    display:       block;
+    width:         24px;
+    height:        2px;
+    background:    var(--bg);  /* crème #F2EFE6 — visible sur fond --ink */
+    transition:    transform var(--transition-normal),
+                   opacity   var(--transition-normal);
+}
+
+/* Menu déroulant mobile — masqué par défaut (display:none).
+   Fond --ink pour continuité avec la navbar sombre — pas de rupture
+   visuelle entre la barre et le panneau qui s'ouvre. */
+.lp-nav__mobile-menu {
+    display:    none;
+    position:   absolute;
+    top:        100%;
+    left:       0;
+    right:      0;
+    background: var(--ink);                        /* #0D0D0D — idem navbar */
+    border-bottom: 1px solid rgba(255,255,255,0.08); /* séparateur discret */
+    padding:    24px var(--container-px);
+    flex-direction: column;
+    gap:        12px;
+}
+
+/* Quand la checkbox est cochée → menu visible via display:flex */
+.lp-nav__mobile-toggle:checked ~ .lp-nav__mobile-menu {
+    display: flex;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   COMPOSANT EYEBROW (sur-titre)
+   Street : point carré lime + texte mono uppercase
+────────────────────────────────────────────────────────────────────── */
+
+.lp-eyebrow {
+    display:        inline-flex;
+    align-items:    center;
+    gap:            var(--eyebrow-gap);           /* 8px */
+    font-family:    var(--mono);
+    font-size:      var(--eyebrow-font-size);     /* 11px */
+    font-weight:    var(--eyebrow-font-weight);   /* 700 */
+    letter-spacing: var(--eyebrow-letter-spacing); /* .12em */
+    text-transform: uppercase;
+    color:          var(--ink-mute);
+}
+
+/* Petit carré lime avant le texte — marque visuelle Street */
+.lp-eyebrow::before {
+    content:      '';
+    display:      inline-block;
+    width:        var(--eyebrow-dot-size);   /* 8px */
+    height:       var(--eyebrow-dot-size);   /* 8px */
+    background:   var(--eyebrow-dot-color);  /* var(--accent) = lime */
+    flex-shrink:  0;
+}
+
+/* Variante "no dot" pour certains eyebrows (footer, SaaS) */
+.lp-eyebrow--nodot::before {
+    display: none;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   COMPOSANT SECTION HEADER
+   Numéro mono + titre display + sous-titre + bordure bas
+────────────────────────────────────────────────────────────────────── */
+
+.lp-section-header {
+    display:        flex;
+    align-items:    baseline;
+    justify-content: space-between;
+    gap:            24px;
+    padding-block:  32px;
+    border-bottom:  var(--section-border); /* 1px solid var(--ink) */
+    margin-bottom:  0;
+}
+
+/* Groupe gauche : index + titre + sous-titre */
+.lp-section-header__left {
+    display:     flex;
+    align-items: baseline;
+    gap:         20px;
+    flex-wrap:   wrap;
+}
+
+/* Numéro (01, 02, 03…) en mono, couleur muted */
+.lp-section-header__index {
+    font-family:    var(--mono);
+    font-size:      12px;
+    font-weight:    700;
+    letter-spacing: .1em;
+    color:          var(--section-index-color); /* var(--ink-mute) */
+    flex-shrink:    0;
+}
+
+/* Titre de section — Archivo Black */
+.lp-section-header__title {
+    font-family:    var(--display);
+    font-size:      clamp(28px, 4vw, var(--section-title-size)); /* 56px max */
+    line-height:    .92;
+    letter-spacing: -.02em;
+    margin:         0;
+    color:          var(--ink);
+}
+
+/* Sous-titre — mono discret */
+.lp-section-header__sub {
+    font-family:    var(--mono);
+    font-size:      11px;
+    letter-spacing: .08em;
+    color:          var(--ink-mute);
+    text-transform: uppercase;
+}
+
+/* Action à droite du header (bouton "Tout voir") */
+.lp-section-header__action {
+    flex-shrink: 0;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   2. HERO — Cœur du design
+   Titre géant en Archivo Black, sous-titre en Instrument Serif,
+   deux CTAs empilés, bandeau de coordonnées géographiques.
+────────────────────────────────────────────────────────────────────── */
+
+.lp-hero {
+    border-bottom: 1px solid var(--ink);
+    position:      relative;
+    overflow:      hidden;
+}
+
+/* Bandeau métadonnées (eyebrow + coordonnées) */
+.lp-hero__meta {
+    display:         flex;
+    justify-content: space-between;
+    align-items:     center;
+    padding-top:     48px;
+    margin-bottom:   24px;
+}
+
+/* Coordonnées géographiques (côté droit) */
+.lp-hero__coords {
+    font-family:    var(--mono);
+    font-size:      11px;
+    letter-spacing: .1em;
+    color:          var(--ink-mute);
+}
+
+/*
+   H1 géant — le cœur du design Street.
+   clamp() assure la fluidité du font-size entre les breakpoints :
+     - mobile (320px) : ~64px
+     - 960px desktop  : ~130px
+     - large (1440px) : 180px
+   letter-spacing négatif (-0.03em) = style "affiche imprimée"
+   line-height: .88 = lignes très serrées comme une affiche typographique
+*/
+.lp-hero__h1 {
+    font-family:    var(--display); /* Archivo Black */
+    font-size:      clamp(64px, 12vw, 180px);
+    line-height:    .88;
+    letter-spacing: -.03em;
+    margin:         0;
+    color:          var(--ink);
+    text-transform: uppercase;
+}
+
+/* Mot en orange (ART) — accent-2 = orange tangerine */
+.lp-hero__h1-orange {
+    color: var(--accent-2);
+}
+
+/* Mot sur fond lime (SANS) — fond vert acide, texte ink */
+.lp-hero__h1-lime {
+    background:  var(--accent);
+    padding:     0 .12em;
+    /* display inline pour que le fond n'occupe pas toute la ligne */
+    display:     inline;
+}
+
+/* Grille sous le H1 : texte (2/3) + CTAs (1/3) */
+.lp-hero__grid {
+    display:               grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap:                   32px;
+    margin-top:            48px;
+    align-items:           end;
+    padding-bottom:        24px;
+}
+
+/* Texte de description — 2 colonnes sur 3, Instrument Serif */
+.lp-hero__desc {
+    font-family:  var(--serif);  /* Instrument Serif — éditorial, doux */
+    font-size:    clamp(18px, 2vw, 24px);
+    line-height:  1.25;
+    margin:       0;
+    grid-column:  span 2;
+    max-width:    760px;
+    color:        var(--ink);
+}
+
+.lp-hero__desc em {
+    /* <em> est sémantiquement juste (emphase légère), on conserve l'italique
+       de Instrument Serif qui est très élégant */
+    font-style: italic;
+}
+
+/* Colonne CTAs — boutons empilés */
+.lp-hero__ctas {
+    display:        flex;
+    flex-direction: column;
+    gap:            10px;
+    align-items:    flex-start;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   3. MARQUEE — Bande défilante
+   Fond --ink, texte --accent (lime), animation CSS pure.
+   Pause au survol via animation-play-state.
+────────────────────────────────────────────────────────────────────── */
+
+.lp-marquee {
+    /* Bordures haut/bas héritées de la section hero (pas besoin de les répéter) */
+    border-top:    1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    background:    var(--ink);
+    color:         var(--accent);
+    padding:       14px 0;
+    overflow:      hidden;
+    margin-top:    48px;
+}
+
+/* Piste défilante — width:max-content pour ne pas contraindre la largeur */
+.lp-marquee__track {
+    display:   flex;
+    width:     max-content;
+    animation: lp-marquee-scroll 30s linear infinite;
+}
+
+/* Pause au survol — accessibilité : l'utilisateur peut lire sans le défilement */
+.lp-marquee:hover .lp-marquee__track {
+    animation-play-state: paused;
+}
+
+/* Keyframe local pour le marquee.
+   On défile de 0 à -33.333% car le contenu est répété 3x :
+   quand on arrive à -33.333%, on est revenu au début — seamless. */
+@keyframes lp-marquee-scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-33.333%); }
+}
+
+/* Chaque item de la bande */
+.lp-marquee__item {
+    font-family:  var(--display); /* Archivo Black */
+    font-size:    32px;
+    padding:      0 32px;
+    white-space:  nowrap;
+    color:        var(--accent);
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   4. SECTION HUBS
+   Grille 3 colonnes avec bordures partagées (style "grille d'affiche").
+   Pas de gap → les bordures font le travail de séparation.
+────────────────────────────────────────────────────────────────────── */
+
+.lp-hubs {
+    /* padding-bottom géré par le container de section */
+    padding-bottom: 48px;
+}
+
+/* La grille des 3 colonnes hubs.
+   border-left + right + bottom sur le conteneur.
+   border-right sur chaque colonne (sauf la dernière) = bordures partagées,
+   sans gap, style "tableau imprimé". */
+.lp-hubs__grid {
+    display:               grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    border-left:           1px solid var(--ink);
+    border-right:          1px solid var(--ink);
+    border-bottom:         1px solid var(--ink);
+}
+
+/* Colonne hub individuelle */
+.lp-hub {
+    padding:        32px 28px;
+    display:        flex;
+    flex-direction: column;
+    gap:            20px;
+    min-height:     520px;
+    /* border-right ajouté via modificateur .lp-hub--bordered */
+}
+
+/* Séparateur vertical entre colonnes — border-right sur col 1 et 2 */
+.lp-hub--bordered {
+    border-right: 1px solid var(--ink);
+}
+
+/* En-tête de la colonne : numéro mono + chip */
+.lp-hub__header {
+    display:         flex;
+    justify-content: space-between;
+    align-items:     flex-start;
+}
+
+/* Numéro HUB 01/02/03 — mono uppercase discret */
+.lp-hub__no {
+    font-family:    var(--mono);
+    font-size:      12px;
+    font-weight:    700;
+    letter-spacing: .1em;
+    color:          var(--ink-mute);
+}
+
+/* Chip de badge (tag du hub) */
+.lp-chip {
+    display:        inline-flex;
+    align-items:    center;
+    padding:        var(--chip-padding);         /* 5px 9px */
+    border-radius:  var(--chip-radius);          /* 0 — bords francs */
+    font-family:    var(--mono);
+    font-size:      var(--chip-font-size);       /* 11px */
+    font-weight:    var(--chip-font-weight);     /* 600 */
+    letter-spacing: var(--chip-letter-spacing);  /* .04em */
+    text-transform: uppercase;
+    background:     var(--chip-default-bg);      /* --bg */
+    color:          var(--chip-default-color);   /* --ink */
+    border:         1px solid var(--ink);
+}
+
+/* Variante lime (hub Event) */
+.lp-chip--lime {
+    background:  var(--chip-accent-bg);  /* var(--accent) = lime */
+    color:       var(--ink);
+    border-color: var(--accent);
+}
+
+/* Variante orange (hub Formation) */
+.lp-chip--orange {
+    background:  var(--accent-2);
+    color:       var(--ink);
+    border-color: var(--accent-2);
+}
+
+/* Variante neutre sable (hub Ingénierie) */
+.lp-chip--sand {
+    background:  var(--bg-alt);   /* #EAE6D9 — crème foncée */
+    color:       var(--ink);
+    border-color: var(--line-soft);
+}
+
+/* Nom du hub — Archivo Black très grand */
+.lp-hub__name {
+    font-family:    var(--display);
+    font-size:      clamp(40px, 6vw, 64px);
+    line-height:    .88;
+    letter-spacing: -.02em;
+    margin:         0;
+    color:          var(--ink);
+    /* white-space:pre-line permet les retours à la ligne forcés
+       (ex: "INGÉNIERIE\nCULTURELLE") */
+    white-space:    pre-line;
+}
+
+/* Description du hub */
+.lp-hub__desc {
+    font-size:   15px;
+    line-height: 1.5;
+    color:       var(--ink-mute);
+    margin:      0;
+    flex:        1; /* pousse les stats en bas */
+}
+
+/* Bloc de stats en bas de chaque hub */
+.lp-hub__stats {
+    margin-top:   auto;
+    border-top:   1px solid var(--line-soft);
+    padding-top:  16px;
+    display:      flex;
+    flex-direction: column;
+    gap:          8px;
+}
+
+/* Ligne de stat individuelle — mono, layout flex */
+.lp-hub__stat {
+    display:         flex;
+    justify-content: space-between;
+    font-family:     var(--mono);
+    font-size:       11px;
+    letter-spacing:  .04em;
+}
+
+.lp-hub__stat-arrow {
+    color: var(--ink-mute);
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   5. SECTION SAAS PITCH
+   Fond --ink (quasi-noir), texte --bg (sable).
+   Grille 2 colonnes : pitch textuel (60%) + liste de features (40%).
+────────────────────────────────────────────────────────────────────── */
+
+.lp-saas {
+    background:  var(--ink);
+    color:       var(--bg);
+    border-top:  1px solid var(--ink);
+}
+
+.lp-saas__grid {
+    display:               grid;
+    grid-template-columns: 1.3fr .9fr;
+    gap:                   48px;
+    align-items:           flex-start;
+    padding-block:         64px;
+}
+
+/* Côté gauche : eyebrow + H2 + description */
+.lp-saas__h2 {
+    font-family:    var(--display);
+    font-size:      clamp(56px, 8vw, 108px);
+    line-height:    .85;
+    letter-spacing: -.03em;
+    margin:         12px 0 24px;
+    color:          var(--bg);
+}
+
+/* "sans le bruit." — mot mis en avant en lime */
+.lp-saas__h2-accent {
+    color: var(--accent);
+}
+
+.lp-saas__desc {
+    font-size:   18px;
+    line-height: 1.5;
+    max-width:   560px;
+    color:       rgba(242, 239, 230, .75); /* --bg à 75% d'opacité */
+    margin:      0;
+}
+
+/* Côté droit : liste de 4 features dans un encadré */
+.lp-saas__features {
+    border:  1px solid var(--bg);
+    display: flex;
+    flex-direction: column;
+    gap:     0;
+}
+
+/* Ligne de feature individuelle */
+.lp-saas__feature {
+    display:     flex;
+    gap:         18px;
+    align-items: center;
+    padding:     20px 22px;
+    border-bottom: 1px solid rgba(242, 239, 230, .1);
+    text-decoration: none;
+    color:       var(--bg);
+    transition:  background var(--transition-fast);
+}
+
+.lp-saas__feature:last-child {
+    border-bottom: none;
+}
+
+.lp-saas__feature:hover {
+    background: rgba(198, 242, 78, .08); /* lime à 8% d'opacité */
+}
+
+/* Icône carré lime 48×48px — lettre d'initiale en Archivo Black */
+.lp-saas__feature-icon {
+    width:           48px;
+    height:          48px;
+    background:      var(--accent); /* lime */
+    color:           var(--ink);
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    flex-shrink:     0;
+    font-family:     var(--display);
+    font-size:       22px;
+}
+
+.lp-saas__feature-body {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Titre de la feature — Archivo Black */
+.lp-saas__feature-title {
+    font-family:  var(--display);
+    font-size:    22px;
+    margin-bottom: 4px;
+    line-height:  1;
+}
+
+/* Description courte de la feature */
+.lp-saas__feature-desc {
+    font-size: 13px;
+    color:     rgba(242, 239, 230, .65);
+    margin:    0;
+}
+
+/* Flèche → à droite */
+.lp-saas__feature-arrow {
+    font-family:  var(--mono);
+    font-size:    16px;
+    color:        rgba(242, 239, 230, .4);
+    flex-shrink:  0;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   6. SECTION OPPORTUNITÉS — Aperçu statique
+   3 cartes en grille avec bordures partagées. Même pattern que les hubs.
+────────────────────────────────────────────────────────────────────── */
+
+.lp-opps {
+    padding-bottom: 0; /* la grille a sa propre border-bottom */
+}
+
+/* Grille des 3 cartes opportunité */
+.lp-opps__grid {
+    display:               grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    border-left:           1px solid var(--ink);
+    border-right:          1px solid var(--ink);
+    border-bottom:         1px solid var(--ink);
+}
+
+/* Carte opportunité individuelle */
+.lp-opp-card {
+    padding:        28px 24px;
+    display:        flex;
+    flex-direction: column;
+    gap:            16px;
+    min-height:     340px;
+    /* border-right ajouté via modificateur */
+}
+
+.lp-opp-card--bordered {
+    border-right: 1px solid var(--ink);
+}
+
+/* En-tête de la carte : chip type + countdown */
+.lp-opp-card__header {
+    display:         flex;
+    justify-content: space-between;
+    align-items:     center;
+}
+
+/* Countdown "J-12" en mono */
+.lp-opp-card__countdown {
+    font-family:    var(--mono);
+    font-size:      11px;
+    font-weight:    700;
+    letter-spacing: .08em;
+    color:          var(--ink-mute);
+}
+
+/* Titre de l'opportunité — Archivo Black */
+.lp-opp-card__title {
+    font-family:    var(--display);
+    font-size:      clamp(22px, 2.5vw, 28px);
+    letter-spacing: -.01em;
+    margin:         0;
+    line-height:    1.05;
+    color:          var(--ink);
+}
+
+/* Méta : lieu + montant — mono, petite taille */
+.lp-opp-card__metas {
+    display:     flex;
+    gap:         14px;
+    font-family: var(--mono);
+    font-size:   11px;
+    letter-spacing: .04em;
+    color:       var(--ink-mute);
+    align-items: center;
+}
+
+.lp-opp-card__meta {
+    display:     inline-flex;
+    gap:         5px;
+    align-items: center;
+}
+
+/* Description courte de l'opportunité */
+.lp-opp-card__desc {
+    font-size:   13.5px;
+    line-height: 1.5;
+    color:       var(--ink-mute);
+    margin:      0;
+    flex:        1;
+}
+
+/* Pied de carte : flèche → à droite */
+.lp-opp-card__footer {
+    margin-top:  auto;
+    display:     flex;
+    justify-content: flex-end;
+}
+
+.lp-opp-card__arrow {
+    font-family:  var(--mono);
+    font-size:    18px;
+    color:        var(--ink);
+    text-decoration: none;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   7. SECTION COMMUNAUTÉ — Aperçu statique
+   Grille 2 colonnes : live fictif (fond --ink) + fils de discussion.
+────────────────────────────────────────────────────────────────────── */
+
+.lp-community {
+    padding-bottom: 48px;
+}
+
+/* Grille 2 colonnes, encadrée (border sur le conteneur) */
+.lp-community__grid {
+    display:               grid;
+    grid-template-columns: 1.4fr 1fr;
+    border-left:           1px solid var(--ink);
+    border-right:          1px solid var(--ink);
+    border-bottom:         1px solid var(--ink);
+}
+
+/* Colonne live — fond noir */
+.lp-live {
+    background:  var(--ink);
+    color:       var(--bg);
+    padding:     24px;
+    border-right: 1px solid var(--ink);
+    display:     flex;
+    flex-direction: column;
+    gap:         16px;
+}
+
+/* En-tête du live : badge EN DIRECT + bouton */
+.lp-live__header {
+    display:         flex;
+    justify-content: space-between;
+    align-items:     center;
+}
+
+/* Badge "● EN DIRECT" pulsant */
+.lp-live__badge {
+    display:     flex;
+    align-items: center;
+    gap:         10px;
+    font-family: var(--mono);
+    font-size:   11px;
+    letter-spacing: .1em;
+    color:       var(--accent-2); /* orange */
+}
+
+/* Le point rouge/orange pulsant du live.
+   Animation pulse-live est définie dans design-tokens.css */
+.lp-live__dot {
+    width:        8px;
+    height:       8px;
+    background:   var(--accent-2);
+    border-radius: 50%;
+    animation:    pulse-live var(--anim-pulse-speed) ease-in-out infinite;
+}
+
+/* Zone vidéo 16:9 avec SVG de barres de fréquences */
+.lp-live__video {
+    aspect-ratio:   16 / 8;
+    background:     #1A1A1A;
+    position:       relative;
+    overflow:       hidden;
+    border:         1px solid var(--line-soft);
+}
+
+/* SVG de barres (fréquences audio fictives) — pleine largeur/hauteur */
+.lp-live__waveform {
+    width:  100%;
+    height: 100%;
+}
+
+/* Nom de l'artiste fictif en bas du live */
+.lp-live__artist {
+    position: absolute;
+    left:     16px;
+    bottom:   16px;
+    display:  flex;
+    align-items: center;
+    gap:      10px;
+}
+
+/* Avatar initiales — petit cercle coloré */
+.lp-live__avatar {
+    width:           36px;
+    height:          36px;
+    background:      var(--accent-2);
+    color:           var(--ink);
+    border-radius:   50%;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    font-family:     var(--display);
+    font-size:       13px;
+    flex-shrink:     0;
+}
+
+.lp-live__artist-name {
+    font-weight:  700;
+    font-size:    14px;
+    color:        var(--bg);
+}
+
+.lp-live__artist-tag {
+    font-family:    var(--mono);
+    font-size:      10px;
+    letter-spacing: .08em;
+    opacity:        .6;
+    color:          var(--bg);
+}
+
+/* Colonne fils de discussion */
+.lp-threads {
+    display:        flex;
+    flex-direction: column;
+}
+
+/* Thread individuel */
+.lp-thread {
+    padding:      14px 18px;
+    display:      flex;
+    gap:          12px;
+    align-items:  flex-start;
+    border-bottom: 1px solid var(--line-soft);
+}
+
+.lp-thread:last-child {
+    border-bottom: none;
+}
+
+/* Vote count en Archivo Black */
+.lp-thread__votes {
+    font-family:  var(--display);
+    font-size:    20px;
+    color:        var(--ink-mute);
+    width:        44px;
+    flex-shrink:  0;
+    line-height:  1;
+}
+
+.lp-thread__body {
+    flex:     1;
+    min-width: 0;
+}
+
+/* Tag du thread — mono uppercase */
+.lp-thread__tag {
+    font-family:    var(--mono);
+    font-size:      10px;
+    letter-spacing: .08em;
+    color:          var(--ink-mute);
+    text-transform: uppercase;
+    display:        block;
+    margin-bottom:  4px;
+}
+
+/* Titre du thread */
+.lp-thread__title {
+    font-weight:  600;
+    font-size:    14px;
+    line-height:  1.3;
+    color:        var(--ink);
+}
+
+/* Méta du thread (auteur · réponses · temps) */
+.lp-thread__meta {
+    font-family:    var(--mono);
+    font-size:      10px;
+    color:          var(--ink-mute);
+    margin-top:     6px;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   8. SECTION CTA — INSCRIPTION
+   Fond --accent (lime), texte --ink.
+   Adapté V1 : PAS de pricing — la plateforme est gratuite.
+   Le prototype avait un tableau de prix (9,90€/mois) — on le remplace
+   par un simple formulaire d'inscription email + bouton.
+────────────────────────────────────────────────────────────────────── */
+
+.lp-cta {
+    background:  var(--accent); /* lime vif */
+    border-top:  1px solid var(--ink);
+}
+
+.lp-cta__grid {
+    display:               grid;
+    grid-template-columns: 1fr 1fr;
+    gap:                   48px;
+    align-items:           center;
+    padding-block:         64px;
+}
+
+/* H2 géant — Archivo Black */
+.lp-cta__h2 {
+    font-family:    var(--display);
+    font-size:      clamp(56px, 8vw, 96px);
+    line-height:    .9;
+    letter-spacing: -.03em;
+    margin:         12px 0 0;
+    color:          var(--ink);
+}
+
+.lp-cta__eyebrow {
+    /* Dans la section lime, le point de l'eyebrow est noir (sur fond lime) */
+    color: var(--ink);
+}
+
+.lp-cta__eyebrow::before {
+    background: var(--ink);
+}
+
+/* Formulaire inline email + bouton */
+.lp-cta__form {
+    display:        flex;
+    flex-direction: column;
+    gap:            14px;
+}
+
+/* Champ email — bords francs Street */
+.lp-cta__input {
+    width:          100%;
+    height:         48px;
+    padding:        0 14px;
+    background:     var(--bg);
+    border:         1px solid var(--ink);
+    border-radius:  var(--input-radius);  /* 0 dans Street */
+    font-family:    var(--body);
+    font-size:      14px;
+    color:          var(--ink);
+    outline:        none;
+    transition:     border-color var(--transition-fast);
+}
+
+.lp-cta__input:focus {
+    border-width:   2px;
+    border-color:   var(--ink);
+}
+
+.lp-cta__input::placeholder {
+    color: var(--ink-mute);
+}
+
+/* Texte légal discret sous le formulaire */
+.lp-cta__legal {
+    font-family:    var(--mono);
+    font-size:      10px;
+    letter-spacing: .06em;
+    color:          var(--ink-mute);
+    margin:         0;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   9. FOOTER
+   Fond --ink, texte --bg. Logo géant en --accent (lime).
+────────────────────────────────────────────────────────────────────── */
+
+.lp-footer {
+    background:   var(--ink);
+    color:        var(--bg);
+    border-top:   1px solid var(--ink);
+}
+
+/* Logo géant — reproduit le style du prototype (80–220px) */
+.lp-footer__logo {
+    font-family:    var(--display);
+    font-size:      clamp(72px, 14vw, 180px);
+    line-height:    .85;
+    color:          var(--accent); /* lime — discret mais présent */
+    letter-spacing: -.03em;
+    padding-top:    48px;
+    display:        block;
+    opacity:        .85;
+}
+
+/* Grille du footer : description (2/5) + 4 colonnes de liens */
+.lp-footer__grid {
+    display:               grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap:                   32px;
+    margin-top:            32px;
+    padding-top:           32px;
+    border-top:            1px solid var(--line-soft);
+}
+
+/* Texte de présentation de l'asso */
+.lp-footer__about {
+    font-size:   13.5px;
+    line-height: 1.5;
+    color:       rgba(242, 239, 230, .65);
+    max-width:   380px;
+    margin:      12px 0 0;
+}
+
+/* Adresse physique en mono discret */
+.lp-footer__address {
+    font-family:    var(--mono);
+    font-size:      10px;
+    letter-spacing: .1em;
+    color:          var(--ink-mute);
+    margin-top:     12px;
+    line-height:    1.8;
+    opacity:        .7;
+}
+
+/* Titre de colonne de liens — mono très discret */
+.lp-footer__col-title {
+    font-family:    var(--mono);
+    font-size:      11px;
+    letter-spacing: .1em;
+    color:          rgba(242, 239, 230, .4);
+    text-transform: uppercase;
+    margin:         0;
+}
+
+/* Liste de liens dans le footer */
+.lp-footer__links {
+    list-style: none;
+    padding:    0;
+    margin:     12px 0 0;
+    display:    flex;
+    flex-direction: column;
+    gap:        8px;
+}
+
+.lp-footer__links a {
+    color:          var(--bg);
+    text-decoration: none;
+    font-size:      13px;
+    font-weight:    500;
+    transition:     color var(--transition-fast);
+}
+
+.lp-footer__links a:hover {
+    color: var(--accent);
+}
+
+/* Barre de copyright en bas */
+.lp-footer__copy {
+    margin-top:     32px;
+    padding-top:    16px;
+    border-top:     1px solid var(--line-soft);
+    display:        flex;
+    justify-content: space-between;
+    font-family:    var(--mono);
+    font-size:      11px;
+    letter-spacing: .08em;
+    color:          rgba(242, 239, 230, .5);
+    padding-bottom: 24px;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   RESPONSIVE — Mobile first
+   Breakpoints :
+     @media (max-width: 1024px) → tablette paysage
+     @media (max-width: 768px)  → tablette portrait + mobile
+     @media (max-width: 480px)  → petit mobile
+────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 1024px) {
+    /* SaaS : 1 colonne sur tablette */
+    .lp-saas__grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* CTA : 1 colonne sur tablette */
+    .lp-cta__grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Footer : 2 colonnes */
+    .lp-footer__grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+
+    /* ─ Navbar ─ */
+    /* Cache liens et CTAs desktop */
+    .lp-nav__links,
+    .lp-nav__ctas {
+        display: none;
+    }
+    /* Affiche le hamburger */
+    .lp-nav__hamburger {
+        display: flex;
+    }
+    /* Nav devient relative pour positionner le menu absolu */
+    .lp-nav {
+        position:   sticky;
+        flex-wrap:  wrap;
+        height:     auto;
+        min-height: var(--nav-height);
+    }
+
+    /* ─ Hero ─ */
+    /* Grille hero : 1 colonne */
+    .lp-hero__grid {
+        grid-template-columns: 1fr;
+    }
+    /* Le texte description reprend 1 colonne entière */
+    .lp-hero__desc {
+        grid-column: 1;
+    }
+    /* CTAs en ligne sur mobile */
+    .lp-hero__ctas {
+        flex-direction: row;
+        flex-wrap:      wrap;
+    }
+
+    /* ─ Hubs ─ */
+    /* 1 colonne, bordures redéfinies */
+    .lp-hubs__grid {
+        grid-template-columns: 1fr;
+    }
+    /* Chaque hub : border-bottom au lieu de border-right */
+    .lp-hub--bordered {
+        border-right:  none;
+        border-bottom: 1px solid var(--ink);
+    }
+
+    /* ─ SaaS ─ */
+    .lp-saas__grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* ─ Opportunités ─ */
+    .lp-opps__grid {
+        grid-template-columns: 1fr;
+    }
+    .lp-opp-card--bordered {
+        border-right:  none;
+        border-bottom: 1px solid var(--ink);
+    }
+
+    /* ─ Communauté ─ */
+    .lp-community__grid {
+        grid-template-columns: 1fr;
+    }
+    .lp-live {
+        border-right: none;
+    }
+
+    /* ─ CTA ─ */
+    .lp-cta__grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* ─ Footer ─ */
+    .lp-footer__grid {
+        grid-template-columns: 1fr;
+    }
+    .lp-footer__copy {
+        flex-direction: column;
+        gap:            8px;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Réduction du padding horizontal sur très petit écran */
+    .lp-container {
+        padding-inline: 20px;
+    }
+
+    /* Section header : empile gauche/droite */
+    .lp-section-header {
+        flex-direction: column;
+        align-items:    flex-start;
+        gap:            12px;
+    }
+
+    /* Hero méta : empile sur mobile étroit */
+    .lp-hero__meta {
+        flex-direction: column;
+        align-items:    flex-start;
+        gap:            8px;
+    }
+}
+</style>
+{% endblock %}
+
+{# ── CORPS DE LA PAGE ─────────────────────────────────────────────────────── #}
+{% block body %}
+{#
+    .lp-root est le wrapper racine de la page.
+    PAS de data-theme="editorial" ici — on veut les tokens :root Street.
+    (Le thème editorial n'est activé que sur les pages de la vitrine ancienne.)
+#}
+<div class="lp-root">
+
+    {# ════════════════════════════════════════════════════════════════════════
+       1. NAVBAR STICKY
+       Structure : logo | liens | boutons CTA | hamburger mobile
+    ════════════════════════════════════════════════════════════════════════ #}
+    <header>
+        <nav class="lp-nav" aria-label="Navigation principale">
+            <div class="lp-container">
+                <div class="lp-nav__inner">
+
+                    {# Logo — "BazaArt" en Archivo Black, ancré à gauche #}
+                    <a href="{{ path('app_home') }}" class="lp-nav__logo" aria-label="BazaArt — Retour à l'accueil">
+                        BazaArt
+                    </a>
+
+                    {#
+                        Liens desktop — ordre fidèle au prototype : Ressources → Communauté → Articles.
+                        Le lien "Communauté" pointe vers app_post_feed (feed principal de l'app).
+                        Si l'utilisateur n'est pas connecté, il sera redirigé vers /login automatiquement
+                        via le firewall Symfony.
+                    #}
+                    <ul class="lp-nav__links" role="list">
+                        <li>
+                            <a href="{{ path('app_resource_index') }}">Ressources</a>
+                        </li>
+                        <li>
+                            <a href="{{ path('app_post_feed') }}">Communauté</a>
+                        </li>
+                        <li>
+                            <a href="{{ path('app_article_index') }}">Articles</a>
+                        </li>
+                    </ul>
+
+                    {# Boutons CTA desktop #}
+                    <div class="lp-nav__ctas">
+                        {# "Connexion" — outline (secondaire) #}
+                        <a href="{{ path('app_login') }}" class="lp-btn lp-btn--outline">
+                            Connexion
+                        </a>
+                        {# "Rejoindre" — dark (primaire) #}
+                        <a href="{{ path('app_register') }}" class="lp-btn lp-btn--dark">
+                            Rejoindre
+                        </a>
+                    </div>
+
+                    {# ── Menu mobile : checkbox trick ──────────────────────────
+                       aria-hidden="true" sur la checkbox : elle n'est pas
+                       un contrôle accessible (rôle joué par le <label>).
+                       Le <label> est le vrai bouton interactif.
+                    ─────────────────────────────────────────────────────────── #}
+                </div>{# /.lp-nav__inner #}
+
+                {# La checkbox DOIT être dans le même parent que .lp-nav__mobile-menu
+                   pour que le sélecteur :checked + adjacent fonctionne. #}
+                <input
+                    type="checkbox"
+                    id="lp-nav-toggle"
+                    class="lp-nav__mobile-toggle"
+                    aria-hidden="true"
+                >
+                <label
+                    for="lp-nav-toggle"
+                    class="lp-nav__hamburger"
+                    aria-label="Ouvrir le menu"
+                >
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </label>
+
+                {# Menu mobile — affiché via CSS quand :checked.
+                   Les couleurs des boutons (.lp-btn--outline et .lp-btn--dark)
+                   sont surchargées par les règles .lp-nav .lp-btn--* définies
+                   dans le <style> ci-dessus — pas besoin de style inline ici. #}
+                <div class="lp-nav__mobile-menu" id="lp-mobile-nav">
+                    {# Liens de navigation — même ordre que le menu desktop : Ressources → Communauté → Articles #}
+                    <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--outline" style="justify-content:flex-start;">
+                        Ressources
+                    </a>
+                    <a href="{{ path('app_post_feed') }}" class="lp-btn lp-btn--outline" style="justify-content:flex-start;">
+                        Communauté
+                    </a>
+                    <a href="{{ path('app_article_index') }}" class="lp-btn lp-btn--outline" style="justify-content:flex-start;">
+                        Articles
+                    </a>
+                    {# Séparateur visuel entre nav et CTAs auth #}
+                    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.12);margin:4px 0;">
+                    {# CTAs auth — Connexion (outline) + Rejoindre (lime via .lp-nav .lp-btn--dark) #}
+                    <a href="{{ path('app_login') }}"    class="lp-btn lp-btn--outline" style="width:100%;justify-content:center;">Connexion</a>
+                    <a href="{{ path('app_register') }}" class="lp-btn lp-btn--dark"    style="width:100%;justify-content:center;">Rejoindre</a>
+                </div>
+
+            </div>{# /.lp-container #}
+        </nav>
+    </header>
+
+    <main>
+
+        {# ════════════════════════════════════════════════════════════════
+           2. HERO — Le cœur du design Street
+           Titre géant en Archivo Black + sous-titre en Instrument Serif
+           + 2 CTAs empilés.
+        ════════════════════════════════════════════════════════════════ #}
+        <section class="lp-hero" aria-labelledby="lp-hero-title">
+            <div class="lp-container">
+
+                {# Bandeau méta : eyebrow + coordonnées géographiques #}
+                <div class="lp-hero__meta">
+                    {# Eyebrow — sur-titre contextuel (prototypé : "Association · SaaS · Fr · 2026") #}
+                    <span class="lp-eyebrow" aria-hidden="true">
+                        Association · Plateforme · Fr · 2026
+                    </span>
+                    {# Coordonnées géographiques — détail "affiche de rue" du design #}
+                    <span class="lp-hero__coords" aria-hidden="true">
+                        48°&nbsp;51′&nbsp;N&nbsp;— Paris, France
+                    </span>
+                </div>
+
+                {#
+                    H1 géant — 3 lignes, style affiche typographique.
+                    Décomposition :
+                      Ligne 1 : "LE BAZAR" — texte encre pur
+                      Ligne 2 : "DE L'[ART en orange] — [SANS sur fond lime]"
+                      Ligne 3 : "LES INTERMÉDIAIRES."
+
+                    Balises sémantiques :
+                    - <span class="lp-hero__h1-orange"> : couleur, pas de sémantique
+                    - <span class="lp-hero__h1-lime">   : surlignage fond, pas de <mark>
+                      (mark = "passage notable dans un résultat de recherche" — pas pertinent ici)
+
+                    font-size: clamp(64px, 12vw, 180px) → fluide entre mobile et desktop
+                    line-height: .88 → lignes très serrées, style "affiche imprimée"
+                #}
+                <h1 class="lp-hero__h1" id="lp-hero-title">
+                    LE BAZAR<br>
+                    DE L'<span class="lp-hero__h1-orange">ART</span>
+                    &nbsp;—&nbsp;<span class="lp-hero__h1-lime">SANS</span><br>
+                    LES INTERMÉDIAIRES.
+                </h1>
+
+                {# Grille sous le H1 : texte (2 colonnes) + CTAs (1 colonne) #}
+                <div class="lp-hero__grid">
+
+                    {#
+                        Description — Instrument Serif, 22-24px.
+                        Reproduit fidèlement le texte du prototype LandingManifesto.
+                        <em> sémantiquement juste : emphase légère sur "association"
+                        et "plateforme" — les lecteurs d'écran le prononcent avec
+                        une légère insistance, ce qui correspond à l'intention.
+                    #}
+                    <p class="lp-hero__desc">
+                        BazaArt rassemble en un seul endroit ce qui était dispersé
+                        sur 200 sites, 30 newsletters et trois groupes Facebook fatigués&nbsp;:
+                        les opportunités, les pairs, les ressources, les lives.
+                        Une <em>association</em> à trois hubs, et une <em>plateforme</em>
+                        faite par et pour les artistes.
+                    </p>
+
+                    {# Colonne CTAs : "Explorer" (accent lime) + "Voir les tarifs" (ghost) #}
+                    <div class="lp-hero__ctas">
+                        <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--dark">
+                            Explorer les opportunités
+                            {# Flèche → SVG inline — pas de dépendance JS ni icône externe #}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M5 12h14M13 5l7 7-7 7"/>
+                            </svg>
+                        </a>
+                        {#
+                            "Voir les tarifs" → dans le prototype, pointe vers /pricing.
+                            En V1, la plateforme est gratuite — on redirige vers l'inscription.
+                            BACK : si une page tarifaire est créée, remplacer path('app_register')
+                            par path('app_pricing').
+                        #}
+                        <a href="{{ path('app_register') }}" class="lp-btn lp-btn--ghost">
+                            Rejoindre gratuitement
+                        </a>
+                    </div>
+
+                </div>{# /.lp-hero__grid #}
+
+            </div>{# /.lp-container #}
+
+            {# ── Marquee bande défilante ──────────────────────────────────
+               Rendu DANS la section hero (border-bottom partagée avec lui).
+               Fond --ink, texte --accent. Animation CSS pure, pause au survol.
+
+               Le contenu est répété 3 fois pour créer l'illusion de continuité :
+               quand la piste a défilé de -33.333%, on revient au début
+               de manière seamless (l'œil ne perçoit pas le reset).
+            ─────────────────────────────────────────────────────────────── #}
+            <div class="lp-marquee" aria-hidden="true">
+                <div class="lp-marquee__track">
+                    {# Répétition 1 #}
+                    <span class="lp-marquee__item">+ 240 opportunités · indexées chaque semaine</span>
+                    <span class="lp-marquee__item">· · ·</span>
+                    <span class="lp-marquee__item">forum + lives — communauté d'artistes</span>
+                    <span class="lp-marquee__item">· · ·</span>
+                    <span class="lp-marquee__item">mentorat 1-to-1</span>
+                    <span class="lp-marquee__item">· · ·</span>
+                    <span class="lp-marquee__item">la plateforme qui te répond en 24h</span>
+                    <span class="lp-marquee__item">· · ·</span>
+                    {# Répétition 2 #}
+                    <span class="lp-marquee__item">+ 240 opportunités · indexées chaque semaine</span>
+                    <span class="lp-marquee__item">· · ·</span>
+                    <span class="lp-marquee__item">forum + lives — communauté d'artistes</span>
+                    <span class="lp-marquee__item">· · ·</span>
+                    <span class="lp-marquee__item">mentorat 1-to-1</span>
+                    <span class="lp-marquee__item">· · ·</span>
+                    <span class="lp-marquee__item">la plateforme qui te répond en 24h</span>
+                    <span class="lp-marquee__item">· · ·</span>
+                    {# Répétition 3 #}
+                    <span class="lp-marquee__item">+ 240 opportunités · indexées chaque semaine</span>
+                    <span class="lp-marquee__item">· · ·</span>
+                    <span class="lp-marquee__item">forum + lives — communauté d'artistes</span>
+                    <span class="lp-marquee__item">· · ·</span>
+                    <span class="lp-marquee__item">mentorat 1-to-1</span>
+                    <span class="lp-marquee__item">· · ·</span>
+                    <span class="lp-marquee__item">la plateforme qui te répond en 24h</span>
+                    <span class="lp-marquee__item">· · ·</span>
+                </div>
+            </div>
+
+        </section>{# /.lp-hero #}
+
+
+        {# ════════════════════════════════════════════════════════════════
+           4. SECTION HUBS — Les 3 pôles de l'association
+           Grille 3 colonnes avec bordures partagées (style grille d'affiche).
+           Données statiques — fidèles au prototype LandingManifesto.
+        ════════════════════════════════════════════════════════════════ #}
+        <section class="lp-hubs lp-container" aria-labelledby="lp-hubs-title">
+
+            {# Section header avec index, titre, sous-titre #}
+            <div class="lp-section-header">
+                <div class="lp-section-header__left">
+                    <span class="lp-section-header__index" aria-hidden="true">01</span>
+                    <h2 class="lp-section-header__title" id="lp-hubs-title">
+                        Les trois hubs de l'asso
+                    </h2>
+                    <span class="lp-section-header__sub">événement · ingénierie · transmission</span>
+                </div>
+            </div>
+
+            {# Grille des 3 hubs #}
+            <div class="lp-hubs__grid">
+
+                {# ── Hub 01 : EVENT ── #}
+                <article class="lp-hub lp-hub--bordered" aria-labelledby="lp-hub-event-title">
+                    <div class="lp-hub__header">
+                        <span class="lp-hub__no">HUB 01</span>
+                        {# Chip lime — couleur prototypée pour EVENT #}
+                        <span class="lp-chip lp-chip--lime">Programmation</span>
+                    </div>
+                    <h3 class="lp-hub__name" id="lp-hub-event-title">EVENT</h3>
+                    <p class="lp-hub__desc">
+                        On produit. Soirées de restitution, vernissages alternatifs,
+                        plateaux mixtes — on met les artistes BazaArt sur scène,
+                        en vrai, devant des gens.
+                    </p>
+                    {# Micro-liste de stats en bas de colonne #}
+                    <div class="lp-hub__stats">
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>18 événements / an</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>3 villes</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>9 000 spectateurs cumulés</span>
+                        </div>
+                    </div>
+                </article>
+
+                {# ── Hub 02 : INGÉNIERIE CULTURELLE ── #}
+                <article class="lp-hub lp-hub--bordered" aria-labelledby="lp-hub-ing-title">
+                    <div class="lp-hub__header">
+                        <span class="lp-hub__no">HUB 02</span>
+                        {# Chip neutre sable — couleur --bg-alt pour ce hub #}
+                        <span class="lp-chip lp-chip--sand">Accompagnement</span>
+                    </div>
+                    {#
+                        "INGÉNIERIE\nCULTURELLE" — le retour à la ligne est
+                        rendu par white-space:pre-line sur .lp-hub__name.
+                        On utilise un <br> HTML ici pour plus de clarté.
+                    #}
+                    <h3 class="lp-hub__name" id="lp-hub-ing-title">INGÉNIERIE<br>CULTURELLE</h3>
+                    <p class="lp-hub__desc">
+                        On structure. Conseil aux artistes et aux structures sur
+                        le montage de projets, les financements croisés, et la
+                        conduite d'une production de A à Z.
+                    </p>
+                    <div class="lp-hub__stats">
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>120 projets accompagnés</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>78% taux de réussite</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>Réseau de 40 financeurs</span>
+                        </div>
+                    </div>
+                </article>
+
+                {# ── Hub 03 : FORMATION ── #}
+                <article class="lp-hub" aria-labelledby="lp-hub-form-title">
+                    <div class="lp-hub__header">
+                        <span class="lp-hub__no">HUB 03</span>
+                        {# Chip orange — accent-2 pour FORMATION #}
+                        <span class="lp-chip lp-chip--orange">Transmission</span>
+                    </div>
+                    <h3 class="lp-hub__name" id="lp-hub-form-title">FORMATION</h3>
+                    <p class="lp-hub__desc">
+                        On forme. Cycles courts (fiscalité, droit, communication, IA)
+                        animés par des pairs et des experts. Gratuit pour les adhérents,
+                        abordable pour les autres.
+                    </p>
+                    <div class="lp-hub__stats">
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>12 cycles / an</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>280 artistes formés</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>Note moyenne 4,7 / 5</span>
+                        </div>
+                    </div>
+                </article>
+
+            </div>{# /.lp-hubs__grid #}
+        </section>
+
+
+        {# ════════════════════════════════════════════════════════════════
+           5. SECTION SAAS PITCH
+           Fond --ink (quasi-noir). Grille 2 colonnes : pitch (60%)
+           + liste de 4 features dans un encadré (40%).
+           Reproduit fidèlement le bloc "SAAS PITCH" du prototype.
+        ════════════════════════════════════════════════════════════════ #}
+        <section class="lp-saas" aria-labelledby="lp-saas-title">
+            <div class="lp-container">
+                <div class="lp-saas__grid">
+
+                    {# ── Colonne gauche : pitch ── #}
+                    <div>
+                        {# Eyebrow — variante "no dot" car fond noir (le point lime passerait mal) #}
+                        <span class="lp-eyebrow lp-eyebrow--nodot" style="color:rgba(242,239,230,.5);">
+                            La plateforme
+                        </span>
+
+                        {#
+                            H2 géant — 3 lignes.
+                            "sans le bruit." en lime (--accent) sur fond noir =
+                            contraste très fort (ratio ~9:1 sur #0D0D0D).
+                        #}
+                        <h2 class="lp-saas__h2" id="lp-saas-title">
+                            Tout ce dont<br>
+                            tu as besoin,<br>
+                            <span class="lp-saas__h2-accent">sans le bruit.</span>
+                        </h2>
+
+                        <p class="lp-saas__desc">
+                            Un seul abonnement. Pas de pub. Pas de revente de tes données.
+                            Tu te connectes, tu vois ce qui te concerne, tu en parles
+                            avec des pairs, tu candidates.
+                        </p>
+                    </div>
+
+                    {# ── Colonne droite : 4 features dans un encadré ── #}
+                    <div class="lp-saas__features" aria-label="Fonctionnalités de la plateforme">
+
+                        {# Feature 1 : Opportunités #}
+                        <a href="{{ path('app_resource_index') }}" class="lp-saas__feature">
+                            {# Icône carré lime 48×48 — lettre "O" d'Opportunités #}
+                            <div class="lp-saas__feature-icon" aria-hidden="true">O</div>
+                            <div class="lp-saas__feature-body">
+                                <div class="lp-saas__feature-title">Opportunités</div>
+                                <p class="lp-saas__feature-desc">
+                                    240+ aides, résidences et appels, indexés et filtrés.
+                                </p>
+                            </div>
+                            <span class="lp-saas__feature-arrow" aria-hidden="true">→</span>
+                        </a>
+
+                        {# Feature 2 : Forum + Lives #}
+                        {#
+                            BACK : remplacer href="#" par path('app_forum_index')
+                            quand le module Communauté sera livré.
+                        #}
+                        <a href="#section-community" class="lp-saas__feature">
+                            <div class="lp-saas__feature-icon" aria-hidden="true">F</div>
+                            <div class="lp-saas__feature-body">
+                                <div class="lp-saas__feature-title">Forum + Lives</div>
+                                <p class="lp-saas__feature-desc">
+                                    Pose une question, lance un live, monte un collectif.
+                                </p>
+                            </div>
+                            <span class="lp-saas__feature-arrow" aria-hidden="true">→</span>
+                        </a>
+
+                        {# Feature 3 : Dashboard artiste #}
+                        <a href="{{ path('app_register') }}" class="lp-saas__feature">
+                            <div class="lp-saas__feature-icon" aria-hidden="true">D</div>
+                            <div class="lp-saas__feature-body">
+                                <div class="lp-saas__feature-title">Dashboard artiste</div>
+                                <p class="lp-saas__feature-desc">
+                                    Profil public, candidatures suivies, agenda.
+                                </p>
+                            </div>
+                            <span class="lp-saas__feature-arrow" aria-hidden="true">→</span>
+                        </a>
+
+                        {# Feature 4 : Blog & ressources #}
+                        {#
+                            BACK : créer route app_blog_index → /blog
+                            pour les articles longs. En V1, ancre vers les ressources.
+                        #}
+                        <a href="{{ path('app_resource_index') }}" class="lp-saas__feature">
+                            <div class="lp-saas__feature-icon" aria-hidden="true">B</div>
+                            <div class="lp-saas__feature-body">
+                                <div class="lp-saas__feature-title">Blog & ressources</div>
+                                <p class="lp-saas__feature-desc">
+                                    Articles longs, cartographies, modèles de dossier.
+                                </p>
+                            </div>
+                            <span class="lp-saas__feature-arrow" aria-hidden="true">→</span>
+                        </a>
+
+                    </div>{# /.lp-saas__features #}
+                </div>{# /.lp-saas__grid #}
+            </div>{# /.lp-container #}
+        </section>
+
+
+        {# ════════════════════════════════════════════════════════════════
+           6. SECTION OPPORTUNITÉS — Aperçu statique du flux
+           3 cartes fictives présentant le type de contenu disponible.
+           Le vrai contenu viendra de la BDD via le contrôleur (V1 avancé).
+        ════════════════════════════════════════════════════════════════ #}
+        <section class="lp-opps lp-container" aria-labelledby="lp-opps-title">
+
+            <div class="lp-section-header">
+                <div class="lp-section-header__left">
+                    <span class="lp-section-header__index" aria-hidden="true">02</span>
+                    <h2 class="lp-section-header__title" id="lp-opps-title">
+                        Ça se passe maintenant
+                    </h2>
+                    <span class="lp-section-header__sub">extrait du flux</span>
+                </div>
+                {# Bouton "Tout voir" à droite du header #}
+                <div class="lp-section-header__action">
+                    <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--outline" style="font-size:11px;padding:7px 11px;">
+                        Tout voir
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M5 12h14M13 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+
+            <div class="lp-opps__grid">
+
+                {# ── Carte 1 : Résidence ── #}
+                <article class="lp-opp-card lp-opp-card--bordered" aria-labelledby="lp-opp-1-title">
+                    <div class="lp-opp-card__header">
+                        <span class="lp-chip lp-chip--sand">Résidence</span>
+                        <span class="lp-opp-card__countdown" aria-label="12 jours restants">J-12</span>
+                    </div>
+                    <h3 class="lp-opp-card__title" id="lp-opp-1-title">
+                        Résidence de création — Chartreuse de Villeneuve
+                    </h3>
+                    <div class="lp-opp-card__metas">
+                        <span class="lp-opp-card__meta">
+                            {# Icône pin — SVG inline #}
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                            </svg>
+                            Avignon
+                        </span>
+                        <span class="lp-opp-card__meta">
+                            {# Icône euro — SVG inline #}
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M4 9h16M4 15h16M14 20c-3.3 0-6-2.7-6-6s2.7-6 6-6"/><path d="M14 4c3.3 0 6 2.7 6 6"/>
+                            </svg>
+                            jusqu'à 2&nbsp;000&nbsp;€
+                        </span>
+                    </div>
+                    <p class="lp-opp-card__desc">
+                        Résidence 4 semaines pour projets pluridisciplinaires. Hébergement inclus.
+                    </p>
+                    <div class="lp-opp-card__footer">
+                        <a href="{{ path('app_resource_index') }}" class="lp-opp-card__arrow" aria-label="Voir l'opportunité">→</a>
+                    </div>
+                </article>
+
+                {# ── Carte 2 : Bourse ── #}
+                <article class="lp-opp-card lp-opp-card--bordered" aria-labelledby="lp-opp-2-title">
+                    <div class="lp-opp-card__header">
+                        <span class="lp-chip lp-chip--lime">Bourse</span>
+                        <span class="lp-opp-card__countdown" aria-label="28 jours restants">J-28</span>
+                    </div>
+                    <h3 class="lp-opp-card__title" id="lp-opp-2-title">
+                        Bourse Beaumarchais — SACD
+                    </h3>
+                    <div class="lp-opp-card__metas">
+                        <span class="lp-opp-card__meta">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                            </svg>
+                            Paris
+                        </span>
+                        <span class="lp-opp-card__meta">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M4 9h16M4 15h16M14 20c-3.3 0-6-2.7-6-6s2.7-6 6-6"/><path d="M14 4c3.3 0 6 2.7 6 6"/>
+                            </svg>
+                            3&nbsp;000&nbsp;€
+                        </span>
+                    </div>
+                    <p class="lp-opp-card__desc">
+                        Aide à l'écriture dramatique, musicale ou numérique pour primo-candidats.
+                    </p>
+                    <div class="lp-opp-card__footer">
+                        <a href="{{ path('app_resource_index') }}" class="lp-opp-card__arrow" aria-label="Voir l'opportunité">→</a>
+                    </div>
+                </article>
+
+                {# ── Carte 3 : Appel à projets ── #}
+                <article class="lp-opp-card" aria-labelledby="lp-opp-3-title">
+                    <div class="lp-opp-card__header">
+                        <span class="lp-chip lp-chip--orange">Appel à projets</span>
+                        <span class="lp-opp-card__countdown" aria-label="45 jours restants">J-45</span>
+                    </div>
+                    <h3 class="lp-opp-card__title" id="lp-opp-3-title">
+                        Festival Afropunk Paris — Scène ouverte
+                    </h3>
+                    <div class="lp-opp-card__metas">
+                        <span class="lp-opp-card__meta">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                            </svg>
+                            Paris
+                        </span>
+                        <span class="lp-opp-card__meta">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M4 9h16M4 15h16M14 20c-3.3 0-6-2.7-6-6s2.7-6 6-6"/><path d="M14 4c3.3 0 6 2.7 6 6"/>
+                            </svg>
+                            Cachet + promo
+                        </span>
+                    </div>
+                    <p class="lp-opp-card__desc">
+                        Candidature pour la scène émergente du festival, toutes disciplines.
+                    </p>
+                    <div class="lp-opp-card__footer">
+                        <a href="{{ path('app_resource_index') }}" class="lp-opp-card__arrow" aria-label="Voir l'opportunité">→</a>
+                    </div>
+                </article>
+
+            </div>{# /.lp-opps__grid #}
+        </section>
+
+
+        {# ════════════════════════════════════════════════════════════════
+           7. SECTION COMMUNAUTÉ — Aperçu statique
+           Grille 2 colonnes : preview live fictif (fond --ink) + fils de discussion.
+        ════════════════════════════════════════════════════════════════ #}
+        <section class="lp-community lp-container" id="section-community" aria-labelledby="lp-community-title">
+
+            <div class="lp-section-header">
+                <div class="lp-section-header__left">
+                    <span class="lp-section-header__index" aria-hidden="true">03</span>
+                    <h2 class="lp-section-header__title" id="lp-community-title">
+                        La communauté en direct
+                    </h2>
+                    <span class="lp-section-header__sub">forum &amp; lives</span>
+                </div>
+                <div class="lp-section-header__action">
+                    {#
+                        BACK : remplacer href="#" par path('app_forum_index')
+                        quand le module Forum sera livré.
+                    #}
+                    <a href="#" class="lp-btn lp-btn--outline" style="font-size:11px;padding:7px 11px;">
+                        Aller au forum
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M5 12h14M13 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+
+            <div class="lp-community__grid">
+
+                {# ── Colonne gauche : preview live fictif ── #}
+                <div class="lp-live" aria-label="Live en cours — exemple fictif">
+
+                    <div class="lp-live__header">
+                        {# Badge "● EN DIRECT" avec point pulsant #}
+                        <div class="lp-live__badge">
+                            <span class="lp-live__dot" aria-hidden="true"></span>
+                            EN DIRECT · 312 SPECTATEURS
+                        </div>
+                        {# Bouton "Rejoindre" — pointe vers l'inscription en V1 #}
+                        <a href="{{ path('app_register') }}" class="lp-btn lp-btn--accent" style="font-size:11px;padding:7px 11px;">
+                            Rejoindre
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                        </a>
+                    </div>
+
+                    {# Zone vidéo 16:9 — SVG de barres de fréquences fictives #}
+                    <div class="lp-live__video" aria-hidden="true">
+                        {#
+                            SVG de barres de fréquences — reproduit le style du prototype.
+                            Les barres ont des hauteurs calculées via sin/cos dans le proto React ;
+                            ici on code des valeurs représentatives à la main.
+                            Les valeurs h= correspondent à : 30 + |sin(i×0.6)|×80 + |cos(i×0.2)|×30
+                        #}
+                        <svg class="lp-live__waveform" viewBox="0 0 600 200" preserveAspectRatio="none" role="img" aria-label="Visualisation audio fictive">
+                            {# Série de rectangles représentant des barres audio #}
+                            <rect x="2"   y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
+                            <rect x="12"  y="60"  width="6" height="80" fill="#C6F24E" opacity=".64"/>
+                            <rect x="22"  y="50"  width="6" height="100" fill="#C6F24E" opacity=".76"/>
+                            <rect x="32"  y="68"  width="6" height="64" fill="#C6F24E" opacity=".52"/>
+                            <rect x="42"  y="40"  width="6" height="120" fill="#C6F24E" opacity=".88"/>
+                            <rect x="52"  y="74"  width="6" height="52" fill="#C6F24E" opacity=".52"/>
+                            <rect x="62"  y="55"  width="6" height="90" fill="#C6F24E" opacity=".64"/>
+                            <rect x="72"  y="65"  width="6" height="70" fill="#C6F24E" opacity=".52"/>
+                            <rect x="82"  y="45"  width="6" height="110" fill="#C6F24E" opacity=".76"/>
+                            <rect x="92"  y="70"  width="6" height="60" fill="#C6F24E" opacity=".52"/>
+                            <rect x="102" y="35"  width="6" height="130" fill="#C6F24E" opacity=".88"/>
+                            <rect x="112" y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
+                            <rect x="122" y="58"  width="6" height="84" fill="#C6F24E" opacity=".64"/>
+                            <rect x="132" y="48"  width="6" height="104" fill="#C6F24E" opacity=".76"/>
+                            <rect x="142" y="66"  width="6" height="68" fill="#C6F24E" opacity=".52"/>
+                            <rect x="152" y="42"  width="6" height="116" fill="#C6F24E" opacity=".88"/>
+                            <rect x="162" y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
+                            <rect x="172" y="52"  width="6" height="96" fill="#C6F24E" opacity=".64"/>
+                            <rect x="182" y="62"  width="6" height="76" fill="#C6F24E" opacity=".52"/>
+                            <rect x="192" y="44"  width="6" height="112" fill="#C6F24E" opacity=".76"/>
+                            <rect x="202" y="74"  width="6" height="52" fill="#C6F24E" opacity=".52"/>
+                            <rect x="212" y="38"  width="6" height="124" fill="#C6F24E" opacity=".88"/>
+                            <rect x="222" y="68"  width="6" height="64" fill="#C6F24E" opacity=".52"/>
+                            <rect x="232" y="56"  width="6" height="88" fill="#C6F24E" opacity=".64"/>
+                            <rect x="242" y="46"  width="6" height="108" fill="#C6F24E" opacity=".76"/>
+                            <rect x="252" y="70"  width="6" height="60" fill="#C6F24E" opacity=".52"/>
+                            <rect x="262" y="36"  width="6" height="128" fill="#C6F24E" opacity=".88"/>
+                            <rect x="272" y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
+                            <rect x="282" y="54"  width="6" height="92" fill="#C6F24E" opacity=".64"/>
+                            <rect x="292" y="64"  width="6" height="72" fill="#C6F24E" opacity=".52"/>
+                            <rect x="302" y="40"  width="6" height="120" fill="#C6F24E" opacity=".76"/>
+                            <rect x="312" y="76"  width="6" height="48" fill="#C6F24E" opacity=".52"/>
+                            <rect x="322" y="34"  width="6" height="132" fill="#C6F24E" opacity=".88"/>
+                            <rect x="332" y="66"  width="6" height="68" fill="#C6F24E" opacity=".52"/>
+                            <rect x="342" y="50"  width="6" height="100" fill="#C6F24E" opacity=".64"/>
+                            <rect x="352" y="60"  width="6" height="80" fill="#C6F24E" opacity=".76"/>
+                            <rect x="362" y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
+                            <rect x="372" y="42"  width="6" height="116" fill="#C6F24E" opacity=".88"/>
+                            <rect x="382" y="68"  width="6" height="64" fill="#C6F24E" opacity=".52"/>
+                            <rect x="392" y="52"  width="6" height="96" fill="#C6F24E" opacity=".64"/>
+                            <rect x="402" y="62"  width="6" height="76" fill="#C6F24E" opacity=".52"/>
+                            <rect x="412" y="38"  width="6" height="124" fill="#C6F24E" opacity=".76"/>
+                            <rect x="422" y="74"  width="6" height="52" fill="#C6F24E" opacity=".52"/>
+                            <rect x="432" y="46"  width="6" height="108" fill="#C6F24E" opacity=".88"/>
+                            <rect x="442" y="70"  width="6" height="60" fill="#C6F24E" opacity=".52"/>
+                            <rect x="452" y="56"  width="6" height="88" fill="#C6F24E" opacity=".64"/>
+                            <rect x="462" y="44"  width="6" height="112" fill="#C6F24E" opacity=".76"/>
+                            <rect x="472" y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
+                            <rect x="482" y="36"  width="6" height="128" fill="#C6F24E" opacity=".88"/>
+                            <rect x="492" y="64"  width="6" height="72" fill="#C6F24E" opacity=".52"/>
+                            <rect x="502" y="48"  width="6" height="104" fill="#C6F24E" opacity=".64"/>
+                            <rect x="512" y="58"  width="6" height="84" fill="#C6F24E" opacity=".76"/>
+                            <rect x="522" y="74"  width="6" height="52" fill="#C6F24E" opacity=".52"/>
+                            <rect x="532" y="40"  width="6" height="120" fill="#C6F24E" opacity=".88"/>
+                            <rect x="542" y="66"  width="6" height="68" fill="#C6F24E" opacity=".52"/>
+                            <rect x="552" y="54"  width="6" height="92" fill="#C6F24E" opacity=".64"/>
+                            <rect x="562" y="62"  width="6" height="76" fill="#C6F24E" opacity=".76"/>
+                            <rect x="572" y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
+                            <rect x="582" y="44"  width="6" height="112" fill="#C6F24E" opacity=".88"/>
+                            <rect x="592" y="68"  width="6" height="64" fill="#C6F24E" opacity=".52"/>
+                        </svg>
+
+                        {# Artiste fictif en bas du live #}
+                        <div class="lp-live__artist">
+                            <div class="lp-live__avatar" aria-hidden="true">ST</div>
+                            <div>
+                                <div class="lp-live__artist-name">Sékou Traoré</div>
+                                <div class="lp-live__artist-tag">SET MODULAIRE — AMBIENT / DRONE</div>
+                            </div>
+                        </div>
+
+                    </div>{# /.lp-live__video #}
+
+                </div>{# /.lp-live #}
+
+                {# ── Colonne droite : fils de discussion fictifs ── #}
+                <div class="lp-threads" aria-label="Fils de discussion récents">
+
+                    {# Thread 1 #}
+                    <div class="lp-thread">
+                        <div class="lp-thread__votes" aria-label="142 votes">142</div>
+                        <div class="lp-thread__body">
+                            <span class="lp-thread__tag">fiscalité</span>
+                            <div class="lp-thread__title">
+                                Comment déclarer ses droits d'auteur en micro-entrepreneur ?
+                            </div>
+                            <div class="lp-thread__meta">Aïcha M. · 18 réponses · il y a 2h</div>
+                        </div>
+                    </div>
+
+                    {# Thread 2 #}
+                    <div class="lp-thread">
+                        <div class="lp-thread__votes" aria-label="98 votes">098</div>
+                        <div class="lp-thread__body">
+                            <span class="lp-thread__tag">résidences</span>
+                            <div class="lp-thread__title">
+                                Retours sur la Villa Médicis — candidature 2026 ?
+                            </div>
+                            <div class="lp-thread__meta">Kader B. · 31 réponses · il y a 5h</div>
+                        </div>
+                    </div>
+
+                    {# Thread 3 #}
+                    <div class="lp-thread">
+                        <div class="lp-thread__votes" aria-label="67 votes">067</div>
+                        <div class="lp-thread__body">
+                            <span class="lp-thread__tag">technique</span>
+                            <div class="lp-thread__title">
+                                Comparatif outils IA pour musiciens — 2026 edition
+                            </div>
+                            <div class="lp-thread__meta">Nneka O. · 12 réponses · il y a 1j</div>
+                        </div>
+                    </div>
+
+                    {# Thread 4 #}
+                    <div class="lp-thread">
+                        <div class="lp-thread__votes" aria-label="54 votes">054</div>
+                        <div class="lp-thread__body">
+                            <span class="lp-thread__tag">collectif</span>
+                            <div class="lp-thread__title">
+                                On lance un collectif photo afro-caribéen — qui est in ?
+                            </div>
+                            <div class="lp-thread__meta">Marcus D. · 47 réponses · il y a 2j</div>
+                        </div>
+                    </div>
+
+                </div>{# /.lp-threads #}
+
+            </div>{# /.lp-community__grid #}
+        </section>
+
+
+        {# ════════════════════════════════════════════════════════════════
+           8. SECTION CTA — Inscription gratuite
+           Fond --accent (lime). Adapté V1 : pas de pricing.
+           La plateforme est gratuite en V1 — on propose l'inscription directe.
+
+           POURQUOI ne pas reproduire le pricing du prototype ?
+           → Le CDC V3 (section 4) confirme : "V1 = pas de Stripe, pas de tarifs".
+             Le prototype avait un pricing 9,90€ qui n'est pas V1. On le remplace
+             par un CTA d'inscription simple + formulaire email inline.
+        ════════════════════════════════════════════════════════════════ #}
+        <section class="lp-cta" id="section-cta" aria-labelledby="lp-cta-title">
+            <div class="lp-container">
+                <div class="lp-cta__grid">
+
+                    {# ── Colonne gauche : titre + message ── #}
+                    <div>
+                        {# Eyebrow adapté — couleur ink sur fond lime #}
+                        <span class="lp-eyebrow lp-cta__eyebrow">
+                            Gratuit en 2026
+                        </span>
+                        {#
+                            H2 géant — message simple et direct.
+                            "Rejoindre gratuitement." = clair sur la gratuité V1.
+                        #}
+                        <h2 class="lp-cta__h2" id="lp-cta-title">
+                            Rejoindre<br>
+                            gratuitement.
+                        </h2>
+                    </div>
+
+                    {# ── Colonne droite : formulaire email + bouton ── #}
+                    <div>
+                        {#
+                            Formulaire : action → page d'inscription (app_register).
+                            Le formulaire Symfony complet est sur cette page.
+                            Ici on pré-remplit juste l'email pour fluidifier le parcours.
+                            BACK : le contrôleur app_register peut récupérer le param
+                            "email" en GET pour pré-remplir le champ email du formulaire.
+                        #}
+                        <form class="lp-cta__form" action="{{ path('app_register') }}" method="get" aria-label="Formulaire d'inscription rapide">
+                            <label for="lp-email-input" class="sr-only">Votre adresse email</label>
+                            <input
+                                type="email"
+                                id="lp-email-input"
+                                name="email"
+                                class="lp-cta__input"
+                                placeholder="ton@email.fr"
+                                autocomplete="email"
+                            >
+                            <button type="submit" class="lp-btn lp-btn--dark" style="width:100%;justify-content:center;font-size:13px;padding:14px 20px;">
+                                Créer mon compte
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M5 12h14M13 5l7 7-7 7"/>
+                                </svg>
+                            </button>
+                        </form>
+                        {# Lien "Déjà membre" discret #}
+                        <p class="lp-cta__legal" style="margin-top:12px;">
+                            Déjà membre ?
+                            <a href="{{ path('app_login') }}" style="color:var(--ink);text-decoration:underline;text-underline-offset:3px;">
+                                Se connecter
+                            </a>
+                            · Aucun paiement requis.
+                        </p>
+                    </div>
+
+                </div>{# /.lp-cta__grid #}
+            </div>{# /.lp-container #}
+        </section>
+
+    </main>
+
+
+    {# ════════════════════════════════════════════════════════════════════════
+       9. FOOTER
+       Reproduit fidèlement le Footer du prototype JSX.
+       Logo géant en lime, 2 colonnes de liens (Plateforme + Légal).
+       Note : les routes /confidentialite, /cgu, /mentions-legales n'existent
+       pas encore.
+       BACK : créer les pages statiques via un StaticController avec ces routes.
+    ════════════════════════════════════════════════════════════════════════ #}
+    <footer class="lp-footer" role="contentinfo">
+        <div class="lp-container">
+
+            {# Logo géant — style affiche, opacité réduite #}
+            <span class="lp-footer__logo" aria-label="BazaArt">BAZAART.</span>
+
+            {# Grille : description + 2 colonnes de liens #}
+            <div class="lp-footer__grid">
+
+                {# Colonne description #}
+                <div>
+                    <span class="lp-eyebrow lp-eyebrow--nodot" style="color:rgba(242,239,230,.4);">
+                        L'asso
+                    </span>
+                    <p class="lp-footer__about">
+                        Association loi 1901 basée à Paris, opérant la plateforme BazaArt
+                        et trois hubs : événementiel, ingénierie culturelle et formation.
+                    </p>
+                    <p class="lp-footer__address">
+                        PARIS, FRANCE<br>
+                        ASSOCIATION LOI 1901
+                    </p>
+                </div>
+
+                {# Colonne Plateforme #}
+                <nav aria-label="Liens plateforme">
+                    <p class="lp-footer__col-title">Plateforme</p>
+                    <ul class="lp-footer__links" role="list">
+                        <li><a href="{{ path('app_resource_index') }}">Ressources</a></li>
+                        {# BACK : route app_forum_index → /forum #}
+                        <li><a href="#">Forum</a></li>
+                        {# BACK : route app_dashboard (artiste) #}
+                        <li><a href="#">Dashboard</a></li>
+                    </ul>
+                </nav>
+
+                {# Colonne Légal #}
+                <nav aria-label="Liens légaux">
+                    <p class="lp-footer__col-title">Légal</p>
+                    <ul class="lp-footer__links" role="list">
+                        {# BACK : route app_privacy → /confidentialite (StaticController) #}
+                        <li><a href="/confidentialite">Confidentialité</a></li>
+                        {# BACK : route app_cgu → /cgu (StaticController) #}
+                        <li><a href="/cgu">CGU</a></li>
+                        {# BACK : route app_mentions_legales → /mentions-legales #}
+                        <li><a href="/mentions-legales">Mentions légales</a></li>
+                    </ul>
+                </nav>
+
+            </div>{# /.lp-footer__grid #}
+
+            {# Barre de copyright #}
+            <div class="lp-footer__copy">
+                <span>© 2026 BAZAART — ASSOCIATION LOI 1901</span>
+                <span>v1.0 · PARIS, FRANCE</span>
+            </div>
+
+        </div>{# /.lp-container #}
+    </footer>
+
+</div>{# /.lp-root #}
+{% endblock %}
+
+
+{# ── JAVASCRIPT MINIMAL (menu mobile + fermeture) ────────────────────────── #}
+{#
+    {{ parent() }} en PREMIER — obligatoire pour ne pas écraser les scripts
+    déclarés dans base.html.twig (importmap Stimulus, Turbo, etc.).
+    Sans cet appel, tout JS ajouté au parent serait ignoré sur cette page.
+#}
+{% block javascripts %}
+{{ parent() }}
 <script>
-  // Ouvrir le modal don HelloAsso
-  document.getElementById('openHaOverlay').addEventListener('click', function () {
-    var modal = document.getElementById('haWidgetModal');
-    modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden'; // empêche le scroll derrière
-  });
+(function () {
+    'use strict';
 
-  // Fermer le modal via le bouton ✕
-  document.getElementById('closeHaWidgetBtn').addEventListener('click', function () {
-    document.getElementById('haWidgetModal').style.display = 'none';
-    document.body.style.overflow = '';
-  });
+    // Récupère la checkbox de contrôle du menu mobile
+    var toggle = document.getElementById('lp-nav-toggle');
+    if (!toggle) return;
 
-  // Fermer le modal en cliquant sur l'overlay (hors iframe)
-  document.getElementById('haWidgetModal').addEventListener('click', function (e) {
-    if (e.target === this) {
-      this.style.display = 'none';
-      document.body.style.overflow = '';
-    }
-  });
+    // Ferme le menu quand on clique sur un lien à l'intérieur.
+    // Par défaut, cliquer sur un lien ancre (#section-xxx) ne décoche
+    // pas la checkbox — ce JS corrige ce comportement.
+    document.querySelectorAll('.lp-nav__mobile-menu a').forEach(function (link) {
+        link.addEventListener('click', function () {
+            toggle.checked = false;
+        });
+    });
 
-  // Fermer le modal avec la touche Echap
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') {
-      document.getElementById('haWidgetModal').style.display = 'none';
-      document.body.style.overflow = '';
-    }
-  });
+    // Ferme le menu à la touche Échap — accessibilité clavier.
+    // Permet aux utilisateurs de navigation au clavier de fermer le menu
+    // sans devoir trouver et cliquer de nouveau sur le hamburger.
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && toggle.checked) {
+            toggle.checked = false;
+        }
+    });
+
+})();
 </script>
-
-</body>
-</html>
+{% endblock %}

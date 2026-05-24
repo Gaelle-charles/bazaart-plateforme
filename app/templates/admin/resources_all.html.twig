@@ -1,127 +1,296 @@
 {% extends 'base_admin.html.twig' %}
 
+{#
+ # admin/resources_all.html.twig — Toutes les ressources (tous statuts)
+ #
+ # Thème : Street
+ # Layout parent : base_admin.html.twig
+ #
+ # Variables disponibles (AdminController::resourcesAll()) :
+ #   - resources    : Resource[] — liste filtrée selon statusFilter
+ #   - statusFilter : string     — 'all' | 'pending' | 'published' | 'rejected'
+ #
+ # Actions disponibles :
+ #   - Publier   : POST /admin/resources/{id}/publish (CSRF : 'resource_action_{id}')
+ #   - Rejeter   : POST /admin/resources/{id}/reject  (CSRF : 'resource_action_{id}')
+ #   - Remettre  : POST /admin/resources/{id}/reset   (CSRF : 'resource_action_{id}')
+ #}
+
 {% block title %}Toutes les ressources — Admin BazaArt{% endblock %}
-{% block page_title %}Toutes les ressources{% endblock %}
+{% block page_title %}Ressources{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* Lien retour */
-    .back-link {
-        display: inline-flex; align-items: center; gap: 6px;
-        font-size: 13px; color: var(--color-text-muted); text-decoration: none;
+
+    /* ── Zone de contenu fond sable ─────────────────────────────────────────── */
+    .app-content {
+        background: var(--bg);
+        font-family: var(--body);
+    }
+
+    /* ── Retour vers le dashboard ───────────────────────────────────────────── */
+    .adm-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
+        text-decoration: none;
         margin-bottom: 20px;
+        transition: color var(--transition-fast);
     }
-    .back-link:hover { color: var(--color-text); }
+    .adm-back:hover { color: var(--ink); }
 
-    /* Onglets de filtre par statut */
-    .filter-tabs { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
-
-    .filter-tab {
-        display: inline-flex; align-items: center; height: 34px; padding: 0 16px;
-        border-radius: var(--radius-full); font-size: 12px; font-weight: 600;
-        text-decoration: none; border: 1px solid var(--color-border);
-        color: var(--color-text-muted); background: var(--color-white);
-        transition: all 0.15s;
+    /* ── Ligne d'en-tête : titre + compteur ─────────────────────────────────── */
+    .adm-section-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 16px;
     }
-    .filter-tab:hover { border-color: var(--color-green); color: var(--color-green); }
-
-    /* Onglet actif */
-    .filter-tab--active {
-        background: var(--color-green); color: white;
-        border-color: var(--color-green);
+    .adm-section-title {
+        font-family: var(--display);   /* Archivo Black */
+        font-size: 24px;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--ink);
     }
-
-    /* Compteur de résultats */
-    .result-count { font-size: 12px; color: var(--color-text-light); margin-bottom: 14px; }
-
-    /* Tableau */
-    .resources-table {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-        overflow: hidden; width: 100%;
+    .adm-count {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .06em;
     }
 
-    .resources-table table { width: 100%; border-collapse: collapse; }
-
-    .resources-table thead tr {
-        background: var(--color-bg); border-bottom: 2px solid var(--color-border);
+    /* ── Onglets de filtre — style chips Street (bords francs, uppercase mono) ── */
+    .adm-filter-tabs {
+        display: flex;
+        gap: 0;
+        border: 1px solid var(--ink);
+        margin-bottom: 20px;
+        /* inline-flex pour que la largeur épouse le contenu, pas le full-width */
+        width: fit-content;
     }
-
-    .resources-table th {
-        padding: 10px 16px; text-align: left;
-        font-size: 10px; font-weight: 700; color: var(--color-text-light);
-        text-transform: uppercase; letter-spacing: 0.06em;
+    /* Chaque onglet = un chip cliquable #}*/
+    .adm-filter-tab {
+        display: inline-flex;
+        align-items: center;
+        height: 34px;
+        padding: 0 16px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        text-decoration: none;
+        color: var(--ink);
+        background: var(--bg);
+        border-right: 1px solid var(--ink);
+        transition: background var(--transition-fast);
     }
-
-    .resources-table td {
-        padding: 12px 16px; border-bottom: 1px solid var(--color-border);
-        font-size: 13px; color: var(--color-text);
+    .adm-filter-tab:last-child { border-right: none; }
+    .adm-filter-tab:hover { background: var(--bg-alt); }
+    /* Onglet actif : fond ink, texte accent */
+    .adm-filter-tab--active {
+        background: var(--ink);
+        color: var(--accent);
     }
+    .adm-filter-tab--active:hover { background: var(--ink); opacity: .9; }
 
-    .resources-table tbody tr:last-child td { border-bottom: none; }
-    .resources-table tbody tr:hover { background: var(--color-bg); }
-
-    /* Badges de statut */
-    .status-badge {
-        display: inline-flex; align-items: center; height: 20px; padding: 0 8px;
-        border-radius: var(--radius-full); font-size: 10px; font-weight: 700;
+    /* ── Tableau Street : header fond ink + texte accent ────────────────────── */
+    /* Conteneur avec scroll horizontal sur mobile */
+    .adm-table-wrap {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        overflow-x: auto;             /* scroll horizontal si écran étroit */
+        -webkit-overflow-scrolling: touch;
+    }
+    .adm-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 700px;             /* largeur minimale avant scroll */
+    }
+    /* En-tête : fond quasi-noir, texte vert acide */
+    .adm-table thead tr {
+        background: var(--ink);
+    }
+    .adm-table th {
+        padding: 11px 14px;
+        text-align: left;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--accent);
+        border-right: 1px solid rgba(198,242,78,.15);  /* séparateur léger sur fond noir */
         white-space: nowrap;
     }
-    .status-pending   { background: #fff3cd; color: #856404; }
-    .status-published { background: #d4edda; color: #155724; }
-    .status-rejected  { background: #f8d7da; color: #721c24; }
-
-    /* Boutons d'action inline dans le tableau */
-    .action-btn {
-        display: inline-flex; align-items: center; justify-content: center;
-        height: 26px; padding: 0 10px; border: none; border-radius: var(--radius-sm);
-        font-size: 11px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+    .adm-table th:last-child { border-right: none; }
+    /* Lignes du corps */
+    .adm-table td {
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 13px;
+        color: var(--ink);
+        vertical-align: middle;
     }
-    .action-btn-publish { background: #d4edda; color: #155724; }
-    .action-btn-publish:hover { background: #c3e6cb; }
-    .action-btn-reject  { background: #f8d7da; color: #721c24; }
-    .action-btn-reject:hover  { background: #f5c6cb; }
-    .action-btn-reset   { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
-    .action-btn-reset:hover   { border-color: var(--color-green); color: var(--color-green); }
+    .adm-table tbody tr:last-child td { border-bottom: none; }
+    /* Alternance de fond (zébrage discret) */
+    .adm-table tbody tr:nth-child(even) { background: var(--bg-alt); }
+    .adm-table tbody tr:hover { background: rgba(13,13,13,.04); }
+    /* Ligne surlignée pour les ressources en attente */
+    .adm-table tbody tr.adm-row--pending { background: rgba(255,107,44,.06); }
+    .adm-table tbody tr.adm-row--pending:hover { background: rgba(255,107,44,.1); }
 
-    /* État vide */
-    .empty-state {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); padding: 48px; text-align: center;
-        color: var(--color-text-muted); font-size: 14px;
+    /* ── Cellule ID — monospace discret ─────────────────────────────────────── */
+    .adm-cell-id {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        white-space: nowrap;
     }
+
+    /* ── Cellule titre ──────────────────────────────────────────────────────── */
+    .adm-cell-title {
+        font-weight: 600;
+        max-width: 260px;
+    }
+
+    /* ── Badges de statut — style Street (bords francs, mono) ───────────────── */
+    .adm-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 9px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        /* Pas de border-radius dans Street */
+    }
+    /* Pending : fond orange tangerine */
+    .adm-badge--pending {
+        background: var(--accent-2);
+        color: var(--ink);
+    }
+    /* Published : fond vert acide */
+    .adm-badge--published {
+        background: var(--accent);
+        color: var(--ink);
+    }
+    /* Rejected : fond danger rouge */
+    .adm-badge--rejected {
+        background: var(--danger);
+        color: #fff;
+    }
+
+    /* ── Boutons d'action inline — petits, bords francs ─────────────────────── */
+    .adm-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 26px;
+        padding: 0 10px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        border: 1px solid var(--ink);
+        cursor: pointer;
+        transition: box-shadow var(--transition-fast);
+        white-space: nowrap;
+    }
+    .adm-action-btn:hover { box-shadow: var(--shadow-offset-sm); }
+    /* Publier : fond vert acide */
+    .adm-action-btn--publish {
+        background: var(--accent);
+        color: var(--ink);
+    }
+    /* Rejeter : fond danger */
+    .adm-action-btn--reject {
+        background: var(--danger);
+        color: #fff;
+        border-color: var(--danger);
+    }
+    .adm-action-btn--reject:hover { box-shadow: 4px 4px 0 var(--danger); }
+    /* Remettre en attente : fond neutre */
+    .adm-action-btn--reset {
+        background: var(--bg-alt);
+        color: var(--ink-mute);
+    }
+    .adm-action-btn--reset:hover { color: var(--ink); }
+
+    .adm-actions-cell {
+        display: flex;
+        gap: 5px;
+        flex-wrap: nowrap;
+    }
+
+    /* ── État vide ──────────────────────────────────────────────────────────── */
+    .adm-empty-state {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        padding: 48px;
+        text-align: center;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink-mute);
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# Lien retour vers le tableau de bord admin #}
-<a href="{{ path('app_admin_dashboard') }}" class="back-link">← Tableau de bord</a>
+{# ── Lien de retour vers le tableau de bord ───────────────────────────────── #}
+<a href="{{ path('app_admin_dashboard') }}" class="adm-back">← Tableau de bord</a>
 
-{# ── Onglets de filtre par statut ── #}
-<div class="filter-tabs">
-    {% for status, label in {'all': 'Toutes', 'pending': 'En attente', 'published': 'Publiées', 'rejected': 'Rejetées'} %}
-        {# L'onglet actif est celui dont le statut correspond au filtre courant #}
+{# ── En-tête avec titre et compteur ──────────────────────────────────────── #}
+<div class="adm-section-header">
+    <h2 class="adm-section-title">Toutes les ressources</h2>
+    {% if resources is not empty %}
+        <span class="adm-count">{{ resources|length }} résultat{{ resources|length > 1 ? 's' : '' }}</span>
+    {% endif %}
+</div>
+
+{#
+  ── Onglets de filtre par statut ─────────────────────────────────────────────
+  On itère sur un objet associatif {valeur: libellé}.
+  Le filtre actif correspond à statusFilter (passé par le contrôleur).
+  'all' est la valeur par défaut quand aucun filtre n'est sélectionné.
+#}
+<div class="adm-filter-tabs" role="tablist">
+    {% for status, label in {'all': 'Toutes', 'pending_validation': 'En attente', 'published': 'Publiées', 'rejected': 'Rejetées'} %}
         {% set isActive = (statusFilter == status) or (statusFilter is not defined and status == 'all') %}
         <a href="{{ path('app_admin_resources_all', status != 'all' ? {status: status} : {}) }}"
-           class="filter-tab {{ isActive ? 'filter-tab--active' : '' }}">
+           class="adm-filter-tab {{ isActive ? 'adm-filter-tab--active' : '' }}"
+           role="tab"
+           aria-selected="{{ isActive ? 'true' : 'false' }}">
             {{ label }}
         </a>
     {% endfor %}
 </div>
 
 {% if resources is empty %}
-    <div class="empty-state">Aucune ressource.</div>
+    <div class="adm-empty-state">Aucune ressource pour ce filtre.</div>
 {% else %}
-    {# Compteur #}
-    <p class="result-count">{{ resources|length }} ressource{{ resources|length > 1 ? 's' : '' }}</p>
 
-    {# Tableau de toutes les ressources #}
-    <div class="resources-table">
-        <table>
+    {# ── Tableau de toutes les ressources ─────────────────────────────────── #}
+    <div class="adm-table-wrap">
+        <table class="adm-table">
             <thead>
                 <tr>
+                    <th>#ID</th>
                     <th>Titre</th>
                     <th>Type</th>
                     <th>Organisation</th>
@@ -132,73 +301,91 @@
             </thead>
             <tbody>
                 {% for resource in resources %}
-                    {# Détermination du badge de statut.
-                       Depuis le passage à l'enum ResourceStatus, `resource.status`
-                       est un objet enum (pas une string) : on utilise donc les
-                       helpers `isPending/isPublished/isRejected` de l'entité. #}
+
+                    {#
+                      Détermine la classe CSS de la ligne et le badge de statut.
+                      On utilise les helpers booléens de l'entité Resource
+                      (isPending, isPublished, isRejected) plutôt que de comparer
+                      la valeur de l'enum directement — plus robuste aux refactos.
+                    #}
                     {% if resource.isPending %}
-                        {% set badgeClass = 'status-pending' %}
+                        {% set rowClass   = 'adm-row--pending' %}
+                        {% set badgeClass = 'adm-badge--pending' %}
                         {% set badgeLabel = 'En attente' %}
                     {% elseif resource.isPublished %}
-                        {% set badgeClass = 'status-published' %}
+                        {% set rowClass   = '' %}
+                        {% set badgeClass = 'adm-badge--published' %}
                         {% set badgeLabel = 'Publiée' %}
                     {% else %}
-                        {% set badgeClass = 'status-rejected' %}
+                        {% set rowClass   = '' %}
+                        {% set badgeClass = 'adm-badge--rejected' %}
                         {% set badgeLabel = 'Rejetée' %}
                     {% endif %}
 
-                    <tr>
-                        {# Titre tronqué à 60 caractères #}
-                        <td style="max-width:280px;">
-                            <span style="font-weight:600;">
-                                {{ resource.title|slice(0, 60) }}{{ resource.title|length > 60 ? '...' : '' }}
-                            </span>
+                    <tr class="{{ rowClass }}">
+
+                        {# ID en monospace — discret et différencié visuellement #}
+                        <td class="adm-cell-id">#{{ resource.id }}</td>
+
+                        {# Titre tronqué à 55 caractères #}
+                        <td class="adm-cell-title">
+                            {{ resource.title|slice(0, 55) }}{{ resource.title|length > 55 ? '…' : '' }}
                         </td>
 
-                        {# Type de ressource avec icône #}
-                        <td style="white-space:nowrap; color:var(--color-text-muted);">
+                        {# Type de ressource avec icône éventuelle #}
+                        <td style="white-space:nowrap; color:var(--ink-mute); font-size:12px;">
                             {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
                         </td>
 
-                        {# Nom de l'organisation #}
-                        <td style="color:var(--color-text-muted);">{{ resource.organization ? resource.organization.name : '—' }}</td>
+                        {# Organisation ou tiret si aucune #}
+                        <td style="color:var(--ink-mute); font-size:12px;">
+                            {{ resource.organization ? resource.organization.name : '—' }}
+                        </td>
 
                         {# Badge de statut coloré #}
                         <td>
-                            <span class="status-badge {{ badgeClass }}">{{ badgeLabel }}</span>
+                            <span class="adm-badge {{ badgeClass }}">{{ badgeLabel }}</span>
                         </td>
 
-                        {# Date de création #}
-                        <td style="color:var(--color-text-light); white-space:nowrap;">
-                            {{ resource.createdAt|date('d/m/Y') }}
-                        </td>
-
-                        {# Actions : Publier / Rejeter / Remettre en attente #}
+                        {# Date de création — mono pour aligner sur une colonne fixe #}
                         <td>
-                            <div style="display:flex; gap:6px; flex-wrap:nowrap;">
+                            <span style="font-family:var(--mono); font-size:11px; color:var(--ink-mute); white-space:nowrap;">
+                                {{ resource.createdAt|date('d/m/Y') }}
+                            </span>
+                        </td>
 
-                                {# Bouton Publier — affiché uniquement si pas déjà publiée #}
+                        {# Boutons d'action conditionnels selon le statut #}
+                        <td>
+                            <div class="adm-actions-cell">
+
+                                {# Publier — visible uniquement si la ressource n'est pas déjà publiée #}
                                 {% if not resource.isPublished %}
                                     <form method="post" action="{{ path('app_admin_resource_publish', {id: resource.id}) }}">
                                         <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
-                                        <button type="submit" class="action-btn action-btn-publish" title="Publier">✓</button>
+                                        <button type="submit" class="adm-action-btn adm-action-btn--publish" title="Publier cette ressource">
+                                            ✓ Publier
+                                        </button>
                                     </form>
                                 {% endif %}
 
-                                {# Bouton Rejeter — affiché uniquement si pas déjà rejetée #}
+                                {# Rejeter — visible uniquement si pas déjà rejetée #}
                                 {% if not resource.isRejected %}
                                     <form method="post" action="{{ path('app_admin_resource_reject', {id: resource.id}) }}"
                                           onsubmit="return confirm('Rejeter cette ressource ?')">
                                         <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
-                                        <button type="submit" class="action-btn action-btn-reject" title="Rejeter">✗</button>
+                                        <button type="submit" class="adm-action-btn adm-action-btn--reject" title="Rejeter cette ressource">
+                                            ✗ Rejeter
+                                        </button>
                                     </form>
                                 {% endif %}
 
-                                {# Bouton Remettre en attente — affiché si publiée ou rejetée #}
+                                {# Remettre en attente — visible si déjà traitée (publiée ou rejetée) #}
                                 {% if not resource.isPending %}
                                     <form method="post" action="{{ path('app_admin_resource_reset', {id: resource.id}) }}">
                                         <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
-                                        <button type="submit" class="action-btn action-btn-reset" title="Remettre en attente">↺</button>
+                                        <button type="submit" class="adm-action-btn adm-action-btn--reset" title="Remettre en attente">
+                                            ↺ Reset
+                                        </button>
                                     </form>
                                 {% endif %}
 
@@ -209,6 +396,7 @@
             </tbody>
         </table>
     </div>
+
 {% endif %}
 
 {% endblock %}

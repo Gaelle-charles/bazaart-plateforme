@@ -1,195 +1,478 @@
 {% extends 'base_app.html.twig' %}
 
+{#
+ # artist_profile/show.html.twig — Profil public d'un artiste
+ #
+ # Thème : Street (--ink, --accent lime, Archivo Black, border-radius 0)
+ # Utilisé pour deux routes :
+ #   - app_artist_profile_show   → profil du membre connecté
+ #   - app_artist_profile_public → profil vu par un autre membre ({id})
+ #
+ # Le template détecte lui-même si l'utilisateur consulte son propre profil
+ # en comparant app.user avec profile.user.
+ #
+ # Variables reçues du contrôleur :
+ #   - profile : ArtistProfile (entité)
+ #}
+
 {% block title %}{{ profile.displayName }} — BazaArt{% endblock %}
 {% block page_title %}Profil artiste{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
+{#
+   Préfixe CSS : .ap- (artist-profile)
+   Toutes les classes de ce template commencent par .ap- pour éviter
+   les collisions avec les styles globaux de base_app.html.twig.
+#}
 <style>
-    .profile-layout {
-        display: grid;
-        grid-template-columns: 280px 1fr;
-        gap: 20px;
-        align-items: start;
+
+/* ============================================================
+   LAYOUT GÉNÉRAL
+   Bande hero pleine largeur + contenu centré en dessous
+   ============================================================ */
+
+/* La zone .ap-hero couvre toute la largeur disponible (après sidebar).
+   Le fond noir (#0D0D0D = var(--ink)) crée le contraste fort
+   caractéristique du thème Street. */
+.ap-hero {
+    background: var(--ink);
+    color: var(--bg);
+    padding: var(--space-2xl) var(--space-xl);
+    border-bottom: 2px solid var(--ink);
+    /* On utilise display flex pour aligner les éléments horizontalement
+       sur desktop, puis on bascule en colonne sur mobile */
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-xl);
+}
+
+/* Carré d'initiales — 64×64px, fond lime, coins francs (thème Street) */
+.ap-hero__avatar {
+    width: 64px;
+    height: 64px;
+    flex-shrink: 0;
+    background: var(--accent);     /* vert lime #C6F24E */
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    /* border-radius: 0 → bords francs, signature du thème Street */
+    /* On ne spécifie pas border-radius car le défaut navigateur est 0 ici */
+}
+
+/* Zone texte à droite de l'avatar */
+.ap-hero__info {
+    flex: 1;
+    min-width: 0; /* évite que le flex child déborde son parent */
+}
+
+/* Nom de l'artiste en très grand Archivo Black — style "affiche" */
+.ap-hero__name {
+    font-family: var(--display);   /* 'Archivo Black' défini dans design-tokens.css */
+    font-size: clamp(36px, 6vw, 72px);
+    line-height: .9;
+    text-transform: uppercase;
+    color: var(--bg);              /* crème sur fond noir */
+    margin: 0 0 var(--space-md) 0;
+    letter-spacing: -.01em;
+}
+
+/* Rangée de chips de disciplines + ville */
+.ap-hero__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+/* Chip de discipline — fond lime, texte noir, mono uppercase */
+.ap-chip {
+    display: inline-block;
+    padding: var(--chip-padding);           /* 5px 9px */
+    font-family: var(--mono);
+    font-size: var(--chip-font-size);       /* 11px */
+    font-weight: var(--chip-font-weight);   /* 600 */
+    letter-spacing: var(--chip-letter-spacing); /* .04em */
+    text-transform: uppercase;
+    background: var(--accent);             /* lime */
+    color: var(--ink);
+    /* border-radius 0 implicite */
+}
+
+/* Ville — mono clair sur fond noir */
+.ap-hero__location {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: rgba(242, 239, 230, .55);        /* crème à 55% d'opacité = texte secondaire */
+    letter-spacing: .06em;
+}
+
+/* Zone des boutons CTA dans le hero */
+.ap-hero__actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-top: 4px;
+}
+
+/* Bouton "Envoyer un message" — fond blanc transparent, bordure blanche */
+.ap-btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: var(--btn-padding);
+    font-family: var(--body);
+    font-size: var(--btn-font-size);
+    font-weight: var(--btn-font-weight);
+    letter-spacing: var(--btn-letter-spacing);
+    text-transform: uppercase;
+    text-decoration: none;
+    background: transparent;
+    color: var(--bg);
+    border: 1px solid rgba(242, 239, 230, .4);
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.ap-btn-ghost:hover {
+    background: rgba(242, 239, 230, .1);
+    color: var(--accent);
+}
+
+/* Bouton "Modifier mon profil" — fond accent (lime), texte noir */
+.ap-btn-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: var(--btn-padding);
+    font-family: var(--body);
+    font-size: var(--btn-font-size);
+    font-weight: var(--btn-font-weight);
+    letter-spacing: var(--btn-letter-spacing);
+    text-transform: uppercase;
+    text-decoration: none;
+    background: var(--accent);
+    color: var(--ink);
+    border: 1px solid var(--accent);
+    cursor: pointer;
+    transition: background var(--transition-fast), box-shadow var(--transition-fast);
+}
+.ap-btn-edit:hover {
+    /* Décalage "offset shadow" — signature hover du thème Street */
+    box-shadow: var(--shadow-offset-sm);
+}
+
+
+/* ============================================================
+   ZONE CONTENU PRINCIPAL (sous le hero)
+   ============================================================ */
+
+.ap-body {
+    padding: var(--space-xl);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+/* Label de section type "EYEBROW" — point lime + texte mono uppercase */
+.ap-section-label {
+    display: flex;
+    align-items: center;
+    gap: var(--eyebrow-gap);        /* 8px */
+    font-family: var(--mono);
+    font-size: var(--eyebrow-font-size);        /* 11px */
+    font-weight: var(--eyebrow-font-weight);    /* 700 */
+    letter-spacing: var(--eyebrow-letter-spacing); /* .12em */
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: var(--space-sm);
+}
+/* Le point carré lime est ajouté via ::before */
+.ap-section-label::before {
+    content: '';
+    display: inline-block;
+    width: var(--eyebrow-dot-size);    /* 8px */
+    height: var(--eyebrow-dot-size);
+    background: var(--accent);
+    flex-shrink: 0;
+}
+
+/* Encadré générique — bordure 1px encre, fond crème, coins francs */
+.ap-card {
+    border: var(--card-border);        /* 1px solid var(--ink) */
+    background: var(--card-bg);        /* var(--bg) = #F2EFE6 */
+    padding: var(--space-lg);
+}
+
+/* Texte de bio — Space Grotesk, interligne généreux */
+.ap-bio {
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.75;
+    color: var(--ink);
+    /* white-space: pre-wrap permet de respecter les sauts de ligne
+       mais nl2br insère des <br> donc on garde le défaut */
+}
+
+/* Lien externe (site, portfolio, réseau social) */
+.ap-link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 13px;
+}
+.ap-link:last-child { border-bottom: none; }
+.ap-link__label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    min-width: 90px;
+}
+.ap-link a {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    font-size: 13px;
+    word-break: break-all;
+}
+.ap-link a:hover { color: var(--accent-2); } /* orange au survol */
+
+/* Chips réseaux sociaux dans la section liens */
+.ap-social-chip {
+    display: inline-block;
+    padding: 4px 10px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    background: var(--ink);
+    color: var(--accent);
+    margin: 2px;
+    transition: background var(--transition-fast);
+}
+.ap-social-chip:hover {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+/* Lien "Voir tous les artistes" */
+.ap-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--ink-mute);
+    transition: color var(--transition-fast);
+}
+.ap-back-link:hover { color: var(--ink); }
+
+/* ============================================================
+   RESPONSIVE — Mobile
+   Le hero passe en colonne, les boutons passent en ligne
+   ============================================================ */
+@media (max-width: 640px) {
+    .ap-hero {
+        flex-direction: column;
+        gap: var(--space-md);
+        padding: var(--space-lg);
     }
-
-    /* ── Carte profil (colonne gauche) ── */
-    .profile-card {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 24px;
-        text-align: center;
+    .ap-hero__actions {
+        flex-direction: row;
+        flex-wrap: wrap;
+        width: 100%;
     }
-
-    /* Grand avatar rond */
-    .profile-avatar {
-        width: 80px; height: 80px; border-radius: 50%;
-        background: var(--color-orange); color: white;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 28px; font-weight: 700;
-        margin: 0 auto 14px;
+    .ap-body {
+        padding: var(--space-md);
     }
-
-    .profile-avatar img {
-        width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
-    }
-
-    .profile-name {
-        font-family: var(--font-heading); font-size: 20px; font-weight: 700;
-        color: var(--color-text); margin-bottom: 4px;
-    }
-
-    .profile-location {
-        font-size: 13px; color: var(--color-text-light); margin-bottom: 16px;
-    }
-
-    /* Bouton Modifier (visible uniquement pour le propriétaire) */
-    .btn-edit {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 100%; height: 36px; border: 1.5px solid var(--color-border);
-        border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
-        color: var(--color-text-muted); text-decoration: none; transition: all 0.15s;
-        margin-bottom: 16px;
-    }
-    .btn-edit:hover { border-color: var(--color-green); color: var(--color-green); }
-
-    /* Liens réseaux sociaux */
-    .social-links { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
-
-    .social-link {
-        display: inline-flex; align-items: center; height: 26px; padding: 0 10px;
-        border: 1px solid var(--color-border); border-radius: var(--radius-full);
-        font-size: 11px; color: var(--color-text-muted); text-decoration: none;
-        transition: all 0.15s;
-    }
-    .social-link:hover { border-color: var(--color-green); color: var(--color-green); }
-
-    /* ── Colonne droite ── */
-    .profile-content { display: flex; flex-direction: column; gap: 16px; }
-
-    .content-card {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 24px;
-    }
-
-    .section-label {
-        font-size: 10px; font-weight: 700; color: var(--color-text-light);
-        text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;
-    }
-
-    .bio-text { font-size: 14px; line-height: 1.8; color: var(--color-text-muted); }
-
-    /* Liens portfolio/site */
-    .link-item {
-        display: flex; align-items: center; gap: 10px;
-        padding: 10px 0; border-bottom: 1px solid var(--color-border);
-        font-size: 13px;
-    }
-    .link-item:last-child { border-bottom: none; padding-bottom: 0; }
-    .link-item__label { font-weight: 600; color: var(--color-text); min-width: 80px; }
-    .link-item a { color: var(--color-red); text-decoration: none; font-size: 13px; }
-    .link-item a:hover { text-decoration: underline; }
-
-    /* État vide */
-    .empty-profile {
-        text-align: center; padding: 32px; color: var(--color-text-light); font-size: 13px;
-    }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 
-<div class="profile-layout">
+{# ── Lien retour vers l'annuaire ── #}
+<div style="margin-bottom: var(--space-md);">
+    <a href="{{ path('app_artist_profile_directory') }}" class="ap-back-link">
+        ← Tous les artistes
+    </a>
+</div>
 
-    {# ── Colonne gauche : carte profil ── #}
-    <div class="profile-card">
+{# ── HERO BANDE ───────────────────────────────────────────────────────────── #}
+{#
+   La bande hero occupe toute la largeur.
+   Avatar = carré 64px fond lime avec les 2 premières lettres du nom.
+   On prend les 2 premières lettres de displayName, en majuscules.
+#}
+<div class="ap-hero">
 
-        {# Avatar #}
-        {% if profile.avatarPath %}
-            <img src="{{ asset(profile.avatarPath) }}" alt="{{ profile.displayName }}"
-                 style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin:0 auto 14px;display:block;">
-        {% else %}
-            <div class="profile-avatar">{{ profile.displayName|first|upper }}</div>
-        {% endif %}
-
-        <div class="profile-name">{{ profile.displayName }}</div>
-
-        {% if profile.location %}
-            <div class="profile-location">📍 {{ profile.location }}</div>
-        {% endif %}
-
-        {# Bouton modifier — uniquement pour le propriétaire #}
-        {% if app.user == profile.user %}
-            <a href="{{ path('app_artist_profile_edit') }}" class="btn-edit">Modifier le profil</a>
-        {% endif %}
-
-        {# Liens réseaux sociaux #}
-        {% if profile.socialLinks %}
-            <div class="social-links">
-                {% for network, url in profile.socialLinks %}
-                    <a href="{{ url }}" target="_blank" rel="noopener" class="social-link">
-                        {{ network|capitalize }}
-                    </a>
-                {% endfor %}
-            </div>
-        {% endif %}
-
+    {# Carré initiales — 2 premières lettres du nom d'affichage #}
+    <div class="ap-hero__avatar" aria-hidden="true">
+        {{ profile.displayName|slice(0, 2)|upper }}
     </div>
 
-    {# ── Colonne droite : biographie + liens ── #}
-    <div class="profile-content">
+    {# Bloc info : nom + disciplines + ville #}
+    <div class="ap-hero__info">
 
-        {# Biographie #}
-        {% if profile.bio %}
-            <div class="content-card">
-                <div class="section-label">Biographie</div>
-                <p class="bio-text">{{ profile.bio|nl2br }}</p>
-            </div>
+        {# Nom en très grand Archivo Black #}
+        <h1 class="ap-hero__name">{{ profile.displayName }}</h1>
+
+        {# Disciplines en chips lime + ville en mono #}
+        <div class="ap-hero__meta">
+
+            {#
+               profile.disciplines est une collection Doctrine (ArrayCollection).
+               Si l'artiste n'a pas encore renseigné ses disciplines, la boucle
+               ne produit simplement rien — pas besoin de condition préalable.
+            #}
+            {% for discipline in profile.disciplines %}
+                <span class="ap-chip">{{ discipline.name }}</span>
+            {% endfor %}
+
+            {# Ville en mono si renseignée #}
+            {% if profile.location %}
+                <span class="ap-hero__location">{{ profile.location }}</span>
+            {% endif %}
+
+        </div>
+    </div>
+
+    {# Boutons d'action — conditionnels selon l'utilisateur connecté #}
+    <div class="ap-hero__actions">
+
+        {#
+           app.user == profile.user compare les références PHP des objets User.
+           C'est équivalent à comparer les IDs, mais Twig/Doctrine supportent
+           l'opérateur == pour les entités (comparaison d'identité d'objet).
+        #}
+        {% if app.user == profile.user %}
+            {# L'utilisateur consulte son propre profil → bouton "Modifier" #}
+            <a href="{{ path('app_artist_profile_edit') }}" class="ap-btn-edit">
+                Modifier mon profil
+            </a>
         {% else %}
-            <div class="content-card">
-                <div class="section-label">Biographie</div>
-                <div class="empty-profile">
-                    Aucune biographie renseignée.
-                    {% if app.user == profile.user %}
-                        <br><a href="{{ path('app_artist_profile_edit') }}"
-                               style="color:var(--color-red);font-weight:600;text-decoration:none;">
-                            Ajouter une bio →
-                        </a>
-                    {% endif %}
-                </div>
-            </div>
-        {% endif %}
-
-        {# Liens portfolio / site web #}
-        {% if profile.websiteUrl or profile.portfolioUrl %}
-            <div class="content-card">
-                <div class="section-label">Liens</div>
-                {% if profile.websiteUrl %}
-                    <div class="link-item">
-                        <span class="link-item__label">Site web</span>
-                        <a href="{{ profile.websiteUrl }}" target="_blank" rel="noopener">
-                            {{ profile.websiteUrl }}
-                        </a>
-                    </div>
-                {% endif %}
-                {% if profile.portfolioUrl %}
-                    <div class="link-item">
-                        <span class="link-item__label">Portfolio</span>
-                        <a href="{{ profile.portfolioUrl }}" target="_blank" rel="noopener">
-                            {{ profile.portfolioUrl }}
-                        </a>
-                    </div>
-                {% endif %}
-            </div>
+            {#
+               L'utilisateur regarde le profil de quelqu'un d'autre.
+               Bouton "Envoyer un message" → route messagerie à implémenter.
+               On vérifie d'abord que l'utilisateur est connecté (toujours vrai
+               ici car IsGranted ROLE_USER, mais bonne pratique de le noter).
+            #}
+            {% if app.user %}
+                {#
+                   TODO back-end : la route app_messaging_new n'existe pas encore en V1.
+                   À décommenter quand le module messagerie sera en place.
+                   Pour l'instant on affiche le bouton sans action (href="#").
+                #}
+                {# <a href="{{ path('app_messaging_new', {userId: profile.user.id}) }}" class="ap-btn-ghost">Envoyer un message</a> #}
+                <a href="#" class="ap-btn-ghost" aria-disabled="true"
+                   title="Messagerie disponible prochainement">
+                    Envoyer un message
+                </a>
+            {% endif %}
         {% endif %}
 
     </div>
 
 </div>
+{# /hero #}
+
+
+{# ── CORPS DU PROFIL ─────────────────────────────────────────────────────── #}
+<div class="ap-body">
+
+    {# ── Biographie ── #}
+    <div>
+        <div class="ap-section-label">Biographie</div>
+
+        <div class="ap-card">
+            {% if profile.bio %}
+                {#
+                   |nl2br convertit les sauts de ligne (\n) en balises <br>.
+                   Jamais |raw sur un champ utilisateur — risque XSS.
+                   nl2br est sûr car Twig auto-échappe d'abord le HTML,
+                   puis insère les <br> (qui sont du HTML de confiance).
+                #}
+                <p class="ap-bio">{{ profile.bio|nl2br }}</p>
+            {% else %}
+                <p style="font-family: var(--mono); font-size: 12px; color: var(--ink-mute); font-style: italic;">
+                    Aucune biographie renseignée.
+                    {% if app.user == profile.user %}
+                        — <a href="{{ path('app_artist_profile_edit') }}"
+                             style="color: var(--accent-2); text-decoration: underline;">Ajouter une bio</a>
+                    {% endif %}
+                </p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Liens & réseaux ── #}
+    {% if profile.websiteUrl or profile.portfolioUrl or profile.socialLinks %}
+        <div>
+            <div class="ap-section-label">Liens</div>
+
+            <div class="ap-card">
+
+                {# Site web #}
+                {% if profile.websiteUrl %}
+                    <div class="ap-link">
+                        <span class="ap-link__label">Site web</span>
+                        <a href="{{ profile.websiteUrl }}" target="_blank" rel="noopener noreferrer">
+                            {{ profile.websiteUrl }}
+                        </a>
+                    </div>
+                {% endif %}
+
+                {# Portfolio #}
+                {% if profile.portfolioUrl %}
+                    <div class="ap-link">
+                        <span class="ap-link__label">Portfolio</span>
+                        <a href="{{ profile.portfolioUrl }}" target="_blank" rel="noopener noreferrer">
+                            {{ profile.portfolioUrl }}
+                        </a>
+                    </div>
+                {% endif %}
+
+                {# Réseaux sociaux — sous forme de chips noirs cliquables #}
+                {% if profile.socialLinks %}
+                    <div class="ap-link">
+                        <span class="ap-link__label">Réseaux</span>
+                        <div>
+                            {#
+                               profile.socialLinks est un tableau associatif
+                               [network => url] (ex: ['instagram' => 'https://...'])
+                            #}
+                            {% for network, url in profile.socialLinks %}
+                                {% if url %}
+                                    <a href="{{ url }}" target="_blank" rel="noopener noreferrer"
+                                       class="ap-social-chip">{{ network }}</a>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+            </div>
+        </div>
+    {% endif %}
+
+</div>
+{# /ap-body #}
 
 {% endblock %}

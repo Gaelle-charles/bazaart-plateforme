@@ -1,282 +1,843 @@
 {% extends 'base_app.html.twig' %}
 
-{% block title %}{{ resource.title }} — BazaArt{% endblock %}
+{#
+ # resource/show.html.twig — Détail d'une ressource / opportunité
+ #
+ # Thème : Street (app connectée)
+ # Layout : 2 colonnes (70% contenu principal / 30% sidebar)
+ # Référence prototype : ScreenOpportunity dans screens-opps.jsx
+ #
+ # Variables Twig disponibles :
+ #   resource      — entité Resource (avec resourceType, disciplines, organization, etc.)
+ #   isFavorited   — bool, si l'utilisateur connecté a mis cette ressource en favori
+ #   favoriteCount — int, nombre total de personnes ayant mis en favori
+ #   user          — app.user (peut être null si non connecté)
+ #}
+
+{% block title %}{{ resource.title }} — Bazaart{% endblock %}
 {% block page_title %}Ressources{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* ── Lien retour ── */
-    .back-link {
-        display: inline-flex; align-items: center; gap: 6px;
-        font-size: 13px; color: var(--color-text-muted); text-decoration: none;
-        margin-bottom: 20px;
-    }
-    .back-link:hover { color: var(--color-text); }
+    /* ═══════════════════════════════════════════════════════════════════════
+       DÉTAIL RESSOURCE — styles thème Street
+       Layout 2 colonnes à partir de 900px, colonne unique sur mobile.
+    ═══════════════════════════════════════════════════════════════════════ */
 
-    /* ── Layout deux colonnes ── */
+    /* ── Fil d'Ariane (breadcrumb) ─────────────────────────────────────── */
+
+    /* Style mono discret — informationnel, pas décoratif */
+    .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: var(--space-xs);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: var(--space-lg);
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb a {
+        color: var(--ink-mute);
+        text-decoration: none;
+        transition: color var(--transition-fast);
+    }
+    .breadcrumb a:hover { color: var(--ink); }
+
+    /* Séparateur entre les items du fil d'Ariane */
+    .breadcrumb__sep { opacity: .4; }
+
+    /* Item courant : encre foncée, pas de lien */
+    .breadcrumb__current { color: var(--ink); }
+
+    /* ── Bande héro (en-tête foncée, style prototype) ─────────────────── */
+
+    /* Fond encre sombre : contraste fort — met en valeur le titre de la ressource.
+       C'est le pattern "hero band" du ScreenOpportunity dans screens-opps.jsx. */
+    .resource-hero {
+        background: var(--ink);
+        color: var(--bg);
+        border: 1px solid var(--ink);
+        padding: var(--space-xl) var(--space-xl) var(--space-2xl);
+        margin-bottom: var(--space-xl);
+        position: relative;
+    }
+
+    /* Ligne des badges en haut du héro : type + disciplines */
+    .resource-hero__badges {
+        display: flex;
+        gap: var(--space-sm);
+        flex-wrap: wrap;
+        margin-bottom: var(--space-lg);
+    }
+
+    /* Badge type principal : fond accent vert acide sur fond sombre = très lisible */
+    .hero-badge-type {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--chip-padding);
+        background: var(--accent);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+        border-radius: var(--chip-radius);
+    }
+
+    /* Badge discipline : transparent avec bordure crème — subtil */
+    .hero-badge-disc {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--chip-padding);
+        background: transparent;
+        color: var(--bg);
+        border: 1px solid rgba(242, 239, 230, .3);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+        border-radius: var(--chip-radius);
+    }
+
+    /* Badge "Deadline proche" : orange intense sur fond sombre = alerte visuelle */
+    .hero-badge-urgent {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--chip-padding);
+        background: var(--accent-2);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+        border-radius: var(--chip-radius);
+    }
+
+    /* Titre H1 : très grand, Archivo Black, fond sombre — impact maximum */
+    .resource-hero__title {
+        font-family: var(--display);
+        font-size: clamp(36px, 5vw, 72px);
+        line-height: .92;
+        color: var(--bg);
+        text-transform: uppercase;
+        margin: 0 0 var(--space-xl);
+    }
+
+    /* Ligne méta sous le titre : organisation + lieu + date #}
+       Reprend la ligne "méta" du prototype (avatar org + séparateurs) */
+    .resource-hero__meta {
+        display: flex;
+        align-items: center;
+        gap: var(--space-lg);
+        flex-wrap: wrap;
+        font-size: 13px;
+        color: rgba(242, 239, 230, .75);
+    }
+
+    .resource-hero__meta-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-xs);
+    }
+
+    /* Séparateur vertical entre les infos méta */
+    .resource-hero__meta-sep {
+        width: 1px;
+        height: 24px;
+        background: rgba(242, 239, 230, .2);
+    }
+
+    /* Bloc deadline en haut à droite du héro (style "countdown" du prototype) */
+    .resource-hero__deadline {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: var(--space-sm);
+        margin-left: auto;
+        flex-shrink: 0;
+    }
+
+    /* Grille countdown J/H/M — carreaux accent sur fond sombre */
+    .deadline-grid {
+        display: flex;
+        gap: 0;
+    }
+
+    /* Chaque case : un chiffre + label — style affiche très structuré */
+    .deadline-cell {
+        background: var(--accent);
+        color: var(--ink);
+        padding: var(--space-md) var(--space-md);
+        text-align: center;
+        min-width: 56px;
+        border-right: 1px solid var(--ink);
+    }
+    .deadline-cell:last-child { border-right: none; }
+
+    .deadline-cell__num {
+        font-family: var(--display);
+        font-size: 32px;
+        line-height: 1;
+    }
+
+    .deadline-cell__label {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        margin-top: 4px;
+    }
+
+    /* ── Layout 2 colonnes ─────────────────────────────────────────────── */
+
+    /* Colonne unique sur mobile, 2 colonnes à partir de 900px
+       70/30 pour donner la priorité au contenu */
     .resource-layout {
         display: grid;
-        grid-template-columns: 1fr 280px;
-        gap: 20px;
+        grid-template-columns: 1fr;
+        gap: var(--space-xl);
         align-items: start;
     }
 
-    /* ── Carte principale ── */
-    .resource-main {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 28px;
+    @media (min-width: 900px) {
+        .resource-layout {
+            grid-template-columns: 2fr 1fr;
+        }
     }
 
-    .resource-main__header { margin-bottom: 20px; }
+    /* ── Colonne principale ────────────────────────────────────────────── */
 
-    .resource-main__type {
-        display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
-        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
-        background: var(--color-red-light); color: var(--color-red);
-        margin-bottom: 14px;
+    .resource-main { display: flex; flex-direction: column; gap: var(--space-xl); }
+
+    /* Bouton CTA externe "Candidater" — plein accent lime, pleine largeur sur mobile */
+    .btn-candidater {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-sm);
+        padding: var(--btn-padding);
+        background: var(--accent);
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+        align-self: flex-start;
+    }
+    .btn-candidater:hover {
+        background: var(--ink);
+        color: var(--accent);
     }
 
-    .resource-main__title {
-        font-family: var(--font-heading); font-size: 26px; font-weight: 700;
-        color: var(--color-text); margin-bottom: 14px; line-height: 1.2;
-    }
-
-    /* Métadonnées : deadline, localisation, date */
-    .resource-meta {
-        display: flex; flex-wrap: wrap; gap: 16px;
-        font-size: 13px; color: var(--color-text-muted);
-        padding: 14px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border);
-        margin-bottom: 20px;
-    }
-    .resource-meta__item { display: flex; align-items: center; gap: 5px; }
-    .resource-meta__urgent { color: #856404; font-weight: 600; }
-    .resource-meta__expired { color: #dc3545; }
-
-    /* Description complète */
+    /* Corps de description : on utilise le serif pour donner un caractère
+       éditorial à la description (conforme au prototype "En bref / summary") */
     .resource-desc {
-        font-size: 14px; line-height: 1.8; color: var(--color-text-muted);
+        font-family: var(--serif);
+        font-size: 16px;
+        line-height: 1.75;
+        color: var(--ink-mute);
     }
 
-    /* Disciplines */
-    .disciplines-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--color-border); }
+    /* Section disciplines : titre label + chips */
+    .resource-disciplines {
+        border-top: 1px solid var(--line-soft);
+        padding-top: var(--space-lg);
+    }
+
+    /* Label de section : mono uppercase très petit = style "eyebrow" */
     .section-label {
-        font-size: 10px; font-weight: 700; color: var(--color-text-light);
-        text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;
-    }
-    .disciplines-list { display: flex; flex-wrap: wrap; gap: 6px; }
-    .discipline-pill {
-        display: inline-flex; align-items: center; height: 24px; padding: 0 10px;
-        border-radius: var(--radius-full); font-size: 11px; font-weight: 600;
-        background: var(--color-green-light); color: var(--color-green);
-        border: 1px solid rgba(28, 58, 47, 0.2);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: var(--space-sm);
     }
 
-    /* ── Colonne latérale ── */
-    .resource-sidebar { display: flex; flex-direction: column; gap: 16px; }
-
-    .side-card {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 20px;
-    }
-    .side-card__label { font-size: 10px; font-weight: 700; color: var(--color-text-light); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
-
-    /* Logo organisation */
-    .org-logo {
-        width: 44px; height: 44px; border-radius: 8px;
-        background: var(--color-green); color: white;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 18px; font-weight: 700; flex-shrink: 0;
+    /* Liste de chips discipline */
+    .disciplines-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-sm);
     }
 
-    .org-name { font-size: 14px; font-weight: 600; color: var(--color-text); }
-
-    .verified-badge {
-        display: inline-flex; align-items: center; height: 18px; padding: 0 6px;
-        border-radius: var(--radius-full); font-size: 9px; font-weight: 700;
-        background: #d4edda; color: #155724; margin-left: 6px;
+    /* Chip discipline : fond bg-alt, bordure soft, mono */
+    .discipline-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--chip-padding);
+        background: var(--bg-alt);
+        border: 1px solid var(--line-soft);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        border-radius: var(--chip-radius);
     }
 
-    .org-location { font-size: 12px; color: var(--color-text-light); margin-top: 4px; }
+    /* ── Sidebar (colonne droite) ──────────────────────────────────────── */
 
-    /* Bouton CTA lien externe */
-    .btn-cta {
-        display: flex; align-items: center; justify-content: center;
-        width: 100%; height: 44px; border-radius: var(--radius-sm);
-        background: var(--color-red); color: white;
-        font-size: 13px; font-weight: 600; text-decoration: none;
-        transition: opacity 0.15s; margin-top: 14px;
+    .resource-sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-md);
     }
-    .btn-cta:hover { opacity: 0.88; }
 
-    /* ── Bouton favori (coeur) ── */
-    /* Le bouton est stylé comme un bouton secondaire avec une icône coeur.
-       Deux états : coeur vide (non favori) et coeur plein rouge (favori).
-       Le compteur affiche le nombre d'utilisateurs ayant mis cette ressource en favori. */
-    .favorite-form { margin-top: 14px; }
-    .btn-favorite {
-        display: flex; align-items: center; justify-content: center; gap: 8px;
-        width: 100%; height: 40px; border-radius: var(--radius-sm);
-        border: 1px solid var(--color-border);
-        background: var(--color-white);
-        color: var(--color-text-muted);
-        font-size: 13px; font-weight: 500; cursor: pointer;
-        font-family: var(--font-body);
-        transition: border-color 0.15s, color 0.15s;
+    /* Encadré générique de la sidebar : bordure ink, bords francs */
+    .side-block {
+        border: 1px solid var(--ink);
+        padding: var(--space-lg);
+        background: var(--bg);
     }
-    .btn-favorite:hover { border-color: var(--color-red); color: var(--color-red); }
 
-    /* État "en favori" : fond rouge clair, texte rouge */
-    .btn-favorite--active {
-        border-color: var(--color-red);
-        background: var(--color-red-light);
-        color: var(--color-red);
+    /* En-tête de bloc sidebar = eyebrow formaté */
+    .side-block__eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-sm);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: var(--space-md);
+    }
+    .side-block__eyebrow::before {
+        content: '';
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background: var(--accent);
+        flex-shrink: 0;
+    }
+
+    /* Tableau de détails (type, deadline, niveau…) dans la sidebar */
+    .details-table {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        border: 1px solid var(--line-soft);
+    }
+
+    .details-row {
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        gap: 0;
+        border-bottom: 1px solid var(--line-soft);
+    }
+    .details-row:last-child { border-bottom: none; }
+
+    /* Clé de la ligne (gauche) */
+    .details-key {
+        padding: var(--space-sm) var(--space-md);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        background: var(--bg-alt);
+        border-right: 1px solid var(--line-soft);
+    }
+
+    /* Valeur de la ligne (droite) */
+    .details-val {
+        padding: var(--space-sm) var(--space-md);
+        font-family: var(--body);
+        font-size: 13px;
         font-weight: 600;
+        color: var(--ink);
     }
-    .btn-favorite--active:hover { opacity: 0.88; }
 
-    .favorite-icon { font-size: 16px; line-height: 1; }
-    .favorite-count { font-size: 11px; opacity: 0.7; }
+    /* Bloc organisation : avatar initiales + nom + badge vérifié */
+    .org-block {
+        display: flex;
+        gap: var(--space-md);
+        align-items: center;
+        margin-bottom: var(--space-md);
+    }
+
+    /* Avatar organisation carré style Street (bords francs) */
+    .org-avatar {
+        width: 44px;
+        height: 44px;
+        background: var(--ink);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--display);
+        font-size: 20px;
+        font-weight: 700;
+        flex-shrink: 0;
+        border: 1px solid var(--ink);
+    }
+
+    .org-name {
+        font-family: var(--body);
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--ink);
+    }
+
+    /* Badge "Vérifiée" : petit, vert discret */
+    .org-verified {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 5px;
+        background: rgba(31, 138, 91, .12);
+        color: var(--ok);
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        border-radius: var(--radius-sm);
+    }
+
+    .org-location {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        margin-top: 2px;
+    }
+
+    /* ── Bouton favori ─────────────────────────────────────────────────── */
+    {#
+       Ce bouton utilise les attributs data-* prévus pour Stimulus.
+       Voir le commentaire dans le template original pour l'architecture AJAX.
+       On conserve TOUS les attributs data-* existants — règle impérative #7.
+    #}
+
+    /* Formulaire favori : pleine largeur dans la sidebar */
+    .favorite-form { margin-top: var(--space-md); }
+
+    .btn-favorite {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-sm);
+        width: 100%;
+        padding: var(--btn-padding);
+        background: transparent;
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        cursor: pointer;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .btn-favorite:hover {
+        background: var(--ink);
+        color: var(--bg);
+    }
+
+    /* État actif favori : fond encre = confirmé */
+    .btn-favorite--active {
+        background: var(--ink);
+        color: var(--accent);
+    }
+    .btn-favorite--active:hover {
+        background: var(--accent);
+        color: var(--ink);
+    }
+
+    .favorite-count {
+        font-family: var(--mono);
+        font-size: 10px;
+        opacity: .65;
+    }
+
+    /* ── Bloc "Soumettre similaire" — CTA accent dans la sidebar ── */
+    .side-block--accent {
+        background: var(--accent);
+        border-color: var(--ink);
+    }
+
+    .side-block--accent .side-block__eyebrow::before {
+        background: var(--ink);
+    }
+
+    .side-block--accent .side-block__eyebrow {
+        color: var(--ink);
+    }
+
+    /* Lien interne dans le bloc accent */
+    .btn-side-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-sm);
+        margin-top: var(--space-md);
+        padding: var(--btn-padding-sm);
+        background: var(--ink);
+        color: var(--accent);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .btn-side-cta:hover {
+        background: var(--accent);
+        color: var(--ink);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<a href="{{ path('app_resource_index') }}" class="back-link">← Retour aux ressources</a>
+{# ── Fil d'Ariane ─────────────────────────────────────────────────────────── #}
+{#
+   Breadcrumb simple : Accueil > Ressources > Titre tronqué
+   Pas de composant Twig dédié — on le construit directement.
+   Le titre est tronqué à 40 caractères pour éviter un débordement.
+#}
+<nav class="breadcrumb" aria-label="Fil d'Ariane">
+    <a href="{{ path('app_dashboard') }}">Accueil</a>
+    <span class="breadcrumb__sep" aria-hidden="true">›</span>
+    <a href="{{ path('app_resource_index') }}">Ressources</a>
+    <span class="breadcrumb__sep" aria-hidden="true">›</span>
+    <span class="breadcrumb__current" aria-current="page">
+        {{ resource.title|slice(0, 40) }}{{ resource.title|length > 40 ? '…' : '' }}
+    </span>
+</nav>
 
-<div class="resource-layout">
+{# ── Bande héro (fond encre, titre + badges) ──────────────────────────────── #}
+{#
+   Cette section reprend la "hero band" du prototype ScreenOpportunity :
+   fond var(--ink) quasi-noir, titre géant en blanc/crème, countdown deadline.
+   Elle sort du flux des 2 colonnes pour occuper toute la largeur.
+#}
+<div class="resource-hero">
 
-    {# ── Colonne principale ── #}
-    <div class="resource-main">
-        <div class="resource-main__header">
-            <div class="resource-main__type">
-                {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
-            </div>
-            <h1 class="resource-main__title">{{ resource.title }}</h1>
-        </div>
+    {# Badges : type de ressource + disciplines + "Deadline proche" si urgente #}
+    <div class="resource-hero__badges">
 
-        {# Métadonnées #}
-        <div class="resource-meta">
-            {% if resource.location %}
-                <span class="resource-meta__item">📍 {{ resource.location }}</span>
-            {% endif %}
+        {# Badge type principal — accent sur fond sombre #}
+        <span class="hero-badge-type">
+            {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
+        </span>
 
-            {% if resource.deadline %}
-                {% set daysLeft = (resource.deadline.timestamp - "now"|date('U')) // 86400 %}
-                <span class="resource-meta__item {{ daysLeft < 0 ? 'resource-meta__expired' : (daysLeft < 14 ? 'resource-meta__urgent' : '') }}">
-                    📅 {{ resource.deadline|date('d/m/Y') }}
-                    {% if daysLeft >= 0 %}
-                        — {{ daysLeft == 0 ? "Aujourd'hui !" : daysLeft ~ ' jour' ~ (daysLeft > 1 ? 's' : '') ~ ' restant' ~ (daysLeft > 1 ? 's' : '') }}
-                    {% else %}
-                        — <span class="resource-meta__expired">Expirée</span>
-                    {% endif %}
+        {# Badges disciplines — transparents avec bordure crème #}
+        {% for discipline in resource.disciplines %}
+            <span class="hero-badge-disc">
+                {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+            </span>
+        {% endfor %}
+
+        {# Badge urgence deadline : visible si moins de 7 jours avant la deadline #}
+        {% if resource.deadline %}
+            {% set daysLeft = (resource.deadline.timestamp - "now"|date('U')) // 86400 %}
+            {% if daysLeft >= 0 and daysLeft < 7 %}
+                <span class="hero-badge-urgent">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    Deadline proche
                 </span>
             {% endif %}
+        {% endif %}
+    </div>
 
-            <span class="resource-meta__item">🗓️ Publiée le {{ resource.createdAt|date('d/m/Y') }}</span>
+    {# Ligne titre + countdown deadline côte à côte #}
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:var(--space-xl); flex-wrap:wrap;">
+
+        {# Titre H1 : grand, uppercase, Archivo Black sur fond sombre #}
+        <h1 class="resource-hero__title">{{ resource.title }}</h1>
+
+        {# Countdown deadline (style "cases" du prototype) — visible si deadline future #}
+        {% if resource.deadline %}
+            {% set daysLeft = (resource.deadline.timestamp - "now"|date('U')) // 86400 %}
+            {% if daysLeft >= 0 %}
+                <div class="resource-hero__deadline">
+                    <div class="section-label" style="color:rgba(242,239,230,.6); margin-bottom:var(--space-xs);">
+                        Deadline
+                    </div>
+                    <div class="deadline-grid">
+                        {# Jours restants — la valeur principale #}
+                        <div class="deadline-cell">
+                            <div class="deadline-cell__num">{{ daysLeft|number_format(0) }}</div>
+                            <div class="deadline-cell__label">{{ daysLeft > 1 ? 'Jours' : 'Jour' }}</div>
+                        </div>
+                        {# Date exacte en 2e case : plus compact qu'afficher h/min #}
+                        <div class="deadline-cell" style="min-width:auto; padding:var(--space-md) var(--space-lg);">
+                            <div class="deadline-cell__num" style="font-size:18px;">{{ resource.deadline|date('d/m') }}</div>
+                            <div class="deadline-cell__label">{{ resource.deadline|date('Y') }}</div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    {# Méta : organisation + date de publication #}
+    <div class="resource-hero__meta">
+        {% if resource.organization %}
+            <div class="resource-hero__meta-item">
+                {# Icône immeuble SVG (organisation) #}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <polyline points="9 22 9 12 15 12 15 22"/>
+                </svg>
+                <strong style="color:var(--bg);">{{ resource.organization.name }}</strong>
+                {% if resource.organization.isVerified %}
+                    <span style="font-family:var(--mono); font-size:9px; letter-spacing:.06em; opacity:.7;">· VÉRIFIÉ</span>
+                {% endif %}
+            </div>
+            <div class="resource-hero__meta-sep" aria-hidden="true"></div>
+        {% endif %}
+
+        <div class="resource-hero__meta-item">
+            {# Icône calendrier SVG #}
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                <rect x="3" y="5" width="18" height="16"/><path d="M3 9h18M8 3v4M16 3v4"/>
+            </svg>
+            Publiée le {{ resource.createdAt|date('d/m/Y') }}
         </div>
 
-        {# Description complète #}
-        <div class="resource-desc">{{ resource.description|nl2br }}</div>
+        {% if resource.location %}
+            <div class="resource-hero__meta-sep" aria-hidden="true"></div>
+            <div class="resource-hero__meta-item">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                    <path d="M12 22s-7-7-7-12a7 7 0 1 1 14 0c0 5-7 12-7 12z"/>
+                    <circle cx="12" cy="10" r="2.5"/>
+                </svg>
+                {{ resource.location }}
+            </div>
+        {% endif %}
+    </div>
 
-        {# Disciplines #}
+</div>
+
+{# ── Layout 2 colonnes : contenu + sidebar ────────────────────────────────── #}
+<div class="resource-layout">
+
+    {# ═══════ COLONNE PRINCIPALE (gauche, 70%) ═══════ #}
+    <div class="resource-main">
+
+        {# ── Bouton CTA externe "Candidater" ── #}
+        {#
+           Affiché en premier car c'est l'action principale de la page.
+           target="_blank" + rel="noopener noreferrer" = bonne pratique sécurité.
+           Noopener empêche la nouvelle page d'accéder à window.opener.
+        #}
+        {% if resource.externalUrl %}
+            <div>
+                <a href="{{ resource.externalUrl }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="btn-candidater">
+                    Candidater / En savoir plus
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M5 12h14M13 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+        {% endif %}
+
+        {# ── Description complète ── #}
+        {#
+           nl2br transforme les retours à la ligne en <br> HTML.
+           La description est du texte libre saisi par la structure / admin.
+           On utilise le serif (Instrument Serif) pour un effet "article éditorial".
+        #}
+        <div class="resource-desc">
+            {{ resource.description|nl2br }}
+        </div>
+
+        {# ── Disciplines ── #}
         {% if resource.disciplines|length > 0 %}
-            <div class="disciplines-section">
+            <div class="resource-disciplines">
                 <div class="section-label">Disciplines concernées</div>
                 <div class="disciplines-list">
                     {% for discipline in resource.disciplines %}
-                        <span class="discipline-pill">
+                        <span class="discipline-chip">
                             {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
                         </span>
                     {% endfor %}
                 </div>
             </div>
         {% endif %}
+
     </div>
 
-    {# ── Colonne latérale ── #}
-    <div class="resource-sidebar">
+    {# ═══════ SIDEBAR (droite, 30%) ═══════ #}
+    <aside class="resource-sidebar">
 
-        {# Carte organisation #}
-        {# ── Carte favoris ── #}
+        {# ── Encadré "Détails" ── #}
         {#
-            Formulaire POST vers la route app_resource_favorite_toggle.
-            En version sans JavaScript, ce formulaire fonctionne comme un formulaire HTML classique
-            et recharge la page pour mettre à jour le bouton.
-            En version avec Stimulus (à brancher), on intercepte le submit et on met à jour le DOM.
-
-            Attributs data-* prévus pour Stimulus :
-              data-resource-id    : identifiant de la ressource (pour construire l'URL AJAX)
-              data-token          : token CSRF pré-calculé (évite un aller-retour serveur)
-              data-favorited      : état initial du bouton (true/false)
-              data-count          : compteur initial
+           Tableau de méta-données en deux colonnes : clé (gris) / valeur (foncé).
+           Reproduit le style grille du prototype (padding, border séparateurs).
         #}
-        <div class="side-card">
-            <div class="side-card__label">Favori</div>
-            <form method="post"
-                  action="{{ path('app_resource_favorite_toggle', {id: resource.id}) }}"
-                  class="favorite-form"
-                  data-resource-id="{{ resource.id }}"
-                  data-token="{{ csrf_token('resource_favorite_' ~ resource.id) }}"
-                  data-favorited="{{ isFavorited ? 'true' : 'false' }}"
-                  data-count="{{ favoriteCount }}">
-                <input type="hidden" name="_token" value="{{ csrf_token('resource_favorite_' ~ resource.id) }}">
-                <button type="submit"
-                        class="btn-favorite {{ isFavorited ? 'btn-favorite--active' : '' }}">
-                    <span class="favorite-icon">{{ isFavorited ? '&#10084;' : '&#9825;' }}</span>
-                    {{ isFavorited ? 'Dans mes favoris' : 'Ajouter aux favoris' }}
-                    {% if favoriteCount > 0 %}
-                        <span class="favorite-count">({{ favoriteCount }})</span>
-                    {% endif %}
-                </button>
-            </form>
-        </div>
+        <div class="side-block">
+            <div class="side-block__eyebrow">Détails</div>
 
-        {% if resource.organization %}
-        <div class="side-card">
-            <div class="side-card__label">Organisation</div>
-            <div style="display:flex;gap:12px;align-items:center;">
-                {% if resource.organization.logoPath %}
-                    <img src="{{ asset(resource.organization.logoPath) }}"
-                         alt="{{ resource.organization.name }}"
-                         style="width:44px;height:44px;border-radius:8px;object-fit:contain;border:1px solid var(--color-border);">
-                {% else %}
-                    <div class="org-logo">{{ resource.organization.name|first|upper }}</div>
-                {% endif %}
-                <div>
-                    <div class="org-name">
-                        {{ resource.organization.name }}
-                        {% if resource.organization.isVerified %}
-                            <span class="verified-badge">✓ Vérifiée</span>
-                        {% endif %}
+            <div class="details-table">
+
+                {# Type de ressource #}
+                <div class="details-row">
+                    <div class="details-key">Type</div>
+                    <div class="details-val">
+                        {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
                     </div>
-                    {% if resource.organization.location %}
-                        <div class="org-location">📍 {{ resource.organization.location }}</div>
-                    {% endif %}
                 </div>
+
+                {# Deadline si disponible #}
+                {% if resource.deadline %}
+                    {% set daysLeft = (resource.deadline.timestamp - "now"|date('U')) // 86400 %}
+                    <div class="details-row">
+                        <div class="details-key">Deadline</div>
+                        <div class="details-val">
+                            {{ resource.deadline|date('d/m/Y') }}
+                            {% if daysLeft >= 0 %}
+                                <br>
+                                <span style="font-family:var(--mono); font-size:10px; color:{{ daysLeft < 7 ? 'var(--accent-2)' : 'var(--ink-mute)' }}; font-weight:700;">
+                                    J-{{ daysLeft }}
+                                </span>
+                            {% elseif daysLeft < 0 %}
+                                <br>
+                                <span style="font-family:var(--mono); font-size:10px; color:var(--danger); font-weight:700;">Expirée</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                {# Organisation si disponible #}
+                {% if resource.organization %}
+                    <div class="details-row">
+                        <div class="details-key">Organisation</div>
+                        <div class="details-val">{{ resource.organization.name }}</div>
+                    </div>
+                {% endif %}
+
+                {# Localisation si disponible #}
+                {% if resource.location %}
+                    <div class="details-row">
+                        <div class="details-key">Lieu</div>
+                        <div class="details-val">{{ resource.location }}</div>
+                    </div>
+                {% endif %}
+
+                {# Date de publication #}
+                <div class="details-row">
+                    <div class="details-key">Publiée</div>
+                    <div class="details-val">{{ resource.createdAt|date('d/m/Y') }}</div>
+                </div>
+
             </div>
-
-            {% if resource.externalUrl %}
-                <a href="{{ resource.externalUrl }}" target="_blank" rel="noopener" class="btn-cta">
-                    Voir la ressource officielle →
-                </a>
-            {% endif %}
         </div>
 
-        {# Carte soumission #}
-        <div class="side-card" style="font-size:13px;color:var(--color-text-muted);">
-            <div class="side-card__label">Source</div>
-            Soumis par <strong>{{ resource.organization.name }}</strong>
-        </div>
+        {# ── Bouton Favori ── #}
+        {#
+           Formulaire POST vers la route toggle favoris.
+           On conserve TOUS les attributs data-* existants pour la compatibilité Stimulus.
+           data-resource-id, data-token, data-favorited, data-count : utilisés par le
+           contrôleur Stimulus future (AJAX) — ne jamais supprimer ces attributs.
+
+           Fallback sans JS : le formulaire POST fonctionne nativement et recharge la page.
+        #}
+        {% if app.user %}
+            <div class="side-block">
+                <div class="side-block__eyebrow">Ma bibliothèque</div>
+
+                <form method="post"
+                      action="{{ path('app_resource_favorite_toggle', {id: resource.id}) }}"
+                      class="favorite-form"
+                      data-resource-id="{{ resource.id }}"
+                      data-token="{{ csrf_token('resource_favorite_' ~ resource.id) }}"
+                      data-favorited="{{ isFavorited ? 'true' : 'false' }}"
+                      data-count="{{ favoriteCount }}">
+
+                    {# Token CSRF caché — protection contre les attaques CSRF #}
+                    <input type="hidden" name="_token" value="{{ csrf_token('resource_favorite_' ~ resource.id) }}">
+
+                    <button type="submit"
+                            class="btn-favorite {{ isFavorited ? 'btn-favorite--active' : '' }}"
+                            aria-pressed="{{ isFavorited ? 'true' : 'false' }}"
+                            aria-label="{{ isFavorited ? 'Retirer des favoris' : 'Ajouter aux favoris' }}">
+
+                        {# Icône cœur SVG : plein si favori, contour sinon #}
+                        {% if isFavorited %}
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--accent)" stroke="var(--accent)"
+                                 stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+                                <path d="M12 21s-7-4.5-9.5-9C.7 8 3 4 6.5 4 9 4 10.5 5.5 12 7.5 13.5 5.5 15 4 17.5 4 21 4 23.3 8 21.5 12 19 16.5 12 21 12 21z"/>
+                            </svg>
+                        {% else %}
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+                                <path d="M12 21s-7-4.5-9.5-9C.7 8 3 4 6.5 4 9 4 10.5 5.5 12 7.5 13.5 5.5 15 4 17.5 4 21 4 23.3 8 21.5 12 19 16.5 12 21 12 21z"/>
+                            </svg>
+                        {% endif %}
+
+                        {{ isFavorited ? 'Dans mes favoris' : 'Ajouter aux favoris' }}
+
+                        {# Compteur favoris si au moins 1 personne a mis en favori #}
+                        {% if favoriteCount > 0 %}
+                            <span class="favorite-count">({{ favoriteCount }})</span>
+                        {% endif %}
+                    </button>
+                </form>
+            </div>
         {% endif %}
 
-    </div>
+        {# ── Bloc "Soumettre une ressource similaire" ── #}
+        {#
+           Bloc accent lime : CTA secondaire qui encourage la contribution.
+           Fond lime + texte encre = bouton "dark" du design system (inversé).
+        #}
+        <div class="side-block side-block--accent">
+            <div class="side-block__eyebrow">Contribuer</div>
+            <p style="font-family:var(--body); font-size:13px; color:var(--ink); line-height:1.5; margin:0;">
+                Tu connais une opportunité similaire ?<br>
+                Partage-la avec la communauté Bazaart.
+            </p>
+            <a href="{{ path('app_resource_submit') }}" class="btn-side-cta">
+                Soumettre une ressource
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M5 12h14M13 5l7 7-7 7"/>
+                </svg>
+            </a>
+        </div>
+
+    </aside>
 
 </div>
 

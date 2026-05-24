@@ -1,130 +1,341 @@
 {% extends 'base_app.html.twig' %}
 
+{#
+ # artist_profile/directory.html.twig — Annuaire des artistes
+ #
+ # Thème : Street (--ink, --accent lime, Archivo Black, border-radius 0)
+ # Route : app_artist_profile_directory
+ #
+ # Variables reçues du contrôleur :
+ #   - profiles : ArtistProfile[] (tableau d'objets ArtistProfile)
+ #
+ # Structure :
+ #   - En-tête avec titre géant + compteur
+ #   - (Pas de filtre discipline en V1 — non implémenté côté back)
+ #   - Grille de cartes artistes : 3 col desktop, 2 col tablet, 1 col mobile
+ #   - État vide si aucun profil
+ #}
+
 {% block title %}Annuaire des artistes — BazaArt{% endblock %}
-{% block page_title %}Annuaire des artistes{% endblock %}
+{% block page_title %}Annuaire{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
+{#
+   Préfixe CSS : .dir- (directory)
+   Toutes les classes de ce template commencent par .dir- pour isolation.
+#}
 <style>
-    /* Grille de cartes artistes — 3 colonnes */
-    .artists-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 16px;
-    }
 
-    /* Carte d'un artiste */
-    .artist-card {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-        padding: 20px; text-align: center;
-        text-decoration: none; color: inherit;
-        transition: box-shadow 0.15s, border-color 0.15s;
-        display: flex; flex-direction: column; align-items: center;
-    }
-    .artist-card:hover {
-        box-shadow: 0 4px 24px rgba(0,0,0,0.10);
-        border-color: var(--color-green);
-    }
+/* ============================================================
+   EN-TÊTE DE L'ANNUAIRE
+   Titre display + sous-titre mono + compteur
+   ============================================================ */
 
-    /* Avatar de l'artiste */
-    .artist-avatar {
-        width: 64px; height: 64px; border-radius: 50%;
-        background: var(--color-orange); color: white;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 22px; font-weight: 700;
-        margin-bottom: 12px; flex-shrink: 0;
-    }
-    .artist-avatar img {
-        width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
-    }
+.dir-header {
+    border-bottom: 1px solid var(--ink);
+    padding-bottom: var(--space-lg);
+    margin-bottom: var(--space-xl);
+}
 
-    /* Nom de l'artiste */
-    .artist-name {
-        font-family: var(--font-heading); font-size: 15px; font-weight: 700;
-        color: var(--color-text); margin-bottom: 4px;
-    }
+/* Titre principal — Archivo Black, très grand, uppercase */
+.dir-title {
+    font-family: var(--display);
+    font-size: clamp(40px, 6vw, 80px);
+    text-transform: uppercase;
+    line-height: .9;
+    color: var(--ink);
+    margin: 0 0 var(--space-sm) 0;
+    letter-spacing: -.02em;
+}
 
-    /* Localisation */
-    .artist-location {
-        font-size: 12px; color: var(--color-text-light); margin-bottom: 10px;
-    }
+/* Sous-titre en mono — style "label machine" */
+.dir-subtitle {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-mute);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
 
-    /* Extrait de bio */
-    .artist-bio {
-        font-size: 12px; color: var(--color-text-muted); line-height: 1.6;
-        display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
+/* Compteur de membres — mis en avant avec un fond accent */
+.dir-count {
+    display: inline-block;
+    margin-top: var(--space-md);
+    padding: 4px 10px;
+    background: var(--accent);    /* lime */
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink);
+}
 
-    /* État vide */
-    .empty-state {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); padding: 48px; text-align: center;
-        color: var(--color-text-muted);
-    }
+/* ============================================================
+   GRILLE DE CARTES
+   Système de bordures partagées pour créer un tableau cohérent.
+   Technique : toutes les cartes ont border-right + border-bottom,
+   et le container a border-left + border-top → résultat = grille.
+   ============================================================ */
 
-    /* Compteur */
-    .artists-count {
-        font-size: 12px; color: var(--color-text-light); margin-bottom: 16px;
+.dir-grid {
+    /* Les bordures extérieures sont portées par le container */
+    border-top: 1px solid var(--ink);
+    border-left: 1px solid var(--ink);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+/* Chaque carte artiste */
+.dir-card {
+    /* Les bordures internes ferment les cases de la grille */
+    border-right: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: var(--space-lg);
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    background: var(--bg);
+    /* Transition pour l'effet hover */
+    transition: background var(--transition-fast);
+    /* position relative pour le hover indicator */
+    position: relative;
+    overflow: hidden;
+}
+
+/* Hover : fond légèrement plus sombre + bande accent en haut */
+.dir-card:hover {
+    background: var(--bg-alt);
+}
+/* Petite barre lime en haut de la carte au hover (style affiche) */
+.dir-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform var(--transition-normal);
+}
+.dir-card:hover::before {
+    transform: scaleX(1);
+}
+
+/* Carré initiales — fond lime, coins francs, mono */
+.dir-card__avatar {
+    width: 48px;
+    height: 48px;
+    background: var(--accent);
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    margin-bottom: var(--space-md);
+    flex-shrink: 0;
+}
+
+/* Nom de l'artiste — Archivo Black */
+.dir-card__name {
+    font-family: var(--display);
+    font-size: 18px;
+    text-transform: uppercase;
+    line-height: 1;
+    color: var(--ink);
+    margin-bottom: var(--space-sm);
+    letter-spacing: -.01em;
+    /* Empêche les noms très longs de déborder */
+    word-break: break-word;
+}
+
+/* Chips de disciplines */
+.dir-card__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: var(--space-sm);
+}
+.dir-chip {
+    padding: 3px 7px;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    background: var(--ink);
+    color: var(--accent);       /* lime sur noir — lisible et graphique */
+}
+
+/* Ville en mono, atténuée */
+.dir-card__location {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-mute);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    margin-top: var(--space-xs);
+}
+
+/* ============================================================
+   ÉTAT VIDE
+   ============================================================ */
+
+.dir-empty {
+    border: 1px solid var(--ink);
+    padding: var(--space-3xl) var(--space-xl);
+    text-align: center;
+    background: var(--bg);
+}
+.dir-empty__title {
+    font-family: var(--display);
+    font-size: 24px;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin-bottom: var(--space-sm);
+}
+.dir-empty__text {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-mute);
+    letter-spacing: .06em;
+    margin-bottom: var(--space-xl);
+}
+
+/* Bouton CTA — fond lime, texte noir */
+.dir-btn-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: var(--btn-padding);
+    font-family: var(--body);
+    font-size: var(--btn-font-size);
+    font-weight: var(--btn-font-weight);
+    letter-spacing: var(--btn-letter-spacing);
+    text-transform: uppercase;
+    text-decoration: none;
+    background: var(--accent);
+    color: var(--ink);
+    border: 1px solid var(--ink);
+    transition: box-shadow var(--transition-fast);
+}
+.dir-btn-cta:hover {
+    box-shadow: var(--shadow-offset-sm);
+}
+
+/* ============================================================
+   RESPONSIVE
+   3 colonnes → 2 colonnes (tablet) → 1 colonne (mobile)
+   ============================================================ */
+@media (max-width: 900px) {
+    .dir-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
+}
+@media (max-width: 540px) {
+    .dir-grid {
+        grid-template-columns: 1fr;
+    }
+    .dir-title {
+        font-size: 36px;
+    }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 
+{# ── EN-TÊTE ──────────────────────────────────────────────────────────────── #}
+<div class="dir-header">
+    <h2 class="dir-title">Annuaire</h2>
+    <p class="dir-subtitle">les artistes de la communauté</p>
+
+    {% if profiles is not empty %}
+        {#
+           Compteur dynamique avec accord en genre et nombre.
+           L'opérateur ternaire ?: gère le pluriel simplement.
+        #}
+        <div class="dir-count">
+            {{ profiles|length }}
+            artiste{{ profiles|length > 1 ? 's' : '' }}
+            inscrit{{ profiles|length > 1 ? 's' : '' }}
+        </div>
+    {% endif %}
+</div>
+
+{# ── GRILLE OU ÉTAT VIDE ─────────────────────────────────────────────────── #}
+
 {% if profiles is empty %}
-    {# Aucun artiste n'a encore créé de profil #}
-    <div class="empty-state">
-        <p style="font-size:32px; margin-bottom:12px;">🎨</p>
-        <p style="font-weight:600; margin-bottom:8px;">Aucun profil artiste pour l'instant.</p>
-        <p style="font-size:13px; margin-bottom:16px;">Soyez le premier à créer votre profil !</p>
-        <a href="{{ path('app_artist_profile_edit') }}" class="btn btn-primary">
-            Créer mon profil artiste
+
+    {# Aucun profil artiste n'existe encore #}
+    <div class="dir-empty">
+        <div class="dir-empty__title">Pas encore d'artiste</div>
+        <p class="dir-empty__text">
+            Soyez le premier à rejoindre l'annuaire.
+        </p>
+        <a href="{{ path('app_artist_profile_edit') }}" class="dir-btn-cta">
+            Créer mon profil artiste →
         </a>
     </div>
-{% else %}
-    {# Compteur d'artistes #}
-    <p class="artists-count">
-        {{ profiles|length }} artiste{{ profiles|length > 1 ? 's' : '' }} inscrit{{ profiles|length > 1 ? 's' : '' }}
-    </p>
 
-    {# Grille des cartes artistes #}
-    <div class="artists-grid">
+{% else %}
+
+    <div class="dir-grid" role="list">
+
         {% for profile in profiles %}
             {#
-             # Chaque carte est un lien vers le profil public de l'artiste.
-             # La route app_artist_profile_public prend l'ID du profil en paramètre.
-            #}
-            <a href="{{ path('app_artist_profile_public', {id: profile.id}) }}" class="artist-card">
+               Chaque carte est un lien vers le profil public de l'artiste.
+               Route : app_artist_profile_public prend {id: profile.id}
+               (confirmé dans ArtistProfileController::publicShow()).
 
-                {# Avatar : photo ou initiale #}
-                <div class="artist-avatar">
-                    {% if profile.avatarPath %}
-                        <img src="{{ asset(profile.avatarPath) }}" alt="{{ profile.displayName }}">
-                    {% else %}
-                        {{ profile.displayName|first|upper }}
-                    {% endif %}
+               role="listitem" sur chaque lien pour l'accessibilité —
+               le role="list" du container déclare une liste de fiches.
+            #}
+            <a href="{{ path('app_artist_profile_public', {id: profile.id}) }}"
+               class="dir-card"
+               role="listitem"
+               aria-label="{{ profile.displayName }}{% if profile.location %}, {{ profile.location }}{% endif %}">
+
+                {# Carré initiales : 2 premières lettres du nom en majuscules #}
+                <div class="dir-card__avatar" aria-hidden="true">
+                    {{ profile.displayName|slice(0, 2)|upper }}
                 </div>
 
-                {# Nom d'affichage #}
-                <div class="artist-name">{{ profile.displayName }}</div>
+                {# Nom en Archivo Black uppercase #}
+                <div class="dir-card__name">{{ profile.displayName }}</div>
 
-                {# Localisation si disponible #}
-                {% if profile.location %}
-                    <div class="artist-location">📍 {{ profile.location }}</div>
+                {# Disciplines en chips #}
+                {% if profile.disciplines|length > 0 %}
+                    <div class="dir-card__chips">
+                        {# On affiche au max 3 disciplines pour garder la carte compacte #}
+                        {% for discipline in profile.disciplines|slice(0, 3) %}
+                            <span class="dir-chip">{{ discipline.name }}</span>
+                        {% endfor %}
+                        {# Si plus de 3 disciplines, on indique le surplus #}
+                        {% if profile.disciplines|length > 3 %}
+                            <span class="dir-chip" style="background: var(--bg-alt); color: var(--ink-mute);">
+                                +{{ profile.disciplines|length - 3 }}
+                            </span>
+                        {% endif %}
+                    </div>
                 {% endif %}
 
-                {# Extrait de biographie #}
-                {% if profile.bio %}
-                    <p class="artist-bio">{{ profile.bio }}</p>
-                {% else %}
-                    <p class="artist-bio" style="font-style:italic;">Aucune biographie.</p>
+                {# Ville si disponible #}
+                {% if profile.location %}
+                    <div class="dir-card__location">{{ profile.location }}</div>
                 {% endif %}
 
             </a>
         {% endfor %}
+
     </div>
+
 {% endif %}
 
 {% endblock %}

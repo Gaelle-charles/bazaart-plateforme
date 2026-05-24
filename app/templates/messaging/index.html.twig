@@ -1,254 +1,393 @@
 {% extends 'base_app.html.twig' %}
 
+{#
+ # messaging/index.html.twig — Liste des conversations (thème Street)
+ #
+ # Variables transmises par MessagingController :
+ #   - conversations : Conversation[] — toutes les conversations de l'utilisateur
+ #   - unreadCounts  : array<int, int> — [conversationId => nombre de non lus]
+ #   - currentUser   : App\Entity\User — l'utilisateur connecté
+ #
+ # Design : thème Street
+ #   Bords francs, cartes border 1px --ink, accents lime + orange
+ #   Avatars : carrés (Street ≠ cercles du thème Editorial)
+ #}
+
 {% block title %}Mes messages — BazaArt{% endblock %}
 {% block page_title %}Messages{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* ── En-tête de section ── */
-    .messaging-header {
-        margin-bottom: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .messaging-header__title {
-        font-family: var(--font-heading);
-        font-size: 22px;
-        font-weight: 700;
-        color: var(--color-text);
-    }
-    .messaging-header__subtitle {
-        font-size: 13px;
-        color: var(--color-text-light);
-        margin-top: 4px;
-    }
 
-    /* ── Liste des conversations ── */
-    .conversations-list {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        overflow: hidden;
-    }
+/* ================================================================
+   MESSAGERIE — Liste des conversations (thème Street)
+   Préfixe : .msg- pour éviter toute collision
+================================================================ */
 
-    /* Chaque ligne de conversation */
-    .conversation-item {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        padding: 16px 20px;
-        text-decoration: none;
-        color: var(--color-text);
-        border-bottom: 1px solid var(--color-border);
-        transition: background 0.12s;
-        position: relative;
-    }
-    .conversation-item:last-child {
-        border-bottom: none;
-    }
-    .conversation-item:hover {
-        background: #f8f9fa;
-    }
+/* ── En-tête de la page ─────────────────────────────────────────
+   Titre en Archivo Black + bouton "Nouvelle conversation" à droite
+----------------------------------------------------------------- */
+.msg-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap; /* bascule en colonne sur mobile */
+}
 
-    /* Conversation avec messages non lus → fond légèrement teinté */
-    .conversation-item--unread {
-        background: #fff9f8;
-    }
+.msg-header__title {
+    font-family: var(--display); /* Archivo Black */
+    font-size: clamp(28px, 4vw, 40px);
+    text-transform: uppercase;
+    line-height: .9;
+    color: var(--ink);
+}
 
-    /* Avatar de l'interlocuteur */
-    .conv-avatar {
-        width: 42px;
-        height: 42px;
-        border-radius: 50%;
-        background: var(--color-orange, #E07A3A);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        font-weight: 700;
-        color: white;
-        flex-shrink: 0;
-    }
+.msg-header__sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-top: 8px;
+}
 
-    /* Zone de texte (nom + extrait) */
-    .conv-body {
-        flex: 1;
-        min-width: 0; /* nécessaire pour que text-overflow: ellipsis fonctionne dans un flex */
-    }
-    .conv-body__name {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--color-text);
-        margin-bottom: 3px;
-    }
-    .conv-body__preview {
-        font-size: 12px;
-        color: var(--color-text-light);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 100%;
-    }
-    /* Nom en gras si messages non lus */
-    .conversation-item--unread .conv-body__name {
-        color: var(--color-red, #C8503A);
-    }
+/* Bouton "Nouvelle conversation +" — style dark (fond --ink) */
+.msg-btn-new {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 10px 16px;
+    background: var(--ink);
+    color: var(--bg);
+    text-decoration: none;
+    border: 1px solid var(--ink);
+    border-radius: 0; /* Street : bords francs */
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
 
-    /* Zone droite : date + badge */
-    .conv-meta {
-        display: flex;
+.msg-btn-new:hover {
+    background: var(--accent);
+    color: var(--ink);
+    border-color: var(--ink);
+}
+
+/* ── Conteneur de la liste ──────────────────────────────────────
+   Border 1px --ink (style carte Street), pas de shadow
+----------------------------------------------------------------- */
+.msg-list {
+    border: 1px solid var(--ink);
+}
+
+/* ── Item de conversation ───────────────────────────────────────
+   Ligne cliquable = toute la largeur est un lien
+----------------------------------------------------------------- */
+.msg-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    text-decoration: none;
+    color: var(--ink);
+    border-bottom: 1px solid var(--line-soft);
+    transition: background var(--transition-fast);
+    position: relative;
+}
+
+.msg-item:last-child {
+    border-bottom: none;
+}
+
+.msg-item:hover {
+    background: var(--bg-alt);
+}
+
+/* Conversation avec messages non lus :
+   barre latérale accent-2 (orange) + fond très légèrement teinté */
+.msg-item--unread {
+    background: var(--bg);
+    border-left: 3px solid var(--accent-2);
+    padding-left: 15px; /* compense les 3px de la bordure */
+}
+
+.msg-item--unread:hover {
+    background: var(--bg-alt);
+}
+
+/* ── Avatar carré avec initiales ────────────────────────────────
+   Street : carré (border-radius: 0), pas de cercle
+   Fond accent lime, texte --ink
+----------------------------------------------------------------- */
+.msg-avatar {
+    width: 40px;
+    height: 40px;
+    background: var(--accent);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid var(--ink);
+    border-radius: 0; /* carré strict */
+}
+
+/* Avatar de conversation non lue : fond orange */
+.msg-item--unread .msg-avatar {
+    background: var(--accent-2);
+    color: var(--bg);
+}
+
+/* ── Contenu textuel de la ligne ────────────────────────────────
+   min-width: 0 est nécessaire pour que text-overflow ellipsis
+   fonctionne à l'intérieur d'un flex container
+----------------------------------------------------------------- */
+.msg-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.msg-body__name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 3px;
+}
+
+/* Nom en gras si messages non lus */
+.msg-item--unread .msg-body__name {
+    font-family: var(--display);
+    font-size: 13px;
+}
+
+.msg-body__preview {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Zone droite : date + badge non lus ─────────────────────── */
+.msg-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.msg-meta__date {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-mute);
+    letter-spacing: .04em;
+}
+
+/* Badge "N non lus" — fond orange (accent-2), style chip Street */
+.msg-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    background: var(--accent-2);
+    color: var(--bg);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0; /* Street : carré */
+}
+
+/* ── État vide ──────────────────────────────────────────────────
+   Affiché si conversations est vide
+----------------------------------------------------------------- */
+.msg-empty {
+    border: 1px solid var(--ink);
+    padding: 64px 24px;
+    text-align: center;
+}
+
+.msg-empty__icon {
+    font-family: var(--display);
+    font-size: 48px;
+    line-height: 1;
+    color: var(--ink-mute);
+    margin-bottom: 16px;
+    opacity: .3;
+}
+
+.msg-empty__text {
+    font-size: 14px;
+    color: var(--ink-mute);
+    margin-bottom: 24px;
+    line-height: 1.5;
+}
+
+/* Bouton CTA état vide */
+.msg-empty__cta {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 10px 20px;
+    background: var(--ink);
+    color: var(--bg);
+    text-decoration: none;
+    display: inline-block;
+    border-radius: 0;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.msg-empty__cta:hover {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+/* ── Responsive mobile ─────────────────────────────────────────
+   La liste reste identique sur mobile — elle est déjà en colonne
+----------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .msg-header {
         flex-direction: column;
-        align-items: flex-end;
-        gap: 6px;
-        flex-shrink: 0;
+        align-items: flex-start;
+        gap: 12px;
     }
-    .conv-meta__date {
-        font-size: 11px;
-        color: var(--color-text-light);
-    }
+}
 
-    /* Badge "N messages non lus" */
-    .badge-unread {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 20px;
-        height: 20px;
-        padding: 0 6px;
-        background: var(--color-red, #C8503A);
-        color: white;
-        font-size: 11px;
-        font-weight: 700;
-        border-radius: 10px;
-    }
-
-    /* ── État vide ── */
-    .messaging-empty {
-        text-align: center;
-        padding: 64px 24px;
-        color: var(--color-text-light);
-    }
-    .messaging-empty__icon {
-        font-size: 48px;
-        margin-bottom: 16px;
-    }
-    .messaging-empty__text {
-        font-size: 15px;
-        margin-bottom: 20px;
-    }
-    .messaging-empty__link {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 9px 18px;
-        background: var(--color-red, #C8503A);
-        color: white;
-        border-radius: var(--radius-sm);
-        text-decoration: none;
-        font-size: 13px;
-        font-weight: 600;
-        transition: background 0.15s;
-    }
-    .messaging-empty__link:hover {
-        background: #a84232;
-    }
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# ── En-tête ──────────────────────────────────────────────────────────────────── #}
-<div class="messaging-header">
+{# ── EN-TÊTE ──────────────────────────────────────────────────────────────────
+   Titre Archivo Black + bouton "Nouvelle conversation"
+#}
+<div class="msg-header">
     <div>
-        <h2 class="messaging-header__title">Mes messages</h2>
-        <p class="messaging-header__subtitle">
-            Vos conversations privées avec les membres de la communauté.
+        <h2 class="msg-header__title">Messages</h2>
+        <p class="msg-header__sub">
+            {{ conversations|length }} conversation{{ conversations|length != 1 ? 's' : '' }}
         </p>
     </div>
+
+    {# Bouton vers la page de création d'une nouvelle conversation #}
+    <a href="{{ path('app_messaging_new') }}" class="msg-btn-new">
+        {# Icône "+" en SVG inline — pas de dépendance externe #}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+        </svg>
+        Nouvelle conversation
+    </a>
 </div>
 
-{# ── Liste des conversations ──────────────────────────────────────────────────── #}
+{# ── LISTE DES CONVERSATIONS ──────────────────────────────────────────────────
+   Si vide → état vide avec CTA
+   Sinon → liste de lignes cliquables
+#}
 {% if conversations is empty %}
 
-    {# Aucune conversation — invite à en démarrer une #}
-    <div class="conversations-list">
-        <div class="messaging-empty">
-            <div class="messaging-empty__icon">✉</div>
-            <p class="messaging-empty__text">
-                Vous n'avez pas encore de conversation.<br>
-                Démarrez un échange avec un artiste de l'annuaire !
-            </p>
-            {# Lien vers l'annuaire artistes pour trouver un interlocuteur #}
-            <a href="{{ path('app_artist_profile_directory') }}" class="messaging-empty__link">
-                Parcourir l'annuaire artistes
-            </a>
-        </div>
+    {# État vide : invite à démarrer une première conversation #}
+    <div class="msg-empty">
+        <div class="msg-empty__icon">✉</div>
+        <p class="msg-empty__text">
+            Vous n'avez pas encore de conversation.<br>
+            Démarrez un échange avec un artiste de l'annuaire !
+        </p>
+        <a href="{{ path('app_artist_profile_directory') }}" class="msg-empty__cta">
+            Parcourir l'annuaire →
+        </a>
     </div>
 
 {% else %}
 
-    <div class="conversations-list">
+    <div class="msg-list" role="list">
+
         {% for conversation in conversations %}
 
-            {# Récupère l'interlocuteur (l'autre participant, pas l'utilisateur courant) #}
+            {#
+                Récupère l'autre participant de la conversation.
+                getOtherParticipant() est une méthode de l'entité Conversation
+                qui filtre les participants pour retourner celui qui n'est pas currentUser.
+            #}
             {% set otherUser = conversation.getOtherParticipant(currentUser) %}
 
-            {# Nombre de messages non lus pour cette conversation #}
+            {#
+                Nombre de messages non lus pour cette conversation.
+                L'opérateur ?? retourne 0 si la clé n'existe pas dans le tableau
+                (null coalescing — plus sûr que conversation.id is defined in unreadCounts).
+            #}
             {% set unread = unreadCounts[conversation.id] ?? 0 %}
 
-            {# Lien vers le fil de la conversation #}
+            {# Lien englobant toute la ligne — accessibilité : title décrit la destination #}
             <a href="{{ path('app_messaging_show', { id: conversation.id }) }}"
-               class="conversation-item {% if unread > 0 %}conversation-item--unread{% endif %}">
+               class="msg-item {% if unread > 0 %}msg-item--unread{% endif %}"
+               role="listitem"
+               title="Conversation avec {{ otherUser ? otherUser.email|split('@')|first : 'utilisateur inconnu' }}">
 
-                {# Avatar avec les initiales de l'interlocuteur #}
-                <div class="conv-avatar">
-                    {# On prend les 2 premières lettres de la partie avant l'@ de l'email #}
-                    {{ otherUser ? (otherUser.email|split('@')|first|slice(0, 2)|upper) : '?' }}
+                {# Avatar carré avec les 2 initiales de l'interlocuteur #}
+                <div class="msg-avatar" aria-hidden="true">
+                    {#
+                        Génère 2 lettres en majuscules depuis l'email de l'interlocuteur.
+                        Si otherUser est null (conversation orpheline), on affiche "??"
+                    #}
+                    {{ otherUser ? (otherUser.email|split('@')|first|slice(0, 2)|upper) : '??' }}
                 </div>
 
-                {# Nom et aperçu du dernier message #}
-                <div class="conv-body">
-                    <div class="conv-body__name">
-                        {# Affiche la partie avant l'@ de l'email comme nom d'usage #}
+                {# Nom et date d'activité de la conversation #}
+                <div class="msg-body">
+                    <div class="msg-body__name">
                         {{ otherUser ? otherUser.email|split('@')|first : 'Utilisateur inconnu' }}
                     </div>
-                    {#
-                        On n'affiche pas le dernier message ici pour éviter une requête
-                        supplémentaire par conversation. En V2, on pourrait dénormaliser
-                        lastMessageContent dans l'entité Conversation.
-                        Pour l'instant, on affiche la date uniquement.
-                    #}
-                    <div class="conv-body__preview">
+                    <div class="msg-body__preview">
+                        {# Affiche la date d'activité — on n'a pas de lastMessageContent
+                           en V1 (pas de dénormalisation). On affiche la date en mono. #}
                         {% if conversation.lastMessageAt %}
-                            Dernière activité le {{ conversation.lastMessageAt|date('d/m/Y à H:i') }}
+                            {{ conversation.lastMessageAt|date('d/m à H:i') }}
                         {% else %}
-                            Conversation démarrée le {{ conversation.createdAt|date('d/m/Y') }}
+                            Démarrée le {{ conversation.createdAt|date('d/m/Y') }}
                         {% endif %}
                     </div>
                 </div>
 
-                {# Date et badge de non-lus #}
-                <div class="conv-meta">
-                    <span class="conv-meta__date">
-                        {# Affiche la date du dernier message ou de création #}
+                {# Zone droite : date courte + badge non-lus #}
+                <div class="msg-meta">
+                    <span class="msg-meta__date">
                         {% if conversation.lastMessageAt %}
                             {{ conversation.lastMessageAt|date('d/m') }}
                         {% else %}
                             {{ conversation.createdAt|date('d/m') }}
                         {% endif %}
                     </span>
+
+                    {# Badge orange — affiché uniquement si messages non lus #}
                     {% if unread > 0 %}
-                        {# Badge rouge avec le nombre de messages non lus #}
-                        <span class="badge-unread">{{ unread }}</span>
+                        <span class="msg-badge" aria-label="{{ unread }} message(s) non lu(s)">
+                            {{ unread }}
+                        </span>
                     {% endif %}
                 </div>
 
             </a>
 
         {% endfor %}
+
     </div>
 
 {% endif %}

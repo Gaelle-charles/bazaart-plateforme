@@ -1,240 +1,358 @@
 {% extends 'base_app.html.twig' %}
 
-{% block title %}Conversation avec {{ otherUser ? otherUser.email|split('@')|first : 'quelqu\'un' }} — BazaArt{% endblock %}
+{#
+ # messaging/show.html.twig — Conversation (vue chat) (thème Street)
+ #
+ # Variables transmises par MessagingController::show() :
+ #   - conversation : App\Entity\Conversation — la conversation affichée
+ #   - messages     : Message[]              — messages ordonnés par date ASC
+ #   - currentUser  : App\Entity\User        — utilisateur connecté
+ #   - sendForm     : FormView               — formulaire d'envoi de message
+ #   - otherUser    : App\Entity\User        — l'autre participant
+ #
+ # Design : thème Street
+ #   Bulles sans border-radius, fond --accent (lime) pour les miennes,
+ #   fond --bg + border pour les leurs.
+ #}
+
+{% block title %}
+    Conversation avec {{ otherUser ? otherUser.email|split('@')|first : 'quelqu\'un' }} — BazaArt
+{% endblock %}
 {% block page_title %}Messages{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* ── Layout de la page conversation ── */
-    .conversation-page {
-        display: flex;
-        flex-direction: column;
-        height: calc(100vh - 56px - 56px); /* viewport - topbar - padding */
-        max-height: 800px;
+
+/* ================================================================
+   MESSAGERIE — Vue conversation / chat (thème Street)
+   Préfixe : .msg- (partagé avec messaging/index.html.twig)
+================================================================ */
+
+/* ── Wrapper global de la page conversation ─────────────────────
+   Hauteur calculée pour remplir l'espace restant sous la topbar.
+   La topbar fait 56px, le padding .app-content fait 28px × 2.
+   On déduit tout ça du 100vh pour que le chat soit full-height.
+----------------------------------------------------------------- */
+.msg-conv-wrapper {
+    border: 1px solid var(--ink);
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 56px - 56px); /* topbar + padding haut + bas */
+    max-height: 820px;
+    min-height: 400px;
+}
+
+/* ── En-tête de la conversation ─────────────────────────────────
+   Fond --ink (sombre), texte --bg (crème) — bande d'identité
+----------------------------------------------------------------- */
+.msg-conv-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--ink);
+    color: var(--bg);
+    border-bottom: 1px solid var(--ink);
+    flex-shrink: 0; /* ne rétrécit pas quand les messages débordent */
+}
+
+/* Lien "← Retour" en mono */
+.msg-conv-back {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: rgba(242, 239, 230, .6); /* --bg atténué */
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: color var(--transition-fast);
+    flex-shrink: 0;
+    padding: 4px 8px;
+    border: 1px solid rgba(242, 239, 230, .2);
+}
+
+.msg-conv-back:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* Séparateur vertical entre le bouton retour et l'avatar */
+.msg-conv-sep {
+    width: 1px;
+    height: 24px;
+    background: rgba(242, 239, 230, .2);
+    flex-shrink: 0;
+}
+
+/* Avatar carré de l'interlocuteur (Street = carré, accent lime) */
+.msg-conv-avatar {
+    width: 34px;
+    height: 34px;
+    background: var(--accent);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 0; /* Street : carré */
+}
+
+/* Nom de l'interlocuteur */
+.msg-conv-name {
+    font-family: var(--display); /* Archivo Black */
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--bg);
+    flex: 1;
+}
+
+/* ── Fil de messages ─────────────────────────────────────────────
+   Zone scrollable, grandit pour remplir l'espace disponible
+----------------------------------------------------------------- */
+.msg-thread {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scroll-behavior: smooth;
+    background: var(--bg); /* fond crème */
+}
+
+/* ── Bulle de message générique ─────────────────────────────────
+   Largeur max 70% pour les messages longs → conserve la lisibilité
+   border-radius: 0 — règle absolue du thème Street
+----------------------------------------------------------------- */
+.msg-bubble {
+    display: flex;
+    flex-direction: column;
+    max-width: 70%;
+}
+
+/* Messages de l'utilisateur courant — à droite */
+.msg-bubble--mine {
+    align-self: flex-end;
+    align-items: flex-end;
+}
+
+/* Messages reçus — à gauche */
+.msg-bubble--theirs {
+    align-self: flex-start;
+    align-items: flex-start;
+}
+
+/* Étiquette auteur (uniquement pour les messages reçus) */
+.msg-bubble__author {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    color: var(--ink-mute);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+}
+
+/* Corps du message — contenu textuel */
+.msg-bubble__content {
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    /* Préserve les retours à la ligne du texte utilisateur */
+    white-space: pre-wrap;
+    word-break: break-word;
+    /* Street : border-radius ZÉRO partout — règle non négociable */
+    border-radius: 0;
+}
+
+/* Bulle envoyée (mes messages) :
+   Fond vert acide --accent, texte --ink — style identitaire Street */
+.msg-bubble--mine .msg-bubble__content {
+    background: var(--accent);
+    color: var(--ink);
+    border: 1px solid var(--ink);
+}
+
+/* Bulle reçue (messages de l'autre) :
+   Fond blanc, bordure --ink — sobre mais lisible */
+.msg-bubble--theirs .msg-bubble__content {
+    background: #fff;
+    color: var(--ink);
+    border: 1px solid var(--ink);
+}
+
+/* Date/heure sous chaque bulle — en JetBrains Mono */
+.msg-bubble__date {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-mute);
+    margin-top: 4px;
+    letter-spacing: .02em;
+}
+
+/* ── Fil vide ───────────────────────────────────────────────────
+   Affiché quand aucun message n'a encore été envoyé
+----------------------------------------------------------------- */
+.msg-thread-empty {
+    text-align: center;
+    padding: 40px 20px;
+    margin: auto; /* centre verticalement dans le flex */
+}
+
+.msg-thread-empty__text {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+}
+
+/* ── Formulaire d'envoi ─────────────────────────────────────────
+   Collé au bas de la conversation, séparé par une ligne --ink
+----------------------------------------------------------------- */
+.msg-send-form {
+    border-top: 1px solid var(--ink);
+    padding: 14px 18px;
+    flex-shrink: 0; /* ne rétrécit pas */
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: var(--bg-alt); /* légèrement plus sombre que le fil */
+}
+
+/* Textarea de saisie — prend tout l'espace disponible */
+.msg-send-textarea {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--ink);
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body); /* Space Grotesk */
+    font-size: 13px;
+    border-radius: 0; /* Street : bords francs */
+    resize: none;
+    min-height: 42px;
+    max-height: 120px;
+    overflow-y: auto;
+    transition: border-color var(--transition-fast);
+}
+
+.msg-send-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    /* Remplacement du border par 2px focussé sans décaler le layout :
+       on utilise outline sur le pseudo-élément plutôt que border-width
+       pour préserver la largeur totale. Ici on accepte le léger shift
+       pour la clarté du feedback visuel. */
+    border-width: 2px;
+}
+
+.msg-send-textarea::placeholder {
+    color: var(--ink-mute);
+}
+
+/* Bouton "Envoyer →" — style dark (fond --ink, hover lime) */
+.msg-send-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 10px 18px;
+    background: var(--ink);
+    color: var(--bg);
+    border: 1px solid var(--ink);
+    border-radius: 0;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.msg-send-btn:hover {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+.msg-send-btn:active {
+    /* Effet "pression" : décalage de 2px vers le bas/droite */
+    transform: translate(2px, 2px);
+    box-shadow: none;
+}
+
+/* ── Responsive mobile ─────────────────────────────────────────
+   Sur mobile, la hauteur du wrapper doit tenir compte de l'absence
+   de sidebar (la sidebar collapse en mobile).
+----------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .msg-conv-wrapper {
+        height: calc(100vh - 56px - 32px);
+        max-height: none;
     }
 
-    /* ── En-tête de la conversation ── */
-    .conv-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 0 0 16px;
-        border-bottom: 1px solid var(--color-border);
-        margin-bottom: 0;
-        flex-shrink: 0;
+    .msg-bubble {
+        max-width: 85%; /* plus large sur petit écran */
     }
-    .conv-header__back {
-        color: var(--color-text-light);
-        text-decoration: none;
-        font-size: 18px;
-        line-height: 1;
-        padding: 4px;
-        border-radius: 4px;
-        transition: background 0.12s;
-    }
-    .conv-header__back:hover {
-        background: #f0f0f0;
-        color: var(--color-text);
-    }
-    .conv-header__avatar {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: var(--color-orange, #E07A3A);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 13px;
-        font-weight: 700;
-        color: white;
-        flex-shrink: 0;
-    }
-    .conv-header__name {
-        font-family: var(--font-heading);
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--color-text);
-    }
+}
 
-    /* ── Fil des messages ── */
-    .messages-thread {
-        flex: 1;
-        overflow-y: auto;
-        padding: 20px 0;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        /* Scroll automatique vers le bas (vers les plus récents) */
-        scroll-behavior: smooth;
-    }
-
-    /* Bulle de message générique */
-    .message-bubble {
-        display: flex;
-        flex-direction: column;
-        max-width: 70%; /* limite la largeur pour les messages longs */
-    }
-
-    /* Messages de l'utilisateur courant — alignés à droite */
-    .message-bubble--mine {
-        align-self: flex-end;
-        align-items: flex-end;
-    }
-
-    /* Messages de l'autre participant — alignés à gauche */
-    .message-bubble--theirs {
-        align-self: flex-start;
-        align-items: flex-start;
-    }
-
-    /* Auteur affiché au-dessus du message (pour les messages reçus) */
-    .message-bubble__author {
-        font-size: 11px;
-        color: var(--color-text-light);
-        margin-bottom: 3px;
-        font-weight: 600;
-    }
-
-    /* Corps du message (texte dans la bulle) */
-    .message-bubble__content {
-        padding: 10px 14px;
-        border-radius: 12px;
-        font-size: 14px;
-        line-height: 1.5;
-        /* Préserve les retours à la ligne (le contenu est du texte brut) */
-        white-space: pre-wrap;
-        word-break: break-word;
-    }
-
-    /* Style bulle envoyée (fond rouge clair) */
-    .message-bubble--mine .message-bubble__content {
-        background: #fdf0ee; /* rouge très clair, cohérent avec la charte Bazaart */
-        color: var(--color-text);
-        border-bottom-right-radius: 3px; /* petite "queue" de bulle */
-    }
-
-    /* Style bulle reçue (fond gris clair) */
-    .message-bubble--theirs .message-bubble__content {
-        background: #f0f2f1; /* gris clair neutre */
-        color: var(--color-text);
-        border-bottom-left-radius: 3px;
-    }
-
-    /* Date/heure sous chaque bulle */
-    .message-bubble__date {
-        font-size: 10px;
-        color: var(--color-text-light);
-        margin-top: 3px;
-    }
-
-    /* ── Zone de saisie ── */
-    .message-form {
-        border-top: 1px solid var(--color-border);
-        padding-top: 16px;
-        flex-shrink: 0;
-        display: flex;
-        gap: 10px;
-        align-items: flex-end;
-    }
-    .message-form__textarea {
-        flex: 1;
-        padding: 10px 14px;
-        border: 1px solid var(--color-border);
-        border-radius: 20px; /* arrondi "bulle" pour cohérence visuelle */
-        font-size: 14px;
-        font-family: inherit;
-        color: var(--color-text);
-        resize: none;
-        min-height: 44px;
-        max-height: 120px;
-        overflow-y: auto;
-        transition: border-color 0.15s;
-        background: var(--color-white);
-    }
-    .message-form__textarea:focus {
-        outline: none;
-        border-color: var(--color-red, #C8503A);
-    }
-    .message-form__textarea::placeholder {
-        color: var(--color-text-light);
-    }
-    .message-form__submit {
-        padding: 10px 20px;
-        background: var(--color-red, #C8503A);
-        color: white;
-        border: none;
-        border-radius: 20px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s;
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
-    .message-form__submit:hover {
-        background: #a84232;
-    }
-
-    /* ── Fil vide ── */
-    .thread-empty {
-        text-align: center;
-        padding: 40px 20px;
-        color: var(--color-text-light);
-        font-size: 14px;
-    }
-
-    /* ── Wrapper page ── */
-    .conversation-wrapper {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        height: calc(100vh - 140px);
-        max-height: 750px;
-    }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<div class="conversation-wrapper">
+<div class="msg-conv-wrapper">
 
-    {# ── En-tête : nom de l'interlocuteur + lien retour ──────────────────────── #}
-    <div class="conv-header">
-        {# Flèche retour vers la liste des conversations #}
-        <a href="{{ path('app_messaging_index') }}" class="conv-header__back" title="Retour aux messages">
-            ←
+    {# ── EN-TÊTE DE LA CONVERSATION ───────────────────────────────────────────
+       Bande sombre (--ink) avec : bouton retour | séparateur | avatar | nom
+    #}
+    <div class="msg-conv-header">
+
+        {# Bouton "← Retour" vers la liste des conversations #}
+        <a href="{{ path('app_messaging_index') }}"
+           class="msg-conv-back"
+           title="Retour à la liste des messages">
+            ← Retour
         </a>
 
-        {# Avatar de l'interlocuteur #}
-        <div class="conv-header__avatar">
-            {{ otherUser ? (otherUser.email|split('@')|first|slice(0, 2)|upper) : '?' }}
+        <div class="msg-conv-sep" aria-hidden="true"></div>
+
+        {# Avatar carré de l'interlocuteur #}
+        <div class="msg-conv-avatar" aria-hidden="true">
+            {{ otherUser ? (otherUser.email|split('@')|first|slice(0, 2)|upper) : '??' }}
         </div>
 
-        {# Nom d'usage (partie avant l'@ de l'email) #}
-        <div>
-            <div class="conv-header__name">
-                {% if otherUser %}
-                    {{ otherUser.email|split('@')|first }}
-                {% else %}
-                    Utilisateur inconnu
-                {% endif %}
-            </div>
+        {# Nom affiché (partie avant l'@ de l'email) #}
+        <div class="msg-conv-name">
+            {% if otherUser %}
+                {{ otherUser.email|split('@')|first }}
+            {% else %}
+                Utilisateur inconnu
+            {% endif %}
         </div>
+
     </div>
 
-    {# ── Fil des messages ─────────────────────────────────────────────────────── #}
-    <div class="messages-thread" id="messages-thread">
+    {# ── FIL DES MESSAGES ─────────────────────────────────────────────────────
+       Zone scrollable ordonnée ASC (les plus anciens en haut, les récents en bas).
+       L'ancre #last-message permet au JS de scroller automatiquement vers le bas.
+    #}
+    <div class="msg-thread" id="messages-thread">
 
         {% if messages is empty %}
 
-            {# Aucun message — invite à envoyer le premier #}
-            <div class="thread-empty">
-                Aucun message pour l'instant. Soyez le premier à écrire !
+            {# Aucun message — invite à briser la glace #}
+            <div class="msg-thread-empty">
+                <div class="msg-thread-empty__text">
+                    Aucun message — soyez le premier à écrire !
+                </div>
             </div>
 
         {% else %}
@@ -242,45 +360,57 @@
             {% for message in messages %}
 
                 {#
-                    On détermine si ce message appartient à l'utilisateur courant
-                    pour l'aligner à droite (bulle "envoyée") ou à gauche (bulle "reçue").
-                    Comparaison par identité d'objet (===) — garanti par Doctrine Unit of Work.
+                    Détermine si ce message appartient à l'utilisateur courant.
+                    On compare les IDs (entiers) plutôt que les objets entiers
+                    pour éviter les faux négatifs liés au Unit of Work de Doctrine
+                    (même utilisateur, proxy différent en cas de lazy loading).
                 #}
                 {% set isMine = (message.author.id == currentUser.id) %}
 
                 {#
-                    L'ancre id="last-message" est placée sur le DERNIER message.
-                    La redirection après envoi inclut #last-message pour que le navigateur
-                    scrolle automatiquement jusqu'au bas du fil.
+                    L'ancre id="last-message" est posée sur le dernier message.
+                    Après un envoi (redirect + GET), le navigateur scrolle
+                    automatiquement sur #last-message via le JS en bas de page.
                 #}
-                <div class="message-bubble {{ isMine ? 'message-bubble--mine' : 'message-bubble--theirs' }}"
+                <div class="msg-bubble {{ isMine ? 'msg-bubble--mine' : 'msg-bubble--theirs' }}"
                      {% if loop.last %}id="last-message"{% endif %}>
 
-                    {# Nom de l'auteur — affiché seulement pour les messages reçus #}
+                    {# Étiquette auteur — visible uniquement pour les messages reçus #}
                     {% if not isMine %}
-                        <div class="message-bubble__author">
+                        <div class="msg-bubble__author">
                             {{ message.author.email|split('@')|first }}
                         </div>
                     {% endif %}
 
-                    {# Contenu du message (texte brut, pas de HTML) #}
                     {#
-                        nl2br() convertit les retours à la ligne (\n) en <br> HTML.
-                        raw est nécessaire car nl2br retourne du HTML.
-                        Sécurité : le contenu est en texte brut (pas de HTML injecté par l'utilisateur).
-                        Twig échappe automatiquement le texte AVANT que nl2br() l'insère —
-                        l'ordre dans le filtre pipeline est :
-                        1. escape() (automatique dans Twig) → protège contre XSS
-                        2. nl2br() → ajoute <br> sur le texte déjà sécurisé
-                        3. raw → dit à Twig "fais confiance au résultat de nl2br"
-                        Ce pipeline est sûr car escape() s'exécute toujours en premier.
+                        Contenu du message.
+
+                        CORRECTION C2 : le pipeline |escape|nl2br|raw était problématique.
+
+                        Problème 1 — double-escaping :
+                          Twig a l'auto-escaping activé (base_app.html.twig étend un template
+                          avec autoescape). Appliquer |escape manuellement PUIS laisser Twig
+                          auto-escaper à l'affichage = les & deviennent &amp;amp;, les <
+                          deviennent &lt;lt; etc. Le texte s'affiche avec des caractères parasites.
+
+                        Problème 2 — |raw dangereux :
+                          Terminer par |raw supprime toute protection, y compris l'auto-escape.
+                          Si un attaquant injecte <script>alert(1)</script>, le |raw le rend
+                          exécutable dans le navigateur.
+
+                        Solution idiomatique Twig : |nl2br seul.
+                          Le filtre nl2br de Twig (contrairement à nl2br PHP) :
+                            1. Échappe d'abord tout le HTML (protection XSS complète)
+                            2. Convertit ensuite les \n en <br>
+                            3. Marque le résultat comme "safe" → Twig ne double-échappe pas.
+                          C'est exactement ce qu'on veut. Aucun |raw nécessaire.
                     #}
-                    <div class="message-bubble__content">
-                        {{ message.content|escape|nl2br|raw }}
+                    <div class="msg-bubble__content">
+                        {{ message.content|nl2br }}
                     </div>
 
-                    {# Date d'envoi sous chaque bulle #}
-                    <div class="message-bubble__date">
+                    {# Date d'envoi en mono sous la bulle #}
+                    <div class="msg-bubble__date">
                         {{ message.createdAt|date('d/m/Y à H:i') }}
                     </div>
 
@@ -292,67 +422,95 @@
 
     </div>
 
-    {# ── Formulaire d'envoi ───────────────────────────────────────────────────── #}
-    <form class="message-form"
+    {# ── FORMULAIRE D'ENVOI ───────────────────────────────────────────────────
+       Formulaire HTML natif (sans sendForm FormView pour conserver la simplicité).
+       Le token CSRF est généré manuellement pour correspondre au contrôleur existant.
+    #}
+    <form class="msg-send-form"
           method="POST"
           action="{{ path('app_messaging_send', { id: conversation.id }) }}">
 
         {#
-            Token CSRF dynamique : nommé "messaging_send_{conversationId}".
-            L'ID de la conversation dans le nom empêche la réutilisation d'un token
-            d'une conversation sur une autre (cloisonnement par ressource).
+            Token CSRF : nommé "messaging_send_{conversationId}".
+            L'ID dans le nom cloisonne le token par conversation —
+            un token d'une conversation ne peut pas être réutilisé sur une autre.
         #}
         <input type="hidden" name="_token" value="{{ csrf_token('messaging_send_' ~ conversation.id) }}">
 
-        {# Zone de saisie du message #}
+        {# Textarea de saisie — grandit automatiquement via JS (voir bloc javascripts) #}
         <textarea
             name="content"
-            class="message-form__textarea"
-            placeholder="Écrivez votre message..."
+            class="msg-send-textarea"
+            placeholder="Écrire un message…"
             rows="1"
             maxlength="5000"
             required
             aria-label="Votre message"></textarea>
 
         {# Bouton d'envoi #}
-        <button type="submit" class="message-form__submit">
-            Envoyer
+        <button type="submit" class="msg-send-btn">
+            Envoyer →
         </button>
 
     </form>
 
 </div>
 
-{#
-    Script de scroll automatique vers le bas du fil.
-    Après chargement de la page (ou après redirect post-envoi), on scrolle
-    jusqu'au dernier message pour que l'utilisateur voie immédiatement
-    les messages les plus récents (comportement naturel d'une messagerie).
-#}
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
 <script>
+/*
+ * Script de scroll automatique et d'auto-resize du textarea.
+ *
+ * Deux comportements :
+ *
+ * 1. Scroll automatique vers le dernier message :
+ *    - Au chargement de la page, on cherche l'élément #last-message.
+ *    - scrollIntoView() avec behavior: 'smooth' fait une animation douce.
+ *    - Fallback : si #last-message n'existe pas (fil vide), on scrolle
+ *      jusqu'au bas du conteneur .msg-thread.
+ *
+ * 2. Auto-resize du textarea :
+ *    - À chaque frappe (événement 'input'), on reset la height à 'auto'
+ *      puis on la recalcule sur scrollHeight.
+ *    - max-height en CSS limite la croissance à 120px → scrollbar interne.
+ *    - Cela donne l'effet "bulle qui grandit" des messageries modernes.
+ */
 document.addEventListener('DOMContentLoaded', function () {
-    // Cible soit l'ancre #last-message, soit le bas du fil si pas de messages
+    'use strict';
+
+    /* ── 1. Scroll vers le dernier message ── */
     var lastMessage = document.getElementById('last-message');
-    var thread = document.getElementById('messages-thread');
+    var thread      = document.getElementById('messages-thread');
 
     if (lastMessage) {
-        // Scroll vers le dernier message avec animation douce
         lastMessage.scrollIntoView({ behavior: 'smooth', block: 'end' });
     } else if (thread) {
-        // Fallback : scroll jusqu'en bas du conteneur
         thread.scrollTop = thread.scrollHeight;
     }
 
-    // Auto-resize du textarea : grandit avec le contenu, max-height contrôlé en CSS
-    var textarea = document.querySelector('.message-form__textarea');
+    /* ── 2. Auto-resize du textarea ── */
+    var textarea = document.querySelector('.msg-send-textarea');
     if (textarea) {
         textarea.addEventListener('input', function () {
-            // Réinitialise la hauteur pour recalculer correctement le scrollHeight
+            /* Réinitialisation nécessaire pour recalculer correctement scrollHeight
+               (sinon il reste bloqué à la hauteur précédente) */
             this.style.height = 'auto';
+            /* On cap à 120px — la CSS prend le relai avec overflow-y: auto */
             this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        /* Envoi avec Ctrl+Enter (confort UX — le bouton reste disponible aussi) */
+        textarea.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                /* Cherche le formulaire parent et le soumet */
+                var form = textarea.closest('form');
+                if (form) { form.submit(); }
+            }
         });
     }
 });
 </script>
-
 {% endblock %}

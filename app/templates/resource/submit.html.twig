@@ -1,201 +1,606 @@
 {% extends 'base_app.html.twig' %}
 
-{% block title %}Soumettre une ressource — BazaArt{% endblock %}
+{#
+ # resource/submit.html.twig — Formulaire de soumission d'une ressource
+ #
+ # Thème : Street (app connectée)
+ # Layout : centré, max 720px, pas de sidebar
+ # Référence : sections "form" du prototype + style guide design-tokens.css
+ #
+ # Variables Twig disponibles :
+ #   organization  — entité OrganizationProfile|null (si l'utilisateur n'en a pas, blocage)
+ #   types         — tableau de ResourceType pour le select
+ #   disciplines   — tableau de Discipline pour les checkboxes
+ #   formData      — tableau des valeurs soumises (re-remplissage en cas d'erreur)
+ #   error         — string|null (message d'erreur global)
+ #}
+
+{% block title %}Soumettre une ressource — Bazaart{% endblock %}
 {% block page_title %}Soumettre une ressource{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* Contrainte de largeur pour les formulaires */
-    .form-container { max-width: 720px; }
+    /* ═══════════════════════════════════════════════════════════════════════
+       FORMULAIRE SOUMISSION — styles thème Street
+       Formulaire centré, max 720px, sections en cartes bordées.
+    ═══════════════════════════════════════════════════════════════════════ */
 
-    /* Bannière d'information (organisation active) */
+    /* ── Conteneur centré ──────────────────────────────────────────────── */
+
+    /* Largeur max pour les formulaires longs (meilleure lisibilité que pleine largeur) */
+    .submit-wrap {
+        max-width: 720px;
+    }
+
+    /* ── Chapeau introductif ───────────────────────────────────────────── */
+
+    /* Texte d'intro : serif pour le ton éditorial, couleur muted */
+    .submit-intro {
+        font-family: var(--serif);
+        font-style: italic;
+        font-size: 17px;
+        color: var(--ink-mute);
+        line-height: 1.55;
+        margin-bottom: var(--space-xl);
+        border-left: 3px solid var(--accent);
+        padding-left: var(--space-md);
+    }
+
+    /* ── Bannière organisation active ──────────────────────────────────── */
+
+    /* Encadré de confirmation : "tu soumets au nom de [organisation]"
+       Fond bg-alt + point accent vert = signal positif / informatif */
     .org-banner {
-        display: flex; align-items: center; gap: 10px;
-        background: var(--color-green-light); border: 1px solid rgba(28,58,47,0.2);
-        border-radius: var(--radius-sm); padding: 12px 16px;
-        font-size: 13px; color: var(--color-green); margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: var(--space-md);
+        padding: var(--space-md) var(--space-lg);
+        background: var(--bg-alt);
+        border: 1px solid var(--ink);
+        border-left: 4px solid var(--accent);
+        margin-bottom: var(--space-xl);
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+    }
+
+    /* Icône organisation dans la bannière */
+    .org-banner__icon {
+        width: 36px;
+        height: 36px;
+        background: var(--ink);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--display);
+        font-size: 16px;
+        font-weight: 700;
+        flex-shrink: 0;
     }
 
     /* Badge "Vérifiée" dans la bannière */
-    .verified-mini {
-        background: #d4edda; color: #155724;
-        font-size: 10px; font-weight: 700;
-        padding: 1px 6px; border-radius: 10px; margin-left: 4px;
+    .verified-badge {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 5px;
+        background: rgba(31, 138, 91, .15);
+        color: var(--ok);
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        border-radius: var(--radius-sm);
     }
 
-    /* Section de formulaire dans une carte */
-    .form-card {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-        padding: 24px; margin-bottom: 14px;
+    /* ── Sections de formulaire ────────────────────────────────────────── */
+
+    /* Chaque groupe de champs = "carte" avec bordure et titre de section.
+       Bords francs (radius 0) = thème Street. */
+    .form-section {
+        border: 1px solid var(--ink);
+        margin-bottom: var(--space-md);
+        background: var(--bg);
     }
 
-    .form-card__title {
-        font-size: 13px; font-weight: 700; color: var(--color-text);
-        margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--color-border);
+    /* En-tête de section : fond encre, titre en accent = tabulation visuelle forte */
+    .form-section__header {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+        padding: var(--space-sm) var(--space-lg);
+        background: var(--ink);
+        color: var(--accent);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
     }
 
-    /* Grille de cases à cocher pour les disciplines */
-    .disciplines-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    /* Numéro de section dans l'en-tête */
+    .form-section__num {
+        font-family: var(--display);
+        font-size: 18px;
+        color: rgba(198, 242, 78, .4);
+        margin-right: 2px;
+    }
 
+    /* Corps de la section */
+    .form-section__body {
+        padding: var(--space-xl);
+    }
+
+    /* ── Champs de formulaire ──────────────────────────────────────────── */
+
+    /* Groupe label + champ : marge entre groupes */
+    .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+        margin-bottom: var(--space-lg);
+    }
+    .form-field:last-child { margin-bottom: 0; }
+
+    /* Label : mono très petit, uppercase — style éditorial strict */
+    .field-label {
+        font-family: var(--mono);
+        font-size: var(--label-font-size);
+        font-weight: var(--label-font-weight);
+        letter-spacing: var(--label-letter-spacing);
+        text-transform: uppercase;
+        color: var(--label-color);
+    }
+    .field-label--required::after {
+        content: ' *';
+        color: var(--accent-2);
+    }
+
+    /* Inputs text, url, date, select : pleine largeur, bords francs */
+    .field-input,
+    .field-select,
+    .field-textarea {
+        width: 100%;
+        padding: var(--input-padding);
+        background: var(--input-bg);
+        border: var(--input-border);
+        border-radius: var(--input-radius);
+        font-family: var(--body);
+        font-size: var(--input-font-size);
+        color: var(--ink);
+        outline: none;
+        transition: border var(--transition-fast);
+        box-sizing: border-box;
+    }
+    .field-input:focus,
+    .field-select:focus,
+    .field-textarea:focus {
+        border: var(--input-border-focus);
+    }
+
+    /* Textarea : hauteur fixe, pas de redimensionnement horizontal */
+    .field-textarea {
+        resize: vertical;
+        min-height: 140px;
+        line-height: 1.6;
+    }
+
+    /* Aide sous le champ : petite note grise */
+    .field-hint {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+
+    /* Message d'erreur : rouge, mono, compact */
+    .field-error {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--danger);
+        letter-spacing: .04em;
+    }
+
+    /* ── Grille de checkboxes (disciplines) ────────────────────────────── */
+
+    /* Grille auto-fill : s'adapte à la largeur disponible */
+    .disciplines-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-sm);
+    }
+
+    /* Chaque checkbox discipline = label stylisé façon chip */
     .discipline-check {
-        display: inline-flex; align-items: center; gap: 6px;
-        padding: 6px 12px; border: 1px solid var(--color-border);
-        border-radius: var(--radius-full); font-size: 12px; cursor: pointer;
-        user-select: none; transition: all 0.15s;
-        background: var(--color-white); color: var(--color-text-muted);
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-sm);
+        padding: 6px 12px;
+        border: 1px solid var(--line-soft);
+        background: var(--bg);
+        color: var(--ink-mute);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: .04em;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        user-select: none;
     }
-    .discipline-check:hover { border-color: var(--color-green); color: var(--color-green); }
 
-    /* Case cochée → style actif */
-    .discipline-check input:checked ~ * { color: var(--color-green); }
+    /* Survol : bordure encre */
+    .discipline-check:hover {
+        border-color: var(--ink);
+        color: var(--ink);
+    }
+
+    /* État coché : fond accent lime = confirmation claire */
     .discipline-check:has(input:checked) {
-        background: var(--color-green-light);
-        border-color: rgba(28,58,47,0.3);
-        color: var(--color-green);
+        background: var(--accent);
+        border-color: var(--ink);
+        color: var(--ink);
+        font-weight: 700;
     }
 
-    /* Bloc d'alerte (pas de profil organisation) */
-    .alert-warning {
-        background: #fff3cd; border: 1px solid #ffc107;
-        border-radius: var(--radius-md); padding: 32px; text-align: center;
+    /* La checkbox native est masquée — l'aspect visuel vient du label */
+    .discipline-check input[type="checkbox"] {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+        pointer-events: none;
     }
-    .alert-warning__title { font-size: 16px; font-weight: 700; color: #856404; margin-bottom: 10px; }
-    .alert-warning__text  { font-size: 13px; color: #6b5900; margin-bottom: 16px; line-height: 1.6; }
+
+    /* ── Bloc d'alerte (pas d'organisation) ────────────────────────────── */
+
+    /* Alerte "orange" : fond crème foncé, bordure accent-2, texte foncé */
+    .alert-block {
+        border: 2px solid var(--accent-2);
+        padding: var(--space-2xl) var(--space-xl);
+        text-align: center;
+        background: var(--bg);
+    }
+
+    /* Icône grande et décorative dans l'alerte */
+    .alert-block__icon {
+        font-family: var(--display);
+        font-size: 56px;
+        color: var(--accent-2);
+        opacity: .6;
+        line-height: 1;
+        margin-bottom: var(--space-md);
+    }
+
+    .alert-block__title {
+        font-family: var(--display);
+        font-size: 22px;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin-bottom: var(--space-sm);
+    }
+
+    .alert-block__text {
+        font-family: var(--body);
+        font-size: 14px;
+        color: var(--ink-mute);
+        line-height: 1.6;
+        margin-bottom: var(--space-lg);
+    }
+
+    /* ── Boutons du formulaire ──────────────────────────────────────────── */
+
+    /* Bouton soumettre : plein accent, pleine largeur, grand */
+    .btn-submit {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-sm);
+        width: 100%;
+        padding: 16px var(--space-xl);
+        background: var(--accent);
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .btn-submit:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    /* Bouton annuler : ghost, outline soft */
+    .btn-cancel {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-xs);
+        padding: var(--btn-padding);
+        background: transparent;
+        color: var(--ink-mute);
+        border: 1px solid var(--line-soft);
+        font-family: var(--mono);
+        font-size: var(--btn-font-size);
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: var(--btn-radius);
+        transition: color var(--transition-fast), border-color var(--transition-fast);
+    }
+    .btn-cancel:hover {
+        color: var(--ink);
+        border-color: var(--ink);
+    }
+
+    /* Bouton primaire pour l'alerte (lien vers créer profil org) */
+    .btn-primary-ink {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-sm);
+        padding: var(--btn-padding);
+        background: var(--ink);
+        color: var(--accent);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .btn-primary-ink:hover {
+        background: var(--accent);
+        color: var(--ink);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="form-container">
+<div class="submit-wrap">
 
-    {# Sous-titre explicatif #}
-    <p style="font-size:13px; color:var(--color-text-muted); margin-bottom:20px;">
-        Votre ressource sera examinée par notre équipe avant d'être publiée.
+    {# ── Chapeau introductif ── #}
+    <p class="submit-intro">
+        Partage une opportunité avec la communauté Bazaart.<br>
+        Ta soumission sera examinée par notre équipe avant publication.
     </p>
 
+    {# ═════════════════════════════════════════════════════════════════════
+       CAS 1 : L'utilisateur n'a pas de profil organisation
+       → On bloque le formulaire et on l'invite à créer un profil.
+       La logique de vérification est dans le contrôleur — ici on affiche
+       juste le message adapté.
+    ═════════════════════════════════════════════════════════════════════ #}
     {% if organization is null %}
-        {# ── Blocage : l'utilisateur n'a pas de profil organisation ── #}
-        <div class="alert-warning">
-            <div class="alert-warning__title">Profil organisation requis</div>
-            <p class="alert-warning__text">
-                Pour soumettre une ressource, vous devez d'abord créer un profil organisation.
+
+        <div class="alert-block" role="alert">
+            {# Numéro décoratif style éditorial #}
+            <div class="alert-block__icon">!</div>
+            <div class="alert-block__title">Profil organisation requis</div>
+            <p class="alert-block__text">
+                Pour soumettre une ressource, tu dois d'abord créer un profil organisation.<br>
+                Cela nous permet d'identifier la structure qui propose l'opportunité.
             </p>
-            <a href="{{ path('app_org_profile_edit') }}" class="btn btn-primary">
+            <a href="{{ path('app_org_profile_edit') }}" class="btn-primary-ink">
                 Créer mon profil organisation
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M5 12h14M13 5l7 7-7 7"/>
+                </svg>
             </a>
         </div>
 
+    {# ═════════════════════════════════════════════════════════════════════
+       CAS 2 : L'utilisateur a un profil organisation → affichage du formulaire
+    ═════════════════════════════════════════════════════════════════════ #}
     {% else %}
 
-        {# Message d'erreur de validation #}
+        {# ── Erreur globale de validation ── #}
         {% if error %}
-            <div class="flash flash-error">{{ error }}</div>
+            <div class="flash flash--error" role="alert">{{ error }}</div>
         {% endif %}
 
-        {# ── Indicateur d'organisation active ── #}
+        {# ── Bannière organisation active ── #}
+        {#
+           Confirme à l'utilisateur sous quelle organisation il soumet.
+           L'organisation est lue depuis le profil connecté — pas un choix du formulaire.
+        #}
         <div class="org-banner">
-            🏢 Soumission au nom de :
-            <strong>{{ organization.name }}</strong>
-            {% if organization.isVerified %}
-                <span class="verified-mini">✓ Vérifiée</span>
-            {% endif %}
+            <div class="org-banner__icon" aria-hidden="true">
+                {{ organization.name|first|upper }}
+            </div>
+            <div>
+                <div style="font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-mute); margin-bottom:2px;">
+                    Soumission au nom de
+                </div>
+                <strong>{{ organization.name }}</strong>
+                {% if organization.isVerified %}
+                    <span class="verified-badge">✓ Vérifiée</span>
+                {% endif %}
+            </div>
         </div>
 
-        <form method="post">
+        {# ── Formulaire principal ── #}
+        {#
+           Action POST vers la même route (pattern PRG : Post-Redirect-Get).
+           Pas de {{ form_start() }} car c'est un formulaire HTML manuel
+           (pas de FormType Symfony dans ce contrôleur en V1).
+           Le token CSRF est présent (champ _token) et validé dans ResourceController::submit().
+        #}
+        <form method="post" action="{{ path('app_resource_submit') }}" novalidate>
 
-            {# ── Section 1 : Informations principales ── #}
-            <div class="form-card">
-                <div class="form-card__title">Informations principales</div>
+            {# Token CSRF — protège contre les soumissions forgées depuis un autre site.
+               Le contrôleur valide ce token avec isCsrfTokenValid('resource_submit', $_POST['_token']). #}
+            <input type="hidden" name="_token" value="{{ csrf_token('resource_submit') }}">
 
-                <div class="form-group">
-                    <label for="title">Titre de la ressource *</label>
-                    <input type="text" id="title" name="title" required
-                           value="{{ formData['title'] ?? '' }}"
-                           placeholder="Ex: Résidence de création — Villa Médicis 2026">
+            {# ── SECTION 1 : L'essentiel ── #}
+            <div class="form-section">
+                <div class="form-section__header">
+                    <span class="form-section__num">01</span>
+                    L'essentiel
                 </div>
+                <div class="form-section__body">
 
-                <div class="form-group">
-                    <label for="resourceTypeId">Type de ressource *</label>
-                    {# Le select utilise les types chargés depuis la base de données #}
-                    <select id="resourceTypeId" name="resourceTypeId" required>
-                        <option value="">— Sélectionner un type —</option>
-                        {% for type in types %}
-                            <option value="{{ type.id }}"
-                                    {{ (formData['resourceTypeId'] ?? '') == type.id ? 'selected' : '' }}>
-                                {{ type.icon ? type.icon ~ ' ' : '' }}{{ type.name }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="form-group" style="margin-bottom:0;">
-                    <label for="description">Description *</label>
-                    <textarea id="description" name="description" rows="6" required
-                              placeholder="Décrivez la ressource, les critères d'éligibilité, les modalités de candidature...">{{ formData['description'] ?? '' }}</textarea>
-                </div>
-            </div>
-
-            {# ── Section 2 : Disciplines artistiques ── #}
-            <div class="form-card">
-                <div class="form-card__title">Disciplines artistiques</div>
-                <p style="font-size:12px; color:var(--color-text-light); margin-bottom:14px;">
-                    Cochez toutes les disciplines concernées par cette ressource.
-                </p>
-
-                {# Grille de cases à cocher stylisées comme des pills #}
-                <div class="disciplines-grid">
-                    {% for discipline in disciplines %}
-                        {# On vérifie si cette discipline était cochée lors d'une soumission précédente (en cas d'erreur).
-                           (discipline.id ~ '') convertit l'entier en chaîne pour la comparaison #}
-                        <label class="discipline-check">
-                            <input type="checkbox" name="disciplines[]" value="{{ discipline.id }}"
-                                   style="accent-color:var(--color-green);"
-                                   {{ (discipline.id ~ '') in (formData['disciplines'] ?? []) ? 'checked' : '' }}>
-                            {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                    {# Titre de la ressource #}
+                    <div class="form-field">
+                        <label class="field-label field-label--required" for="title">
+                            Titre de la ressource
                         </label>
-                    {% endfor %}
+                        <input class="field-input"
+                               type="text"
+                               id="title"
+                               name="title"
+                               required
+                               autocomplete="off"
+                               value="{{ formData['title'] ?? '' }}"
+                               placeholder="Ex : Résidence de création — Villa Médicis 2026">
+                    </div>
+
+                    {# Type de ressource #}
+                    <div class="form-field">
+                        <label class="field-label field-label--required" for="resourceTypeId">
+                            Type de ressource
+                        </label>
+                        <select class="field-select" id="resourceTypeId" name="resourceTypeId" required>
+                            <option value="">— Sélectionner un type —</option>
+                            {% for type in types %}
+                                <option value="{{ type.id }}"
+                                        {{ (formData['resourceTypeId'] ?? '') == type.id ? 'selected' : '' }}>
+                                    {{ type.icon ? type.icon ~ ' ' : '' }}{{ type.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {# Description #}
+                    <div class="form-field">
+                        <label class="field-label field-label--required" for="description">
+                            Description
+                        </label>
+                        <textarea class="field-textarea"
+                                  id="description"
+                                  name="description"
+                                  required
+                                  placeholder="Décris la ressource, les critères d'éligibilité, les modalités de candidature…">{{ formData['description'] ?? '' }}</textarea>
+                        <span class="field-hint">Sois précis·e — une bonne description aide les artistes à évaluer rapidement si l'opportunité leur correspond.</span>
+                    </div>
+
                 </div>
             </div>
 
-            {# ── Section 3 : Détails pratiques ── #}
-            <div class="form-card">
-                <div class="form-card__title">Détails pratiques</div>
-
-                <div class="form-group">
-                    <label for="location">Localisation</label>
-                    <input type="text" id="location" name="location"
-                           value="{{ formData['location'] ?? '' }}"
-                           placeholder="Ex: Paris, Lyon, National, International, En ligne">
+            {# ── SECTION 2 : Disciplines artistiques ── #}
+            <div class="form-section">
+                <div class="form-section__header">
+                    <span class="form-section__num">02</span>
+                    Disciplines concernées
                 </div>
+                <div class="form-section__body">
 
-                <div class="form-group">
-                    <label for="deadline">Date limite de candidature</label>
-                    <input type="date" id="deadline" name="deadline"
-                           value="{{ formData['deadline'] ?? '' }}">
-                    <small style="color:var(--color-text-light); display:block; margin-top:4px;">
-                        Laissez vide si la date n'est pas encore connue.
-                    </small>
-                </div>
+                    <p class="field-hint" style="margin-bottom:var(--space-md);">
+                        Coche toutes les disciplines concernées par cette opportunité.<br>
+                        Laisse vide si la ressource est ouverte à toutes les disciplines.
+                    </p>
 
-                <div class="form-group" style="margin-bottom:0;">
-                    <label for="externalUrl">Lien vers la ressource officielle</label>
-                    <input type="url" id="externalUrl" name="externalUrl"
-                           value="{{ formData['externalUrl'] ?? '' }}"
-                           placeholder="https://...">
-                    <small style="color:var(--color-text-light); display:block; margin-top:4px;">
-                        URL du site officiel de l'opportunité.
-                    </small>
+                    {#
+                       Grille de checkboxes stylisées comme des chips.
+                       L'état coché est conservé à la soumission grâce à `formData['disciplines']`.
+                       (discipline.id ~ '') convertit l'entier en chaîne pour la comparaison Twig.
+                    #}
+                    <div class="disciplines-grid">
+                        {% for discipline in disciplines %}
+                            <label class="discipline-check"
+                                   for="discipline_{{ discipline.id }}"
+                                   title="{{ discipline.name }}">
+                                <input type="checkbox"
+                                       id="discipline_{{ discipline.id }}"
+                                       name="disciplines[]"
+                                       value="{{ discipline.id }}"
+                                       {{ (discipline.id ~ '') in (formData['disciplines'] ?? []) ? 'checked' : '' }}>
+                                {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
+                            </label>
+                        {% endfor %}
+                    </div>
+
                 </div>
             </div>
 
-            {# ── Boutons de validation ── #}
-            <div style="display:flex; gap:12px; align-items:center;">
-                <button type="submit" class="btn btn-primary">Soumettre pour validation</button>
-                <a href="{{ path('app_resource_index') }}" class="btn btn-outline">Annuler</a>
+            {# ── SECTION 3 : Informations pratiques ── #}
+            <div class="form-section">
+                <div class="form-section__header">
+                    <span class="form-section__num">03</span>
+                    Informations pratiques
+                </div>
+                <div class="form-section__body">
+
+                    {# Localisation #}
+                    <div class="form-field">
+                        <label class="field-label" for="location">Localisation</label>
+                        <input class="field-input"
+                               type="text"
+                               id="location"
+                               name="location"
+                               value="{{ formData['location'] ?? '' }}"
+                               placeholder="Ex : Paris, Lyon, National, En ligne…">
+                    </div>
+
+                    {# Date limite #}
+                    <div class="form-field">
+                        <label class="field-label" for="deadline">Date limite de candidature</label>
+                        <input class="field-input"
+                               type="date"
+                               id="deadline"
+                               name="deadline"
+                               value="{{ formData['deadline'] ?? '' }}">
+                        <span class="field-hint">Laisse vide si la date n'est pas encore connue.</span>
+                    </div>
+
+                    {# Lien externe #}
+                    <div class="form-field">
+                        <label class="field-label" for="externalUrl">Lien officiel de la ressource</label>
+                        <input class="field-input"
+                               type="url"
+                               id="externalUrl"
+                               name="externalUrl"
+                               value="{{ formData['externalUrl'] ?? '' }}"
+                               placeholder="https://…">
+                        <span class="field-hint">URL du site officiel de l'opportunité. Permet aux artistes de candidater directement.</span>
+                    </div>
+
+                </div>
+            </div>
+
+            {# ── Boutons ── #}
+            {#
+               Le bouton submit est en pleine largeur (style affiche, très visible).
+               Le lien annuler est plus discret (ghost) — hiérarchie d'action respectée.
+            #}
+            <div style="display:flex; flex-direction:column; gap:var(--space-sm); margin-top:var(--space-lg);">
+                <button type="submit" class="btn-submit">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                        <path d="M12 16V4M5 11l7-7 7 7M4 20h16"/>
+                    </svg>
+                    Soumettre pour validation
+                </button>
+                <div style="text-align:center;">
+                    <a href="{{ path('app_resource_index') }}" class="btn-cancel">
+                        Annuler
+                    </a>
+                </div>
             </div>
 
         </form>
+
     {% endif %}
+
 </div>
 {% endblock %}

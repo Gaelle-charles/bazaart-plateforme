@@ -52,6 +52,17 @@ class OrganizationProfileController extends AbstractController
         $profile = $user->getOrganizationProfile();
 
         if ($request->isMethod('POST')) {
+            // ── Validation CSRF ──────────────────────────────────────────────
+            // On vérifie en priorité absolue que le token soumis correspond
+            // au token généré pour cet utilisateur et cette action.
+            // isCsrfTokenValid() compare le token reçu avec celui stocké en session ;
+            // si quelqu'un soumet ce formulaire depuis un autre site, le token sera absent
+            // ou invalide → on rejette la requête avant tout traitement de données.
+            if (!$this->isCsrfTokenValid('org_profile_edit', $request->request->get('_token'))) {
+                $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+                return $this->redirectToRoute('app_org_profile_edit');
+            }
+
             $logoFile = $request->files->get('logo');
 
             // saveProfile retourne soit le profil, soit un message d'erreur (SIRET invalide)

@@ -80,6 +80,42 @@ class ResourceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Retourne les ressources soumises par un utilisateur, avec filtre optionnel sur le statut.
+     *
+     * Utilisé par la page "Mes ressources" (/resources/my) dont les onglets permettent
+     * de filtrer par statut (Toutes / Publiées / En attente / Rejetées...).
+     *
+     * Pourquoi ne pas réutiliser findByUser() + filtrage PHP en mémoire ?
+     * Avec potentiellement des centaines de ressources par utilisateur, charger
+     * toute la liste pour n'en afficher qu'une fraction serait peu efficace.
+     * On filtre directement en SQL, ce qui est plus propre et scalable.
+     *
+     * @param User                $user       L'utilisateur connecté (obligatoire)
+     * @param ResourceStatus|null $status     Filtre de statut. Null = toutes les ressources.
+     * @return Resource[]
+     */
+    public function findByUserWithStatusFilter(User $user, ?ResourceStatus $status = null): array
+    {
+        $qb = $this->createQueryBuilder('r')
+            // On charge resourceType en même temps pour éviter le N+1 dans le template
+            // (chaque $resource->getResourceType() serait sinon une requête séparée).
+            ->leftJoin('r.resourceType', 'rt')->addSelect('rt')
+            ->where('r.submittedBy = :user')
+            ->setParameter('user', $user)
+            ->orderBy('r.createdAt', 'DESC');
+
+        // Si un filtre de statut est fourni, on ajoute la condition WHERE sur le statut.
+        // On passe l'objet enum directement : Doctrine sait le convertir en valeur SQL
+        // grâce à la configuration `enumType: ResourceStatus::class` sur la colonne.
+        if ($status !== null) {
+            $qb->andWhere('r.status = :status')
+               ->setParameter('status', $status);
+        }
+
+        return $qb->getQuery()->getResult();
+    }
+
+    /**
      * Retourne les ressources soumises par une organisation donnée.
      *
      * @return Resource[]

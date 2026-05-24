@@ -1,211 +1,376 @@
 {% extends 'base_admin.html.twig' %}
 
+{#
+ # admin/scraped_opportunities.html.twig — Opportunités scrapées (Google Sheets)
+ #
+ # Thème : Street
+ # Layout parent : base_admin.html.twig
+ #
+ # Variables disponibles (AdminController::scrapedOpportunities()) :
+ #   - pending  : ScrapedResource[] — statut "À vérifier" triés par score desc
+ #   - verified : ScrapedResource[] — statut "Vérifié" (archives)
+ #
+ # Actions disponibles :
+ #   - Vérifier : POST /admin/scraped-opportunities/{id}/verify (CSRF : 'verify_scraped_{id}')
+ #                → change le statut ScrapedResource à "verified" ET crée une Resource publiée
+ #}
+
 {% block title %}Scraping — Admin BazaArt{% endblock %}
-{% block page_title %}Opportunités scrapées{% endblock %}
+{% block page_title %}Scraping Sheets{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* Onglets À vérifier / Vérifié */
-    .tabs {
-        display: flex;
-        gap: 4px;
-        margin-bottom: 24px;
-        border-bottom: 2px solid var(--color-border);
-    }
-    .tab-btn {
-        padding: 9px 20px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        border: none;
-        background: none;
-        color: var(--color-text-muted);
-        border-bottom: 2px solid transparent;
-        margin-bottom: -2px;
-        transition: color 0.15s;
-    }
-    .tab-btn.active {
-        color: var(--admin-accent);
-        border-bottom-color: var(--admin-accent);
-    }
-    .tab-panel { display: none; }
-    .tab-panel.active { display: block; }
 
-    /* Compteur dans l'onglet */
-    .tab-count {
+    /* ── Zone de contenu fond sable ─────────────────────────────────────────── */
+    .app-content {
+        background: var(--bg);
+        font-family: var(--body);
+    }
+
+    /* ── Retour dashboard ───────────────────────────────────────────────────── */
+    .adm-back {
         display: inline-flex;
         align-items: center;
-        justify-content: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
+        text-decoration: none;
+        margin-bottom: 14px;
+        transition: color var(--transition-fast);
+    }
+    .adm-back:hover { color: var(--ink); }
+
+    /* ── Hint commande scraping ─────────────────────────────────────────────── */
+    .adm-hint {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        margin-bottom: 20px;
+        letter-spacing: .04em;
+    }
+    .adm-hint code {
+        background: var(--ink);
+        color: var(--accent);
+        padding: 2px 8px;
+        font-size: 11px;
+        font-family: var(--mono);
+        display: inline-block;
+        margin-left: 4px;
+    }
+
+    /* ── Onglets Street (À vérifier / Vérifié) ──────────────────────────────── */
+    /*
+      Style : bandeau horizontal, l'onglet actif a un fond ink et un texte accent.
+      Les onglets inactifs ont fond bg-alt. Bords francs (pas de border-radius).
+    */
+    .adm-tabs {
+        display: flex;
+        border: 1px solid var(--ink);
+        margin-bottom: 20px;
+        width: fit-content;
+    }
+    .adm-tab-btn {
+        padding: 10px 20px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        border: none;
+        border-right: 1px solid var(--ink);
+        background: var(--bg-alt);
+        color: var(--ink);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: background var(--transition-fast);
+    }
+    .adm-tab-btn:last-child { border-right: none; }
+    /* Onglet actif : fond noir, texte vert */
+    .adm-tab-btn.active {
+        background: var(--ink);
+        color: var(--accent);
+    }
+    .adm-tab-btn:hover:not(.active) { background: var(--bg); }
+
+    /* Compteur dans l'onglet */
+    .adm-tab-count {
         min-width: 18px;
         height: 18px;
         padding: 0 5px;
-        border-radius: 9px;
         font-size: 10px;
         font-weight: 700;
-        margin-left: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
-    .tab-count--pending  { background: #fff3cd; color: #856404; }
-    .tab-count--verified { background: #d4edda; color: #155724; }
+    /* Compteur en attente : fond orange */
+    .adm-tab-count--pending  { background: var(--accent-2); color: var(--ink); }
+    /* Compteur vérifié : fond vert acide */
+    .adm-tab-count--verified { background: var(--accent); color: var(--ink); }
 
-    /* Tableau */
-    .opp-table {
+    /* Panneaux d'onglets (affichés/masqués via JS) */
+    .adm-tab-panel { display: none; }
+    .adm-tab-panel.active { display: block; }
+
+    /* ── Tableau Street — en-tête noir + corps sable ─────────────────────────── */
+    .adm-table-wrap {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        overflow-x: auto;             /* scroll horizontal sur mobile */
+        -webkit-overflow-scrolling: touch;
+    }
+    .adm-table {
         width: 100%;
         border-collapse: collapse;
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        overflow: hidden;
-        font-size: 13px;
+        min-width: 680px;
     }
-    .opp-table thead th {
-        background: #f8f9fa;
+    .adm-table thead tr { background: var(--ink); }
+    .adm-table th {
         padding: 11px 14px;
         text-align: left;
-        font-size: 11px;
+        font-family: var(--mono);
+        font-size: 10px;
         font-weight: 700;
-        color: var(--color-text-muted);
+        letter-spacing: .1em;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        border-bottom: 1px solid var(--color-border);
-    }
-    .opp-table tbody tr {
-        border-bottom: 1px solid var(--color-border);
-        transition: background 0.1s;
-    }
-    .opp-table tbody tr:last-child { border-bottom: none; }
-    .opp-table tbody tr:hover { background: #fafbfc; }
-    .opp-table td { padding: 12px 14px; vertical-align: top; }
-
-    /* Titre */
-    .opp-title { font-weight: 600; line-height: 1.4; }
-    .opp-title a { color: inherit; text-decoration: none; }
-    .opp-title a:hover { color: var(--admin-accent); text-decoration: underline; }
-    .opp-desc { font-size: 12px; color: var(--color-text-muted); margin-top: 4px; line-height: 1.5; }
-
-    /* Badge type */
-    .type-badge {
-        display: inline-block; padding: 2px 8px;
-        border-radius: var(--radius-full);
-        font-size: 10px; font-weight: 700;
-        background: #e8f0fe; color: #1a5fb4;
-    }
-
-    /* Badges statut */
-    .badge-pending  { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; background:#fff3cd; color:#856404; }
-    .badge-verified { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; background:#d4edda; color:#155724; }
-
-    /* Score étoiles */
-    .score-stars { color: #f59e0b; font-size: 13px; letter-spacing: 1px; }
-
-    /* Bouton Vérifier */
-    .btn-verify {
-        height: 30px; padding: 0 14px;
-        background: #d4edda; color: #155724;
-        border: 1px solid #c3e6cb; border-radius: 6px;
-        font-size: 12px; font-weight: 700; cursor: pointer;
+        color: var(--accent);
+        border-right: 1px solid rgba(198,242,78,.15);
         white-space: nowrap;
     }
-    .btn-verify:hover { background: #c3e6cb; }
-
-    /* État vide */
-    .empty-state {
-        text-align: center; padding: 48px 20px;
-        color: var(--color-text-muted); font-size: 14px;
-        background: var(--color-white);
-        border: 1px solid var(--color-border); border-radius: var(--radius-md);
+    .adm-table th:last-child { border-right: none; }
+    .adm-table td {
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 13px;
+        color: var(--ink);
+        vertical-align: top;
     }
+    .adm-table tbody tr:last-child td { border-bottom: none; }
+    .adm-table tbody tr:nth-child(even) { background: var(--bg-alt); }
+    .adm-table tbody tr:hover { background: rgba(13,13,13,.04); }
+
+    /* Colonne titre : lien externe vers la source */
+    .adm-opp-title {
+        font-weight: 600;
+        line-height: 1.4;
+        max-width: 300px;
+    }
+    .adm-opp-title a {
+        color: inherit;
+        text-decoration: none;
+    }
+    .adm-opp-title a:hover { color: var(--accent-2); text-decoration: underline; }
+
+    /* Description tronquée sous le titre */
+    .adm-opp-desc {
+        font-size: 12px;
+        color: var(--ink-mute);
+        margin-top: 4px;
+        line-height: 1.5;
+    }
+
+    /* Chip de type de ressource */
+    .adm-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        border: 1px solid var(--ink);
+        background: var(--bg-alt);
+        color: var(--ink);
+        white-space: nowrap;
+    }
+
+    /* Badge "Vérifié" — fond vert acide */
+    .adm-badge-verified {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 9px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        background: var(--accent);
+        color: var(--ink);
+    }
+
+    /* Étoiles de score afro-pertinence */
+    .adm-stars {
+        color: var(--accent-2);   /* orange pour les étoiles pleines */
+        font-size: 13px;
+        letter-spacing: 1px;
+        white-space: nowrap;
+    }
+    .adm-stars .star-empty { color: var(--line-soft); }
+
+    /* Bouton Vérifier — action principale */
+    .adm-btn-verify {
+        height: 30px;
+        padding: 0 14px;
+        background: var(--accent);
+        color: var(--ink);
+        border: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: box-shadow var(--transition-fast);
+    }
+    .adm-btn-verify:hover { box-shadow: var(--shadow-offset-sm); }
+
+    /* Date de scraping — mono compact */
+    .adm-date {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        white-space: nowrap;
+    }
+
+    /* ── État vide ──────────────────────────────────────────────────────────── */
+    .adm-empty-state {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        padding: 48px;
+        text-align: center;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink-mute);
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# En-tête avec compteurs #}
-<div style="margin-bottom: 8px; font-size: 13px; color: var(--color-text-muted);">
-    Lance le scraping :
-    <code style="background:#f4f5f7; padding:2px 6px; border-radius:4px; font-size:12px;">
-        docker compose exec app php bin/console app:scrape-opportunities
-    </code>
-</div>
+{# ── Retour dashboard ─────────────────────────────────────────────────────── #}
+<a href="{{ path('app_admin_dashboard') }}" class="adm-back">← Tableau de bord</a>
 
-{# Onglets #}
-<div class="tabs">
-    <button class="tab-btn active" onclick="showTab('pending', this)">
+{# Rappel de la commande pour lancer le scraping manuellement #}
+<p class="adm-hint">
+    Lancer le scraping :
+    <code>docker compose exec app php bin/console app:scrape-opportunities</code>
+</p>
+
+{# ── Onglets À vérifier / Vérifié ─────────────────────────────────────────── #}
+{# role="tablist" + aria-selected pour l'accessibilité clavier #}
+<div class="adm-tabs" role="tablist">
+    <button class="adm-tab-btn active"
+            role="tab"
+            aria-selected="true"
+            aria-controls="tab-pending"
+            onclick="showTab('pending', this)">
         À vérifier
-        <span class="tab-count tab-count--pending">{{ pending|length }}</span>
+        <span class="adm-tab-count adm-tab-count--pending">{{ pending|length }}</span>
     </button>
-    <button class="tab-btn" onclick="showTab('verified', this)">
+    <button class="adm-tab-btn"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-verified"
+            onclick="showTab('verified', this)">
         Vérifié
-        <span class="tab-count tab-count--verified">{{ verified|length }}</span>
+        <span class="adm-tab-count adm-tab-count--verified">{{ verified|length }}</span>
     </button>
 </div>
 
 {# ── Panneau : À VÉRIFIER ─────────────────────────────────────────────────── #}
-<div id="tab-pending" class="tab-panel active">
+<div id="tab-pending" class="adm-tab-panel active" role="tabpanel">
 
     {% if pending is empty %}
-        <div class="empty-state">
+        <div class="adm-empty-state">
             Aucune opportunité en attente de validation.<br>
-            Lance le scraping pour en collecter de nouvelles.
+            Lancez le scraping pour en collecter de nouvelles.
         </div>
     {% else %}
-        <div style="overflow-x: auto;">
-            <table class="opp-table">
+        <div class="adm-table-wrap">
+            <table class="adm-table">
                 <thead>
                     <tr>
                         <th>Titre / Description</th>
                         <th>Type</th>
-                        <th>Site</th>
+                        <th>Source</th>
                         <th>Deadline</th>
                         <th>Score Afro</th>
-                        <th>Scraping</th>
+                        <th>Scrapé le</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for opp in pending %}
                         <tr>
-                            <td style="max-width: 320px;">
-                                <div class="opp-title">
+                            {# Titre avec lien externe vers la source originale #}
+                            <td style="max-width:320px;">
+                                <div class="adm-opp-title">
                                     {% if opp.url %}
-                                        <a href="{{ opp.url }}" target="_blank" rel="noopener">{{ opp.title }}</a>
+                                        {# rel="noopener noreferrer" : sécurité pour les liens vers des sites tiers #}
+                                        <a href="{{ opp.url }}" target="_blank" rel="noopener noreferrer">
+                                            {{ opp.title }}
+                                        </a>
                                     {% else %}
                                         {{ opp.title }}
                                     {% endif %}
                                 </div>
                                 {% if opp.description %}
-                                    <div class="opp-desc">
-                                        {{ opp.description|slice(0, 140) }}{{ opp.description|length > 140 ? '...' : '' }}
+                                    <div class="adm-opp-desc">
+                                        {{ opp.description|slice(0, 140) }}{{ opp.description|length > 140 ? '…' : '' }}
                                     </div>
                                 {% endif %}
                             </td>
+
+                            {# Type de ressource détecté par le scraper #}
                             <td>
                                 {% if opp.type %}
-                                    <span class="type-badge">{{ opp.type }}</span>
+                                    <span class="adm-chip">{{ opp.type }}</span>
+                                {% else %}
+                                    <span style="color:var(--ink-mute);">—</span>
                                 {% endif %}
                             </td>
-                            <td style="color: var(--color-text-muted); white-space: nowrap;">
-                                {{ opp.sourceSite ?: '—' }}
-                            </td>
-                            <td style="color: var(--color-text-muted); white-space: nowrap;">
-                                {{ opp.deadline ?: '—' }}
-                            </td>
+
+                            {# Site source #}
+                            <td class="adm-date">{{ opp.sourceSite ?: '—' }}</td>
+
+                            {# Date limite de candidature #}
+                            <td class="adm-date">{{ opp.deadline ?: '—' }}</td>
+
+                            {# Score de pertinence afro-atlantique (1 à 5 étoiles) #}
                             <td>
-                                <span class="score-stars">
-                                    {% for i in 1..5 %}{{ i <= opp.relevanceScore ? '★' : '☆' }}{% endfor %}
+                                <span class="adm-stars">
+                                    {% for i in 1..5 %}
+                                        {% if i <= opp.relevanceScore %}★{% else %}<span class="star-empty">☆</span>{% endif %}
+                                    {% endfor %}
                                 </span>
                             </td>
-                            <td style="color: var(--color-text-muted); font-size: 12px; white-space: nowrap;">
-                                {{ opp.scrapedAt|date('d/m/Y') }}
-                            </td>
-                            {# Bouton Vérifier → passe le statut à "verified" et crée une Resource #}
+
+                            {# Date de scraping #}
+                            <td class="adm-date">{{ opp.scrapedAt|date('d/m/Y') }}</td>
+
+                            {#
+                              Bouton Vérifier → appelle verifyScrapedOpportunity() dans AdminController :
+                                1. Passe ScrapedResource.status à "verified"
+                                2. Crée une Resource publiée dans la table Opportunités
+                              Token CSRF : 'verify_scraped_{id}' (vérifié côté PHP)
+                            #}
                             <td>
                                 <form method="post"
                                       action="{{ path('app_admin_scraped_opportunity_verify', {id: opp.id}) }}"
-                                      onsubmit="return confirm('Vérifier et ajouter aux Opportunités ?')">
+                                      onsubmit="return confirm('Vérifier et ajouter « {{ opp.title|e('js') }} » aux Opportunités ?')">
                                     <input type="hidden" name="_token"
                                            value="{{ csrf_token('verify_scraped_' ~ opp.id) }}">
-                                    <button type="submit" class="btn-verify">✓ Vérifier</button>
+                                    <button type="submit" class="adm-btn-verify">✓ Vérifier</button>
                                 </form>
                             </td>
                         </tr>
@@ -217,34 +382,32 @@
 
 </div>
 
-{# ── Panneau : VÉRIFIÉ ────────────────────────────────────────────────────── #}
-<div id="tab-verified" class="tab-panel">
+{# ── Panneau : VÉRIFIÉ (archives) ─────────────────────────────────────────── #}
+<div id="tab-verified" class="adm-tab-panel" role="tabpanel">
 
     {% if verified is empty %}
-        <div class="empty-state">
-            Aucune opportunité validée pour l'instant.
-        </div>
+        <div class="adm-empty-state">Aucune opportunité validée pour l'instant.</div>
     {% else %}
-        <div style="overflow-x: auto;">
-            <table class="opp-table">
+        <div class="adm-table-wrap">
+            <table class="adm-table">
                 <thead>
                     <tr>
                         <th>Titre</th>
                         <th>Type</th>
-                        <th>Site</th>
+                        <th>Source</th>
                         <th>Deadline</th>
                         <th>Score Afro</th>
-                        <th>Scraping</th>
+                        <th>Scrapé le</th>
                         <th>Statut</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for opp in verified %}
                         <tr>
-                            <td style="max-width: 320px;">
-                                <div class="opp-title">
+                            <td style="max-width:320px;">
+                                <div class="adm-opp-title">
                                     {% if opp.url %}
-                                        <a href="{{ opp.url }}" target="_blank" rel="noopener">{{ opp.title }}</a>
+                                        <a href="{{ opp.url }}" target="_blank" rel="noopener noreferrer">{{ opp.title }}</a>
                                     {% else %}
                                         {{ opp.title }}
                                     {% endif %}
@@ -252,24 +415,21 @@
                             </td>
                             <td>
                                 {% if opp.type %}
-                                    <span class="type-badge">{{ opp.type }}</span>
+                                    <span class="adm-chip">{{ opp.type }}</span>
                                 {% endif %}
                             </td>
-                            <td style="color: var(--color-text-muted); white-space: nowrap;">
-                                {{ opp.sourceSite ?: '—' }}
-                            </td>
-                            <td style="color: var(--color-text-muted); white-space: nowrap;">
-                                {{ opp.deadline ?: '—' }}
-                            </td>
+                            <td class="adm-date">{{ opp.sourceSite ?: '—' }}</td>
+                            <td class="adm-date">{{ opp.deadline ?: '—' }}</td>
                             <td>
-                                <span class="score-stars">
-                                    {% for i in 1..5 %}{{ i <= opp.relevanceScore ? '★' : '☆' }}{% endfor %}
+                                <span class="adm-stars">
+                                    {% for i in 1..5 %}
+                                        {% if i <= opp.relevanceScore %}★{% else %}<span class="star-empty">☆</span>{% endif %}
+                                    {% endfor %}
                                 </span>
                             </td>
-                            <td style="color: var(--color-text-muted); font-size: 12px; white-space: nowrap;">
-                                {{ opp.scrapedAt|date('d/m/Y') }}
-                            </td>
-                            <td><span class="badge-verified">✓ Vérifié</span></td>
+                            <td class="adm-date">{{ opp.scrapedAt|date('d/m/Y') }}</td>
+                            {# Badge "Vérifié" — fond vert acide : action accomplie #}
+                            <td><span class="adm-badge-verified">✓ Vérifié</span></td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -279,17 +439,29 @@
 
 </div>
 
+{#
+  Script de gestion des onglets (vanilla JS — pas de dépendance externe).
+  Très simple : on masque tous les panneaux, on affiche le bon, on met à jour les boutons.
+#}
 <script>
 /**
- * Gestion des onglets À vérifier / Vérifié.
+ * Affiche l'onglet demandé et masque les autres.
+ * @param {string} name - Nom de l'onglet ('pending' ou 'verified')
+ * @param {HTMLButtonElement} btn - Bouton cliqué
  */
 function showTab(name, btn) {
-    // Met à jour les boutons
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    /* Mise à jour des boutons d'onglet */
+    document.querySelectorAll('.adm-tab-btn').forEach(function(b) {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+    });
     btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
 
-    // Affiche le bon panneau
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    /* Affichage du panneau correspondant */
+    document.querySelectorAll('.adm-tab-panel').forEach(function(p) {
+        p.classList.remove('active');
+    });
     document.getElementById('tab-' + name).classList.add('active');
 }
 </script>

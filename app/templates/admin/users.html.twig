@@ -1,157 +1,430 @@
 {% extends 'base_admin.html.twig' %}
 
+{#
+ # admin/users.html.twig — Gestion des utilisateurs
+ #
+ # Thème : Street
+ # Layout parent : base_admin.html.twig
+ #
+ # Variables disponibles (AdminController::users()) :
+ #   - users : User[] — tous les utilisateurs triés par createdAt DESC
+ #
+ # Actions disponibles :
+ #   - Créer un utilisateur : POST /admin/users            (CSRF : 'user_create')
+ #   - Basculer rôle admin  : POST /admin/users/{id}/toggle-admin (CSRF : 'user_toggle_{id}')
+ #   - Supprimer            : POST /admin/users/{id}/delete  (CSRF : 'user_delete_{id}')
+ #   - Vérifier org         : POST /admin/organizations/{id}/verify (CSRF : 'org_verify_{id}')
+ #}
+
 {% block title %}Utilisateurs — Admin BazaArt{% endblock %}
-{% block page_title %}Utilisateurs & organisations{% endblock %}
+{% block page_title %}Utilisateurs{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* Lien retour */
-    .back-link {
-        display: inline-flex; align-items: center; gap: 6px;
-        font-size: 13px; color: var(--color-text-muted); text-decoration: none;
+
+    /* ── Zone de contenu fond sable ─────────────────────────────────────────── */
+    .app-content {
+        background: var(--bg);
+        font-family: var(--body);
+    }
+
+    /* ── Retour dashboard ───────────────────────────────────────────────────── */
+    .adm-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
+        text-decoration: none;
+        margin-bottom: 20px;
+        transition: color var(--transition-fast);
+    }
+    .adm-back:hover { color: var(--ink); }
+
+    /* ── En-tête de page : titre + bouton créer ─────────────────────────────── */
+    .adm-page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
         margin-bottom: 20px;
     }
-    .back-link:hover { color: var(--color-text); }
-
-    /* En-tête de la page (titre + bouton créer) */
-    .page-header {
-        display: flex; justify-content: space-between; align-items: center;
-        flex-wrap: wrap; gap: 12px; margin-bottom: 24px;
+    .adm-page-title {
+        font-family: var(--display);
+        font-size: 24px;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--ink);
+    }
+    .adm-count {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .06em;
+        margin-left: 12px;
     }
 
-    /* Panneau de création d'utilisateur (masqué par défaut) */
-    .create-panel {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-        padding: 24px; margin-bottom: 20px;
+    /* Bouton "Ajouter" — style bouton primaire Street */
+    .adm-btn-create {
+        height: 36px;
+        padding: 0 18px;
+        background: var(--ink);
+        color: var(--accent);
+        border: 2px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: box-shadow var(--transition-fast);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .adm-btn-create:hover {
+        background: var(--accent);
+        color: var(--ink);
+        box-shadow: var(--shadow-offset-sm);
     }
 
-    .create-panel__title {
-        font-size: 14px; font-weight: 700; color: var(--color-text);
-        margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border);
+    /* ── Panneau de création d'utilisateur (masqué par défaut, toggle JS) ────── */
+    .adm-create-panel {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        margin-bottom: 24px;
+        /* display:none par défaut — affiché via toggleCreatePanel() */
+    }
+    .adm-create-panel__head {
+        padding: 12px 18px;
+        background: var(--ink);
+        border-bottom: 1px solid var(--ink);
+    }
+    .adm-create-panel__heading {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--accent);
+    }
+    .adm-create-panel__body {
+        padding: 20px 18px;
+    }
+    /* Grille de formulaire : 2 colonnes côte à côte */
+    .adm-form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+    @media (max-width: 600px) {
+        .adm-form-grid { grid-template-columns: 1fr; }
     }
 
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-
-    /* Tableau des utilisateurs */
-    .users-table {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-        overflow: hidden;
+    /* Label de formulaire — style Street */
+    .adm-label {
+        display: block;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: 5px;
+    }
+    /* Input de formulaire — bords francs, fond sable */
+    .adm-input {
+        width: 100%;
+        height: 38px;
+        padding: 0 12px;
+        background: var(--bg);
+        border: 1px solid var(--ink);
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+        box-sizing: border-box;
+        transition: border-color var(--transition-fast);
+    }
+    .adm-input:focus {
+        outline: none;
+        border: 2px solid var(--accent);
     }
 
-    .users-table table { width: 100%; border-collapse: collapse; }
-
-    .users-table thead tr {
-        background: var(--color-bg); border-bottom: 2px solid var(--color-border);
+    /* Ligne de bas de formulaire : checkbox + boutons */
+    .adm-form-footer {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+    .adm-checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        cursor: pointer;
+        color: var(--ink);
+    }
+    .adm-form-actions {
+        display: flex;
+        gap: 8px;
+        margin-left: auto;
     }
 
-    .users-table th {
-        padding: 10px 16px; text-align: left;
-        font-size: 10px; font-weight: 700; color: var(--color-text-light);
-        text-transform: uppercase; letter-spacing: 0.06em;
+    /* Bouton submit formulaire */
+    .adm-btn-submit {
+        height: 36px;
+        padding: 0 18px;
+        background: var(--accent);
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: box-shadow var(--transition-fast);
     }
+    .adm-btn-submit:hover { box-shadow: var(--shadow-offset-sm); }
 
-    .users-table td {
-        padding: 12px 16px; border-bottom: 1px solid var(--color-border);
-        font-size: 13px; vertical-align: middle;
+    /* Bouton annuler */
+    .adm-btn-cancel {
+        height: 36px;
+        padding: 0 18px;
+        background: var(--bg-alt);
+        color: var(--ink-mute);
+        border: 1px solid var(--line-soft);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        cursor: pointer;
     }
-    .users-table tbody tr:last-child td { border-bottom: none; }
-    .users-table tbody tr:hover { background: var(--color-bg); }
+    .adm-btn-cancel:hover { color: var(--ink); border-color: var(--ink); }
 
-    /* Ligne mise en avant pour l'admin connecté */
-    .users-table tbody tr.self-row { background: #f0fdf4; }
-
-    /* Badges de rôles */
-    .role-badge-admin {
-        display: inline-flex; align-items: center; height: 18px; padding: 0 8px;
-        background: var(--color-green); color: white;
-        border-radius: var(--radius-full); font-size: 10px; font-weight: 700;
+    /* ── Tableau des utilisateurs — style Street ─────────────────────────────── */
+    .adm-table-wrap {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
-    .role-badge-user {
-        display: inline-flex; align-items: center; height: 18px; padding: 0 8px;
-        background: #e8f0fe; color: #1a5fb4;
-        border-radius: var(--radius-full); font-size: 10px; font-weight: 600;
+    .adm-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 720px;
     }
-
-    /* Badge "Vérifiée" / bouton "Vérifier" */
-    .verified-badge { background: #d4edda; color: #155724; padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 700; }
-
-    .btn-verify {
-        height: 22px; padding: 0 8px; background: #e8f0fe; color: #1a5fb4;
-        border: 1px solid #a8c7fa; border-radius: 10px;
-        font-size: 10px; font-weight: 600; cursor: pointer; font-family: var(--font-body);
-    }
-    .btn-verify:hover { background: #d0e3fc; }
-
-    /* Boutons d'action */
-    .action-btn {
-        display: inline-flex; align-items: center; justify-content: center;
-        height: 26px; padding: 0 10px; border: none; border-radius: var(--radius-sm);
-        font-size: 11px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+    .adm-table thead tr { background: var(--ink); }
+    .adm-table th {
+        padding: 11px 14px;
+        text-align: left;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--accent);
+        border-right: 1px solid rgba(198,242,78,.15);
         white-space: nowrap;
     }
-    .action-btn-promote  { background: #e8f0fe; color: #1a5fb4; }
-    .action-btn-promote:hover { background: #d0e3fc; }
-    .action-btn-demote   { background: #fff3cd; color: #856404; }
-    .action-btn-demote:hover { background: #ffe8a1; }
-    .action-btn-delete   { background: #f8d7da; color: #721c24; }
-    .action-btn-delete:hover { background: #f5c6cb; }
+    .adm-table th:last-child { border-right: none; text-align: center; }
+    .adm-table td {
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 13px;
+        color: var(--ink);
+        vertical-align: middle;
+    }
+    .adm-table tbody tr:last-child td { border-bottom: none; }
+    /* Zébrage */
+    .adm-table tbody tr:nth-child(even) { background: var(--bg-alt); }
+    .adm-table tbody tr:hover { background: rgba(13,13,13,.04); }
+    /* Ligne surlignée pour le compte de l'admin connecté */
+    .adm-table tbody tr.adm-row--self {
+        background: rgba(198,242,78,.08);   /* teinte vert acide très légère */
+    }
+    .adm-table tbody tr.adm-row--self:hover {
+        background: rgba(198,242,78,.14);
+    }
 
-    /* Note de bas de page */
-    .table-footnote { margin-top: 12px; font-size: 11px; color: var(--color-text-light); }
+    /* ── Chips de rôles — codés par couleur ──────────────────────────────────── */
+    /*
+      Convention de couleurs :
+        ADMIN     → fond noir, texte vert acide (pouvoir maximal)
+        STRUCTURE → fond vert acide (partenaire commercial)
+        ARTIST    → fond orange tangerine (profil créatif)
+        USER      → fond bg-alt (base)
+    */
+    .adm-role-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 7px;
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        margin-right: 3px;
+        margin-bottom: 2px;
+    }
+    .adm-role-chip--admin     { background: var(--ink);     color: var(--accent); }
+    .adm-role-chip--structure { background: var(--accent);  color: var(--ink);    }
+    .adm-role-chip--artist    { background: var(--accent-2);color: var(--ink);    }
+    .adm-role-chip--user      { background: var(--bg-alt);  color: var(--ink-mute); border: 1px solid var(--line-soft); }
+
+    /* ── Badge email : soi-même ─────────────────────────────────────────────── */
+    .adm-self-tag {
+        font-family: var(--mono);
+        font-size: 9px;
+        color: var(--accent);
+        font-weight: 700;
+        letter-spacing: .06em;
+        margin-left: 6px;
+        text-transform: uppercase;
+    }
+
+    /* ── Badge org vérifiée / bouton vérifier ───────────────────────────────── */
+    .adm-badge-ok {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 7px;
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        background: var(--accent);
+        color: var(--ink);
+    }
+    /* Bouton vérifier (petite taille, inline dans la cellule) */
+    .adm-btn-verify-org {
+        height: 22px;
+        padding: 0 8px;
+        background: var(--bg-alt);
+        color: var(--ink-mute);
+        border: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: background var(--transition-fast);
+    }
+    .adm-btn-verify-org:hover {
+        background: var(--accent);
+        color: var(--ink);
+    }
+
+    /* ── Boutons d'action utilisateur ───────────────────────────────────────── */
+    .adm-user-actions {
+        display: flex;
+        gap: 5px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    /* Style de base partagé */
+    .adm-action-btn {
+        height: 26px;
+        padding: 0 10px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        border: 1px solid var(--ink);
+        cursor: pointer;
+        white-space: nowrap;
+        transition: box-shadow var(--transition-fast);
+    }
+    .adm-action-btn:hover { box-shadow: var(--shadow-offset-sm); }
+    /* Promouvoir admin : fond vert acide */
+    .adm-action-btn--promote { background: var(--accent); color: var(--ink); }
+    /* Rétrograder : fond bg-alt avec texte orange */
+    .adm-action-btn--demote  { background: var(--bg-alt); color: var(--ink-mute); border-color: var(--line-soft); }
+    .adm-action-btn--demote:hover { border-color: var(--ink); color: var(--ink); }
+    /* Supprimer : fond danger, action irréversible */
+    .adm-action-btn--delete {
+        background: var(--danger);
+        color: #fff;
+        border-color: var(--danger);
+    }
+    .adm-action-btn--delete:hover { box-shadow: 4px 4px 0 var(--danger); }
+
+    /* ── Note de bas de page ────────────────────────────────────────────────── */
+    .adm-footnote {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .06em;
+        margin-top: 14px;
+    }
+
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# Lien retour #}
-<a href="{{ path('app_admin_dashboard') }}" class="back-link">← Tableau de bord</a>
+{# ── Retour dashboard ─────────────────────────────────────────────────────── #}
+<a href="{{ path('app_admin_dashboard') }}" class="adm-back">← Tableau de bord</a>
 
-{# En-tête : titre + bouton pour ouvrir le formulaire de création #}
-<div class="page-header">
-    <div></div>
-    <button onclick="document.getElementById('create-panel').style.display = document.getElementById('create-panel').style.display === 'none' ? 'block' : 'none'"
-            class="btn btn-primary">
+{# ── En-tête : titre + compteur + bouton créer ────────────────────────────── #}
+<div class="adm-page-header">
+    <div>
+        <span class="adm-page-title">Utilisateurs</span>
+        <span class="adm-count">{{ users|length }} au total</span>
+    </div>
+    {# Le bouton bascule la visibilité du panneau de création (JS ci-dessous) #}
+    <button class="adm-btn-create" onclick="toggleCreatePanel()">
         + Ajouter un utilisateur
     </button>
 </div>
 
-{# ── Panneau de création d'utilisateur (masqué par défaut) ── #}
-{# Ce formulaire est affiché uniquement lorsque l'admin clique sur le bouton ci-dessus #}
-<div id="create-panel" style="display:none;">
-    <div class="create-panel">
-        <div class="create-panel__title">Créer un nouvel utilisateur</div>
+{# ── Panneau de création d'utilisateur (masqué par défaut) ───────────────── #}
+{# Ce panneau est affiché/masqué via JS sans rechargement de page #}
+<div id="create-panel" class="adm-create-panel" style="display:none;">
+    <div class="adm-create-panel__head">
+        <span class="adm-create-panel__heading">Créer un nouvel utilisateur</span>
+    </div>
+    <div class="adm-create-panel__body">
         <form method="post" action="{{ path('app_admin_users') }}">
-            {# Token CSRF pour sécuriser le formulaire #}
+            {# Token CSRF — protège contre les attaques cross-site request forgery #}
             <input type="hidden" name="_token" value="{{ csrf_token('user_create') }}">
 
-            {# Grille email / mot de passe côte à côte #}
-            <div class="form-grid">
-                <div class="form-group" style="margin:0;">
-                    <label for="new_email">Email *</label>
-                    <input type="email" id="new_email" name="email" required placeholder="email@exemple.com">
+            {# Champs email + mot de passe côte à côte #}
+            <div class="adm-form-grid">
+                <div>
+                    <label class="adm-label" for="new_email">Email *</label>
+                    <input class="adm-input" type="email" id="new_email" name="email"
+                           required placeholder="email@exemple.com">
                 </div>
-                <div class="form-group" style="margin:0;">
-                    <label for="new_password">
-                        Mot de passe * <small style="font-weight:normal; color:var(--color-text-light);">(min. 8 caractères)</small>
+                <div>
+                    <label class="adm-label" for="new_password">
+                        Mot de passe * <span style="font-weight:400; text-transform:none; letter-spacing:0;">(min. 10 caractères)</span>
                     </label>
-                    <input type="password" id="new_password" name="password" required minlength="8" placeholder="••••••••">
+                    <input class="adm-input" type="password" id="new_password" name="password"
+                           required minlength="10" placeholder="••••••••••">
                 </div>
             </div>
 
-            <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
-                {# Checkbox pour donner le rôle admin #}
-                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:normal;">
-                    <input type="checkbox" name="is_admin" value="1" style="accent-color:var(--color-green); width:15px; height:15px;">
+            <div class="adm-form-footer">
+                {# Case à cocher pour attribuer le rôle ADMIN directement #}
+                <label class="adm-checkbox-label">
+                    <input type="checkbox" name="is_admin" value="1"
+                           style="accent-color:var(--accent); width:15px; height:15px;">
                     Donner le rôle administrateur
                 </label>
-                <div style="display:flex; gap:10px; margin-left:auto;">
-                    <button type="submit" class="btn btn-primary">Créer l'utilisateur</button>
-                    <button type="button"
-                            onclick="document.getElementById('create-panel').style.display='none'"
-                            class="btn btn-outline">
+                <div class="adm-form-actions">
+                    <button type="submit" class="adm-btn-submit">Créer</button>
+                    <button type="button" class="adm-btn-cancel" onclick="toggleCreatePanel()">
                         Annuler
                     </button>
                 </div>
@@ -160,9 +433,9 @@
     </div>
 </div>
 
-{# ── Tableau des utilisateurs ── #}
-<div class="users-table">
-    <table>
+{# ── Tableau des utilisateurs ─────────────────────────────────────────────── #}
+<div class="adm-table-wrap">
+    <table class="adm-table">
         <thead>
             <tr>
                 <th>Email</th>
@@ -170,94 +443,131 @@
                 <th>Profil artiste</th>
                 <th>Organisation</th>
                 <th>Inscrit le</th>
-                <th style="text-align:center;">Actions</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for user in users %}
-                {# On identifie si c'est le compte de l'admin connecté #}
+
+                {# Identifie le compte de l'admin connecté (pour bloquer certaines actions) #}
                 {% set isSelf  = (app.user.id == user.id) %}
                 {% set isAdmin = 'ROLE_ADMIN' in user.roles %}
 
-                <tr class="{{ isSelf ? 'self-row' : '' }}">
+                <tr class="{{ isSelf ? 'adm-row--self' : '' }}">
 
-                    {# Email de l'utilisateur #}
+                    {# Email — en gras + label "(vous)" si c'est le compte connecté #}
                     <td>
-                        <strong>{{ user.email }}</strong>
+                        <strong style="font-size:13px;">{{ user.email }}</strong>
                         {% if isSelf %}
-                            <span style="font-size:10px; color:var(--color-green); margin-left:4px;">(vous)</span>
+                            <span class="adm-self-tag">● vous</span>
                         {% endif %}
                     </td>
 
-                    {# Badges de rôles : Admin et/ou User #}
+                    {#
+                      Chips de rôles codées par couleur.
+                      On itère sur user.roles qui inclut automatiquement ROLE_USER
+                      grâce à la hiérarchie des rôles Symfony.
+                      On affiche uniquement les rôles non génériques.
+                    #}
                     <td>
-                        <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                        <div style="display:flex; flex-wrap:wrap; gap:3px; align-items:center;">
                             {% if isAdmin %}
-                                <span class="role-badge-admin">Admin</span>
+                                <span class="adm-role-chip adm-role-chip--admin">Admin</span>
                             {% endif %}
-                            <span class="role-badge-user">User</span>
+                            {% if 'ROLE_STRUCTURE' in user.roles %}
+                                <span class="adm-role-chip adm-role-chip--structure">Structure</span>
+                            {% endif %}
+                            {% if 'ROLE_ARTIST' in user.roles %}
+                                <span class="adm-role-chip adm-role-chip--artist">Artiste</span>
+                            {% endif %}
+                            {# ROLE_USER est affiché uniquement si l'utilisateur n'a pas d'autre rôle #}
+                            {% if not isAdmin and 'ROLE_STRUCTURE' not in user.roles and 'ROLE_ARTIST' not in user.roles %}
+                                <span class="adm-role-chip adm-role-chip--user">User</span>
+                            {% endif %}
                         </div>
                     </td>
 
-                    {# Profil artiste lié (ou tiret si aucun) #}
+                    {# Profil artiste (si existant) #}
                     <td>
                         {% if user.artistProfile %}
-                            <span style="color:var(--color-green); font-size:12px;">✓ {{ user.artistProfile.displayName }}</span>
+                            <span style="color:var(--ok); font-size:12px; font-weight:600;">
+                                ✓ {{ user.artistProfile.displayName }}
+                            </span>
                         {% else %}
-                            <span style="color:var(--color-border);">—</span>
+                            <span style="color:var(--line-soft); font-family:var(--mono); font-size:11px;">—</span>
                         {% endif %}
                     </td>
 
-                    {# Organisation liée avec bouton de vérification #}
+                    {# Organisation liée avec bouton de vérification si non encore vérifiée #}
                     <td>
                         {% if user.organizationProfile %}
                             <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                                <span style="font-size:12px;">{{ user.organizationProfile.name }}</span>
+                                <span style="font-size:12px; font-weight:500;">{{ user.organizationProfile.name }}</span>
                                 {% if user.organizationProfile.isVerified %}
-                                    <span class="verified-badge">✓ Vérifiée</span>
+                                    <span class="adm-badge-ok">✓ Vérifiée</span>
                                 {% else %}
-                                    {# Bouton pour valider manuellement l'organisation #}
-                                    <form method="post" action="{{ path('app_admin_org_verify', {id: user.organizationProfile.id}) }}">
-                                        <input type="hidden" name="_token" value="{{ csrf_token('org_verify_' ~ user.organizationProfile.id) }}">
-                                        <button type="submit" class="btn-verify">Vérifier</button>
+                                    {#
+                                      Formulaire de vérification manuelle de l'organisation.
+                                      Token CSRF : 'org_verify_{id}' (vérifié dans AdminController::verifyOrganization())
+                                    #}
+                                    <form method="post" action="{{ path('app_admin_org_verify', {id: user.organizationProfile.id}) }}"
+                                          style="display:inline;">
+                                        <input type="hidden" name="_token"
+                                               value="{{ csrf_token('org_verify_' ~ user.organizationProfile.id) }}">
+                                        <button type="submit" class="adm-btn-verify-org">Vérifier</button>
                                     </form>
                                 {% endif %}
                             </div>
                         {% else %}
-                            <span style="color:var(--color-border);">—</span>
+                            <span style="color:var(--line-soft); font-family:var(--mono); font-size:11px;">—</span>
                         {% endif %}
                     </td>
 
-                    {# Date d'inscription #}
-                    <td style="color:var(--color-text-light); white-space:nowrap; font-size:12px;">
-                        {{ user.createdAt ? user.createdAt|date('d/m/Y') : '—' }}
+                    {# Date d'inscription en monospace #}
+                    <td>
+                        <span style="font-family:var(--mono); font-size:11px; color:var(--ink-mute); white-space:nowrap;">
+                            {{ user.createdAt ? user.createdAt|date('d/m/Y') : '—' }}
+                        </span>
                     </td>
 
-                    {# Actions : Promouvoir/Rétrograder admin + Supprimer (bloqués pour son propre compte) #}
+                    {# Boutons d'action : bloqués pour son propre compte #}
                     <td>
-                        <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
+                        <div class="adm-user-actions">
                             {% if not isSelf %}
-                                {# Bouton pour basculer le rôle admin #}
+
+                                {#
+                                  Basculer le rôle admin (toggle).
+                                  Token CSRF : 'user_toggle_{id}' (AdminController::toggleAdmin())
+                                  Le libellé et le style changent selon le rôle actuel.
+                                #}
                                 <form method="post" action="{{ path('app_admin_user_toggle_admin', {id: user.id}) }}">
                                     <input type="hidden" name="_token" value="{{ csrf_token('user_toggle_' ~ user.id) }}">
                                     <button type="submit"
-                                            class="action-btn {{ isAdmin ? 'action-btn-demote' : 'action-btn-promote' }}"
-                                            title="{{ isAdmin ? 'Retirer les droits admin' : 'Promouvoir admin' }}">
+                                            class="adm-action-btn {{ isAdmin ? 'adm-action-btn--demote' : 'adm-action-btn--promote' }}"
+                                            title="{{ isAdmin ? 'Retirer les droits admin' : 'Promouvoir administrateur' }}">
                                         {{ isAdmin ? '↓ Admin' : '↑ Admin' }}
                                     </button>
                                 </form>
 
-                                {# Bouton de suppression avec confirmation #}
+                                {#
+                                  Supprimer l'utilisateur et toutes ses données (cascade Doctrine).
+                                  Token CSRF : 'user_delete_{id}' (AdminController::deleteUser())
+                                  Confirmation JS obligatoire avant envoi (action irréversible).
+                                #}
                                 <form method="post" action="{{ path('app_admin_user_delete', {id: user.id}) }}"
-                                      onsubmit="return confirm('Supprimer « {{ user.email }} » ? Cette action est irréversible.')">
+                                      onsubmit="return confirm('Supprimer « {{ user.email|e('js') }} » ?\nCette action est IRRÉVERSIBLE : profil, ressources et données associées seront effacés.')">
                                     <input type="hidden" name="_token" value="{{ csrf_token('user_delete_' ~ user.id) }}">
-                                    <button type="submit" class="action-btn action-btn-delete" title="Supprimer cet utilisateur">
+                                    <button type="submit" class="adm-action-btn adm-action-btn--delete"
+                                            title="Supprimer cet utilisateur définitivement">
                                         Supprimer
                                     </button>
                                 </form>
+
                             {% else %}
-                                {# On bloque les actions sur son propre compte #}
-                                <span style="font-size:11px; color:var(--color-text-light);">Votre compte</span>
+                                {# Compte connecté : on ne peut pas se supprimer soi-même #}
+                                <span style="font-family:var(--mono); font-size:10px; color:var(--ink-mute); letter-spacing:.04em;">
+                                    Votre compte
+                                </span>
                             {% endif %}
                         </div>
                     </td>
@@ -265,17 +575,39 @@
                 </tr>
             {% else %}
                 <tr>
-                    <td colspan="6" style="padding:32px; text-align:center; color:var(--color-text-muted);">Aucun utilisateur.</td>
+                    <td colspan="6" style="padding:32px; text-align:center; font-family:var(--mono); font-size:11px; color:var(--ink-mute); letter-spacing:.08em; text-transform:uppercase;">
+                        Aucun utilisateur.
+                    </td>
                 </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
 
-{# Note de bas de page #}
-<p class="table-footnote">
+{# Note de bas de tableau #}
+<p class="adm-footnote">
     {{ users|length }} utilisateur{{ users|length > 1 ? 's' : '' }} au total.
-    La suppression d'un utilisateur efface également ses profils et ressources associées.
+    La suppression d'un compte efface également ses profils et ressources associées (cascade Doctrine).
 </p>
+
+{#
+  Script de bascule du panneau de création.
+  Vanilla JS — aucune dépendance externe.
+#}
+<script>
+/**
+ * Affiche ou masque le panneau de création d'utilisateur.
+ * Fonctionne comme un simple toggle sur la propriété display.
+ */
+function toggleCreatePanel() {
+    var panel = document.getElementById('create-panel');
+    panel.style.display = (panel.style.display === 'none' || panel.style.display === '') ? 'block' : 'none';
+    /* Déplace le focus vers le premier champ si le panneau s'ouvre (accessibilité) */
+    if (panel.style.display === 'block') {
+        var firstInput = panel.querySelector('input[type="email"]');
+        if (firstInput) firstInput.focus();
+    }
+}
+</script>
 
 {% endblock %}

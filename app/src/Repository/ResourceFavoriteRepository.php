@@ -65,6 +65,14 @@ class ResourceFavoriteRepository extends ServiceEntityRepository
             ->leftJoin('f.resource', 'r')->addSelect('r')
             ->leftJoin('r.resourceType', 'rt')->addSelect('rt')
             ->leftJoin('r.organization', 'org')->addSelect('org')
+            // ── Correction N+1 sur disciplines ────────────────────────────────
+            // Sans ce JOIN, chaque accès à resource.disciplines dans le template Twig
+            // (ex: {% for d in favorite.resource.disciplines %}) déclenche une requête SQL
+            // séparée par ressource. Avec ce JOIN + addSelect, toutes les disciplines
+            // sont chargées en une seule requête grâce à l'hydratation Doctrine.
+            // La relation sur Resource est : #[ORM\ManyToMany] private Collection $disciplines
+            ->leftJoin('r.disciplines', 'd')->addSelect('d')
+            // ──────────────────────────────────────────────────────────────────
             ->where('f.user = :user')
             ->setParameter('user', $user)
             ->orderBy('f.createdAt', 'DESC')

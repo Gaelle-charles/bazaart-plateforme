@@ -5,482 +5,873 @@
 
 {% block stylesheets %}
 {{ parent() }}
+{#
+    Styles spécifiques à la page d'affichage d'un thread.
+    Convention de nommage : préfixe ".ft-" (forum-thread).
+
+    Structure :
+    - Post original (avec actions de modération si droits accordés)
+    - Séparateur "N réponses"
+    - Liste des réponses (avec suppression si autorisé)
+    - Formulaire de réponse (ou message verrouillé)
+
+    Points de sécurité conservés depuis le template original :
+    - CSRF sur chaque formulaire d'action (pin, lock, delete, reply)
+    - Ordre : vérification de permission AVANT l'action (is_granted / canModerate)
+    - |nl2br sur tout contenu utilisateur (thread.content, reply.content)
+    - Jamais |raw sur du contenu utilisateur
+#}
 <style>
-    /* ── Breadcrumb ── */
-    .breadcrumb {
+
+    /* ══════════════════════════════════════════════════════════════
+       FIL D'ARIANE
+    ══════════════════════════════════════════════════════════════ */
+
+    .ft-breadcrumb {
         display: flex;
         align-items: center;
         gap: 8px;
-        font-size: 13px;
-        color: var(--color-text-light);
-        margin-bottom: 20px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: 24px;
+        flex-wrap: wrap;
     }
-    .breadcrumb a { color: var(--color-text-light); text-decoration: none; }
-    .breadcrumb a:hover { color: var(--color-red, #C8503A); }
-    .breadcrumb__separator { color: var(--color-border); }
-    .breadcrumb__current {
-        color: var(--color-text);
-        font-weight: 500;
+    .ft-breadcrumb a {
+        color: var(--ink-mute);
+        text-decoration: none;
+        transition: color var(--transition-fast);
+    }
+    .ft-breadcrumb a:hover { color: var(--ink); }
+    .ft-breadcrumb a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+    .ft-breadcrumb__sep {
+        color: var(--line-soft);
+        font-size: 14px;
+    }
+    .ft-breadcrumb__current {
+        color: var(--ink);
+        font-weight: 700;
+        /* Tronque le titre du thread dans le breadcrumb s'il est très long */
+        max-width: 300px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 280px;
     }
 
-    /* ── Post principal (contenu du thread) ── */
-    .thread-post {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        margin-bottom: 12px;
-        overflow: hidden;
+    /* ══════════════════════════════════════════════════════════════
+       POST ORIGINAL
+       Encadré bordure ink, fond blanc.
+       Divisé en sections : en-tête, contenu, actions modération.
+    ══════════════════════════════════════════════════════════════ */
+
+    .ft-post {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        margin-bottom: 0;
+        /* border-radius: 0 — bords francs Street */
     }
 
-    /* En-tête du post principal */
-    .thread-post__header {
+    /* En-tête du post : avatar + auteur + date + badges */
+    .ft-post__header {
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
-        padding: 16px 20px;
-        border-bottom: 1px solid var(--color-border);
-        background: var(--color-bg, #f8f9fa);
-    }
-
-    .thread-post__title {
-        font-family: var(--font-heading);
-        font-size: 18px;
-        font-weight: 700;
-        color: var(--color-text);
-        margin-bottom: 8px;
-        line-height: 1.3;
-    }
-
-    .thread-post__meta {
-        font-size: 12px;
-        color: var(--color-text-light);
-        display: flex;
-        align-items: center;
-        gap: 12px;
+        gap: 16px;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--ink);
+        background: var(--bg-alt);
         flex-wrap: wrap;
     }
 
-    /* Auteur avec avatar */
-    .thread-post__author {
+    .ft-post__author-row {
         display: flex;
         align-items: center;
-        gap: 6px;
-        font-weight: 600;
-        color: var(--color-text);
-    }
-
-    /* Badge état du thread */
-    .badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        padding: 3px 8px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 600;
-    }
-    .badge--pinned { background: #fff3cd; color: #856404; }
-    .badge--locked { background: #f8d7da; color: #842029; }
-
-    /* Contenu textuel du post */
-    .thread-post__content {
-        padding: 20px;
-        font-size: 14px;
-        line-height: 1.7;
-        color: var(--color-text);
-        /* Pas de white-space: pre-wrap : le filtre Twig |nl2br gère les sauts de ligne
-           en les convertissant en <br> après avoir échappé le HTML — plus sûr. */
-    }
-
-    /* Actions de modération sur le thread */
-    .thread-post__actions {
-        display: flex;
-        gap: 8px;
-        padding: 12px 20px;
-        border-top: 1px solid var(--color-border);
-        background: var(--color-bg, #f8f9fa);
-    }
-
-    /* Boutons d'action modération */
-    .btn-mod {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 5px 12px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        background: var(--color-white);
-        color: var(--color-text);
-        font-size: 12px;
-        cursor: pointer;
-        text-decoration: none;
-        transition: border-color 0.1s, background 0.1s;
-    }
-    .btn-mod:hover { border-color: var(--color-text-light); background: var(--color-bg, #f8f9fa); }
-    .btn-mod--danger:hover { border-color: #dc3545; color: #dc3545; }
-
-    /* ── Section des réponses ── */
-    .replies-section {
-        margin-top: 24px;
-    }
-
-    .replies-section__title {
-        font-size: 15px;
-        font-weight: 700;
-        color: var(--color-text);
-        margin-bottom: 12px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .replies-count-badge {
-        background: var(--color-border);
-        color: var(--color-text-light);
-        border-radius: 999px;
-        padding: 2px 8px;
-        font-size: 12px;
-        font-weight: 600;
-    }
-
-    /* ── Bulle de réponse ── */
-    .reply-item {
-        display: flex;
         gap: 14px;
-        margin-bottom: 12px;
     }
 
-    /* Avatar de l'auteur de la réponse */
-    .reply-item__avatar {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: var(--color-orange, #E8935A);
+    /* Avatar carré de l'auteur — fond noir, initiales lime */
+    .ft-avatar {
+        width: 44px;
+        height: 44px;
+        /* border-radius: 0 → avatar CARRÉ dans Street */
+        background: var(--ink);
+        color: var(--accent);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 12px;
+        font-family: var(--mono);
+        font-size: 14px;
         font-weight: 700;
-        color: white;
+        letter-spacing: .04em;
         flex-shrink: 0;
-        margin-top: 2px;
+        border: 1px solid var(--ink);
+    }
+    /* Variante plus petite pour les réponses */
+    .ft-avatar--sm {
+        width: 32px;
+        height: 32px;
+        font-size: 10px;
     }
 
-    .reply-item__body {
-        flex: 1;
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        overflow: hidden;
-    }
-
-    .reply-item__header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 14px;
-        background: var(--color-bg, #f8f9fa);
-        border-bottom: 1px solid var(--color-border);
-    }
-
-    .reply-item__author {
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--color-text);
-    }
-
-    .reply-item__date {
-        font-size: 11px;
-        color: var(--color-text-light);
-    }
-
-    .reply-item__content {
-        padding: 14px;
-        font-size: 13px;
-        line-height: 1.6;
-        color: var(--color-text);
-        /* Idem : |nl2br dans le template gère les sauts de ligne sans white-space: pre-wrap */
-    }
-
-    /* Action "supprimer" sur une réponse */
-    .reply-item__delete {
-        padding: 10px 14px;
-        border-top: 1px solid var(--color-border);
-        background: var(--color-bg, #f8f9fa);
-        text-align: right;
-    }
-
-    /* Réponse marquée comme solution */
-    .reply-item--solution {
-        border-color: #198754;
-    }
-    .reply-item--solution .reply-item__header {
-        background: #d1e7dd;
-    }
-
-    /* ── Formulaire de réponse ── */
-    .reply-form {
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        padding: 20px;
-        margin-top: 24px;
-    }
-
-    .reply-form__title {
-        font-size: 15px;
+    .ft-post__author-name {
+        font-family: var(--body);
+        font-size: 14px;
         font-weight: 700;
-        color: var(--color-text);
-        margin-bottom: 14px;
+        color: var(--ink);
     }
-
-    .reply-form textarea {
-        width: 100%;
-        min-height: 120px;
-        padding: 10px 14px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        font-family: var(--font-body);
-        font-size: 13px;
-        line-height: 1.5;
-        resize: vertical;
-        background: var(--color-input-bg);
-        color: var(--color-text);
-        box-sizing: border-box;
-        transition: border-color 0.15s;
-    }
-    .reply-form textarea:focus {
-        outline: none;
-        border-color: var(--color-green);
-    }
-
-    .reply-form__footer {
+    .ft-post__meta {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+        margin-top: 3px;
         display: flex;
-        justify-content: flex-end;
-        margin-top: 10px;
+        flex-wrap: wrap;
+        gap: 4px 12px;
     }
 
-    .btn-submit {
+    /* Titre du thread en Archivo Black */
+    .ft-post__title {
+        font-family: var(--display);
+        font-size: clamp(24px, 4vw, 40px);
+        text-transform: uppercase;
+        line-height: 1;
+        color: var(--ink);
+        margin: 0 0 16px;
+        word-break: break-word;
+    }
+
+    /* ── Badges d'état ──────────────────────────────────────────── */
+
+    .ft-badges {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+
+    .ft-badge {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 9px 20px;
-        background: var(--color-red, #C8503A);
-        color: white;
-        border: none;
-        border-radius: var(--radius-sm);
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s;
+        gap: 4px;
+        padding: var(--chip-padding);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+        border-radius: var(--chip-radius);  /* 0 */
     }
-    .btn-submit:hover { background: #a84232; }
+    .ft-badge--pinned {
+        background: var(--accent);
+        color: var(--ink);
+    }
+    .ft-badge--locked {
+        background: var(--accent-2);
+        color: var(--ink);
+    }
 
-    /* Message "thread verrouillé" */
-    .thread-locked-notice {
-        margin-top: 24px;
-        padding: 16px 20px;
-        background: #f8d7da;
-        border: 1px solid #f5c2c7;
-        border-radius: var(--radius-md);
-        color: #842029;
-        font-size: 14px;
+    /* Contenu textuel du post original */
+    .ft-post__content {
+        padding: 24px;
+        font-family: var(--body);
+        font-size: 15px;
+        line-height: 1.7;
+        color: var(--ink);
+        /*
+         * PAS de white-space: pre-wrap ici.
+         * Le filtre Twig |nl2br échappe le HTML (protection XSS) puis
+         * convertit chaque \n en <br>. C'est l'approche correcte.
+         */
+    }
+
+    /* Stats inline (vues, réponses) — affichées dans l'en-tête */
+    .ft-post__stats {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .ft-post__stat {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    /* ── Actions de modération ──────────────────────────────────── */
+
+    .ft-post__actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 14px 24px;
+        border-top: 1px solid var(--line-soft);
+        background: var(--bg-alt);
+    }
+
+    /* Bouton de modération — outline ink, bords francs, taille réduite */
+    .ft-btn-mod {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 12px;
+        border: 1px solid var(--ink);
+        background: transparent;
+        color: var(--ink);
+        font-family: var(--body);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        border-radius: 0;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .ft-btn-mod:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
+    /* Variante danger — bord orange au survol */
+    .ft-btn-mod--danger:hover {
+        background: var(--accent-2);
+        color: var(--ink);
+        border-color: var(--accent-2);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SÉPARATEUR "N RÉPONSES"
+       Barre mono sur fond alt — sépare le post des réponses.
+    ══════════════════════════════════════════════════════════════ */
+
+    .ft-replies-header {
+        border-top: 1px solid var(--ink);
+        border-bottom: 1px solid var(--ink);
+        padding: 12px 24px;
+        background: var(--bg-alt);
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
         display: flex;
         align-items: center;
         gap: 10px;
+        margin-top: 24px;
+    }
+    /* Compteur mis en avant */
+    .ft-replies-header strong {
+        font-family: var(--display);
+        font-size: 20px;
+        color: var(--ink);
+        line-height: 1;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       LISTE DES RÉPONSES
+       Chaque réponse = encadré bordure soft, fond alterné pair/impair.
+    ══════════════════════════════════════════════════════════════ */
+
+    .ft-reply {
+        display: grid;
+        /* 48px pour le rail vote (inspiré prototype) | reste pour le contenu */
+        grid-template-columns: 48px 1fr;
+        border: 1px solid var(--line-soft);
+        border-top: none;
+        background: var(--bg);
+        scroll-margin-top: 80px; /* Pour que l'ancre #reply-{id} soit visible */
+    }
+    /* Fond légèrement différent sur les réponses paires — alternance subtile */
+    .ft-reply:nth-child(even) {
+        background: var(--bg-alt);
+    }
+
+    /* Rail gauche — avatar + indicateur solution */
+    .ft-reply__rail {
+        background: var(--bg-alt);
+        border-right: 1px solid var(--line-soft);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 14px 0;
+        gap: 6px;
+    }
+    /* Quand la réponse est marquée "solution" — rail lime */
+    .ft-reply--solution .ft-reply__rail {
+        background: var(--accent);
+    }
+
+    /* Contenu de la réponse */
+    .ft-reply__body {
+        padding: 0;
+        min-width: 0;
+    }
+
+    .ft-reply__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line-soft);
+        flex-wrap: wrap;
+    }
+
+    .ft-reply__author-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .ft-reply__author {
+        font-family: var(--body);
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--ink);
+    }
+
+    .ft-reply__date {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+
+    .ft-reply__content {
+        padding: 16px;
+        font-family: var(--body);
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--ink);
+        /* |nl2br gère les sauts de ligne — pas de white-space: pre-wrap */
+    }
+
+    /* Zone de suppression d'une réponse */
+    .ft-reply__delete {
+        padding: 10px 16px;
+        border-top: 1px solid var(--line-soft);
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    /* Indicateur "Solution" dans le header d'une réponse */
+    .ft-badge--solution {
+        background: var(--accent);
+        color: var(--ink);
+        padding: var(--chip-padding);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: 700;
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+        border-radius: 0;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FORMULAIRE DE RÉPONSE
+       Encadré bordure ink, fond blanc.
+    ══════════════════════════════════════════════════════════════ */
+
+    .ft-reply-form {
+        border: 1px solid var(--ink);
+        border-top: none;
+        background: var(--bg);
+        margin-top: 24px;
+    }
+
+    .ft-reply-form__head {
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--ink);
+        background: var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--accent);
+    }
+
+    .ft-reply-form__body {
+        padding: 20px;
+    }
+
+    /* Textarea — bords francs, focus accent */
+    .ft-reply-form__textarea {
+        display: block;
+        width: 100%;
+        min-height: 140px;
+        padding: var(--input-padding);
+        border: var(--input-border);
+        border-radius: var(--input-radius);   /* 0 */
+        font-family: var(--body);
+        font-size: var(--input-font-size);
+        line-height: 1.6;
+        color: var(--ink);
+        background: var(--input-bg);
+        resize: vertical;
+        box-sizing: border-box;
+        transition: border var(--transition-fast);
+    }
+    .ft-reply-form__textarea:focus {
+        outline: none;
+        border: var(--input-border-focus);   /* 2px solid var(--accent) */
+    }
+
+    /* Label du textarea */
+    .ft-reply-form__label {
+        display: block;
+        font-family: var(--body);
+        font-size: var(--label-font-size);
+        font-weight: var(--label-font-weight);
+        letter-spacing: var(--label-letter-spacing);
+        text-transform: uppercase;
+        color: var(--label-color);
+        margin-bottom: 8px;
+    }
+
+    .ft-reply-form__footer {
+        display: flex;
+        justify-content: flex-end;
+        padding: 14px 20px;
+        border-top: 1px solid var(--line-soft);
+    }
+
+    /* Bouton "Répondre →" — plein accent lime */
+    .ft-btn-submit {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--btn-padding);
+        background: var(--btn-primary-bg);
+        color: var(--btn-primary-color);
+        border: none;
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        cursor: pointer;
+        border-radius: 0;
+        transition:
+            background var(--transition-fast),
+            color var(--transition-fast),
+            box-shadow var(--transition-fast);
+    }
+    .ft-btn-submit:hover {
+        background: var(--btn-primary-hover-bg);
+        color: var(--btn-primary-hover-color);
+        box-shadow: var(--shadow-offset-sm);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       NOTICES (VERROUILLÉ / NON CONNECTÉ)
+    ══════════════════════════════════════════════════════════════ */
+
+    .ft-notice {
+        margin-top: 24px;
+        padding: 18px 24px;
+        border: 1px solid var(--ink);
+        background: var(--bg-alt);
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+    /* Icône notice en gros */
+    .ft-notice__icon {
+        font-size: 24px;
+        flex-shrink: 0;
+    }
+    /* Notice "verrouillé" — accentuation orange */
+    .ft-notice--locked {
+        border-color: var(--accent-2);
+    }
+    .ft-notice--locked .ft-notice__icon {
+        color: var(--accent-2);
+    }
+
+    /* Lien "se connecter" dans la notice non-connecté */
+    .ft-notice a {
+        color: var(--ink);
+        font-weight: 700;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+    }
+    .ft-notice a:hover {
+        color: var(--accent-2);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       RESPONSIVE
+    ══════════════════════════════════════════════════════════════ */
+
+    @media (max-width: 640px) {
+        .ft-post__header {
+            padding: 16px;
+        }
+        .ft-post__content {
+            padding: 16px;
+        }
+        .ft-post__title {
+            font-size: 24px;
+        }
+        /* Sur mobile : rail toujours présent mais plus étroit */
+        .ft-reply {
+            grid-template-columns: 32px 1fr;
+        }
+        .ft-reply-form__body {
+            padding: 14px;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-{# ── Breadcrumb ──────────────────────────────────────────────────────────────── #}
-<nav class="breadcrumb">
+
+{# ── FIL D'ARIANE ─────────────────────────────────────────────────────────────
+   Forum → Catégorie → Titre du thread (tronqué si trop long).
+#}
+<nav class="ft-breadcrumb" aria-label="Fil d'ariane">
     <a href="{{ path('app_forum_index') }}">Forum</a>
-    <span class="breadcrumb__separator">›</span>
+    <span class="ft-breadcrumb__sep" aria-hidden="true">›</span>
     <a href="{{ path('app_forum_category', { categorySlug: category.slug }) }}">{{ category.name }}</a>
-    <span class="breadcrumb__separator">›</span>
-    <span class="breadcrumb__current">{{ thread.title }}</span>
+    <span class="ft-breadcrumb__sep" aria-hidden="true">›</span>
+    <span class="ft-breadcrumb__current" aria-current="page" title="{{ thread.title }}">
+        {{ thread.title }}
+    </span>
 </nav>
 
-{# ── Post principal ──────────────────────────────────────────────────────────── #}
-<article class="thread-post">
-    <div class="thread-post__header">
+{# ── POST ORIGINAL ────────────────────────────────────────────────────────────
+   L'article principal du thread : titre, auteur, contenu, actions mod.
+#}
+<article class="ft-post" id="top">
+
+    {# En-tête : titre + badges + auteur + stats #}
+    <div class="ft-post__header">
         <div>
-            <h2 class="thread-post__title">
-                {{ thread.title }}
-                {# Badges d'état visibles dans l'en-tête #}
-                {% if thread.pinned %}
-                    <span class="badge badge--pinned">📌 Épinglé</span>
-                {% endif %}
-                {% if thread.locked %}
-                    <span class="badge badge--locked">🔒 Verrouillé</span>
-                {% endif %}
-            </h2>
-            <div class="thread-post__meta">
-                <span class="thread-post__author">
-                    {# Initiales de l'auteur comme mini-avatar textuel #}
-                    <span style="background: var(--color-orange, #E8935A); color: white; border-radius: 50%; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700;">
-                        {{ thread.author.email|slice(0, 2)|upper }}
-                    </span>
-                    {{ thread.author.email|split('@')|first }}
-                </span>
-                <span>{{ thread.createdAt|date('d/m/Y à H:i') }}</span>
-                <span>👁 {{ thread.viewsCount }} vue{{ thread.viewsCount > 1 ? 's' : '' }}</span>
-                <span>💬 {{ thread.repliesCount }} réponse{{ thread.repliesCount > 1 ? 's' : '' }}</span>
+            {# Badges d'état affichés au-dessus du titre #}
+            {% if thread.pinned or thread.locked %}
+                <div class="ft-badges">
+                    {% if thread.pinned %}
+                        <span class="ft-badge ft-badge--pinned" aria-label="Sujet épinglé">
+                            &#9913; Épinglé
+                        </span>
+                    {% endif %}
+                    {% if thread.locked %}
+                        <span class="ft-badge ft-badge--locked" aria-label="Sujet verrouillé">
+                            &#9746; Verrouillé
+                        </span>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {# Titre en Archivo Black — uppercase via CSS #}
+            <h1 class="ft-post__title">{{ thread.title }}</h1>
+
+            {# Auteur + date + statistiques #}
+            <div class="ft-post__author-row">
+                {# Avatar carré avec initiales de l'email #}
+                <div class="ft-avatar" aria-hidden="true">
+                    {{ thread.author.email|slice(0, 2)|upper }}
+                </div>
+                <div>
+                    <div class="ft-post__author-name">
+                        {{ thread.author.email|split('@')|first }}
+                    </div>
+                    <div class="ft-post__meta">
+                        <span>{{ thread.createdAt|date('d/m/Y à H:i') }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Stats : vues + réponses — affichées en haut à droite #}
+        <div class="ft-post__stats" aria-label="Statistiques du sujet">
+            <div class="ft-post__stat">
+                <span aria-hidden="true">&#9673;</span>
+                {{ thread.viewsCount }} vue{{ thread.viewsCount > 1 ? 's' : '' }}
+            </div>
+            <div class="ft-post__stat">
+                <span aria-hidden="true">&#9706;</span>
+                {{ thread.repliesCount }} réponse{{ thread.repliesCount > 1 ? 's' : '' }}
             </div>
         </div>
     </div>
 
     {#
         Contenu du thread.
-        Le filtre |nl2br échappe d'abord le HTML (protection XSS), PUIS convertit
-        les sauts de ligne en <br>. C'est plus sûr que white-space: pre-wrap qui
-        n'échappe rien et rendrait <script>alert(1)</script> si autoescape était désactivé.
-    #}
-    <div class="thread-post__content">{{ thread.content|nl2br }}</div>
 
-    {# ── Actions de modération (admins/modérateurs seulement) ─────────────────── #}
+        SÉCURITÉ : le filtre |nl2br de Twig :
+        1. Échappe d'abord tout le HTML (protection contre les attaques XSS)
+        2. Convertit ensuite les \n en balises <br>
+        → On n'utilise JAMAIS |raw sur du contenu saisit par l'utilisateur.
+
+        La variable "category" est passée par le controller. Si elle n'est pas
+        disponible dans le contexte Twig, vérifier le controller forum.
+    #}
+    <div class="ft-post__content">
+        {{ thread.content|nl2br }}
+    </div>
+
+    {# ── Actions de modération ────────────────────────────────────────────────
+       canModerate est défini dans le controller (admins + modérateurs).
+       IMPORTANT : l'ordre de vérification est intentionnel :
+         1. On vérifie canModerate en premier (variable calculée par le controller)
+         2. Dans le bloc elseif, on vérifie is_granted sur le thread
+       Le token CSRF protège chaque action contre les attaques CSRF.
+    #}
     {% if canModerate %}
-        <div class="thread-post__actions">
-            {# Épingler/désépingler — réservé aux admins (ForumVoter::FORUM_PIN) #}
+        <div class="ft-post__actions">
+
+            {# Épingler / désépingler — réservé aux admins uniquement #}
             {% if is_granted('ROLE_ADMIN') %}
                 <form action="{{ path('app_forum_pin', { id: thread.id }) }}" method="post">
+                    {# CSRF unique par thread et par action (forum_pin_{id}) #}
                     <input type="hidden" name="_token" value="{{ csrf_token('forum_pin_' ~ thread.id) }}">
-                    <button type="submit" class="btn-mod" title="{{ thread.pinned ? 'Désépingler' : 'Épingler' }}">
-                        📌 {{ thread.pinned ? 'Désépingler' : 'Épingler' }}
+                    <button type="submit" class="ft-btn-mod">
+                        &#9913; {{ thread.pinned ? 'Désépingler' : 'Épingler' }}
                     </button>
                 </form>
             {% endif %}
 
-            {# Verrouiller/déverrouiller — admins et modérateurs (ForumVoter::FORUM_LOCK) #}
+            {# Verrouiller / déverrouiller — admins et modérateurs #}
             <form action="{{ path('app_forum_lock', { id: thread.id }) }}" method="post">
                 <input type="hidden" name="_token" value="{{ csrf_token('forum_lock_' ~ thread.id) }}">
-                <button type="submit" class="btn-mod" title="{{ thread.locked ? 'Déverrouiller' : 'Verrouiller' }}">
-                    🔒 {{ thread.locked ? 'Déverrouiller' : 'Verrouiller' }}
+                <button type="submit" class="ft-btn-mod">
+                    &#9746; {{ thread.locked ? 'Déverrouiller' : 'Verrouiller' }}
                 </button>
             </form>
 
-            {# Supprimer le thread — admins et modérateurs (ForumVoter::FORUM_DELETE) #}
+            {# Supprimer le thread — confirmation obligatoire (onsubmit) #}
             <form action="{{ path('app_forum_delete_thread', { id: thread.id }) }}" method="post"
                   onsubmit="return confirm('Supprimer ce sujet et toutes ses réponses ? Cette action est irréversible.')">
                 <input type="hidden" name="_token" value="{{ csrf_token('forum_delete_thread_' ~ thread.id) }}">
-                <button type="submit" class="btn-mod btn-mod--danger">
-                    🗑 Supprimer
+                <button type="submit" class="ft-btn-mod ft-btn-mod--danger">
+                    &#9003; Supprimer
                 </button>
             </form>
         </div>
+
     {% elseif is_granted(constant('App\\Security\\Voter\\ForumVoter::FORUM_DELETE'), thread) %}
-        {# L'auteur peut supprimer son propre thread (sans être modérateur) #}
-        <div class="thread-post__actions">
+        {#
+            L'auteur peut supprimer son propre thread (sans être modérateur).
+            ForumVoter::FORUM_DELETE autorise l'auteur à agir sur sa propre contribution.
+        #}
+        <div class="ft-post__actions">
             <form action="{{ path('app_forum_delete_thread', { id: thread.id }) }}" method="post"
                   onsubmit="return confirm('Supprimer ce sujet ? Cette action est irréversible.')">
                 <input type="hidden" name="_token" value="{{ csrf_token('forum_delete_thread_' ~ thread.id) }}">
-                <button type="submit" class="btn-mod btn-mod--danger">
-                    🗑 Supprimer mon sujet
+                <button type="submit" class="ft-btn-mod ft-btn-mod--danger">
+                    &#9003; Supprimer mon sujet
                 </button>
             </form>
         </div>
     {% endif %}
+
 </article>
 
-{# ── Section des réponses ────────────────────────────────────────────────────── #}
-<section class="replies-section" id="replies">
-    <div class="replies-section__title">
-        Réponses
-        <span class="replies-count-badge">{{ replies|length }}</span>
-    </div>
+{# ── SÉPARATEUR "N RÉPONSES" ──────────────────────────────────────────────────
+   Barre de séparation entre le post original et la liste des réponses.
+   aria-live="polite" : le lecteur d'écran annonce le changement de compteur
+   après un ajout de réponse (après un redirect de Symfony).
+#}
+<div class="ft-replies-header" id="replies" aria-live="polite">
+    <strong>{{ replies|length }}</strong>
+    réponse{{ replies|length > 1 ? 's' : '' }}
+</div>
+
+{# ── LISTE DES RÉPONSES ───────────────────────────────────────────────────────
+   Chaque réponse a une ancre id="reply-{id}" pour les redirections
+   post-création (le controller fait un redirect vers #reply-{id}).
+#}
+<section aria-label="Réponses au sujet">
 
     {% if replies is empty %}
-        <p style="color: var(--color-text-light); font-size: 13px; margin-bottom: 20px;">
-            Aucune réponse pour le moment. Soyez le premier à répondre !
-        </p>
+        <div style="padding: 32px 24px; font-family: var(--mono); font-size: 11px;
+                    color: var(--ink-mute); letter-spacing: .08em; text-transform: uppercase;
+                    border: 1px solid var(--line-soft); border-top: none; background: var(--bg);">
+            Aucune réponse pour le moment — soyez le premier à répondre !
+        </div>
     {% else %}
-        {# Chaque réponse a une ancre id="reply-{id}" pour les redirections post-création #}
+        {# Toutes les réponses sont enchaînées sans gap — les bordures font office de séparateurs #}
         {% for reply in replies %}
-            <div class="reply-item{% if reply.solution %} reply-item--solution{% endif %}" id="reply-{{ reply.id }}">
+            <div class="ft-reply{% if reply.solution %} ft-reply--solution{% endif %}"
+                 id="reply-{{ reply.id }}">
 
-                {# Avatar de l'auteur (initiales) #}
-                <div class="reply-item__avatar">
-                    {{ reply.author.email|slice(0, 2)|upper }}
+                {# Rail gauche : avatar de l'auteur de la réponse #}
+                <div class="ft-reply__rail" aria-hidden="true">
+                    <div class="ft-avatar ft-avatar--sm">
+                        {{ reply.author.email|slice(0, 2)|upper }}
+                    </div>
+                    {# Indicateur visuel "solution" dans le rail #}
+                    {% if reply.solution %}
+                        <span style="font-size: 16px;" title="Meilleure réponse">&#10003;</span>
+                    {% endif %}
                 </div>
 
-                <div class="reply-item__body">
-                    <div class="reply-item__header">
-                        <span class="reply-item__author">
-                            {{ reply.author.email|split('@')|first }}
+                {# Corps de la réponse #}
+                <div class="ft-reply__body">
+                    <div class="ft-reply__header">
+                        <div class="ft-reply__author-row">
+                            <span class="ft-reply__author">
+                                {{ reply.author.email|split('@')|first }}
+                            </span>
+                            {# Badge "Solution" si la réponse a été marquée comme telle #}
                             {% if reply.solution %}
-                                <span style="color: #198754; font-size: 11px;">✓ Solution</span>
+                                <span class="ft-badge--solution" aria-label="Meilleure réponse">
+                                    &#10003; Solution
+                                </span>
                             {% endif %}
-                        </span>
-                        <span class="reply-item__date">
+                        </div>
+                        <span class="ft-reply__date">
                             {{ reply.createdAt|date('d/m/Y à H:i') }}
-                            {# Indique si la réponse a été modifiée après sa création #}
-                            {% if reply.updatedAt.timestamp != reply.createdAt.timestamp %}
+                            {#
+                                Indique si la réponse a été modifiée après sa création.
+                                On compare les timestamps pour détecter une modification.
+                            #}
+                            {#
+                                CORRECTION C1 : `.timestamp` n'existe pas sur un objet DateTime en Twig
+                                et lève une erreur à l'exécution. En Twig, on compare directement
+                                les objets DateTime avec les opérateurs > < == — Twig les gère
+                                nativement (il appelle getTimestamp() en interne côté PHP).
+                            #}
+                            {% if reply.updatedAt > reply.createdAt %}
                                 <em>(modifiée)</em>
                             {% endif %}
                         </span>
                     </div>
 
-                    {# |nl2br : échappe le HTML puis convertit \n en <br> — protection XSS #}
-                    <div class="reply-item__content">{{ reply.content|nl2br }}</div>
+                    {#
+                        Contenu de la réponse.
+                        |nl2br : échappe le HTML puis convertit les \n en <br>.
+                        JAMAIS |raw ici — contenu utilisateur potentiellement malveillant.
+                    #}
+                    <div class="ft-reply__content">{{ reply.content|nl2br }}</div>
 
-                    {# Bouton de suppression de réponse (auteur ou admin/modo) #}
+                    {#
+                        Bouton de suppression — visible uniquement si le Voter l'autorise.
+                        ForumVoter::FORUM_DELETE autorise : l'auteur de la réponse,
+                        les admins et les modérateurs.
+                        Token CSRF unique par réponse.
+                    #}
                     {% if is_granted(constant('App\\Security\\Voter\\ForumVoter::FORUM_DELETE'), reply) %}
-                        <div class="reply-item__delete">
+                        <div class="ft-reply__delete">
                             <form action="{{ path('app_forum_delete_reply', { id: reply.id }) }}" method="post"
                                   onsubmit="return confirm('Supprimer cette réponse ?')"
                                   style="display: inline;">
                                 <input type="hidden" name="_token" value="{{ csrf_token('forum_delete_reply_' ~ reply.id) }}">
-                                <button type="submit" class="btn-mod btn-mod--danger" style="font-size: 11px;">
-                                    🗑 Supprimer
+                                <button type="submit" class="ft-btn-mod ft-btn-mod--danger">
+                                    &#9003; Supprimer
                                 </button>
                             </form>
                         </div>
                     {% endif %}
-                </div>
-            </div>
+
+                </div>{# fin ft-reply__body #}
+            </div>{# fin ft-reply #}
         {% endfor %}
     {% endif %}
+
 </section>
 
-{# ── Formulaire de réponse ───────────────────────────────────────────────────── #}
-{# canReply est calculé dans le controller : !thread.locked || is_granted(ROLE_MODERATOR) #}
-{% if canReply %}
-    <div class="reply-form" id="reply-form">
-        <div class="reply-form__title">Répondre à ce sujet</div>
+{# ── FORMULAIRE DE RÉPONSE ────────────────────────────────────────────────────
+   canReply est calculé dans le controller :
+     !thread.locked || is_granted('ROLE_MODERATOR')
+   Si false, on affiche le motif (verrouillé ou non connecté).
+#}
+{% if canReply and app.user %}
+
+    <div class="ft-reply-form" id="reply-form">
+
+        {# En-tête noir : indique à qui on répond #}
+        <div class="ft-reply-form__head">
+            Répondre en tant que {{ app.user.email|split('@')|first }}
+        </div>
+
+        {#
+            Formulaire de réponse.
+            On n'utilise pas le Symfony Form Component ici (même pattern que new_thread).
+            La validation se fait côté controller (contenu non vide, minimum 5 caractères).
+            Token CSRF unique par thread → forum_reply_{id}.
+        #}
         <form action="{{ path('app_forum_reply', { id: thread.id }) }}" method="post">
-            {# Token CSRF unique par thread pour éviter les attaques de type CSRF #}
             <input type="hidden" name="_token" value="{{ csrf_token('forum_reply_' ~ thread.id) }}">
 
-            {#
-                Le textarea est vide par défaut.
-                Après un POST, Symfony redirige (redirect-after-post) donc les données POST
-                ne sont pas disponibles ici — app.request.get('content') serait toujours ''.
-                En cas d'erreur de validation, le flash message guide l'utilisateur.
-            #}
-            <textarea name="content"
-                      placeholder="Votre réponse... (minimum 5 caractères)"
-                      minlength="5"
-                      required></textarea>
+            <div class="ft-reply-form__body">
+                <label for="reply-content" class="ft-reply-form__label">
+                    Votre réponse <span aria-hidden="true" style="color: var(--accent-2);">*</span>
+                </label>
+                {#
+                    Le textarea est vide par défaut.
+                    Symfony redirige après le POST (redirect-after-post pattern),
+                    donc les données POST ne reviennent pas dans ce template.
+                    Les erreurs de validation sont transmises via les flash messages.
+                #}
+                <textarea id="reply-content"
+                          name="content"
+                          class="ft-reply-form__textarea"
+                          placeholder="Tape ta réponse… (minimum 5 caractères)"
+                          minlength="5"
+                          required
+                          aria-required="true"
+                          aria-describedby="reply-hint"></textarea>
+                <div id="reply-hint" style="font-family: var(--mono); font-size: 10px;
+                          color: var(--ink-mute); margin-top: 6px; letter-spacing: .06em;
+                          text-transform: uppercase;">
+                    Sois utile, sois respectueux.
+                </div>
+            </div>
 
-            <div class="reply-form__footer">
-                <button type="submit" class="btn-submit">
-                    ✉ Publier ma réponse
+            <div class="ft-reply-form__footer">
+                <button type="submit" class="ft-btn-submit">
+                    Répondre →
                 </button>
             </div>
         </form>
     </div>
-{% else %}
-    {# Thread verrouillé — affichage d'un message explicatif #}
-    <div class="thread-locked-notice">
-        🔒
-        <span>Ce sujet est verrouillé. Les nouvelles réponses ne sont pas autorisées.</span>
+
+{#
+    CORRECTION W3 : ordre des branches elseif.
+    Problème original : `elseif thread.locked` était testé AVANT `elseif not app.user`.
+    Conséquence : si le thread n'est PAS verrouillé et que l'utilisateur n'est pas
+    connecté, aucun des deux blocs ne s'affichait → silence total, l'utilisateur
+    ne voyait pas l'invitation à se connecter.
+
+    Ordre correct :
+      1. canReply + connecté   → formulaire
+      2. non connecté          → invite à se connecter (prioritaire sur le verrou,
+                                 car l'utilisateur doit d'abord savoir pourquoi il
+                                 ne voit pas le formulaire)
+      3. thread verrouillé     → notice verrou (utilisateur connecté mais bloqué)
+#}
+{% elseif not app.user %}
+    {# Utilisateur non connecté — on l'invite à se connecter #}
+    <div class="ft-notice" role="status">
+        <span class="ft-notice__icon" aria-hidden="true">&#9706;</span>
+        <span>
+            <a href="{{ path('app_login') }}">Connectez-vous</a>
+            pour participer à la discussion.
+        </span>
     </div>
+
+{% elseif thread.locked %}
+    {# Thread verrouillé — plus de nouvelles réponses possibles #}
+    <div class="ft-notice ft-notice--locked" role="status" aria-live="polite">
+        <span class="ft-notice__icon" aria-hidden="true">&#9746;</span>
+        <span>Ce sujet est verrouillé — nouvelles réponses désactivées.</span>
+    </div>
+
 {% endif %}
+
 {% endblock %}

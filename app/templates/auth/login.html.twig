@@ -1,187 +1,485 @@
 {% extends 'base.html.twig' %}
 
 {#
- # auth/login.html.twig — Page de connexion
+ # auth/login.html.twig — Page de connexion (thème Street)
  #
- # Mise en page split-screen (deux colonnes) :
- # - Gauche (vert foncé) : branding, citation
- # - Droite (beige) : formulaire de connexion
+ # Mise en page split-screen 50/50 pleine hauteur :
+ #   - Colonne gauche : panneau décoratif fond quasi-noir (--ink), branding BazaArt
+ #   - Colonne droite : formulaire de connexion sur fond crème (--bg)
+ #
+ # Symfony Security :
+ #   - La route app_login est définie dans security.yaml (form_login)
+ #   - Le contrôleur est LoginController — il expose $error et $lastUsername
+ #   - Les champs _username et _password sont les noms attendus par le firewall
+ #   - Le token CSRF "authenticate" doit correspondre exactement à security.yaml
  #}
 
 {% block title %}Connexion — BazaArt{% endblock %}
 
 {% block stylesheets %}
+{{ parent() }}
+{# ── CSS propre à la page auth — préfixé .auth- pour éviter les collisions ── #}
 <style>
-    /* Page de login sans scroll — plein écran */
-    html, body { height: 100%; overflow: hidden; }
 
-    /* ── Layout deux colonnes ── */
+    /* ── Preload prioritaire des polices Street utilisées ici ── */
+    /* Archivo Black est la police display (--display) du thème Street.
+       On ajoute des preload additionnels spécifiques à ce template
+       via le bloc stylesheets plutôt que base.html.twig (qui préload Editorial).
+       Archivo Black 400 et Space Grotesk 400 sont les plus critiques. */
+
+    /* ── Reset hauteur pour le full-screen ── */
+    /* overflow:hidden évite l'apparition d'une scrollbar sur le body
+       quand le layout prend exactement 100vh */
+    html, body {
+        height: 100%;
+        overflow: hidden;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+     * LAYOUT — deux colonnes 50/50 pleine hauteur
+     * ══════════════════════════════════════════════════════════════ */
     .auth-layout {
         display: flex;
         height: 100vh;
+        /* background global = --bg du thème Street (#F2EFE6) */
+        background: var(--bg);
     }
 
-    /* ── Colonne gauche — branding ── */
+    /* ── Colonne gauche : panneau décoratif ── */
     .auth-left {
-        width: 560px;
-        flex-shrink: 0;
-        background: var(--color-green);
+        /* 50% de la largeur — flex-shrink:0 empêche la compression */
+        flex: 0 0 50%;
+        background: var(--ink);       /* quasi-noir #0D0D0D — contraste fort */
+        color: var(--bg);             /* crème sur fond noir */
         display: flex;
         flex-direction: column;
-        justify-content: center;
-        padding: 60px;
+        justify-content: space-between;  /* logo haut, chips bas */
+        padding: 56px 64px;
+        /* Pas de border-radius — thème Street est sharp (--radius-none = 0) */
         position: relative;
+        overflow: hidden;
     }
 
-    /* Badge "Nouveau sur BazaArt ?" */
-    .auth-left__badge {
-        display: inline-flex;
-        align-items: center;
-        height: 28px;
-        padding: 0 12px;
-        background: var(--color-red);
-        border-radius: var(--radius-full);
-        font-size: 10px;
-        font-weight: 600;
-        color: var(--color-white);
-        margin-bottom: 40px;
-        align-self: flex-start;
+    /* Zone haute : logo + tagline */
+    .auth-left__top {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xl);
     }
 
-    .auth-left__title {
-        font-family: var(--font-heading);
-        font-size: 42px;
-        font-weight: 700;
-        color: var(--color-white);
-        margin-bottom: 16px;
+    /* Logo principal */
+    .auth-left__logo {
+        font-family: var(--display);  /* Archivo Black */
+        font-size: 72px;
+        line-height: 1;
+        letter-spacing: -.02em;
+        color: var(--bg);
+        /* Pas de margin — le gap du parent gère l'espacement */
     }
 
+    /* Accentuation "Art" en vert acide (--accent) */
+    .auth-left__logo span {
+        color: var(--accent);  /* #C6F24E — vert lime */
+    }
+
+    /* Citation / tagline éditoriale */
     .auth-left__tagline {
-        font-size: 14px;
-        color: var(--color-text-green);
-        line-height: 1.6;
+        font-family: var(--serif);   /* Instrument Serif — ton éditorial */
+        font-style: italic;
+        font-size: 22px;
+        line-height: 1.4;
+        color: rgba(242, 239, 230, .75);  /* crème à 75% d'opacité */
+        max-width: 400px;
     }
 
-    /* ── Colonne droite — formulaire ── */
+    /* Guillemet décoratif devant la citation */
+    .auth-left__tagline::before {
+        content: '"';
+        font-size: 48px;
+        line-height: 0;
+        vertical-align: -.35em;
+        display: inline-block;
+        margin-right: 4px;
+        color: var(--accent);
+        font-style: normal;
+    }
+
+    /* Zone basse : chips de disciplines */
+    .auth-left__bottom {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-md);
+    }
+
+    /* Label "disciplines" au-dessus des chips */
+    .auth-left__label {
+        font-family: var(--mono);
+        font-size: var(--eyebrow-font-size);  /* 11px */
+        font-weight: 700;
+        letter-spacing: var(--eyebrow-letter-spacing);  /* .12em */
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        /* --ink-mute en dark mode = #9a978f — lisible sur fond noir */
+    }
+
+    /* Groupe de chips */
+    .auth-left__chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-sm);
+    }
+
+    /* Chip individuelle — bords francs (--chip-radius = 0) */
+    .auth-chip {
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);       /* 11px */
+        font-weight: var(--chip-font-weight);   /* 600 */
+        letter-spacing: var(--chip-letter-spacing); /* .04em */
+        text-transform: uppercase;
+        padding: var(--chip-padding);           /* 5px 9px */
+        border: 1px solid rgba(242, 239, 230, .25);  /* bordure crème subtile */
+        color: var(--bg);
+        border-radius: var(--radius-none);  /* 0 — bords francs Street */
+        /* Pas de fond — transparent par défaut */
+    }
+
+    /* ── Colonne droite : formulaire ── */
     .auth-right {
         flex: 1;
-        background: var(--color-bg);
+        background: var(--bg);
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        padding: 40px;
+        padding: var(--space-2xl) var(--space-xl);
+        overflow-y: auto;  /* scroll si viewport très petit */
     }
 
-    /* Le titre et le sous-titre sont en dehors de la carte */
-    .auth-right__header { margin-bottom: 24px; text-align: left; width: 440px; }
-
-    .auth-right__title {
-        font-family: var(--font-heading);
-        font-size: 28px;
-        font-weight: 700;
-        color: var(--color-text);
-        margin-bottom: 6px;
+    /* Wrapper centré qui contient tout le contenu droit */
+    .auth-form-wrapper {
+        width: 100%;
+        max-width: 420px;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xl);
     }
 
-    .auth-right__subtitle {
-        font-size: 13px;
-        color: var(--color-text-muted);
+    /* En-tête du formulaire : titre + sous-titre */
+    .auth-header {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-sm);
     }
 
-    /* ── Carte formulaire ── */
-    .auth-card {
-        width: 440px;
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-card);
-        padding: 32px 40px;
+    /* Titre principal "Connexion" */
+    .auth-title {
+        font-family: var(--display);  /* Archivo Black */
+        font-size: 40px;
+        line-height: 1;
+        letter-spacing: -.01em;
+        color: var(--ink);
     }
 
-    /* Lien "Mot de passe oublié ?" aligné à droite */
-    .forgot-link {
-        font-size: 12px;
-        color: var(--color-red);
+    /* Sous-titre avec lien vers l'inscription */
+    .auth-subtitle {
+        font-family: var(--body);  /* Space Grotesk */
+        font-size: 14px;
+        color: var(--ink-mute);  /* #5b584f */
+    }
+
+    .auth-subtitle a {
+        color: var(--accent-2);  /* orange tangerine #FF6B2C */
+        font-weight: 600;
         text-decoration: none;
-        float: right;
-        margin-top: -4px;
+        /* Pas de soulignement par défaut — cohérent avec Street */
     }
-    .forgot-link:hover { text-decoration: underline; }
+    .auth-subtitle a:hover {
+        text-decoration: underline;
+    }
 
-    /* Bouton Google */
-    .btn-google {
+    /* ── Bloc d'erreur (affiché si Symfony Security renvoie une erreur) ── */
+    .auth-error {
+        border: 2px solid var(--accent-2);  /* orange tangerine — visible sans rouge */
+        background: rgba(255, 107, 44, .08); /* orange très pâle */
+        padding: var(--space-md);
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+        /* Pas de border-radius — bords francs Street */
+    }
+
+    /* ── Bouton Google — connexion OAuth ── */
+    .auth-btn-google {
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 10px;
+        gap: var(--space-sm);
         width: 100%;
-        height: 40px;
-        background: var(--color-white);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
+        padding: 12px var(--space-md);
+        background: white;
+        border: 2px solid var(--ink);  /* bordure forte — style Street */
+        border-radius: var(--radius-none);  /* 0 — bords francs */
+        font-family: var(--body);
         font-size: 13px;
-        font-weight: 500;
-        color: var(--color-text);
-        text-decoration: none;
-        transition: background 0.15s;
-        margin-bottom: 20px;
-    }
-    .btn-google:hover { background: var(--color-bg); }
-
-    /* Liens du bas */
-    .auth-footer-text {
-        text-align: center;
-        font-size: 13px;
-        color: var(--color-text-light);
-        margin-top: 16px;
-    }
-    .auth-footer-text a {
-        color: var(--color-red);
         font-weight: 600;
+        color: var(--ink);
         text-decoration: none;
+        cursor: pointer;
+        transition: background var(--transition-fast), box-shadow var(--transition-fast);
     }
-    .auth-footer-text a:hover { text-decoration: underline; }
+    /* Effet offset "affiche" au hover — signature visuelle Street */
+    .auth-btn-google:hover {
+        background: var(--bg-alt);
+        box-shadow: var(--shadow-offset-sm);  /* 4px 4px 0 var(--ink) */
+    }
+
+    /* ── Séparateur "— ou —" ── */
+    .auth-divider {
+        display: flex;
+        align-items: center;
+        gap: var(--space-md);
+    }
+    .auth-divider::before,
+    .auth-divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--line-soft);  /* rgba(13,13,13,.14) */
+    }
+    .auth-divider__text {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--ink-mute);
+        letter-spacing: .08em;
+        white-space: nowrap;
+    }
+
+    /* ── Champs de formulaire — style Street ── */
+    .auth-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    /* Label : mono uppercase petit — convention Street */
+    .auth-label {
+        font-family: var(--mono);
+        font-size: var(--label-font-size);       /* 11px */
+        font-weight: var(--label-font-weight);   /* 700 */
+        letter-spacing: var(--label-letter-spacing); /* .08em */
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    /* Input : bords francs, bordure 2px --ink, focus vert acide */
+    .auth-input {
+        width: 100%;
+        padding: var(--input-padding);     /* 10px 12px */
+        font-family: var(--body);
+        font-size: var(--input-font-size); /* 13px */
+        color: var(--ink);
+        background: white;
+        border: 2px solid var(--ink);      /* 2px solid — plus fort que le token 1px */
+        border-radius: var(--radius-none); /* 0 — bords francs */
+        outline: none;
+        transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .auth-input:focus {
+        /* outline vert acide — repère visuel clair sans casser le thème */
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+    .auth-input::placeholder {
+        color: var(--ink-mute);
+        opacity: .5;
+    }
+
+    /* Lien "Mot de passe oublié ?" — discret, aligné à droite du label */
+    .auth-forgot {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        text-decoration: none;
+        margin-left: auto;  /* pousse le lien à droite dans un flex-row */
+    }
+    .auth-forgot:hover {
+        color: var(--ink);
+        text-decoration: underline;
+    }
+
+    /* En-tête de label (row pour label + lien oublié) */
+    .auth-label-row {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-sm);
+    }
+
+    /* ── Bouton principal "Se connecter" ── */
+    /* Style conforme aux tokens bouton Street :
+       fond --accent (lime), texte --ink, uppercase, Archivo Black */
+    .auth-btn-submit {
+        width: 100%;
+        padding: 14px var(--space-lg);
+        font-family: var(--display);  /* Archivo Black */
+        font-size: var(--btn-font-size);     /* 12px */
+        font-weight: var(--btn-font-weight); /* 700 */
+        letter-spacing: var(--btn-letter-spacing); /* .06em */
+        text-transform: uppercase;
+        color: var(--ink);
+        background: var(--accent);   /* vert lime #C6F24E */
+        border: 2px solid var(--ink);
+        border-radius: var(--radius-none);  /* 0 — bords francs */
+        cursor: pointer;
+        transition: background var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    /* Hover : fond --ink, texte --accent — inversion chromatique Street */
+    .auth-btn-submit:hover {
+        background: var(--ink);
+        color: var(--accent);
+        box-shadow: var(--shadow-offset-sm);  /* 4px 4px 0 var(--ink) */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+     * RESPONSIVE — mobile-first
+     * En dessous de 768px : les deux colonnes s'empilent,
+     * la colonne décorative se réduit à un bandeau compact
+     * ══════════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+        /* Plus de full-screen figé sur mobile */
+        html, body {
+            height: auto;
+            overflow: auto;
+        }
+
+        .auth-layout {
+            flex-direction: column;
+            height: auto;
+            min-height: 100vh;
+        }
+
+        /* Colonne gauche : bandeau compact en haut */
+        .auth-left {
+            flex: none;
+            padding: var(--space-xl) var(--space-lg);
+            justify-content: flex-start;
+            gap: var(--space-md);
+        }
+
+        /* Chips cachées sur mobile — trop de place */
+        .auth-left__bottom {
+            display: none;
+        }
+
+        .auth-left__logo {
+            font-size: 48px;
+        }
+
+        .auth-left__tagline {
+            font-size: 16px;
+        }
+
+        /* Colonne droite : pleine largeur */
+        .auth-right {
+            padding: var(--space-xl) var(--space-md);
+        }
+
+        .auth-form-wrapper {
+            max-width: 100%;
+        }
+    }
+
 </style>
 {% endblock %}
 
 {% block body %}
-<div class="auth-layout">
+{# ──────────────────────────────────────────────────────────────────────────── #}
+{# LAYOUT SPLIT-SCREEN                                                         #}
+{# role="main" sur le layout global — la page entière est le contenu principal #}
+{# ──────────────────────────────────────────────────────────────────────────── #}
+<div class="auth-layout" role="main">
 
-    {# ── COLONNE GAUCHE : branding ─────────────────────────────────────────── #}
-    <div class="auth-left">
-        {# Badge visible en haut de la colonne #}
-        <span class="auth-left__badge">Nouveau sur BazaArt ?</span>
+    {# ══════════════════════════════════════════════════════════════════════════
+     # COLONNE GAUCHE — Panneau décoratif
+     # aria-hidden="true" : ce panneau est purement décoratif, les lecteurs
+     # d'écran n'ont pas besoin de le lire — le contenu utile est à droite
+     # ════════════════════════════════════════════════════════════════════════ #}
+    <aside class="auth-left" aria-hidden="true">
 
-        <h1 class="auth-left__title">BazaArt</h1>
-        <p class="auth-left__tagline">
-            La plateforme des artistes<br>francophones
-        </p>
-    </div>
+        {# Zone haute : logo + tagline #}
+        <div class="auth-left__top">
+            {# Logo avec l'accentuation "Art" en vert lime #}
+            <div class="auth-left__logo">
+                Baza<span>Art</span>
+            </div>
 
-    {# ── COLONNE DROITE : formulaire ──────────────────────────────────────── #}
-    <div class="auth-right">
-
-        {# Titre et sous-titre au-dessus de la carte #}
-        <div class="auth-right__header">
-            <h2 class="auth-right__title">Connexion</h2>
-            <p class="auth-right__subtitle">Ravis de vous revoir</p>
+            {# Tagline éditoriale — serif italic #}
+            <p class="auth-left__tagline">
+                La plateforme des artistes<br>
+                qui ne se contentent pas du minimum.
+            </p>
         </div>
 
-        {# Carte avec le formulaire #}
-        <div class="auth-card">
+        {# Zone basse : chips des disciplines représentées sur la plateforme #}
+        <div class="auth-left__bottom">
+            <span class="auth-left__label">Disciplines</span>
+            <div class="auth-left__chips">
+                <span class="auth-chip">Musique</span>
+                <span class="auth-chip">Arts visuels</span>
+                <span class="auth-chip">Cinéma</span>
+                <span class="auth-chip">Danse</span>
+                <span class="auth-chip">Littérature</span>
+                <span class="auth-chip">Théâtre</span>
+            </div>
+        </div>
 
-            {# Affichage des erreurs de connexion (mauvais mot de passe, etc.) #}
+    </aside>
+
+    {# ══════════════════════════════════════════════════════════════════════════
+     # COLONNE DROITE — Formulaire de connexion
+     # ════════════════════════════════════════════════════════════════════════ #}
+    <div class="auth-right">
+        <div class="auth-form-wrapper">
+
+            {# ── En-tête ── #}
+            <header class="auth-header">
+                <h1 class="auth-title">Connexion</h1>
+                <p class="auth-subtitle">
+                    Pas encore membre ?
+                    <a href="{{ path('app_register') }}">S'inscrire →</a>
+                </p>
+            </header>
+
+            {# ── Erreur de connexion ──────────────────────────────────────────
+             # Symfony Security injecte la variable $error dans le template
+             # via le SecurityController (ou automatiquement via form_login).
+             # error.messageKey est la clé de traduction dans le catalogue
+             # "security" (fichier translations/security.fr.yaml ou similaire).
+             # error.messageData contient les paramètres de substitution.
+             # On utilise |trans() — pas |raw — car le message vient du système,
+             # pas de l'utilisateur (risque XSS si on utilisait raw).
+             # ──────────────────────────────────────────────────────────────── #}
             {% if error %}
-                <div class="flash flash--error">
+                <div class="auth-error" role="alert" aria-live="assertive">
+                    {# role="alert" + aria-live : annoncé immédiatement aux lecteurs d'écran #}
                     {{ error.messageKey|trans(error.messageData, 'security') }}
                 </div>
             {% endif %}
 
-            {# Bouton connexion via Google (OAuth2) #}
-            <a href="{{ path('app_google_connect') }}" class="btn-google">
-                {# Logo Google en SVG (pas d'image externe nécessaire) #}
-                <svg width="18" height="18" viewBox="0 0 48 48">
+            {# ── Connexion Google (OAuth2) ───────────────────────────────────
+             # path('app_google_connect') est configuré dans KnpUOAuth2ClientBundle.
+             # Ce bouton est placé AVANT le formulaire email/password —
+             # dans les stats UX, c'est l'option choisie en premier.
+             # ──────────────────────────────────────────────────────────────── #}
+            <a href="{{ path('app_google_connect') }}"
+               class="auth-btn-google"
+               aria-label="Se connecter avec Google">
+                {# SVG Google — 4 paths colorés officiels (pas d'image externe) #}
+                {# Taille 18px — dimensionnement recommandé par les guidelines Google #}
+                <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
                     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
                     <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
                     <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
@@ -190,58 +488,95 @@
                 Connexion avec Google
             </a>
 
-            {# Séparateur "ou" #}
-            <div class="divider" style="margin-bottom: 20px;">ou</div>
+            {# ── Séparateur visuel "— ou —" ── #}
+            <div class="auth-divider" aria-hidden="true">
+                <span class="auth-divider__text">— ou —</span>
+            </div>
 
-            {# Formulaire email / mot de passe #}
-            {# action="" = la même URL gère le POST (configuré dans security.yaml) #}
-            <form method="post">
+            {# ══════════════════════════════════════════════════════════════════
+             # FORMULAIRE EMAIL / MOT DE PASSE
+             #
+             # Symfony Security intercepte le POST sur la route configurée dans
+             # security.yaml (login_path / check_path). Le formulaire doit :
+             #   1. Pointer vers path('app_login') (ou l'URL configurée)
+             #   2. Envoyer le champ "email" comme identifiant (configurable via
+             #      username_parameter dans security.yaml — ici on laisse "email"
+             #      et le SecurityController le mappe sur _username).
+             #      ⚠️ IMPORTANT : le name de l'input email DOIT être "_username"
+             #      (convention Symfony) sinon l'authentification échoue.
+             #   3. Le champ password DOIT s'appeler "_password"
+             #   4. Le token CSRF DOIT s'appeler "_csrf_token"
+             # ═══════════════════════════════════════════════════════════════ #}
+            <form method="post" action="{{ path('app_login') }}" novalidate>
+                {# novalidate : on délègue la validation à Symfony côté serveur.
+                   La validation HTML5 native peut bloquer la soumission avant
+                   même que Symfony puisse afficher ses messages personnalisés. #}
 
-                <div class="form-group">
-                    <label class="form-label" for="email">Adresse e-mail</label>
+                {# Champ email #}
+                <div class="auth-field" style="margin-bottom: var(--space-md);">
+                    <label class="auth-label" for="auth-email">
+                        Adresse e-mail
+                    </label>
                     <input
-                        class="form-input"
+                        class="auth-input"
                         type="email"
-                        id="email"
-                        name="email"
+                        id="auth-email"
+                        {# ⚠️ name="_username" — nom attendu par Symfony Security.
+                           Ne pas changer, même si le champ s'appelle "email" à l'écran. #}
+                        name="_username"
+                        {# last_username : pré-remplit le champ après une erreur
+                           Symfony Security stocke le dernier identifiant saisi
+                           en session pour améliorer l'UX. #}
                         value="{{ last_username }}"
-                        placeholder="vous@exemple.com"
+                        placeholder="toi@exemple.com"
                         autocomplete="email"
                         required
                         autofocus>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="password">
-                        Mot de passe
-                        <a href="#" class="forgot-link">Mot de passe oublié ?</a>
-                    </label>
+                {# Champ mot de passe #}
+                <div class="auth-field" style="margin-bottom: var(--space-xl);">
+                    <div class="auth-label-row">
+                        <label class="auth-label" for="auth-password">
+                            Mot de passe
+                        </label>
+                        {# Lien "Mot de passe oublié ?" — route à créer si inexistante #}
+                        {# Si la route app_forgot_password n'existe pas encore,
+                           commenter ce lien pour éviter une erreur Twig. #}
+                        {# <a href="{{ path('app_forgot_password') }}" class="auth-forgot">
+                            Mot de passe oublié ?
+                        </a> #}
+                        <a href="#" class="auth-forgot">Mot de passe oublié ?</a>
+                    </div>
                     <input
-                        class="form-input"
+                        class="auth-input"
                         type="password"
-                        id="password"
-                        name="password"
-                        placeholder="••••••••"
+                        id="auth-password"
+                        {# ⚠️ name="_password" — nom attendu par Symfony Security. #}
+                        name="_password"
+                        placeholder="••••••••••"
                         autocomplete="current-password"
                         required>
                 </div>
 
-                {# Token CSRF — protection contre les attaques CSRF (obligatoire avec Symfony) #}
+                {# ── Token CSRF ────────────────────────────────────────────────
+                 # Protection contre les attaques CSRF (Cross-Site Request Forgery).
+                 # csrf_token('authenticate') génère un token unique lié à la session.
+                 # Symfony Security vérifie ce token à chaque soumission.
+                 # La valeur 'authenticate' est l'intention CSRF — elle doit correspondre
+                 # à csrf_token_id dans security.yaml (form_login).
+                 # ────────────────────────────────────────────────────────────── #}
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
 
-                <button type="submit" class="btn btn-primary btn-full" style="margin-top: 4px;">
-                    Se connecter
+                {# Bouton submit — fond lime, texte noir, uppercase Archivo Black #}
+                <button type="submit" class="auth-btn-submit">
+                    Se connecter →
                 </button>
+
             </form>
 
-            {# Lien vers la page d'inscription #}
-            <div class="auth-footer-text" style="margin-top: 20px;">
-                Pas encore de compte ?
-                <a href="{{ path('app_register') }}">S'inscrire →</a>
-            </div>
-
         </div>
-    </div>
+    </div>{# fin .auth-right #}
 
-</div>
+</div>{# fin .auth-layout #}
 {% endblock %}

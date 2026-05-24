@@ -1,136 +1,421 @@
 {% extends 'base_app.html.twig' %}
 
+{#
+ # organization_profile/edit.html.twig — Édition du profil organisation (thème Street)
+ #
+ # Variables transmises par OrganizationProfileController::edit() :
+ #   - profile  : OrganizationProfile|null — null si premier enregistrement, objet si modification
+ #   - error    : string|null  — message d'erreur de validation (ex: SIRET invalide)
+ #   - formData : array        — valeurs saisies renvoyées en cas d'erreur (pour repeupler les champs)
+ #
+ # Ce formulaire est en HTML natif (pas Symfony FormType).
+ # Le contrôleur lit $request->request->all() et $request->files->get('logo').
+ #
+ # Sécurité :
+ #   - Protection CSRF active : token "org_profile_edit" validé dans OrganizationProfileController::edit().
+ #   - XSS : toutes les valeurs affichées passent par l'autoescaping Twig.
+ #   - L'action est réservée aux ROLE_USER via #[IsGranted] sur le contrôleur.
+ #}
+
 {% block title %}Mon organisation — BazaArt{% endblock %}
 {% block page_title %}{{ profile ? 'Modifier mon organisation' : 'Créer le profil de mon organisation' }}{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
+{# Styles préfixés .org-edit- pour cette page #}
 <style>
-    /* Contrainte de largeur pour les formulaires */
-    .form-container { max-width: 680px; }
 
-    /* Section de formulaire dans une carte */
-    .form-card {
-        background: var(--color-white); border: 1px solid var(--color-border);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-        padding: 24px; margin-bottom: 16px;
+    /* ── Contrainte de largeur ─────────────────────────────────────────── */
+
+    /*
+     * max-width: 720px — formulaire plus étroit que l'éditeur d'articles
+     * (680px → 720px pour mieux respirer les champs de saisie).
+     */
+    .org-edit-wrap { max-width: 720px; }
+
+    /* ── En-tête ────────────────────────────────────────────────────────── */
+
+    /*
+     * Même motif que article/form.html.twig :
+     * titre Archivo Black + sous-titre mono + border-bottom 1px ink.
+     */
+    .org-edit-header {
+        border-bottom: 1px solid var(--ink);
+        padding-bottom: 20px;
+        margin-bottom: 28px;
     }
 
-    .form-card__title {
-        font-size: 13px; font-weight: 700; color: var(--color-text);
-        margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border);
+    .org-edit-header__title {
+        font-family: var(--display);
+        font-size: 40px;
+        text-transform: uppercase;
+        letter-spacing: -.02em;
+        color: var(--ink);
+        margin: 0 0 4px;
     }
 
-    /* Aperçu du logo actuel */
-    .current-logo {
-        max-height: 80px; max-width: 200px; object-fit: contain;
-        margin-bottom: 14px; display: block;
-        border: 1px solid var(--color-border); padding: 6px;
-        border-radius: var(--radius-sm);
+    .org-edit-header__sub {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    /* ── Sections du formulaire ─────────────────────────────────────────── */
+
+    /*
+     * .org-edit-section : même motif que article/form.html.twig (.art-form-section).
+     * Bordure 1px ink, pas de rayon, fond --bg.
+     * La cohérence visuelle entre les formulaires simplifie la maintenance CSS.
+     */
+    .org-edit-section {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        margin-bottom: 16px;
+    }
+
+    /* En-tête de section : fond --bg-alt, mono uppercase */
+    .org-edit-section__head {
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--line-soft);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        background: var(--bg-alt);
+    }
+
+    .org-edit-section__body { padding: 20px; }
+
+    /* ── Champs de formulaire ───────────────────────────────────────────── */
+
+    /*
+     * On surcharge les styles globaux uniquement pour les inputs dans .org-edit-wrap.
+     * L'objectif : label mono uppercase + input bords francs + focus lime.
+     */
+    .org-edit-wrap label {
+        display: block;
+        font-family: var(--mono);
+        font-size: var(--label-font-size);
+        font-weight: var(--label-font-weight);
+        letter-spacing: var(--label-letter-spacing);
+        text-transform: uppercase;
+        color: var(--label-color);
+        margin-bottom: 6px;
+    }
+
+    .org-edit-wrap input[type="text"],
+    .org-edit-wrap input[type="email"],
+    .org-edit-wrap input[type="url"],
+    .org-edit-wrap textarea,
+    .org-edit-wrap input[type="file"] {
+        width: 100%;
+        padding: var(--input-padding);
+        border: var(--input-border);
+        background: var(--input-bg);
+        border-radius: var(--input-radius);
+        font-family: var(--body);
+        font-size: var(--input-font-size);
+        color: var(--ink);
+        outline: none;
+        box-sizing: border-box;
+    }
+    .org-edit-wrap input:focus,
+    .org-edit-wrap textarea:focus {
+        border: var(--input-border-focus);
+    }
+
+    .org-edit-wrap textarea { resize: vertical; }
+
+    /* Margin entre champs */
+    .org-edit-field { margin-bottom: 18px; }
+    .org-edit-field:last-child { margin-bottom: 0; }
+
+    /* Hint sous un champ */
+    .org-edit-hint {
+        display: block;
+        margin-top: 6px;
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
+    }
+
+    /* ── Aperçu du logo actuel ──────────────────────────────────────────── */
+
+    /*
+     * Fond --bg-alt et bordure encre → le logo s'inscrit dans le thème.
+     * max-height pour éviter qu'un très grand logo déborde.
+     */
+    .org-edit-logo-preview {
+        max-height: 88px;
+        max-width: 220px;
+        object-fit: contain;
+        display: block;
+        background: var(--bg-alt);
+        border: 1px solid var(--ink);
+        padding: 8px;
+        margin-bottom: 14px;
+    }
+
+    /* ── Bouton "Enregistrer" ────────────────────────────────────────────── */
+
+    /*
+     * Bouton primaire accent lime — même style que dans les templates articles.
+     * C'est le seul CTA ici → fort poids visuel justifié.
+     */
+    .org-edit-btn-save {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--btn-padding);
+        background: var(--btn-primary-bg);
+        color: var(--btn-primary-color);
+        border: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        cursor: pointer;
+        font-family: var(--mono);
+        transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .org-edit-btn-save:hover {
+        background: var(--btn-primary-hover-bg);
+        color: var(--btn-primary-hover-color);
+        box-shadow: var(--shadow-offset-sm);
+    }
+
+    /* Lien "Annuler" — discret, visible uniquement si profil existant */
+    .org-edit-btn-cancel {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        text-decoration: none;
+        padding: 0 8px;
+    }
+    .org-edit-btn-cancel:hover { color: var(--ink); text-decoration: underline; }
+
+    /* ── Message d'erreur ────────────────────────────────────────────────── */
+
+    /*
+     * .org-edit-error : bande rouge en haut si erreur de validation
+     * (ex: SIRET invalide, nom trop court).
+     * Même style que .art-error-banner → cohérence inter-templates.
+     */
+    .org-edit-error {
+        border: 1px solid var(--danger);
+        background: rgba(229, 72, 77, .08);
+        color: var(--danger);
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: .06em;
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────────────── */
+
+    @media (max-width: 640px) {
+        .org-edit-header__title { font-size: 28px; }
+        .org-edit-section__body { padding: 16px; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="form-container">
+<div class="org-edit-wrap">
 
-    {# Message d'erreur éventuel (ex : SIRET invalide) #}
+    {# ── En-tête ─────────────────────────────────────────────────────────── #}
+    <div class="org-edit-header">
+        <h1 class="org-edit-header__title">Mon organisation</h1>
+        <p class="org-edit-header__sub">
+            {{ profile ? 'Mise à jour du profil · ' ~ profile.name|slice(0, 40) : 'Nouveau profil organisation' }}
+        </p>
+    </div>
+
+    {# Message d'erreur de validation (retourné par OrganizationProfileService) #}
     {% if error %}
-        <div class="flash flash-error">{{ error }}</div>
+        <div class="org-edit-error" role="alert">
+            {{ error }}
+        </div>
     {% endif %}
 
-    {# enctype="multipart/form-data" est OBLIGATOIRE pour l'upload de fichiers #}
-    <form method="post" enctype="multipart/form-data">
+    {#
+     # enctype="multipart/form-data" : OBLIGATOIRE pour l'upload du logo.
+     # Sans cet attribut, $request->files->get('logo') sera toujours null.
+     #
+     # Protection CSRF : le token "org_profile_edit" est généré par Twig
+     # et validé côté contrôleur via $this->isCsrfTokenValid().
+     # Il expire à la fin de la session et change à chaque page-load.
+    #}
+    <form method="post" enctype="multipart/form-data" novalidate>
 
-        {# ── Section 1 : Informations générales ── #}
-        <div class="form-card">
-            <div class="form-card__title">Informations générales</div>
+        {# Token CSRF — protège contre les requêtes forgées inter-sites (CSRF) #}
+        <input type="hidden" name="_token" value="{{ csrf_token('org_profile_edit') }}">
 
-            {# Priorité : formData (valeurs saisies en cas d'erreur) > profile (BDD) > vide #}
+        {# ── Section 1 : Informations générales ───────────────────────── #}
+        <div class="org-edit-section">
+            <div class="org-edit-section__head">Informations générales</div>
+            <div class="org-edit-section__body">
 
-            <div class="form-group">
-                <label for="name">Nom de l'organisation *</label>
-                <input type="text" id="name" name="name" required
-                       value="{{ formData['name'] ?? profile.name ?? '' }}"
-                       placeholder="Ex: Association Les Arts Vivants">
-            </div>
+                {# Nom de l'organisation #}
+                <div class="org-edit-field">
+                    <label for="org-name">Nom de l'organisation *</label>
+                    {#
+                     # Priorité de remplissage :
+                     #   1. formData['name']   — valeurs soumises en cas d'erreur
+                     #   2. profile.name       — valeur en BDD (modification)
+                     #   3. ''                 — formulaire vide (création)
+                     # L'opérateur ?? (null coalescent) est natif en Twig.
+                    #}
+                    <input type="text"
+                           id="org-name"
+                           name="name"
+                           required
+                           maxlength="255"
+                           autocomplete="organization"
+                           placeholder="Ex : Association Les Arts Vivants"
+                           value="{{ formData['name'] ?? profile.name ?? '' }}">
+                </div>
 
-            <div class="form-group">
-                <label for="siret">
-                    Numéro SIRET
-                    <small style="font-weight:normal; color:var(--color-text-light);">
-                        (14 chiffres — optionnel pour les organisations étrangères)
-                    </small>
-                </label>
-                <input type="text" id="siret" name="siret"
-                       value="{{ formData['siret'] ?? profile.siret ?? '' }}"
-                       placeholder="12345678901234" maxlength="14">
-                {# Explication pour aider la débutante à comprendre l'utilité du SIRET #}
-                <small style="color:var(--color-text-light); display:block; margin-top:4px;">
-                    Le SIRET permet de vérifier l'existence légale de votre organisation en France.
-                    Votre profil sera marqué « Vérifié » après validation par notre équipe.
-                </small>
-            </div>
+                {# Numéro SIRET #}
+                <div class="org-edit-field">
+                    <label for="org-siret">
+                        Numéro SIRET
+                        <span style="font-weight:400;font-family:var(--body);text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink-mute);">
+                            — optionnel pour les structures étrangères
+                        </span>
+                    </label>
+                    <input type="text"
+                           id="org-siret"
+                           name="siret"
+                           maxlength="14"
+                           pattern="[0-9]{14}"
+                           autocomplete="off"
+                           placeholder="12345678901234"
+                           value="{{ formData['siret'] ?? profile.siret ?? '' }}">
+                    <span class="org-edit-hint">
+                        14 chiffres. Permet de vérifier l'existence légale de votre organisation en France.
+                        Votre profil sera marqué « Vérifié » après validation par notre équipe.
+                    </span>
+                </div>
 
-            <div class="form-group">
-                <label for="description">Description</label>
-                <textarea id="description" name="description" rows="5"
-                          placeholder="Mission, activités, historique de votre organisation...">{{ formData['description'] ?? profile.description ?? '' }}</textarea>
-            </div>
+                {# Description #}
+                <div class="org-edit-field">
+                    <label for="org-description">Description</label>
+                    <textarea id="org-description"
+                              name="description"
+                              rows="5"
+                              placeholder="Mission, activités, historique de votre organisation…">{{ formData['description'] ?? profile.description ?? '' }}</textarea>
+                    <span class="org-edit-hint">
+                        Les sauts de ligne seront respectés à l'affichage.
+                    </span>
+                </div>
 
-            <div class="form-group" style="margin-bottom:0;">
-                <label for="location">Localisation</label>
-                <input type="text" id="location" name="location"
-                       value="{{ formData['location'] ?? profile.location ?? '' }}"
-                       placeholder="Ex: Lyon, France">
+                {# Localisation #}
+                <div class="org-edit-field">
+                    <label for="org-location">Localisation</label>
+                    <input type="text"
+                           id="org-location"
+                           name="location"
+                           maxlength="120"
+                           autocomplete="address-level2"
+                           placeholder="Ex : Lyon, France"
+                           value="{{ formData['location'] ?? profile.location ?? '' }}">
+                </div>
+
             </div>
         </div>
 
-        {# ── Section 2 : Contact & liens ── #}
-        <div class="form-card">
-            <div class="form-card__title">Contact & liens</div>
+        {# ── Section 2 : Contact & liens ───────────────────────────────── #}
+        <div class="org-edit-section">
+            <div class="org-edit-section__head">Contact & liens</div>
+            <div class="org-edit-section__body">
 
-            <div class="form-group">
-                <label for="contactEmail">Email de contact public</label>
-                <input type="email" id="contactEmail" name="contactEmail"
-                       value="{{ formData['contactEmail'] ?? profile.contactEmail ?? '' }}"
-                       placeholder="contact@monorganisation.fr">
-            </div>
+                {# Email de contact public #}
+                <div class="org-edit-field">
+                    <label for="org-contact-email">Email de contact public</label>
+                    <input type="email"
+                           id="org-contact-email"
+                           name="contactEmail"
+                           autocomplete="email"
+                           placeholder="contact@monorganisation.fr"
+                           value="{{ formData['contactEmail'] ?? profile.contactEmail ?? '' }}">
+                    <span class="org-edit-hint">
+                        Affiché sur votre profil public. Utilise un email générique, pas le vôtre.
+                    </span>
+                </div>
 
-            <div class="form-group" style="margin-bottom:0;">
-                <label for="websiteUrl">Site web</label>
-                <input type="url" id="websiteUrl" name="websiteUrl"
-                       value="{{ formData['websiteUrl'] ?? profile.websiteUrl ?? '' }}"
-                       placeholder="https://monorganisation.fr">
-            </div>
-        </div>
+                {# Site web #}
+                <div class="org-edit-field">
+                    <label for="org-website">Site web</label>
+                    <input type="url"
+                           id="org-website"
+                           name="websiteUrl"
+                           autocomplete="url"
+                           placeholder="https://monorganisation.fr"
+                           value="{{ formData['websiteUrl'] ?? profile.websiteUrl ?? '' }}">
+                </div>
 
-        {# ── Section 3 : Logo ── #}
-        <div class="form-card">
-            <div class="form-card__title">Logo</div>
-
-            {# Aperçu du logo actuel s'il existe #}
-            {% if profile and profile.logoPath %}
-                <img src="{{ asset(profile.logoPath) }}"
-                     alt="Logo actuel"
-                     class="current-logo">
-            {% endif %}
-
-            <div class="form-group" style="margin-bottom:0;">
-                <label for="logo">
-                    {{ profile and profile.logoPath ? 'Changer le logo' : 'Ajouter un logo' }}
-                    <small style="font-weight:normal; color:var(--color-text-light);">(JPG, PNG — max 10Mo)</small>
-                </label>
-                <input type="file" id="logo" name="logo" accept="image/jpeg,image/png,image/webp,image/svg+xml">
             </div>
         </div>
 
-        {# ── Boutons de validation ── #}
+        {# ── Section 3 : Logo ──────────────────────────────────────────── #}
+        <div class="org-edit-section">
+            <div class="org-edit-section__head">Logo</div>
+            <div class="org-edit-section__body">
+
+                {# Aperçu du logo actuel s'il existe #}
+                {% if profile and profile.logoPath %}
+                    <img src="{{ asset(profile.logoPath) }}"
+                         alt="Logo actuel de {{ profile.name }}"
+                         class="org-edit-logo-preview">
+                    <p class="org-edit-hint" style="margin-bottom:14px;">
+                        Sélectionner un nouveau fichier remplacera ce logo.
+                    </p>
+                {% endif %}
+
+                <div class="org-edit-field">
+                    <label for="org-logo">
+                        {{ profile and profile.logoPath ? 'Changer le logo' : 'Ajouter un logo' }}
+                    </label>
+                    <input type="file"
+                           id="org-logo"
+                           name="logo"
+                           accept="image/jpeg,image/png,image/webp,image/svg+xml">
+                    <span class="org-edit-hint">JPG, PNG, WebP, SVG — max 10 Mo</span>
+                </div>
+
+            </div>
+        </div>
+
+        {# ── Boutons de validation ─────────────────────────────────────── #}
         <div style="display:flex; gap:12px; align-items:center;">
-            <button type="submit" class="btn btn-primary">Enregistrer</button>
+
+            <button type="submit" class="org-edit-btn-save">
+                Enregistrer
+            </button>
+
+            {#
+             # Bouton "Annuler" — affiché uniquement si un profil existe déjà.
+             # Si c'est la première création, il n'y a pas de page "show" vers laquelle revenir.
+             # (Dans ce cas le contrôleur redirige vers edit → boucle créative normale.)
+            #}
             {% if profile %}
-                <a href="{{ path('app_org_profile_show') }}" class="btn btn-outline">Annuler</a>
+                <a href="{{ path('app_org_profile_show') }}"
+                   class="org-edit-btn-cancel">
+                    Annuler
+                </a>
             {% endif %}
+
         </div>
 
     </form>
