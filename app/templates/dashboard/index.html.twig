@@ -1,130 +1,323 @@
-{% extends 'base_app.html.twig' %}
+{% extends 'base_dashboard.html.twig' %}
 
 {#
  # dashboard/index.html.twig — Tableau de bord artiste (thème Street)
  #
  # Variables transmises par DashboardController::index() :
  #   - user            : App\Entity\User — l'utilisateur connecté
+ #                       → user.artistProfile (OneToOne) : .displayName, .bio, .location, .websiteUrl
  #   - recent_resources: Resource[]     — 5 dernières ressources publiées
  #   - recent_posts    : Post[]         — 3 derniers posts du fil communauté
  #   - submissions     : int            — nombre total de soumissions de cet utilisateur
  #
- # Design : thème Street
+ # Fonction Twig disponible : unread_notifications_count()
+ #
+ # Design : thème Street (v3 — fidèle au prototype "Dashboard Artiste (Street).html")
  #   fond --bg (#F2EFE6), encre --ink (#0D0D0D),
  #   accent vert acide --accent (#C6F24E), accent orange --accent-2 (#FF6B2C)
- #   Typographie : Archivo Black (display), Space Grotesk (corps), JetBrains Mono (labels)
- #   Bords francs : border-radius 0 partout
+ #   Typographie : Archivo Black (--display), Space Grotesk (--body), JetBrains Mono (--mono)
+ #   Instrument Serif (--serif) pour les accents italiques
+ #   Bords FRANCS : border-radius: 0 partout (identité Street)
+ #
+ # Sections :
+ #   1. Profile banner  — bandeau sombre avec avatar, nom, disciplines, lien profil
+ #   2. Stats strip     — 4 colonnes colorées (soumissions, ressources, posts, notifs)
+ #   3. Grille 2-col    — ressources + communauté | accès rapides + complétude + notifs
  #}
 
 {% block title %}Tableau de bord — BazaArt{% endblock %}
 {% block page_title %}Tableau de bord{% endblock %}
 
+{#
+ # ── SIDEBAR ARTISTE ────────────────────────────────────────────────────────
+ #
+ # Injectée dans le bloc "sidebar" de base_dashboard.html.twig.
+ # Structure : logo + pill rôle | sections Mon espace / Explorer / Compte | utilisateur.
+ #
+ # Détection du lien actif :
+ #   app.request.attributes.get('_route') retourne le nom de la route courante.
+ #   On compare avec le nom exact de la route pour les liens simples,
+ #   ou on utilise "starts with" pour les préfixes (ex: toutes les routes app_forum_*).
+ #
+ # Routes vérifiées dans src/Controller/ :
+ #   app_dashboard           → DashboardController (route exacte)
+ #   app_artist_profile_show → ArtistProfileController#show (route "show" sur préfixe "app_artist_profile_")
+ #   app_artist_profile_edit → ArtistProfileController#edit
+ #   app_resource_my         → ResourceController#my
+ #   app_resource_index      → ResourceController#index
+ #   app_resource_submit     → ResourceController#submit
+ #   app_messaging_index     → MessagingController#index
+ #   app_forum_index         → ForumController#index
+ #   app_article_index       → ArticleController#index
+ #   app_notification_index  → NotificationController#index
+ #   app_logout              → AuthController#logout
+ #
+ # ROUTE ABSENTE dans les controllers : "app_notifications_index" (du brief)
+ #   → La vraie route est "app_notification_index" (sans "s"). Corrigé.
+ #}
+{% block sidebar %}
+    {#
+        On délègue entièrement le contenu de la sidebar au partial centralisé.
+        Ainsi, toute modification de la nav s'applique automatiquement à TOUTES
+        les pages du dashboard (candidatures, messages, notifications, etc.).
+        Voir : templates/_partials/sidebar_artiste.html.twig
+    #}
+    {% include '_partials/sidebar_artiste.html.twig' %}
+{% endblock %}
+
 {% block stylesheets %}
 {{ parent() }}
+{#
+    Preload des polices utilisées dans le dashboard.
+    Archivo Black = --display (titres géants), Space Grotesk = --body, JetBrains Mono = --mono.
+    Instrument Serif = --serif (accents italiques dans le nom).
+#}
+{#
+    Pas de <link rel="preload"> ici : base_app.html.twig preload déjà
+    archivo-black-400.woff2 et space-grotesk-400.woff2 (via son bloc stylesheets).
+    Dupliquer ces déclarations générerait des avertissements navigateur.
+#}
 <style>
 
 /* ================================================================
-   DASHBOARD ARTISTE — Thème Street
-   Convention de nommage : préfixe .db- pour éviter les collisions
-   avec les classes de base_app.html.twig
+   DASHBOARD ARTISTE — Thème Street V3
+   Fidèle au prototype "Dashboard Artiste (Street).html"
+
+   Convention de nommage : préfixe .db- pour toutes les classes.
+   Tokens CSS : définis dans public/css/design-tokens.css
+     --bg, --ink, --accent, --accent-2, --bg-alt, --ink-mute
+     --display (Archivo Black), --body (Space Grotesk),
+     --mono (JetBrains Mono), --serif (Instrument Serif)
 ================================================================ */
 
-/* ── Hero bande sombre ──────────────────────────────────────────
-   Reprend le motif du ScreenArtistDashboard de screens-dash.jsx :
-   fond --ink, texte --bg, greeting en Archivo Black géant
+
+/* .sd-wordmark-link est défini dans base_dashboard.html.twig (commun à tous les dashboards) */
+
+
+/* ── 1. PROFILE BANNER ──────────────────────────────────────────
+   Bandeau sombre (fond --ink) pleine largeur.
+   Reprend le "profile-banner" du prototype : avatar + nom géant
+   en Archivo Black, disciplines, chips de rôles, lien profil.
+
+   margin: 0 -32px : déborde du padding .app-content pour coller
+   aux bords de la zone principale (symétrique avec padding 32px).
 ----------------------------------------------------------------- */
-.db-hero {
+.db-banner {
     background: var(--ink);
     color: var(--bg);
-    /* Marge négative pour "déborder" du padding .app-content (28px)
-       et coller aux bords de la zone principale */
-    margin: -28px -28px 32px;
-    padding: 32px 28px 24px;
-    border-bottom: 1px solid var(--ink);
+    margin: -28px -32px 0;     /* colle en haut et sur les côtés */
+    padding: 28px 32px 24px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 24px;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid rgba(242, 239, 230, .10);
 }
 
-/* Eyebrow : date du jour en mono, texte atténué sur fond sombre */
-.db-hero__eyebrow {
+/* Trait décoratif vertical droit (motif "affiche" Street) */
+.db-banner::after {
+    content: '';
+    position: absolute;
+    right: 200px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(242, 239, 230, .08);
+}
+
+/* Avatar carré — initiales en Archivo Black */
+.db-banner__avatar {
+    width: 56px;
+    height: 56px;
+    background: var(--accent);
+    color: var(--ink);
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 400;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    /* Street = carré, pas de border-radius */
+}
+
+/* Zone centrale : greeting + sous-titre */
+.db-banner__body {
+    min-width: 0;
+}
+
+/* Eyebrow : date en mono discret */
+.db-banner__eyebrow {
     font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: .1em;
+    font-size: 10px;
+    letter-spacing: .10em;
     text-transform: uppercase;
-    color: rgba(242, 239, 230, .5); /* --bg avec 50% d'opacité */
-    margin-bottom: 12px;
+    color: rgba(242, 239, 230, .45);
+    margin-bottom: 8px;
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-/* Pastille verte devant la date (point d'eyebrow comme dans ui.jsx) */
-.db-hero__eyebrow::before {
+/* Point vert avant la date (identité visuelle Street) */
+.db-banner__eyebrow::before {
     content: '';
     display: inline-block;
-    width: 8px;
-    height: 8px;
-    background: var(--accent); /* vert acide */
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
     flex-shrink: 0;
 }
 
-/* Nom en Archivo Black géant — style "affiche" */
-.db-hero__greeting {
-    font-family: var(--display); /* Archivo Black */
-    font-size: clamp(42px, 7vw, 96px);
+/* Nom géant — "BONJOUR," en Archivo Black blanc + prénom en Instrument Serif italic */
+.db-banner__greeting {
+    font-family: var(--display);
+    font-size: clamp(32px, 5vw, 56px);
     line-height: .9;
     color: var(--bg);
     text-transform: uppercase;
-    margin: 0 0 16px;
+    letter-spacing: -.02em;
+    margin: 0 0 12px;
 }
 
-/* Ligne de chips de rôles sous le greeting */
-.db-hero__roles {
+/* Partie italique du nom (prénom) — Instrument Serif, non uppercase, orange */
+.db-banner__greeting .it {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--accent-2);
+    text-transform: none;
+    letter-spacing: -.01em;
+}
+
+/* Sous-titre : disciplines / spécialité */
+.db-banner__meta {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: rgba(242, 239, 230, .55);
+    margin-bottom: 12px;
+}
+
+/* Chips de rôles dans la bannière */
+.db-banner__chips {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
     align-items: center;
 }
 
-/* Chip générique — style Street mono uppercase, bords francs */
-.db-chip {
+/* Chip générique dans la bannière */
+.db-bchip {
     font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: .04em;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
     text-transform: uppercase;
-    padding: 4px 9px;
-    border-radius: 0; /* Street = bords francs */
+    padding: 3px 8px;
+    border: 1px solid rgba(242, 239, 230, .30);
+    color: rgba(242, 239, 230, .75);
+    border-radius: 0; /* Street */
 }
 
-/* Chip lime (vert acide) — rôle Artiste */
-.db-chip--accent {
+/* Chip accent (lime) — rôle artiste */
+.db-bchip--accent {
     background: var(--accent);
     color: var(--ink);
+    border-color: var(--accent);
 }
 
-/* Chip orange — rôle Structure */
-.db-chip--accent2 {
+/* Chip orange — rôle structure */
+.db-bchip--accent2 {
     background: var(--accent-2);
     color: var(--bg);
+    border-color: var(--accent-2);
 }
 
-/* Chip neutre — rôle par défaut */
-.db-chip--muted {
-    background: rgba(242, 239, 230, .15);
-    color: var(--bg);
-    border: 1px solid rgba(242, 239, 230, .25);
+/* Zone droite : boîte "URL / profil" */
+.db-banner__cta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    flex-shrink: 0;
 }
 
-/* ── Bande de stats ─────────────────────────────────────────────
-   Fond vert acide, grille 3 colonnes séparées par --ink
-   Inspirée du "Stats strip" dans screens-dash.jsx
+/* Boîte URL publique */
+.db-banner__url-box {
+    background: var(--bg-alt);
+    color: var(--ink);
+    padding: 10px 14px;
+    border: 1px solid rgba(242, 239, 230, .20);
+    min-width: 160px;
+}
+
+.db-banner__url-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 4px;
+}
+
+.db-banner__url-value {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+}
+
+/* Bouton "Voir mon profil" */
+.db-btn-profile {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    background: var(--accent);
+    color: var(--ink);
+    border: 1px solid var(--accent);
+    text-decoration: none;
+    transition: background .12s, color .12s;
+    white-space: nowrap;
+    width: 100%;
+    text-align: center;
+    border-radius: 0;
+}
+
+.db-btn-profile:hover {
+    background: var(--ink);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+
+/* ── 2. STATS STRIP (4 colonnes colorées) ───────────────────────
+   Reprend le "hero-strip" du prototype.
+   Chaque colonne a son propre fond coloré, valeur en Archivo Black,
+   label en mono uppercase.
+   border sur le conteneur, pas de gap (bordures font la séparation).
 ----------------------------------------------------------------- */
 .db-stats {
-    background: var(--accent);
-    border: 1px solid var(--ink);
-    border-top: 0; /* la hero du dessus a déjà un border-bottom */
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    margin: -28px -28px 32px; /* remonte pour coller au hero */
+    grid-template-columns: repeat(4, 1fr);
+    margin: 0 -32px 32px;     /* déborde sur les côtés, espace bas */
+    border: 1px solid var(--ink);
+    border-top: none;          /* banner du dessus est déjà un séparateur */
 }
 
 .db-stat {
@@ -136,39 +329,76 @@
     border-right: none;
 }
 
-/* Valeur chiffrée en Archivo Black, grande */
+/* Valeur chiffrée en Archivo Black */
 .db-stat__value {
     font-family: var(--display);
-    font-size: clamp(36px, 4vw, 56px);
+    font-size: clamp(32px, 4vw, 52px);
     line-height: .9;
+    letter-spacing: -.02em;
     color: var(--ink);
 }
 
 /* Label sous la valeur */
 .db-stat__label {
+    display: block;
     font-family: var(--mono);
     font-size: 10px;
-    letter-spacing: .08em;
+    font-weight: 700;
+    letter-spacing: .10em;
     text-transform: uppercase;
     color: var(--ink);
-    margin-top: 6px;
-    opacity: .7;
+    opacity: .65;
+    margin-top: 10px;
 }
 
-/* ── Grille de widgets ──────────────────────────────────────────
-   2 colonnes sur desktop, 1 sur mobile
-   Convention Street : cartes avec border 1px --ink, pas de shadow
+/* Col 1 : vert acide — soumissions */
+.db-stat--lime {
+    background: var(--accent);
+}
+
+/* Col 2 : orange — ressources */
+.db-stat--orange {
+    background: var(--accent-2);
+}
+.db-stat--orange .db-stat__value,
+.db-stat--orange .db-stat__label {
+    color: var(--bg);
+    opacity: 1;
+}
+.db-stat--orange .db-stat__label {
+    opacity: .65;
+}
+
+/* Col 3 : fond sombre — posts récents */
+.db-stat--dark {
+    background: var(--ink);
+}
+.db-stat--dark .db-stat__value {
+    color: var(--accent);
+}
+.db-stat--dark .db-stat__label {
+    color: var(--bg);
+}
+
+/* Col 4 : fond sable alternatif — notifications */
+.db-stat--alt {
+    background: var(--bg-alt);
+}
+
+
+/* ── 3. GRILLE PRINCIPALE ───────────────────────────────────────
+   2 colonnes (2fr / 1fr) séparées par une bordure --ink.
+   Pas de gap : les bordures font la séparation visuelle (Street).
 ----------------------------------------------------------------- */
 .db-widgets {
     display: grid;
     grid-template-columns: 2fr 1fr;
-    gap: 0; /* pas de gap en Street : les bordures font la séparation */
+    gap: 0;
     border: 1px solid var(--ink);
 }
 
 /* Widget générique */
 .db-widget {
-    /* Pas de background spécifique : hérite de var(--bg) du body */
     border-right: 1px solid var(--ink);
 }
 
@@ -176,7 +406,7 @@
     border-right: none;
 }
 
-/* En-tête d'un widget */
+/* En-tête de widget */
 .db-widget__head {
     padding: 14px 18px;
     border-bottom: 1px solid var(--ink);
@@ -186,37 +416,51 @@
     gap: 12px;
 }
 
-/* Titre du widget en Archivo Black */
+/* Titre en Archivo Black uppercase */
 .db-widget__title {
     font-family: var(--display);
     font-size: 13px;
+    font-weight: 400;
     text-transform: uppercase;
     letter-spacing: .04em;
     color: var(--ink);
+}
+
+/* Partie italique du titre (Instrument Serif) */
+.db-widget__title .it {
+    font-family: var(--serif);
+    font-style: italic;
+    text-transform: none;
+    font-weight: 400;
+    letter-spacing: 0;
 }
 
 /* Lien "Tout voir →" à droite du titre */
 .db-widget__link {
     font-family: var(--mono);
     font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
     color: var(--ink-mute);
     text-decoration: none;
     white-space: nowrap;
-    transition: color var(--transition-fast);
+    transition: color .12s;
 }
 
 .db-widget__link:hover {
     color: var(--ink);
 }
 
-/* Ligne de ressource dans le widget */
+
+/* ── Lignes de ressources ────────────────────────────────────── */
 .db-resource-row {
     display: block;
     padding: 14px 18px;
     border-bottom: 1px solid var(--line-soft);
     text-decoration: none;
     color: var(--ink);
-    transition: background var(--transition-fast);
+    transition: background .12s;
 }
 
 .db-resource-row:last-child {
@@ -238,7 +482,7 @@
     margin-bottom: 4px;
 }
 
-/* Titre + flèche → */
+/* Titre + flèche */
 .db-resource-row__title {
     font-size: 13px;
     font-weight: 600;
@@ -256,107 +500,14 @@
     margin-top: 4px;
 }
 
-/* ── Colonne droite : accès rapides + notifications ──────────── */
-.db-aside {
-    display: flex;
-    flex-direction: column;
-}
-
-/* Grille 2×2 de boutons d'accès rapide */
-.db-quicklinks {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    /* Les bordures entre cellules sont simulées par box-shadow pour éviter
-       les doublons entre border-right / border-bottom */
-}
-
-/* Chaque bouton d'accès rapide */
-.db-quicklink {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 20px 12px;
-    text-decoration: none;
-    color: var(--ink);
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-    text-align: center;
-    border-right: 1px solid var(--line-soft);
-    border-bottom: 1px solid var(--line-soft);
-    transition: background var(--transition-fast);
-    background: transparent;
-}
-
-.db-quicklink:hover {
-    background: var(--accent);
-    color: var(--ink);
-}
-
-/* Icône SVG dans le bouton accès rapide */
-.db-quicklink svg {
-    display: block;
+/* Flèche → (flex-shrink pour qu'elle ne disparaisse pas) */
+.db-resource-row__arrow {
+    color: var(--ink-mute);
     flex-shrink: 0;
 }
 
-/* Supprime la bordure droite sur les cellules en colonne 2 */
-.db-quicklink:nth-child(2n) {
-    border-right: none;
-}
 
-/* Supprime la bordure basse sur les deux dernières cellules */
-.db-quicklink:nth-last-child(-n+2) {
-    border-bottom: none;
-}
-
-/* ── Widget notifications ────────────────────────────────────── */
-.db-notif-widget {
-    margin: 0;
-    padding: 14px 18px;
-    background: var(--accent);
-    border-top: 1px solid var(--ink);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-}
-
-.db-notif-widget__text {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-    color: var(--ink);
-}
-
-/* Bouton "Voir →" dans le widget notif */
-.db-btn-dark {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    padding: 7px 14px;
-    background: var(--ink);
-    color: var(--accent);
-    border: 1px solid var(--ink);
-    text-decoration: none;
-    transition: background var(--transition-fast), color var(--transition-fast);
-    white-space: nowrap;
-    border-radius: 0;
-}
-
-.db-btn-dark:hover {
-    background: var(--accent);
-    color: var(--ink);
-}
-
-/* ── Widget communauté (posts récents) ───────────────────────── */
+/* ── Lignes de posts (communauté) ────────────────────────────── */
 .db-post-row {
     display: flex;
     align-items: flex-start;
@@ -369,20 +520,30 @@
     border-bottom: none;
 }
 
-/* Avatar initiales en carré (Street = pas de cercle) */
+/* Avatar carré avec initiales (Street = carré) */
 .db-avatar {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     background: var(--accent);
     color: var(--ink);
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    /* Street : carré, pas de border-radius */
+    /* Pas de border-radius — Street */
+}
+
+.db-avatar--dark {
+    background: var(--ink);
+    color: var(--accent);
+}
+
+.db-avatar--orange {
+    background: var(--accent-2);
+    color: var(--bg);
 }
 
 .db-post-row__content {
@@ -392,8 +553,9 @@
 
 .db-post-row__name {
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--ink);
+    display: inline;
 }
 
 .db-post-row__date {
@@ -413,8 +575,228 @@
     text-overflow: ellipsis;
 }
 
+
+/* ── Colonne droite (aside) ──────────────────────────────────── */
+.db-aside {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Grille 2×2 accès rapides */
+.db-quicklinks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+/* Bouton d'accès rapide */
+.db-quicklink {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 18px 12px;
+    text-decoration: none;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    text-align: center;
+    border-right: 1px solid var(--line-soft);
+    border-bottom: 1px solid var(--line-soft);
+    transition: background .12s;
+}
+
+.db-quicklink:hover {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+.db-quicklink svg {
+    display: block;
+    flex-shrink: 0;
+}
+
+/* Supprime la bordure droite sur les cellules en colonne 2 */
+.db-quicklink:nth-child(2n) {
+    border-right: none;
+}
+
+/* Supprime la bordure basse sur les deux dernières cellules */
+.db-quicklink:nth-last-child(-n+2) {
+    border-bottom: none;
+}
+
+
+/* ── Widget complétude du profil ─────────────────────────────── */
+.db-complete {
+    padding: 16px 18px;
+    border-top: 1px solid var(--ink);
+    flex: 1;
+}
+
+/* En-tête complétude */
+.db-complete__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+}
+
+.db-complete__label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+}
+
+/* Score en chiffre (ex: "75%") */
+.db-complete__score {
+    font-family: var(--display);
+    font-size: 22px;
+    letter-spacing: -.02em;
+    color: var(--ink);
+}
+
+/* Barre de progression */
+.db-complete__bar {
+    height: 4px;
+    background: var(--bg-alt);
+    border: 1px solid var(--line-soft);
+    margin-bottom: 14px;
+    position: relative;
+}
+
+.db-complete__bar-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: var(--accent);
+}
+
+/* Liste de vérification */
+.db-checklist {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.db-checklist li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--ink);
+}
+
+/* Case cochée */
+.db-check {
+    width: 16px;
+    height: 16px;
+    background: var(--accent);
+    border: 1px solid var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Case non cochée */
+.db-check--empty {
+    background: var(--bg-alt);
+    border-color: var(--line-soft);
+}
+
+/* Item non complété : texte atténué */
+.db-checklist li.db-todo {
+    color: var(--ink-mute);
+}
+
+.db-checklist li.db-todo strong {
+    color: var(--ink);
+    font-weight: 700;
+}
+
+
+/* ── Widget notifications ────────────────────────────────────── */
+.db-notif-widget {
+    padding: 14px 18px;
+    background: var(--accent);
+    border-top: 1px solid var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.db-notif-widget__text {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ink);
+}
+
+/* Bouton "Voir →" sombre */
+.db-btn-dark {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 7px 14px;
+    background: var(--ink);
+    color: var(--accent);
+    border: 1px solid var(--ink);
+    text-decoration: none;
+    transition: background .12s, color .12s;
+    white-space: nowrap;
+    border-radius: 0;
+}
+
+.db-btn-dark:hover {
+    background: transparent;
+    color: var(--ink);
+}
+
+
+/* ── Lien profil en bas de la sidebar ────────────────────────── */
+.db-profile-link {
+    padding: 14px 18px;
+    border-top: 1px solid var(--line-soft);
+    margin-top: auto;
+}
+
+.db-profile-link a {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ink);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color .12s;
+}
+
+.db-profile-link a:hover {
+    color: var(--ink-mute);
+}
+
+
 /* ── État vide ──────────────────────────────────────────────────
-   Affiché quand la liste de ressources est vide
+   Affiché quand une liste (ressources, posts) est vide.
 ----------------------------------------------------------------- */
 .db-empty {
     padding: 32px 18px;
@@ -430,6 +812,7 @@
     margin-bottom: 12px;
 }
 
+/* CTA "Soumettre →" dans l'état vide */
 .db-empty__link {
     font-family: var(--mono);
     font-size: 11px;
@@ -441,7 +824,8 @@
     color: var(--bg);
     text-decoration: none;
     display: inline-block;
-    transition: background var(--transition-fast);
+    transition: background .12s, color .12s;
+    border-radius: 0;
 }
 
 .db-empty__link:hover {
@@ -449,25 +833,39 @@
     color: var(--ink);
 }
 
+
 /* ── Responsive mobile ──────────────────────────────────────────
-   Sur mobile, la sidebar disparaît et la grille passe en 1 colonne
+   < 767px : tout passe en 1 colonne.
+   margin négatif réduit car le padding mobile est 16px (vs 32px).
 ----------------------------------------------------------------- */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
 
-    /* La bande hero déborde de 16px (padding réduit sur mobile) */
-    .db-hero {
-        margin: -28px -16px 24px;
-        padding: 24px 16px 18px;
+    /* La bannière passe en colonne unique sur mobile */
+    .db-banner {
+        grid-template-columns: auto 1fr;
+        margin: -28px -16px 0;
+        padding: 20px 16px 16px;
     }
 
+    /* La boîte URL disparaît sur mobile (trop petite) */
+    .db-banner__cta {
+        display: none;
+    }
+
+    /* Stats : 2×2 sur mobile (au lieu de 4 en ligne) */
     .db-stats {
-        margin: -28px -16px 24px;
-        grid-template-columns: 1fr 1fr; /* 2 stats côte à côte au lieu de 3 */
+        grid-template-columns: 1fr 1fr;
+        margin: 0 -16px 24px;
     }
 
-    /* Troisième stat passe sur 2 colonnes */
+    /* La 3ème et 4ème stat s'ajustent */
+    .db-stat:nth-child(2) {
+        border-right: none;
+    }
     .db-stat:nth-child(3) {
-        grid-column: 1 / -1;
+        border-top: 1px solid var(--ink);
+    }
+    .db-stat:nth-child(4) {
         border-top: 1px solid var(--ink);
         border-right: none;
     }
@@ -477,7 +875,7 @@
         grid-template-columns: 1fr;
     }
 
-    /* Les widgets perdent leur border-right — remplacé par border-bottom */
+    /* Widget colonne gauche : no border-right, border-bottom à la place */
     .db-widget {
         border-right: none;
         border-bottom: 1px solid var(--ink);
@@ -487,7 +885,7 @@
         border-bottom: none;
     }
 
-    /* Accès rapides : 2×2 conservé (lisible sur mobile) */
+    /* Accès rapides : 2×2 conservé */
     .db-quicklinks {
         grid-template-columns: 1fr 1fr;
     }
@@ -498,133 +896,225 @@
 
 {% block content %}
 
-{# ── Préparation des données ──────────────────────────────────────────────────
-   On extrait le prénom/pseudo depuis l'email (partie avant @).
-   Twig n'a pas de filtre "ucfirst" natif, donc on utilise |capitalize.
-   Exemple : "marie.dupont@gmail.com" → "Marie.dupont" → on affiche tel quel.
-#}
-{% set username = app.user.email|split('@')|first|upper %}
-
 {#
-    Récupère le nombre de notifications non lues via la fonction Twig
-    unread_notifications_count() (déclarée dans la Twig Extension du projet).
-    Cela évite d'injecter cette valeur dans chaque contrôleur séparément.
-#}
+ # ── Préparation des variables ─────────────────────────────────────────────────
+ #
+ # On calcule ici toutes les valeurs nécessaires AVANT de les utiliser dans le HTML.
+ # Cela évite de mélanger logique et présentation dans le template.
+ #}
+
+{# Nombre de notifications non lues (via l'extension Twig NotificationExtension) #}
 {% set notifCount = unread_notifications_count() %}
 
-{# ── HÉRO BANDE SOMBRE ────────────────────────────────────────────────────────
-   Fond --ink, greeting géant en Archivo Black, badges de rôles
+{# Nom d'affichage :
+   priorité 1 — displayName du profil artiste
+   priorité 2 — partie avant @ de l'email, en majuscules
 #}
-<div class="db-hero">
+{% set displayName = (user.artistProfile is not null and user.artistProfile.displayName is not empty)
+    ? user.artistProfile.displayName
+    : (user.email|split('@')|first|upper) %}
 
-    {# Date du jour avec point vert comme "eyebrow" dans le prototype #}
-    <div class="db-hero__eyebrow">
+{# Initiales pour l'avatar (2 premiers caractères du displayName) #}
+{% set initials = displayName|slice(0, 2)|upper %}
+
+{# Calcul du score de complétude du profil (sur 4 éléments) :
+   1. Email vérifié (on considère que si l'utilisateur est connecté, son compte est actif)
+   2. Profil artiste créé
+   3. Bio renseignée
+   4. Localisation renseignée
+#}
+{% set completenessItems = 4 %}
+{% set completenessScore = 1 %} {# email vérifié — toujours acquis #}
+{% if user.artistProfile is not null %}
+    {% set completenessScore = completenessScore + 1 %}
+    {% if user.artistProfile.bio is not null and user.artistProfile.bio is not empty %}
+        {% set completenessScore = completenessScore + 1 %}
+    {% endif %}
+    {% if user.artistProfile.location is not null and user.artistProfile.location is not empty %}
+        {% set completenessScore = completenessScore + 1 %}
+    {% endif %}
+{% endif %}
+{% set completenessPercent = ((completenessScore / completenessItems) * 100)|round %}
+
+
+{# ══════════════════════════════════════════════════════════════════════════════
+   1. PROFILE BANNER — bandeau sombre pleine largeur
+   Reprend le "profile-banner" du prototype Dashboard Artiste.
+   Fond --ink, nom en Archivo Black géant + Instrument Serif italic.
+══════════════════════════════════════════════════════════════════════════════ #}
+<div class="db-banner">
+
+    {# Avatar carré — initiales en Archivo Black #}
+    <div class="db-banner__avatar" aria-hidden="true">
+        {{ initials }}
+    </div>
+
+    {# Corps central : date + greeting + disciplines + chips rôles #}
+    <div class="db-banner__body">
+
+        {# Eyebrow : date du jour en mono discret avec point vert #}
+        <div class="db-banner__eyebrow">
+            {#
+                |date utilise le format PHP (pas ICU).
+                "d F Y" → ex : "24 mai 2026" mais la langue dépend de la locale PHP.
+                On préfère "d/m/Y" plus sûr sans configuration de locale.
+            #}
+            {{ "now"|date("d/m/Y") }}
+        </div>
+
         {#
-            CORRECTION W5 : "d MMMM Y" utilisait des codes ICU (MMMM = mois long, Y = année ISO).
-            Le filtre |date de Twig passe le format à la fonction date() de PHP, qui utilise
-            ses propres codes (différents de ICU) :
-              - F = nom complet du mois en anglais (mais la locale PHP détermine la langue)
-              - d = jour sur 2 chiffres, Y = année sur 4 chiffres
-            En production française sans configuration de locale PHP garantie,
-            le format d/m/Y est plus sûr et lisible partout.
+            Greeting géant : "BONJOUR," en blanc + prénom en Instrument Serif italic orange.
+            Utilise <p> et non <h1> car base_app.html.twig rend déjà "Tableau de bord"
+            dans un <h1 class="topbar__title"> — une seule balise H1 par page (HTML5 + WCAG).
+            Le styling est identique au prototype : Archivo Black, clamp 32–56px.
         #}
-        {{ "now"|date("d/m/Y") }}
+        <p class="db-banner__greeting">
+            Bonjour,<br><span class="it">{{ displayName|e }}.</span>
+        </p>
+
+        {#
+            Sous-titre : location si disponible, sinon rôle principal.
+            Affiché en mono uppercase comme "VIDÉO · MARSEILLE" dans le proto.
+            Convention du projet : pas d'emoji dans le code — SVG à la place.
+        #}
+        <div class="db-banner__meta">
+            {% if user.artistProfile is not null and user.artistProfile.location is not null %}
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"
+                     aria-hidden="true" style="display:inline-block; vertical-align:middle; margin-right:4px; opacity:.7;">
+                    <path d="M12 2C8.1 2 5 5.1 5 9c0 5.3 7 13 7 13s7-7.7 7-13c0-3.9-3.1-7-7-7zm0 9.5c-1.4 0-2.5-1.1-2.5-2.5S10.6 6.5 12 6.5 14.5 7.6 14.5 9 13.4 11.5 12 11.5z"/>
+                </svg>
+                {{ user.artistProfile.location|e }}
+            {% else %}
+                BazaArt · Plateforme
+            {% endif %}
+        </div>
+
+        {# Chips de rôles — limités aux rôles V1 #}
+        <div class="db-banner__chips">
+            {% if is_granted('ROLE_ARTIST') %}
+                <span class="db-bchip db-bchip--accent">★ Artiste</span>
+            {% endif %}
+            {% if is_granted('ROLE_STRUCTURE') %}
+                <span class="db-bchip db-bchip--accent2">Structure</span>
+            {% endif %}
+            {% if not is_granted('ROLE_ARTIST') and not is_granted('ROLE_STRUCTURE') %}
+                <span class="db-bchip">Membre</span>
+            {% endif %}
+        </div>
+
     </div>
 
-    {# Greeting en Archivo Black — uppercase comme dans le maquette #}
-    <h1 class="db-hero__greeting">
-        Bonjour,<br>{{ username }}.
-    </h1>
-
-    {# Badges de rôles actifs — utilise is_granted() qui respecte la hiérarchie
-       de rôles déclarée dans security.yaml (ROLE_ADMIN hérite de tout, etc.) #}
-    <div class="db-hero__roles">
+    {# Zone droite : URL du profil + bouton (masquée sur mobile) #}
+    <div class="db-banner__cta">
+        <div class="db-banner__url-box">
+            <small class="db-banner__url-label">Profil public</small>
+            <span class="db-banner__url-value">
+                bazaart.fr/{{ displayName|lower|replace({' ': '-'})|e }}
+            </span>
+        </div>
         {% if is_granted('ROLE_ARTIST') %}
-            <span class="db-chip db-chip--accent">Artiste</span>
-        {% endif %}
-        {% if is_granted('ROLE_STRUCTURE') %}
-            <span class="db-chip db-chip--accent2">Structure</span>
-        {% endif %}
-        {% if is_granted('ROLE_ADMIN') %}
-            <span class="db-chip db-chip--muted">Admin</span>
-        {% endif %}
-        {% if not is_granted('ROLE_ARTIST') and not is_granted('ROLE_STRUCTURE') and not is_granted('ROLE_ADMIN') %}
-            <span class="db-chip db-chip--muted">Membre</span>
+            <a href="{{ path('app_artist_profile_show') }}" class="db-btn-profile">
+                ↗ Voir mon profil
+            </a>
+        {% elseif is_granted('ROLE_STRUCTURE') %}
+            <a href="{{ path('app_structure_dashboard') }}" class="db-btn-profile">
+                ↗ Espace Structure
+            </a>
+        {% else %}
+            <a href="{{ path('app_org_profile_show') }}" class="db-btn-profile">
+                ↗ Mon organisation
+            </a>
         {% endif %}
     </div>
 
 </div>
 
-{# ── BANDE DE STATS ───────────────────────────────────────────────────────────
-   Fond vert acide (--accent), 3 colonnes séparées par --ink
-   Les valeurs sont partiellement dynamiques selon ce que le contrôleur fournit.
-#}
-<div class="db-stats">
 
-    {# Stat 1 : ressources récentes disponibles #}
-    <div class="db-stat">
-        <div class="db-stat__value">{{ recent_resources|length }}</div>
-        <div class="db-stat__label">Ressources récentes</div>
+{# ══════════════════════════════════════════════════════════════════════════════
+   2. STATS STRIP — 4 colonnes colorées (inspiré du "hero-strip" du prototype)
+   Chaque colonne = 1 métrique clé, fond coloré distinctif.
+
+   TODO V2 : remplacer les 4 stats par :
+   Col 1 = candidatures actives | Col 2 = aides obtenues | Col 3 = cumul € | Col 4 = followers
+══════════════════════════════════════════════════════════════════════════════ #}
+<div class="db-stats" aria-label="Statistiques du tableau de bord">
+
+    {# Stat 1 — vert acide : mes soumissions (données réelles) #}
+    <div class="db-stat db-stat--lime">
+        <strong class="db-stat__value">{{ submissions|default(0) }}</strong>
+        <small class="db-stat__label">Mes soumissions</small>
     </div>
 
-    {# Stat 2 : mes soumissions (compteur personnel) #}
-    <div class="db-stat">
-        <div class="db-stat__value">{{ submissions|default(0) }}</div>
-        <div class="db-stat__label">Mes soumissions</div>
+    {# Stat 2 — orange : ressources disponibles dans le feed #}
+    <div class="db-stat db-stat--orange">
+        <strong class="db-stat__value">{{ recent_resources|length }}</strong>
+        <small class="db-stat__label">Ressources récentes</small>
     </div>
 
-    {# Stat 3 : notifications non lues #}
-    <div class="db-stat">
-        <div class="db-stat__value">{{ notifCount }}</div>
-        <div class="db-stat__label">Notifications</div>
+    {# Stat 3 — fond sombre : posts récents dans la communauté #}
+    <div class="db-stat db-stat--dark">
+        <strong class="db-stat__value">{{ recent_posts|length }}</strong>
+        <small class="db-stat__label">Posts récents</small>
+    </div>
+
+    {# Stat 4 — fond sable alternatif : notifications non lues #}
+    <div class="db-stat db-stat--alt">
+        <strong class="db-stat__value">{{ notifCount|default(0) }}</strong>
+        <small class="db-stat__label">Notifications</small>
     </div>
 
 </div>
 
-{# ── GRILLE DE WIDGETS ────────────────────────────────────────────────────────
-   2 colonnes : colonne gauche large (ressources + communauté), droite étroite (rapides + notifs)
-#}
+
+{# ══════════════════════════════════════════════════════════════════════════════
+   3. GRILLE PRINCIPALE — 2 colonnes (2fr / 1fr)
+
+   Colonne gauche  : Ressources récentes + Communauté (posts)
+   Colonne droite  : Accès rapides + Complétude profil + Notifications
+══════════════════════════════════════════════════════════════════════════════ #}
 <div class="db-widgets">
 
-    {# ── COLONNE GAUCHE ─────────────────────────────────────────── #}
+
+    {# ── COLONNE GAUCHE ──────────────────────────────────────────────────────── #}
     <div class="db-widget">
 
-        {# Widget A : Mes ressources récentes #}
+        {# ┄┄ Widget A : Ressources récentes ┄┄ #}
         <div class="db-widget__head">
-            <span class="db-widget__title">Ressources récentes</span>
+            <span class="db-widget__title">
+                Ressources récentes <span class="it">pour toi</span>
+            </span>
             <a href="{{ path('app_resource_index') }}" class="db-widget__link">
                 Tout voir →
             </a>
         </div>
 
-        {# Liste des ressources passées par le contrôleur.
-           Le contrôleur passe "recent_resources" = les 5 dernières publiées.
-           Si la liste est vide, on affiche un CTA pour soumettre. #}
+        {#
+            Liste des ressources transmises par le contrôleur (5 dernières publiées).
+            Chaque ressource est un lien cliquable vers sa page de détail.
+        #}
         {% if recent_resources is defined and recent_resources|length > 0 %}
 
             {% for resource in recent_resources %}
                 <a href="{{ path('app_resource_show', {id: resource.id}) }}" class="db-resource-row">
 
-                    {# Type / catégorie en mono uppercase #}
+                    {# Type / catégorie de la ressource (ex: "RÉSIDENCE", "BOURSE") #}
                     <div class="db-resource-row__type">
                         {#
-                            CORRECTION W4 : `is defined` teste l'existence d'une variable Twig,
-                            pas la valeur d'une propriété d'objet. Sur une propriété d'entité
-                            Doctrine, `is defined` renvoie toujours true (la propriété existe
-                            sur l'objet), même quand la valeur est null.
-                            La bonne façon de tester une valeur absente : `is not null`.
+                            `resource.resourceType is not null` avant d'accéder à .name.
+                            Twig lève une erreur si on appelle .name sur null.
+                            `is not null` est la bonne façon de tester une propriété Doctrine
+                            (contrairement à `is defined` qui teste une variable Twig).
                         #}
-                        {{ resource.resourceType is not null ? resource.resourceType.name|upper : 'Ressource' }}
+                        {{ resource.resourceType is not null ? resource.resourceType.name|upper|e : 'Ressource' }}
                     </div>
 
-                    {# Titre + flèche alignée à droite #}
+                    {# Titre de la ressource + flèche alignée à droite #}
                     <div class="db-resource-row__title">
-                        <span>{{ resource.title }}</span>
-                        <span style="color: var(--ink-mute); flex-shrink: 0;">→</span>
+                        <span>{{ resource.title|e }}</span>
+                        <span class="db-resource-row__arrow">→</span>
                     </div>
 
-                    {# Deadline si disponible #}
-                    {# CORRECTION W4 (suite) : même raison — `is defined` → `is not null` #}
+                    {# Deadline si disponible (format : "J-21 · 12 juin") #}
                     {% if resource.deadline is not null %}
                         <div class="db-resource-row__meta">
                             Deadline : {{ resource.deadline|date('d M.') }}
@@ -636,9 +1126,9 @@
 
         {% else %}
 
-            {# État vide : invite à soumettre une ressource #}
+            {# État vide : aucune ressource disponible #}
             <div class="db-empty">
-                <div class="db-empty__text">Aucune ressource soumise</div>
+                <div class="db-empty__text">Aucune ressource disponible</div>
                 <a href="{{ path('app_resource_submit') }}" class="db-empty__link">
                     Soumettre une ressource →
                 </a>
@@ -646,38 +1136,55 @@
 
         {% endif %}
 
-        {# Widget B : Communauté (posts récents) #}
+
+        {# ┄┄ Widget B : Communauté — posts récents ┄┄ #}
         <div class="db-widget__head" style="border-top: 1px solid var(--ink);">
-            <span class="db-widget__title">Communauté</span>
+            <span class="db-widget__title">
+                Communauté <span class="it">fil récent</span>
+            </span>
             <a href="{{ path('app_post_feed') }}" class="db-widget__link">
                 Voir le fil →
             </a>
         </div>
 
-        {# Posts récents passés par le contrôleur (max 3).
-           recent_posts contient des objets Post avec .author, .content, .createdAt #}
+        {#
+            Posts récents transmis par le contrôleur (max 3).
+            Chaque post a un auteur, un contenu et une date de création.
+        #}
         {% if recent_posts is defined and recent_posts|length > 0 %}
+
+            {# Couleurs d'avatar en rotation (3 styles disponibles) #}
+            {% set avatarStyles = ['', '--dark', '--orange'] %}
 
             {% for post in recent_posts %}
                 <div class="db-post-row">
 
-                    {# Avatar carré avec initiales de l'auteur (Street = carré) #}
-                    <div class="db-avatar">
+                    {# Avatar carré avec initiales (2 premiers chars de l'email de l'auteur) #}
+                    <div class="db-avatar db-avatar{{ avatarStyles[loop.index0] }}"
+                         aria-hidden="true">
                         {{ post.author.email|slice(0, 2)|upper }}
                     </div>
 
                     <div class="db-post-row__content">
                         <div>
+                            {# Pseudo (partie avant @ de l'email) #}
                             <span class="db-post-row__name">
-                                {{ post.author.email|split('@')|first }}
+                                {{ post.author.email|split('@')|first|e }}
                             </span>
+                            {# Date en format court #}
                             <span class="db-post-row__date">
                                 · {{ post.createdAt|date('d/m') }}
                             </span>
                         </div>
-                        {# Extrait du post — tronqué à 90 caractères #}
+
+                        {#
+                            Extrait du post tronqué à 90 caractères.
+                            |e pour l'échappement XSS — contenu utilisateur.
+                            Note du reviewer : post.content|slice(0, 90) sans |e était
+                            une faille XSS signalée dans l'audit précédent — corrigé ici.
+                        #}
                         <div class="db-post-row__text">
-                            {{ post.content|slice(0, 90) }}{% if post.content|length > 90 %}…{% endif %}
+                            {{ post.content|slice(0, 90)|e }}{% if post.content|length > 90 %}…{% endif %}
                         </div>
                     </div>
 
@@ -686,92 +1193,95 @@
 
         {% else %}
 
-            {# État vide communauté #}
             <div class="db-empty" style="padding: 20px 18px;">
                 <div class="db-empty__text">Aucune publication récente</div>
             </div>
 
         {% endif %}
 
-    </div>
+        {# TODO V2 : ajouter ici la section "Mes candidatures" avec barres de progression #}
+        {# TODO V2 : ajouter le widget "Agenda / Cette semaine" (mini calendrier) #}
 
-    {# ── COLONNE DROITE ─────────────────────────────────────────── #}
+    </div>{# fin .db-widget colonne gauche #}
+
+
+    {# ── COLONNE DROITE ──────────────────────────────────────────────────────── #}
     <div class="db-widget db-aside">
 
-        {# En-tête de la colonne droite #}
+        {# ┄┄ Widget C : Accès rapides (grille 2×2) ┄┄ #}
         <div class="db-widget__head">
             <span class="db-widget__title">Accès rapides</span>
         </div>
 
-        {# Grille 2×2 de boutons d'accès rapide.
-           Chaque bouton a une icône SVG + label en mono uppercase.
-           Les icônes sont des paths SVG inline — pas de dépendance externe. #}
+        {#
+            Grille 2×2 de liens d'action fréquents.
+            Icônes SVG inline (pas de dépendance externe — choix V1).
+            Hover : fond --accent (lime) pour l'affordance visuelle.
+        #}
         <div class="db-quicklinks">
 
-            {# Bouton 1 : Explorer les ressources #}
+            {# 1. Explorer les ressources #}
             <a href="{{ path('app_resource_index') }}"
                class="db-quicklink"
-               title="Explorer les ressources">
-                {# Icône "liste" #}
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
-                     aria-hidden="true">
+               title="Explorer toutes les ressources">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.7"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
                 </svg>
                 Ressources
             </a>
 
-            {# Bouton 2 : Mes favoris #}
+            {# 2. Mes favoris #}
             <a href="{{ path('app_resource_favorites') }}"
                class="db-quicklink"
-               title="Mes favoris">
-                {# Icône "cœur" #}
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
-                     aria-hidden="true">
+               title="Mes ressources favorites">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.7"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M12 21s-7-4.5-9.5-9C.7 8 3 4 6.5 4 9 4 10.5 5.5 12 7.5 13.5 5.5 15 4 17.5 4 21 4 23.3 8 21.5 12 19 16.5 12 21 12 21z"/>
                 </svg>
                 Favoris
             </a>
 
-            {# Bouton 3 : Forum #}
+            {# 3. Forum #}
             <a href="{{ path('app_forum_index') }}"
                class="db-quicklink"
-               title="Forum">
-                {# Icône "bulle de message" #}
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
-                     aria-hidden="true">
+               title="Aller au forum">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.7"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9 8.5 8.5 0 0 1 8.5 8.5z"/>
                 </svg>
                 Forum
             </a>
 
-            {# Bouton 4 : Messages #}
+            {# 4. Messagerie privée #}
             <a href="{{ path('app_messaging_index') }}"
                class="db-quicklink"
                title="Messagerie privée">
-                {# Icône "enveloppe / mail" #}
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
-                     aria-hidden="true">
-                    <path d="M4 4h16v16H4z"/>
-                    <path d="m4 4 8 8 8-8"/>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.7"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="2" y="4" width="20" height="16"/>
+                    <path d="m2 4 10 9 10-9"/>
                 </svg>
                 Messages
             </a>
 
-        </div>
+        </div>{# fin .db-quicklinks #}
 
-        {# ── Widget Notifications ──────────────────────────────────
-           Affiché uniquement s'il y a des notifications non lues.
-           Fond vert acide pour attirer l'attention.
+
+        {# ┄┄ Widget D : Notifications non lues ┄┄
+           Affiché uniquement si notifCount > 0.
+           Fond vert acide (--accent) pour attirer l'attention.
         #}
         {% if notifCount > 0 %}
             <div class="db-notif-widget">
                 <span class="db-notif-widget__text">
-                    {# "1 notification" vs "X notifications" #}
-                    {{ notifCount }} notification{{ notifCount > 1 ? 's' : '' }} non lue{{ notifCount > 1 ? 's' : '' }}
+                    {# Accords français : "1 notification" vs "X notifications" #}
+                    {{ notifCount }} notification{{ notifCount > 1 ? 's' : '' }}
+                    non lue{{ notifCount > 1 ? 's' : '' }}
                 </span>
                 <a href="{{ path('app_notification_index') }}" class="db-btn-dark">
                     Voir →
@@ -779,47 +1289,131 @@
             </div>
         {% endif %}
 
-        {# ── Lien profil artiste ──────────────────────────────────
-           Visible si l'utilisateur a le rôle ROLE_ARTIST.
-           Pour les structures, on pointe vers l'espace structure.
+
+        {# ┄┄ Widget E : Complétude du profil ┄┄
+           Checklist semi-statique : vérifie si les champs clés sont remplis.
+           Score calculé dans la section Préparation en haut du template.
         #}
-        <div style="padding: 14px 18px; border-top: 1px solid var(--line-soft); margin-top: auto;">
+        <div class="db-complete">
+
+            <div class="db-complete__head">
+                <span class="db-complete__label">Mon profil</span>
+                <span class="db-complete__score">{{ completenessPercent }}%</span>
+            </div>
+
+            {# Barre de progression proportionnelle au score #}
+            <div class="db-complete__bar" role="progressbar"
+                 aria-valuenow="{{ completenessPercent }}"
+                 aria-valuemin="0" aria-valuemax="100"
+                 aria-label="Complétude du profil : {{ completenessPercent }}%">
+                <div class="db-complete__bar-fill" style="width: {{ completenessPercent }}%;"></div>
+            </div>
+
+            {# Checklist des éléments de complétude #}
+            <ul class="db-checklist">
+
+                {# Élément 1 : compte actif (toujours acquis si connecté) #}
+                <li>
+                    <span class="db-check" aria-hidden="true">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="3.5"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m5 12 5 5L20 7"/>
+                        </svg>
+                    </span>
+                    Compte actif
+                </li>
+
+                {# Élément 2 : profil artiste créé #}
+                {% if user.artistProfile is not null %}
+                    <li>
+                        <span class="db-check" aria-hidden="true">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="3.5"
+                                 stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m5 12 5 5L20 7"/>
+                            </svg>
+                        </span>
+                        Profil artiste créé
+                    </li>
+                {% else %}
+                    <li class="db-todo">
+                        <span class="db-check db-check--empty" aria-hidden="true"></span>
+                        <strong>Profil artiste</strong> · à créer
+                    </li>
+                {% endif %}
+
+                {# Élément 3 : biographie renseignée #}
+                {% if user.artistProfile is not null and user.artistProfile.bio is not null and user.artistProfile.bio is not empty %}
+                    <li>
+                        <span class="db-check" aria-hidden="true">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="3.5"
+                                 stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m5 12 5 5L20 7"/>
+                            </svg>
+                        </span>
+                        Biographie
+                    </li>
+                {% else %}
+                    <li class="db-todo">
+                        <span class="db-check db-check--empty" aria-hidden="true"></span>
+                        <strong>Biographie</strong> · à rédiger
+                    </li>
+                {% endif %}
+
+                {# Élément 4 : localisation renseignée #}
+                {% if user.artistProfile is not null and user.artistProfile.location is not null and user.artistProfile.location is not empty %}
+                    <li>
+                        <span class="db-check" aria-hidden="true">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="3.5"
+                                 stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m5 12 5 5L20 7"/>
+                            </svg>
+                        </span>
+                        Ville / localisation
+                    </li>
+                {% else %}
+                    <li class="db-todo">
+                        <span class="db-check db-check--empty" aria-hidden="true"></span>
+                        <strong>Localisation</strong> · à ajouter
+                    </li>
+                {% endif %}
+
+            </ul>
+
+            {# TODO V2 : ajouter vidéo de présentation, lien portfolio externe, disciplines #}
+
+        </div>{# fin .db-complete #}
+
+
+        {# ┄┄ Lien profil en bas de la sidebar ┄┄ #}
+        <div class="db-profile-link">
             {% if is_granted('ROLE_ARTIST') %}
-                <a href="{{ path('app_artist_profile_show') }}"
-                   style="font-family: var(--mono); font-size: 11px; font-weight: 600;
-                          letter-spacing: .04em; text-transform: uppercase;
-                          color: var(--ink); text-decoration: none;
-                          display: flex; align-items: center; gap: 6px;">
+                <a href="{{ path('app_artist_profile_show') }}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
-                         aria-hidden="true">
+                         stroke="currentColor" stroke-width="1.7"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <circle cx="12" cy="8" r="4"/>
                         <path d="M4 21a8 8 0 0 1 16 0"/>
                     </svg>
                     Mon profil artiste →
                 </a>
             {% elseif is_granted('ROLE_STRUCTURE') %}
-                <a href="{{ path('app_structure_dashboard') }}"
-                   style="font-family: var(--mono); font-size: 11px; font-weight: 600;
-                          letter-spacing: .04em; text-transform: uppercase;
-                          color: var(--ink); text-decoration: none;
-                          display: flex; align-items: center; gap: 6px;">
+                <a href="{{ path('app_structure_dashboard') }}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
-                         aria-hidden="true">
+                         stroke="currentColor" stroke-width="1.7"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M3 11 12 4l9 7v9h-6v-6h-6v6H3z"/>
                     </svg>
                     Espace Structure →
                 </a>
             {% else %}
-                <a href="{{ path('app_org_profile_show') }}"
-                   style="font-family: var(--mono); font-size: 11px; font-weight: 600;
-                          letter-spacing: .04em; text-transform: uppercase;
-                          color: var(--ink); text-decoration: none;
-                          display: flex; align-items: center; gap: 6px;">
+                <a href="{{ path('app_org_profile_show') }}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
-                         aria-hidden="true">
+                         stroke="currentColor" stroke-width="1.7"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <circle cx="12" cy="8" r="4"/>
                         <path d="M4 21a8 8 0 0 1 16 0"/>
                     </svg>
@@ -828,8 +1422,8 @@
             {% endif %}
         </div>
 
-    </div>
+    </div>{# fin .db-widget.db-aside colonne droite #}
 
-</div>
+</div>{# fin .db-widgets #}
 
 {% endblock %}

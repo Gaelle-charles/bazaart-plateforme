@@ -1,0 +1,588 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # course/learn.html.twig — Espace apprenant (vue d'ensemble de la formation)
+ #
+ # Accessible uniquement aux utilisateurs inscrits (et aux admins).
+ # Affiche le plan de cours avec l'état de progression de chaque leçon,
+ # et la barre de progression globale.
+ #
+ # Variables disponibles :
+ #   - course      : Course
+ #   - enrollment  : CourseEnrollment|null (null si admin non inscrit)
+ #   - modules     : Collection<CourseModule> (avec leçons incluses)
+ #   - progresses  : array<int, LessonProgress> indexé par lesson.id
+ #
+ # Layout : deux colonnes
+ #   Gauche  : sidebar plan de cours (modules > leçons avec statut)
+ #   Droite  : barre de progression globale + call-to-action "Commencer"
+ #}
+
+{% block page_title %}{{ course.title|e }}{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+    /*
+     * ── ESPACE APPRENANT — Styles ────────────────────────────────────────────
+     * Préfixe .cf- (course-formation)
+     * border-radius: 0 partout — thème Street
+     */
+
+    /* ── Layout deux colonnes ────────────────────────────────────────────── */
+    .cf-learn {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 0;
+        border: 1px solid var(--ink);
+        min-height: 60vh;
+    }
+
+    @media (max-width: 768px) {
+        .cf-learn {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ── Sidebar plan de cours ───────────────────────────────────────────── */
+    .cf-learn__sidebar {
+        border-right: 1px solid var(--ink);
+        background: var(--bg);
+    }
+
+    @media (max-width: 768px) {
+        .cf-learn__sidebar {
+            border-right: none;
+            border-bottom: 1px solid var(--ink);
+        }
+    }
+
+    /* En-tête sidebar */
+    .cf-learn__sidebar-header {
+        padding: 14px 16px;
+        background: var(--ink);
+        color: var(--bg);
+    }
+
+    .cf-learn__sidebar-title {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        margin: 0;
+    }
+
+    /* Module dans la sidebar */
+    .cf-learn__module {
+        border-bottom: 1px solid var(--line-soft);
+    }
+
+    .cf-learn__module:last-child { border-bottom: none; }
+
+    .cf-learn__module-title {
+        padding: 10px 16px;
+        font-family: var(--display);
+        font-size: 11px;
+        font-weight: 400;
+        letter-spacing: -.01em;
+        color: var(--ink);
+        background: var(--bg-alt);
+        border-bottom: 1px solid var(--line-soft);
+        margin: 0;
+    }
+
+    /* Liste de leçons */
+    .cf-learn__lessons {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .cf-learn__lesson {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 12px;
+        text-decoration: none;
+        color: var(--ink);
+        transition: background var(--transition-fast);
+    }
+
+    .cf-learn__lesson:last-child { border-bottom: none; }
+
+    .cf-learn__lesson:hover {
+        background: var(--bg-alt);
+    }
+
+    /* Indicateurs d'état de la leçon */
+    .cf-learn__lesson-status {
+        flex-shrink: 0;
+        width: 14px;
+        height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Leçon terminée : fond vert acide */
+    .cf-learn__lesson--completed .cf-learn__lesson-status {
+        background: var(--accent);
+        color: var(--ink);
+        border: 1px solid var(--accent);
+    }
+
+    /* Leçon en cours : tiret orange */
+    .cf-learn__lesson--started .cf-learn__lesson-status {
+        background: transparent;
+        color: var(--accent-2);
+        border: 1px solid var(--accent-2);
+    }
+
+    /* Leçon non commencée : cercle vide */
+    .cf-learn__lesson--todo .cf-learn__lesson-status {
+        border: 1px solid var(--line-soft);
+        color: transparent;
+    }
+
+    .cf-learn__lesson-name {
+        flex: 1;
+        line-height: 1.3;
+    }
+
+    /* Leçon terminée = texte atténué */
+    .cf-learn__lesson--completed .cf-learn__lesson-name {
+        color: var(--ink-mute);
+    }
+
+    .cf-learn__lesson-duration {
+        font-family: var(--mono);
+        font-size: 9px;
+        color: var(--ink-mute);
+        letter-spacing: .03em;
+        white-space: nowrap;
+    }
+
+    /* ── Zone principale (droite) ────────────────────────────────────────── */
+    .cf-learn__main {
+        padding: 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    @media (max-width: 640px) {
+        .cf-learn__main { padding: 16px; }
+    }
+
+    /* Carte de progression globale */
+    .cf-progress-card {
+        border: 1px solid var(--ink);
+    }
+
+    .cf-progress-card__header {
+        padding: 12px 20px;
+        background: var(--ink);
+        color: var(--bg);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .cf-progress-card__label {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+    }
+
+    .cf-progress-card__percent {
+        font-family: var(--display);
+        font-size: 20px;
+        color: var(--accent);
+    }
+
+    .cf-progress-card__body {
+        padding: 20px;
+    }
+
+    /* Barre de progression */
+    .cf-progress-bar {
+        height: 8px;
+        background: var(--bg-alt);
+        border: 1px solid var(--line-soft);
+        margin-bottom: 16px;
+        overflow: hidden;
+    }
+
+    .cf-progress-bar__fill {
+        height: 100%;
+        background: var(--accent);
+        transition: width .4s ease;
+    }
+
+    /* CTA commencer/continuer */
+    .cf-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        font-family: var(--display);
+        font-size: 13px;
+        letter-spacing: -.01em;
+        text-transform: uppercase;
+        text-decoration: none;
+        border: 1px solid var(--ink);
+        background: var(--ink);
+        color: var(--bg);
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+
+    .cf-btn:hover {
+        background: var(--accent);
+        color: var(--ink);
+        border-color: var(--accent);
+    }
+
+    /* Badge "Formation terminée" */
+    .cf-completed-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        background: var(--accent);
+        color: var(--ink);
+        border: 1px solid var(--accent);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+    }
+
+    /* Légende des statuts */
+    .cf-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 16px 0;
+        border-top: 1px solid var(--line-soft);
+        margin-top: 16px;
+    }
+
+    .cf-legend__item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    .cf-legend__dot {
+        width: 10px;
+        height: 10px;
+        border: 1px solid currentColor;
+        flex-shrink: 0;
+    }
+
+    .cf-legend__dot--done    { background: var(--accent); border-color: var(--accent); color: var(--accent); }
+    .cf-legend__dot--started { background: transparent;   border-color: var(--accent-2); color: var(--accent-2); }
+    .cf-legend__dot--todo    { background: transparent;   border-color: var(--line-soft); color: var(--ink-mute); }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+{#
+ # En-tête : titre + retour vers la page de vente
+ #}
+<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 8px;">
+    <div>
+        {#
+         # Pas de <h2> ici : le <h1> dans la topbar du layout suffit.
+         # On ajoute juste le nom du formateur si disponible.
+         #}
+        {% if course.instructorName is not null %}
+            <p style="font-family: var(--mono); font-size: 10px; color: var(--ink-mute);
+                      letter-spacing: .06em; text-transform: uppercase; margin: 0;">
+                {{ course.instructorName|e }}
+            </p>
+        {% endif %}
+    </div>
+    <a href="{{ path('app_course_show', {slug: course.slug}) }}"
+       style="font-family: var(--mono); font-size: 11px; color: var(--ink-mute);
+              text-decoration: none; letter-spacing: .04em;">
+        {# Icône flèche gauche #}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"
+             style="display: inline; vertical-align: middle; margin-right: 4px;"
+             aria-hidden="true">
+            <line x1="19" y1="12" x2="5" y2="12"/>
+            <polyline points="12 19 5 12 12 5"/>
+        </svg>
+        Retour à la présentation
+    </a>
+</div>
+
+{# ── LAYOUT DEUX COLONNES ──────────────────────────────────────────────────── #}
+<div class="cf-learn">
+
+    {# ── SIDEBAR : PLAN DE COURS ──────────────────────────────────────────── #}
+    <nav class="cf-learn__sidebar" aria-label="Plan de la formation">
+
+        <div class="cf-learn__sidebar-header">
+            <h2 class="cf-learn__sidebar-title">Plan de la formation</h2>
+        </div>
+
+        {# Parcours de tous les modules et leurs leçons #}
+        {% for module in modules %}
+            <div class="cf-learn__module">
+
+                <h3 class="cf-learn__module-title">
+                    {{ loop.index }}. {{ module.title|e }}
+                </h3>
+
+                {% if module.lessons is not empty %}
+                    <ul class="cf-learn__lessons">
+
+                        {% for lesson in module.lessons %}
+                            {#
+                             # Détermination du statut de la leçon :
+                             #   - progresses[lesson.id] existe ? → started ou completed
+                             #   - Sinon → todo
+                             # progresses est un tableau PHP indexé par lesson.id
+                             # (construit dans CourseController::learn()).
+                             #}
+                            {% set lessonProgress = progresses[lesson.id] ?? null %}
+                            {% if lessonProgress is not null and lessonProgress.isCompleted() %}
+                                {% set lessonStatus = 'completed' %}
+                            {% elseif lessonProgress is not null and lessonProgress.isStarted() %}
+                                {% set lessonStatus = 'started' %}
+                            {% else %}
+                                {% set lessonStatus = 'todo' %}
+                            {% endif %}
+
+                            {#
+                             # Lien vers le lecteur de leçon.
+                             # Si l'enrollment est null (admin en prévisualisation),
+                             # on affiche quand même le lien mais sans progression.
+                             #}
+                            <li>
+                                <a href="{{ path('app_course_lesson', {slug: course.slug, lessonId: lesson.id}) }}"
+                                   class="cf-learn__lesson cf-learn__lesson--{{ lessonStatus }}"
+                                   aria-label="{{ lesson.title|e }} — {{ lessonStatus == 'completed' ? 'terminée' : (lessonStatus == 'started' ? 'en cours' : 'non commencée') }}">
+
+                                    {# Indicateur de statut : check, tiret, ou vide #}
+                                    <span class="cf-learn__lesson-status" aria-hidden="true">
+                                        {% if lessonStatus == 'completed' %}
+                                            {# Coche SVG #}
+                                            <svg width="8" height="8" viewBox="0 0 24 24"
+                                                 fill="none" stroke="currentColor"
+                                                 stroke-width="3" stroke-linecap="round"
+                                                 stroke-linejoin="round">
+                                                <path d="M20 6L9 17l-5-5"/>
+                                            </svg>
+                                        {% elseif lessonStatus == 'started' %}
+                                            {# Tiret = en cours #}
+                                            <svg width="8" height="8" viewBox="0 0 24 24"
+                                                 fill="none" stroke="currentColor"
+                                                 stroke-width="3" stroke-linecap="round">
+                                                <line x1="5" y1="12" x2="19" y2="12"/>
+                                            </svg>
+                                        {% endif %}
+                                    </span>
+
+                                    <span class="cf-learn__lesson-name">{{ lesson.title|e }}</span>
+
+                                    {# Durée si renseignée #}
+                                    {% if lesson.durationMinutes is not null %}
+                                        <span class="cf-learn__lesson-duration">
+                                            {{ lesson.durationMinutes }}min
+                                        </span>
+                                    {% endif %}
+
+                                </a>
+                            </li>
+
+                        {% endfor %}
+
+                    </ul>
+                {% else %}
+                    {# Module sans leçons (en construction) #}
+                    <p style="padding: 8px 16px; font-size: 11px; color: var(--ink-mute); margin: 0;">
+                        Leçons à venir…
+                    </p>
+                {% endif %}
+
+            </div>
+        {% endfor %}
+
+    </nav>
+
+    {# ── ZONE PRINCIPALE : PROGRESSION + CTA ──────────────────────────────── #}
+    <div class="cf-learn__main">
+
+        {# ── Carte de progression globale ─────────────────────────────────── #}
+        <div class="cf-progress-card">
+
+            <div class="cf-progress-card__header">
+                <span class="cf-progress-card__label">Ma progression</span>
+                {% if enrollment is not null %}
+                    <span class="cf-progress-card__percent">
+                        {{ enrollment.progressPercent }}%
+                    </span>
+                {% else %}
+                    {# Admin en prévisualisation sans inscription #}
+                    <span style="font-family: var(--mono); font-size: 10px;
+                                 color: rgba(242,239,230,.4);">
+                        Prévisualisation admin
+                    </span>
+                {% endif %}
+            </div>
+
+            <div class="cf-progress-card__body">
+
+                {% if enrollment is not null %}
+
+                    {# Barre de progression #}
+                    <div class="cf-progress-bar"
+                         role="progressbar"
+                         aria-valuenow="{{ enrollment.progressPercent }}"
+                         aria-valuemin="0"
+                         aria-valuemax="100"
+                         aria-label="Progression : {{ enrollment.progressPercent }}%">
+                        <div class="cf-progress-bar__fill"
+                             style="width: {{ enrollment.progressPercent }}%"></div>
+                    </div>
+
+                    {% if enrollment.isCompleted() %}
+                        {# Formation terminée ! #}
+                        <div class="cf-completed-badge">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2.5"
+                                 stroke-linecap="round" stroke-linejoin="round"
+                                 aria-hidden="true">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                <path d="M22 4L12 14.01l-3-3"/>
+                            </svg>
+                            Formation terminée
+                            {% if enrollment.completedAt is not null %}
+                                — {{ enrollment.completedAt|date('d/m/Y') }}
+                            {% endif %}
+                        </div>
+
+                    {% elseif enrollment.progressPercent == 0 %}
+                        {# Pas encore commencé #}
+                        <p style="font-size: 13px; color: var(--ink-mute); margin: 0 0 16px;">
+                            Vous n'avez pas encore commencé cette formation. Choisissez une leçon pour démarrer.
+                        </p>
+                        {# CTA : commencer la première leçon disponible #}
+                        {% set firstLesson = null %}
+                        {% for module in modules %}
+                            {% if firstLesson is null and module.lessons is not empty %}
+                                {% set firstLesson = module.lessons|first %}
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if firstLesson is not null %}
+                            <a href="{{ path('app_course_lesson', {slug: course.slug, lessonId: firstLesson.id}) }}"
+                               class="cf-btn">
+                                {# Icône play #}
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                     stroke="currentColor" stroke-width="2"
+                                     stroke-linecap="round" stroke-linejoin="round"
+                                     aria-hidden="true">
+                                    <polygon points="5 3 19 12 5 21 5 3"/>
+                                </svg>
+                                Commencer la formation
+                            </a>
+                        {% endif %}
+
+                    {% else %}
+                        {# En cours #}
+                        <p style="font-size: 13px; color: var(--ink-mute); margin: 0 0 16px;">
+                            Vous avez complété {{ enrollment.progressPercent }}% de la formation.
+                            Continuez depuis la leçon où vous vous êtes arrêté·e.
+                        </p>
+                        {# Le lien "continuer" pointe vers la sidebar (choisir une leçon) #}
+                        <a href="#" onclick="document.querySelector('.cf-learn__sidebar').scrollIntoView({behavior:'smooth'}); return false;"
+                           class="cf-btn">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2"
+                                 stroke-linecap="round" stroke-linejoin="round"
+                                 aria-hidden="true">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                            Continuer
+                        </a>
+                    {% endif %}
+
+                {% else %}
+                    {# Admin sans inscription — message de prévisualisation #}
+                    <p style="font-size: 13px; color: var(--ink-mute); margin: 0;">
+                        Vous consultez cette formation en tant qu'administrateur.
+                        Les données de progression ne s'affichent pas.
+                    </p>
+                {% endif %}
+
+                {# ── Légende des statuts ─────────────────────────────────── #}
+                <div class="cf-legend">
+                    <div class="cf-legend__item">
+                        <span class="cf-legend__dot cf-legend__dot--done"></span>
+                        Terminée
+                    </div>
+                    <div class="cf-legend__item">
+                        <span class="cf-legend__dot cf-legend__dot--started"></span>
+                        En cours
+                    </div>
+                    <div class="cf-legend__item">
+                        <span class="cf-legend__dot cf-legend__dot--todo"></span>
+                        À faire
+                    </div>
+                </div>
+
+            </div>
+
+        </div>{# /.cf-progress-card #}
+
+        {# ── Infos de la formation ─────────────────────────────────────────── #}
+        <div style="border: 1px solid var(--line-soft); padding: 16px;">
+            <p style="font-family: var(--mono); font-size: 9px; font-weight: 700;
+                      letter-spacing: .12em; text-transform: uppercase;
+                      color: var(--ink-mute); margin: 0 0 10px;">
+                Infos
+            </p>
+            <dl style="display: grid; grid-template-columns: auto 1fr; gap: 4px 16px;
+                       font-size: 12px; margin: 0;">
+                <dt style="color: var(--ink-mute);">Niveau</dt>
+                <dd style="margin: 0;">{{ course.level.label() }}</dd>
+
+                {% if course.durationMinutesTotal is not null %}
+                    <dt style="color: var(--ink-mute);">Durée</dt>
+                    <dd style="margin: 0;">{{ course.durationMinutesTotal }}&#8239;min</dd>
+                {% endif %}
+
+                {% if course.instructorName is not null %}
+                    <dt style="color: var(--ink-mute);">Formateur·rice</dt>
+                    <dd style="margin: 0;">{{ course.instructorName|e }}</dd>
+                {% endif %}
+
+                {% if enrollment is not null %}
+                    <dt style="color: var(--ink-mute);">Inscrit·e le</dt>
+                    <dd style="margin: 0;">{{ enrollment.enrolledAt|date('d/m/Y') }}</dd>
+                {% endif %}
+            </dl>
+        </div>
+
+    </div>{# /.cf-learn__main #}
+
+</div>{# /.cf-learn #}
+
+{% endblock %}

@@ -18,7 +18,7 @@ Plateforme bazaart.fr pour artistes de la diaspora afro-atlantique.
 - Communauté / Forum : TERMINÉ le 23 mai — entités ForumCategory/ForumThread/ForumReply, ForumService, ForumController (9 routes), ForumVoter mis à jour, 4 templates, commande seed, migration Version20260523131534
 - Communauté / Messagerie : TERMINÉ le 23 mai — entités Conversation/ConversationParticipant/Message, ConversationRepository/MessageRepository, MessagingVoter, MessagingService, MessagingController (4 routes), 3 templates, migration Version20260523133318 (à appliquer)
 - Communauté : reste notifications, lives
-- Formation : 0%
+- Formation : entités créées le 25 mai (Course, CourseModule, Lesson, LessonResource, CourseEnrollment, LessonProgress + enum CourseLevel + 6 repositories). Migration Version20260525100937 écrite manuellement (docker CLI non accessible). À appliquer : `php bin/console doctrine:migrations:migrate --no-interaction`.
 
 **Entités existantes importantes :**
 - `User` — rôles JSON, pas de `updatedAt`, bcrypt

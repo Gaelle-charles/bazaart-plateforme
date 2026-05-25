@@ -28,9 +28,20 @@ class ForumThreadRepository extends ServiceEntityRepository
      * Retourne les threads d'une catégorie avec pagination.
      *
      * Tri appliqué (dans cet ordre de priorité) :
-     *   1. isPinned DESC  → les threads épinglés sont toujours en tête
-     *   2. lastReplyAt DESC NULLS LAST → les threads avec activité récente remontent
-     *   3. createdAt DESC → à égalité, les plus récents d'abord
+     *   1. isPinned DESC     → les threads épinglés sont toujours en tête
+     *   2. NULLS LAST manuel → les threads sans réponse (lastReplyAt = NULL) passent EN FIN de liste
+     *   3. lastReplyAt DESC  → les threads avec activité récente remontent
+     *   4. createdAt DESC    → à égalité, les plus récents d'abord
+     *
+     * Correction 2 — Bug PostgreSQL NULLS FIRST :
+     *   `ORDER BY last_reply_at DESC` génère implicitement NULLS FIRST en PostgreSQL.
+     *   Conséquence : les threads sans aucune réponse (lastReplyAt = NULL) remontaient
+     *   en tête de liste, devant les threads actifs — comportement inverse du voulu.
+     *
+     *   Solution : on ajoute une expression CASE WHEN intermédiaire qui vaut 0 quand
+     *   lastReplyAt est renseigné, et 1 quand il est NULL. En triant ASC sur cette
+     *   colonne calculée, les threads avec activité (0) passent avant les threads sans (1).
+     *   Doctrine ORM 3.x supporte les expressions CASE WHEN dans addOrderBy().
      *
      * Les jointures FETCH évitent le problème N+1 lors de l'affichage de la liste
      * (accès à $thread->getAuthor()->getEmail() sans requête supplémentaire).
@@ -49,9 +60,14 @@ class ForumThreadRepository extends ServiceEntityRepository
             // Filtre : uniquement les threads de la catégorie demandée
             ->where('t.category = :category')
             ->setParameter('category', $category)
-            // Tri : épinglés en premier, puis par activité récente
+            // Tri 1 : threads épinglés toujours en premier
             ->orderBy('t.isPinned', 'DESC')
-            ->addOrderBy('t.lastReplyAt', 'DESC')   // NULLS LAST en PostgreSQL
+            // Tri 2 : simule NULLS LAST — 0 si lastReplyAt renseigné, 1 si NULL
+            // Les threads avec activité (0) passent avant les threads sans réponse (1).
+            ->addOrderBy('CASE WHEN t.lastReplyAt IS NULL THEN 1 ELSE 0 END', 'ASC')
+            // Tri 3 : parmi les threads avec activité, le plus récent en premier
+            ->addOrderBy('t.lastReplyAt', 'DESC')
+            // Tri 4 : à égalité complète (ex : tous NULL), les plus récents en premier
             ->addOrderBy('t.createdAt', 'DESC')
             // Pagination
             ->setMaxResults($limit)
@@ -107,6 +123,10 @@ class ForumThreadRepository extends ServiceEntityRepository
      * Utilisé dans ForumController::index() pour afficher un aperçu de chaque catégorie
      * sans charger tous les threads de chaque catégorie.
      *
+     * Correction 2 — même bug NULLS FIRST que findByCategory() — même correction.
+     * Les threads sans réponse (lastReplyAt = NULL) ne doivent pas remonter devant
+     * les threads avec activité récente dans les aperçus de la page d'accueil.
+     *
      * @return ForumThread[]
      */
     public function findLatestByCategory(ForumCategory $category, int $limit = 3): array
@@ -116,7 +136,9 @@ class ForumThreadRepository extends ServiceEntityRepository
             ->addSelect('a')
             ->where('t.category = :category')
             ->setParameter('category', $category)
+            // Même logique de tri que findByCategory() — cf. commentaires détaillés là-haut
             ->orderBy('t.isPinned', 'DESC')
+            ->addOrderBy('CASE WHEN t.lastReplyAt IS NULL THEN 1 ELSE 0 END', 'ASC')
             ->addOrderBy('t.lastReplyAt', 'DESC')
             ->addOrderBy('t.createdAt', 'DESC')
             ->setMaxResults($limit)

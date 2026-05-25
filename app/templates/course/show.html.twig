@@ -1,0 +1,625 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # course/show.html.twig — Page de vente d'une formation
+ #
+ # Présente la formation à un visiteur/utilisateur pour l'inciter à s'inscrire.
+ #
+ # Variables disponibles :
+ #   - course      : Course (la formation)
+ #   - isEnrolled  : bool (l'utilisateur courant est-il inscrit ?)
+ #   - enrollment  : CourseEnrollment|null (l'inscription courante si existe)
+ #
+ # Sections de la page :
+ #   1. Hero : cover, titre, formateur, niveau, durée
+ #   2. Description
+ #   3. Trailer vidéo (si renseigné)
+ #   4. Plan de la formation (modules + leçons — titres uniquement)
+ #   5. CTA : "Continuer" (inscrit) ou "S'inscrire" (non inscrit)
+ #
+ # TODO sécurité: configurer frame-src dans Content-Security-Policy
+ # (config/packages/security.yaml ou NginxConf) pour autoriser YouTube et Vimeo.
+ # Voir aussi lesson.html.twig pour la même note.
+ #}
+
+{% block page_title %}{{ course.title|e }}{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+    /*
+     * ── PAGE DE VENTE FORMATION — Styles ────────────────────────────────────
+     * Préfixe .cf- (course-formation) — partagé avec index.html.twig
+     * border-radius: 0 PARTOUT — règle absolue du thème Street.
+     */
+
+    /* ── Hero ────────────────────────────────────────────────────────────────*/
+    .cf-show-hero {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        gap: 0;
+        border: 1px solid var(--ink);
+        margin-bottom: 32px;
+    }
+
+    @media (max-width: 768px) {
+        .cf-show-hero { grid-template-columns: 1fr; }
+    }
+
+    /* Colonne gauche : infos */
+    .cf-show-hero__info {
+        padding: 32px;
+        border-right: 1px solid var(--ink);
+    }
+
+    @media (max-width: 768px) {
+        .cf-show-hero__info { border-right: none; border-bottom: 1px solid var(--ink); }
+    }
+
+    .cf-show-hero__title {
+        font-family: var(--display);
+        font-size: clamp(1.4rem, 3.5vw, 2.5rem);
+        letter-spacing: -.02em;
+        text-transform: uppercase;
+        line-height: 1.1;
+        margin: 0 0 12px;
+    }
+
+    .cf-show-hero__subtitle {
+        font-size: 15px;
+        color: var(--ink-mute);
+        margin: 0 0 20px;
+        line-height: 1.5;
+    }
+
+    .cf-show-hero__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+    }
+
+    /* Badge niveau — identique à l'index */
+    .cf-badge {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        padding: 3px 7px;
+        border: 1px solid var(--ink);
+        white-space: nowrap;
+    }
+
+    .cf-badge--beginner     { background: var(--accent);   border-color: var(--accent);   color: var(--ink); }
+    .cf-badge--intermediate { background: var(--bg-alt);   border-color: var(--ink); }
+    .cf-badge--advanced     { background: var(--ink);      color: var(--bg); }
+
+    .cf-show-hero__duration {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .03em;
+    }
+
+    /* Formateur */
+    .cf-show-hero__instructor {
+        margin-top: 20px;
+        padding-top: 16px;
+        border-top: 1px solid var(--line-soft);
+        font-size: 13px;
+        color: var(--ink-mute);
+    }
+
+    .cf-show-hero__instructor strong {
+        display: block;
+        font-family: var(--display);
+        font-size: 14px;
+        color: var(--ink);
+        font-weight: 400;
+        letter-spacing: -.01em;
+    }
+
+    /* Colonne droite : image + CTA */
+    .cf-show-hero__aside {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Image de couverture */
+    .cf-show-hero__cover {
+        flex: 1;
+        background: var(--bg-alt);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M 20 0 L 0 0 0 20' fill='none' stroke='rgba(13,13,13,.10)' stroke-width='0.5'/%3E%3C/svg%3E");
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 180px;
+        overflow: hidden;
+    }
+
+    .cf-show-hero__cover img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    /* Zone CTA */
+    .cf-show-hero__cta {
+        padding: 20px;
+        border-top: 1px solid var(--ink);
+        background: var(--bg);
+    }
+
+    /* Bouton principal — style Street : fond plein ink, texte bg */
+    .cf-btn {
+        display: block;
+        width: 100%;
+        padding: 14px 20px;
+        font-family: var(--display);
+        font-size: 14px;
+        font-weight: 400;
+        letter-spacing: -.01em;
+        text-transform: uppercase;
+        text-align: center;
+        text-decoration: none;
+        border: 1px solid var(--ink);
+        background: var(--ink);
+        color: var(--bg);
+        cursor: pointer;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+
+    .cf-btn:hover {
+        background: var(--accent);
+        color: var(--ink);
+        border-color: var(--accent);
+    }
+
+    /* Bouton secondaire (outline) — pour "Continuer l'apprentissage" */
+    .cf-btn--outline {
+        background: transparent;
+        color: var(--ink);
+    }
+
+    .cf-btn--outline:hover {
+        background: var(--accent);
+        border-color: var(--accent);
+    }
+
+    /* Progression dans la zone CTA */
+    .cf-progress {
+        margin-bottom: 12px;
+    }
+
+    .cf-progress__label {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+    }
+
+    .cf-progress__bar {
+        height: 4px;
+        background: var(--bg-alt);
+        border: 1px solid var(--line-soft);
+        overflow: hidden;
+    }
+
+    .cf-progress__fill {
+        height: 100%;
+        background: var(--accent);
+        transition: width .3s ease;
+    }
+
+    /* ── Description ─────────────────────────────────────────────────────────*/
+    .cf-section {
+        margin-bottom: 32px;
+        border: 1px solid var(--ink);
+    }
+
+    .cf-section__header {
+        padding: 12px 20px;
+        background: var(--ink);
+        color: var(--bg);
+    }
+
+    .cf-section__title {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        margin: 0;
+    }
+
+    .cf-section__body {
+        padding: 20px;
+        line-height: 1.7;
+        font-size: 14px;
+        white-space: pre-line;
+    }
+
+    /* ── Trailer vidéo ───────────────────────────────────────────────────────*/
+    .cf-trailer {
+        margin-bottom: 32px;
+    }
+
+    .cf-trailer__embed {
+        position: relative;
+        padding-bottom: 56.25%;   /* ratio 16/9 responsive */
+        height: 0;
+        overflow: hidden;
+        border: 1px solid var(--ink);
+    }
+
+    .cf-trailer__embed iframe {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        border: none;
+    }
+
+    /* ── Plan de la formation ────────────────────────────────────────────────*/
+    .cf-plan {
+        margin-bottom: 32px;
+        border: 1px solid var(--ink);
+    }
+
+    .cf-plan__module {
+        border-bottom: 1px solid var(--line-soft);
+    }
+
+    .cf-plan__module:last-child {
+        border-bottom: none;
+    }
+
+    /* En-tête du module — style "accordéon fermé" */
+    .cf-plan__module-header {
+        padding: 12px 20px;
+        background: var(--bg-alt);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 1px solid var(--line-soft);
+    }
+
+    .cf-plan__module-title {
+        font-family: var(--display);
+        font-size: 13px;
+        font-weight: 400;
+        letter-spacing: -.01em;
+        margin: 0;
+        flex: 1;
+    }
+
+    .cf-plan__module-count {
+        font-family: var(--mono);
+        font-size: 9px;
+        color: var(--ink-mute);
+        letter-spacing: .05em;
+    }
+
+    /* Liste des leçons du module */
+    .cf-plan__lessons {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .cf-plan__lesson {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 20px 8px 28px;    /* indent de 28px pour créer la hiérarchie visuelle */
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 13px;
+    }
+
+    .cf-plan__lesson:last-child { border-bottom: none; }
+
+    /* Icône verrou pour les leçons protégées, oeil pour les previews */
+    .cf-plan__lesson-icon {
+        flex-shrink: 0;
+        opacity: .35;
+    }
+
+    .cf-plan__lesson-title {
+        flex: 1;
+        color: var(--ink-mute);
+    }
+
+    /* Leçons preview gratuit = disponibles sans inscription */
+    .cf-plan__lesson--preview .cf-plan__lesson-title {
+        color: var(--ink);
+    }
+
+    .cf-plan__lesson--preview .cf-plan__lesson-icon {
+        opacity: .7;
+        color: var(--ok);
+    }
+
+    .cf-plan__lesson-duration {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+    }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+{#
+ # ── SECTION 1 : HERO ────────────────────────────────────────────────────────
+ # Deux colonnes : infos à gauche, image + CTA à droite.
+ #}
+<section class="cf-show-hero" aria-label="Présentation de la formation">
+
+    {# ── Infos ────────────────────────────────────────────────────────────── #}
+    <div class="cf-show-hero__info">
+
+        {# Titre affiché ici (le <h1> dans la topbar est identique) #}
+        <h2 class="cf-show-hero__title">{{ course.title|e }}</h2>
+
+        {% if course.subtitle is not null %}
+            <p class="cf-show-hero__subtitle">{{ course.subtitle|e }}</p>
+        {% endif %}
+
+        {# Méta : niveau + durée #}
+        <div class="cf-show-hero__meta">
+            <span class="cf-badge cf-badge--{{ course.level.value|e }}">
+                {{ course.level.label() }}
+            </span>
+
+            {% if course.durationMinutesTotal is not null %}
+                <span class="cf-show-hero__duration">
+                    {# &#8239; = espace fine insécable avant l'unité #}
+                    {{ course.durationMinutesTotal }}&#8239;min au total
+                </span>
+            {% endif %}
+        </div>
+
+        {# Formateur #}
+        {% if course.instructorName is not null %}
+            <div class="cf-show-hero__instructor">
+                Formateur·rice
+                <strong>{{ course.instructorName|e }}</strong>
+                {% if course.instructorBio is not null %}
+                    <p style="margin: 6px 0 0; font-size: 12px; line-height: 1.5;">
+                        {{ course.instructorBio|e }}
+                    </p>
+                {% endif %}
+            </div>
+        {% endif %}
+
+    </div>
+
+    {# ── Colonne droite : image + CTA ──────────────────────────────────────── #}
+    <div class="cf-show-hero__aside">
+
+        {# Image de couverture ou placeholder quadrillé #}
+        <div class="cf-show-hero__cover">
+            {% if course.coverImage is not null %}
+                <img src="{{ asset(course.coverImage|e) }}"
+                     alt="Couverture : {{ course.title|e }}">
+            {% else %}
+                {# Placeholder — icône mortier SVG, opacité 20% #}
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+                     stroke="var(--ink)" stroke-width="1" stroke-linecap="round"
+                     stroke-linejoin="round" opacity=".2" aria-hidden="true">
+                    <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                    <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                </svg>
+            {% endif %}
+        </div>
+
+        {# ── Zone CTA ─────────────────────────────────────────────────────── #}
+        <div class="cf-show-hero__cta">
+
+            {% if isEnrolled %}
+                {#
+                 # L'utilisateur est déjà inscrit.
+                 # On affiche la barre de progression et un bouton "Continuer".
+                 #}
+                {% if enrollment is not null %}
+                    <div class="cf-progress">
+                        <div class="cf-progress__label">
+                            <span>Progression</span>
+                            <span>{{ enrollment.progressPercent }}%</span>
+                        </div>
+                        <div class="cf-progress__bar">
+                            <div class="cf-progress__fill"
+                                 style="width: {{ enrollment.progressPercent }}%"
+                                 role="progressbar"
+                                 aria-valuenow="{{ enrollment.progressPercent }}"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100"></div>
+                        </div>
+                    </div>
+                {% endif %}
+
+                <a href="{{ path('app_course_learn', {slug: course.slug}) }}"
+                   class="cf-btn cf-btn--outline">
+                    {# Icône play #}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round"
+                         style="display: inline; vertical-align: middle; margin-right: 6px;"
+                         aria-hidden="true">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                    Continuer l'apprentissage
+                </a>
+
+            {% elseif app.user %}
+                {#
+                 # Utilisateur connecté mais pas inscrit → formulaire d'inscription.
+                 # Le token CSRF est validé dans CourseController::enroll().
+                 # Identifiant du token : 'enroll_{course.id}'
+                 #}
+                <form method="POST"
+                      action="{{ path('app_course_enroll', {slug: course.slug}) }}"
+                      aria-label="S'inscrire à la formation">
+                    <input type="hidden" name="_token"
+                           value="{{ csrf_token('enroll_' ~ course.id) }}">
+                    <button type="submit" class="cf-btn">
+                        S'inscrire — c'est gratuit
+                    </button>
+                </form>
+
+            {% else %}
+                {#
+                 # Visiteur non connecté → lien vers la connexion.
+                 # On stocke l'URL de retour pour rediriger après connexion.
+                 #}
+                <a href="{{ path('app_login', {_target_path: app.request.uri}) }}"
+                   class="cf-btn">
+                    Se connecter pour s'inscrire
+                </a>
+            {% endif %}
+
+        </div>
+
+    </div>
+
+</section>
+
+{#
+ # ── SECTION 2 : DESCRIPTION ─────────────────────────────────────────────────
+ #}
+{% if course.description is not null %}
+    <section class="cf-section" aria-label="Description de la formation">
+        <div class="cf-section__header">
+            <h3 class="cf-section__title">Description</h3>
+        </div>
+        <div class="cf-section__body">
+            {# white-space: pre-line en CSS pour respecter les sauts de ligne #}
+            {{ course.description|e }}
+        </div>
+    </section>
+{% endif %}
+
+{#
+ # ── SECTION 3 : TRAILER VIDÉO ───────────────────────────────────────────────
+ # Si trailerVideoUrl est renseigné, on l'affiche en iframe responsive.
+ #
+ # {# TODO sécurité: configurer frame-src dans Content-Security-Policy
+ # (config/packages/nelmio_security.yaml ou NginxConf) pour autoriser
+ # les domaines : youtube.com, player.vimeo.com, iframe.mediadelivery.net
+ # Sans cette config, la vidéo sera bloquée par le navigateur en production. #}
+ #}
+{% if course.trailerVideoUrl is not null %}
+    <section class="cf-trailer" aria-label="Vidéo de présentation">
+        <div class="cf-section__header" style="border: 1px solid var(--ink); border-bottom: none;">
+            <h3 class="cf-section__title">Aperçu de la formation</h3>
+        </div>
+        <div class="cf-trailer__embed">
+            {#
+             # SÉCURITÉ : l'URL vient de la base de données (saisie admin).
+             # |e échappe les caractères HTML spéciaux dans l'attribut src.
+             # allow="..." liste les permissions accordées à l'iframe.
+             #}
+            <iframe src="{{ course.trailerVideoUrl|e }}"
+                    title="Aperçu : {{ course.title|e }}"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen
+                    loading="lazy">
+            </iframe>
+        </div>
+    </section>
+{% endif %}
+
+{#
+ # ── SECTION 4 : PLAN DE LA FORMATION ────────────────────────────────────────
+ # Liste des modules avec leurs leçons (titres uniquement — pas de contenu).
+ # Les leçons isFreePreview = true sont marquées comme accessibles sans inscription.
+ #}
+{% if course.modules is not empty %}
+    <section class="cf-plan" aria-label="Plan de la formation">
+
+        <div class="cf-section__header">
+            <h3 class="cf-section__title">Plan de la formation</h3>
+        </div>
+
+        {% for module in course.modules %}
+            <div class="cf-plan__module">
+
+                {# En-tête du module #}
+                <div class="cf-plan__module-header">
+                    <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true"
+                         style="width:14px;height:14px;stroke:var(--ink-mute);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;">
+                        <rect x="3" y="3" width="18" height="18" rx="0"/>
+                        <path d="M3 9h18M9 21V9"/>
+                    </svg>
+                    <h4 class="cf-plan__module-title">{{ module.title|e }}</h4>
+                    <span class="cf-plan__module-count">
+                        {{ module.lessons|length }} leçon{{ module.lessons|length > 1 ? 's' : '' }}
+                    </span>
+                </div>
+
+                {# Liste des leçons du module #}
+                {% if module.lessons is not empty %}
+                    <ul class="cf-plan__lessons">
+                        {% for lesson in module.lessons %}
+                            <li class="cf-plan__lesson {% if lesson.isFreePreview %}cf-plan__lesson--preview{% endif %}">
+
+                                {# Icône : oeil pour preview gratuit, verrou pour protégée #}
+                                {% if lesson.isFreePreview %}
+                                    {# Icône oeil — visible/gratuit #}
+                                    <svg class="cf-plan__lesson-icon" width="12" height="12"
+                                         viewBox="0 0 24 24" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         stroke-linecap="round" stroke-linejoin="round"
+                                         aria-label="Aperçu gratuit">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+                                {% else %}
+                                    {# Icône verrou — accès réservé #}
+                                    <svg class="cf-plan__lesson-icon" width="12" height="12"
+                                         viewBox="0 0 24 24" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         stroke-linecap="round" stroke-linejoin="round"
+                                         aria-label="Réservé aux inscrits">
+                                        <rect x="3" y="11" width="18" height="11"/>
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                    </svg>
+                                {% endif %}
+
+                                <span class="cf-plan__lesson-title">{{ lesson.title|e }}</span>
+
+                                {# Durée si renseignée #}
+                                {% if lesson.durationMinutes is not null %}
+                                    <span class="cf-plan__lesson-duration">
+                                        {{ lesson.durationMinutes }}&#8239;min
+                                    </span>
+                                {% endif %}
+
+                                {# Badge "Gratuit" pour les leçons preview #}
+                                {% if lesson.isFreePreview %}
+                                    <span style="font-family: var(--mono); font-size: 8px;
+                                                 font-weight: 700; letter-spacing: .1em;
+                                                 text-transform: uppercase; padding: 2px 5px;
+                                                 background: var(--accent); color: var(--ink);
+                                                 border: 1px solid var(--accent);">
+                                        Gratuit
+                                    </span>
+                                {% endif %}
+
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+
+            </div>
+        {% endfor %}
+
+    </section>
+{% endif %}
+
+{% endblock %}

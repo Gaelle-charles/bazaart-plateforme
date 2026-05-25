@@ -1,0 +1,347 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/course/index.html.twig — Liste admin de toutes les formations
+ #
+ # Affiche les formations (publiées + brouillons) dans un tableau.
+ # Variables disponibles :
+ #   - courses : Course[] (triées par createdAt DESC)
+ #
+ # Design : thème admin (sidebar ink, zone principale --bg)
+ # Préfixe CSS : .adc- (admin-dashboard-course)
+ #}
+
+{% block page_title %}Formations{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+    /*
+     * ── LISTE ADMIN FORMATIONS — Styles ─────────────────────────────────────
+     * Préfixe .adc- (admin-dashboard-course)
+     * border-radius: 0 partout
+     */
+
+    /* ── En-tête : titre + bouton "Nouvelle formation" ──────────────────── */
+    .adc-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+
+    .adc-header__title {
+        font-family: var(--display);
+        font-size: 1.4rem;
+        letter-spacing: -.02em;
+        text-transform: uppercase;
+        margin: 0;
+    }
+
+    .adc-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 16px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        border: 1px solid var(--ink);
+        background: var(--ink);
+        color: var(--bg);
+        text-decoration: none;
+        cursor: pointer;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+
+    .adc-btn:hover {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--ink);
+    }
+
+    /* ── Tableau ─────────────────────────────────────────────────────────── */
+    .adc-table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid var(--ink);
+        font-size: 13px;
+    }
+
+    .adc-table th {
+        padding: 10px 14px;
+        background: var(--ink);
+        color: var(--bg);
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        text-align: left;
+        white-space: nowrap;
+    }
+
+    .adc-table td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line-soft);
+        vertical-align: middle;
+    }
+
+    .adc-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .adc-table tr:hover td {
+        background: var(--bg-alt);
+    }
+
+    /* ── Titre de formation dans le tableau ──────────────────────────────── */
+    .adc-course-title {
+        font-family: var(--display);
+        font-size: 13px;
+        font-weight: 400;
+        letter-spacing: -.01em;
+        color: var(--ink);
+        text-decoration: none;
+    }
+
+    .adc-course-title:hover { text-decoration: underline; }
+
+    .adc-course-slug {
+        display: block;
+        font-family: var(--mono);
+        font-size: 9px;
+        color: var(--ink-mute);
+        letter-spacing: .03em;
+        margin-top: 2px;
+    }
+
+    /* ── Badges niveau ───────────────────────────────────────────────────── */
+    .adc-badge {
+        font-family: var(--mono);
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        padding: 2px 6px;
+        border: 1px solid var(--ink);
+        white-space: nowrap;
+    }
+
+    .adc-badge--beginner     { background: var(--accent); border-color: var(--accent); color: var(--ink); }
+    .adc-badge--intermediate { background: var(--bg-alt); }
+    .adc-badge--advanced     { background: var(--ink); color: var(--bg); }
+
+    /* ── Badge statut publié/brouillon ───────────────────────────────────── */
+    .adc-status {
+        font-family: var(--mono);
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        padding: 2px 7px;
+        border: 1px solid;
+        white-space: nowrap;
+    }
+
+    .adc-status--published { color: var(--ok); border-color: var(--ok); background: transparent; }
+    .adc-status--draft     { color: var(--ink-mute); border-color: var(--line-soft); background: transparent; }
+
+    /* ── Actions dans le tableau ─────────────────────────────────────────── */
+    .adc-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+    }
+
+    .adc-action-link {
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink);
+        text-decoration: none;
+        padding: 3px 8px;
+        border: 1px solid var(--line-soft);
+        transition: border-color var(--transition-fast), background var(--transition-fast);
+    }
+
+    .adc-action-link:hover {
+        border-color: var(--ink);
+        background: var(--bg-alt);
+    }
+
+    /* Formulaire de publication inline */
+    .adc-publish-form {
+        display: inline;
+        margin: 0;
+    }
+
+    .adc-action-btn {
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--bg);
+        background: var(--ink);
+        padding: 3px 8px;
+        border: 1px solid var(--ink);
+        cursor: pointer;
+        transition: background var(--transition-fast);
+    }
+
+    .adc-action-btn:hover {
+        background: var(--accent);
+        color: var(--ink);
+        border-color: var(--accent);
+    }
+
+    /* ── État vide ────────────────────────────────────────────────────────── */
+    .adc-empty {
+        text-align: center;
+        padding: 40px;
+        border: 1px solid var(--line-soft);
+        color: var(--ink-mute);
+        font-size: 13px;
+    }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+{# ── EN-TÊTE : TITRE + CTA ───────────────────────────────────────────────── #}
+<div class="adc-header">
+    <h2 class="adc-header__title">Formations</h2>
+    <a href="{{ path('app_admin_course_new') }}" class="adc-btn">
+        {# Icône plus #}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Nouvelle formation
+    </a>
+</div>
+
+{# ── TABLEAU DES FORMATIONS ──────────────────────────────────────────────── #}
+{% if courses is empty %}
+
+    <div class="adc-empty">
+        <p>Aucune formation créée pour le moment.</p>
+        <p style="margin-top: 8px;">
+            <a href="{{ path('app_admin_course_new') }}" style="color: var(--ink);">
+                Créer la première formation →
+            </a>
+        </p>
+    </div>
+
+{% else %}
+
+    <table class="adc-table">
+        <thead>
+            <tr>
+                <th scope="col">Formation</th>
+                <th scope="col">Niveau</th>
+                <th scope="col">Modules / Leçons</th>
+                <th scope="col">Statut</th>
+                <th scope="col">Créée le</th>
+                <th scope="col">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for course in courses %}
+                <tr>
+
+                    {# ── Titre + slug ────────────────────────────────── #}
+                    <td>
+                        <a href="{{ path('app_admin_course_edit', {id: course.id}) }}"
+                           class="adc-course-title">
+                            {{ course.title|e }}
+                        </a>
+                        <span class="adc-course-slug">/formations/{{ course.slug|e }}</span>
+                    </td>
+
+                    {# ── Niveau ──────────────────────────────────────── #}
+                    <td>
+                        <span class="adc-badge adc-badge--{{ course.level.value|e }}">
+                            {{ course.level.label() }}
+                        </span>
+                    </td>
+
+                    {# ── Compteurs modules/leçons ─────────────────────── #}
+                    <td>
+                        {# On compte les leçons en itérant les modules (collections Doctrine déjà chargées) #}
+                        {% set lessonCount = 0 %}
+                        {% for module in course.modules %}
+                            {% set lessonCount = lessonCount + module.lessons|length %}
+                        {% endfor %}
+
+                        <span style="font-family: var(--mono); font-size: 11px;">
+                            {{ course.modules|length }} module{{ course.modules|length > 1 ? 's' : '' }}
+                            · {{ lessonCount }} leçon{{ lessonCount > 1 ? 's' : '' }}
+                        </span>
+                    </td>
+
+                    {# ── Statut publié / brouillon ────────────────────── #}
+                    <td>
+                        {% if course.isPublished() %}
+                            <span class="adc-status adc-status--published">Publié</span>
+                        {% else %}
+                            <span class="adc-status adc-status--draft">Brouillon</span>
+                        {% endif %}
+                    </td>
+
+                    {# ── Date de création ────────────────────────────── #}
+                    <td style="font-family: var(--mono); font-size: 10px; color: var(--ink-mute); white-space: nowrap;">
+                        {{ course.createdAt|date('d/m/Y') }}
+                    </td>
+
+                    {# ── Actions ─────────────────────────────────────── #}
+                    <td>
+                        <div class="adc-actions">
+
+                            {# Lien Éditer #}
+                            <a href="{{ path('app_admin_course_edit', {id: course.id}) }}"
+                               class="adc-action-link">
+                                Éditer
+                            </a>
+
+                            {# Formulaire Publier (si pas encore publié) #}
+                            {% if not course.isPublished() %}
+                                <form class="adc-publish-form"
+                                      method="POST"
+                                      action="{{ path('app_admin_course_publish', {id: course.id}) }}"
+                                      onsubmit="return confirm('Publier la formation « {{ course.title|e|replace({'"': '&quot;'}) }} » ? Cette action est visible publiquement.')">
+                                    <input type="hidden" name="_token"
+                                           value="{{ csrf_token('publish_course_' ~ course.id) }}">
+                                    <button type="submit" class="adc-action-btn">
+                                        Publier
+                                    </button>
+                                </form>
+                            {% else %}
+                                {# Lien vers la page publique #}
+                                <a href="{{ path('app_course_show', {slug: course.slug}) }}"
+                                   class="adc-action-link"
+                                   target="_blank"
+                                   rel="noopener">
+                                    Voir →
+                                </a>
+                            {% endif %}
+
+                        </div>
+                    </td>
+
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+{% endif %}
+
+{% endblock %}

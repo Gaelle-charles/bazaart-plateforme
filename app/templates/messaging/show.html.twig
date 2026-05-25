@@ -1,4 +1,4 @@
-{% extends 'base_app.html.twig' %}
+{% extends 'base_dashboard.html.twig' %}
 
 {#
  # messaging/show.html.twig — Conversation (vue chat) (thème Street)
@@ -14,6 +14,11 @@
  #   Bulles sans border-radius, fond --accent (lime) pour les miennes,
  #   fond --bg + border pour les leurs.
  #}
+
+{% block sidebar %}
+    {# Sidebar commune à toutes les pages du dashboard artiste — voir _partials/sidebar_artiste.html.twig #}
+    {% include '_partials/sidebar_artiste.html.twig' %}
+{% endblock %}
 
 {% block title %}
     Conversation avec {{ otherUser ? otherUser.email|split('@')|first : 'quelqu\'un' }} — BazaArt

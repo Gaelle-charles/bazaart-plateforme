@@ -11,9 +11,14 @@ use Symfony\Component\Routing\Attribute\Route;
 /**
  * Contrôleur de la page d'accueil publique.
  *
- * Cette page est accessible sans être connecté.
- * Si l'utilisateur est déjà connecté, on le redirige directement
- * vers son tableau de bord.
+ * La vitrine (/) est accessible à TOUS, connectés ou non.
+ * La navbar dans base.html.twig gère déjà l'affichage conditionnel
+ * (bouton "Connexion" vs avatar utilisateur).
+ *
+ * Pourquoi ce changement ?
+ * Avant : l'utilisateur connecté était redirigé vers app_dashboard.
+ * Bug : cliquer sur le logo depuis n'importe quelle page → /  → redirect
+ * → dashboard → boucle. L'utilisateur ne pouvait plus accéder à la vitrine.
  */
 class HomeController extends AbstractController
 {
@@ -26,13 +31,9 @@ class HomeController extends AbstractController
     #[Route('/', name: 'app_home')]
     public function index(): Response
     {
-        // Si l'utilisateur est déjà connecté, pas besoin de voir la landing page
-        // On le redirige directement vers son tableau de bord
-        if ($this->getUser()) {
-            return $this->redirectToRoute('app_dashboard');
-        }
-
-        // Sinon, on affiche la page vitrine publique
+        // On affiche la vitrine pour tout le monde.
+        // La navbar se charge d'adapter son contenu selon l'état de connexion
+        // via {{ app.user }} dans base.html.twig.
         return $this->render('vitrine/index.html.twig');
     }
 }

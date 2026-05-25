@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Entity;
 
 use App\Repository\ArtistProfileRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
@@ -76,6 +78,27 @@ class ArtistProfile
     private ?string $avatarPath = null;
 
     /**
+     * Disciplines artistiques de l'artiste.
+     *
+     * Relation ManyToMany unidirectionnelle vers Discipline.
+     * "Unidirectionnelle" signifie que Discipline ne connaît PAS ArtistProfile —
+     * on n'a pas besoin de naviguer dans l'autre sens pour le V1.
+     *
+     * Table de jointure : artist_disciplines
+     *   - artist_profile_id FK → artist_profiles.id (ON DELETE CASCADE)
+     *   - discipline_id      FK → disciplines.id    (ON DELETE CASCADE)
+     *
+     * ArtistProfile est le "côté propriétaire" (owning side) de cette relation :
+     * c'est lui qui porte le JoinTable, donc Doctrine écrira dans artist_disciplines
+     * lors du persist de l'artiste.
+     *
+     * @var Collection<int, Discipline>
+     */
+    #[ORM\ManyToMany(targetEntity: Discipline::class)]
+    #[ORM\JoinTable(name: 'artist_disciplines')]
+    private Collection $disciplines;
+
+    /**
      * Date de création du profil — remplie automatiquement via PrePersist.
      */
     #[ORM\Column(type: 'datetime')]
@@ -86,6 +109,14 @@ class ArtistProfile
      */
     #[ORM\Column(type: 'datetime')]
     private \DateTimeInterface $updatedAt;
+
+    public function __construct()
+    {
+        // ArrayCollection est l'implémentation Doctrine de Collection.
+        // On l'initialise ici pour pouvoir appeler ->add()/$this->disciplines->contains()
+        // sans risque de NullPointerException, même sur un profil non persisté.
+        $this->disciplines = new ArrayCollection();
+    }
 
     // --- Lifecycle Callbacks ---
 
@@ -213,5 +244,41 @@ class ArtistProfile
     public function getUpdatedAt(): \DateTimeInterface
     {
         return $this->updatedAt;
+    }
+
+    // --- Disciplines ---
+
+    /**
+     * Retourne la collection des disciplines artistiques de cet artiste.
+     *
+     * @return Collection<int, Discipline>
+     */
+    public function getDisciplines(): Collection
+    {
+        return $this->disciplines;
+    }
+
+    /**
+     * Ajoute une discipline au profil artiste (si elle n'y est pas déjà).
+     * contains() vérifie l'identité de l'objet — pas de doublon possible.
+     */
+    public function addDiscipline(Discipline $discipline): static
+    {
+        if (!$this->disciplines->contains($discipline)) {
+            $this->disciplines->add($discipline);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Retire une discipline du profil artiste.
+     * Si la discipline n'est pas dans la collection, l'appel est sans effet.
+     */
+    public function removeDiscipline(Discipline $discipline): static
+    {
+        $this->disciplines->removeElement($discipline);
+
+        return $this;
     }
 }

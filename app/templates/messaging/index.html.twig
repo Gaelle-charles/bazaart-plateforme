@@ -1,4 +1,4 @@
-{% extends 'base_app.html.twig' %}
+{% extends 'base_dashboard.html.twig' %}
 
 {#
  # messaging/index.html.twig — Liste des conversations (thème Street)
@@ -12,6 +12,11 @@
  #   Bords francs, cartes border 1px --ink, accents lime + orange
  #   Avatars : carrés (Street ≠ cercles du thème Editorial)
  #}
+
+{% block sidebar %}
+    {# Sidebar commune à toutes les pages du dashboard artiste — voir _partials/sidebar_artiste.html.twig #}
+    {% include '_partials/sidebar_artiste.html.twig' %}
+{% endblock %}
 
 {% block title %}Mes messages — BazaArt{% endblock %}
 {% block page_title %}Messages{% endblock %}

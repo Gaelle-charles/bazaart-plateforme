@@ -1,787 +1,1318 @@
-{% extends 'base_app.html.twig' %}
+{% extends 'base_dashboard.html.twig' %}
 
 {#
  # structure/dashboard.html.twig — Tableau de bord de la structure partenaire
  #
- # Thème : Street (application connectée)
- # Design de référence : ScreenStructureDashboard dans screens-dash.jsx
+ # Thème : Street (application connectée — design V3)
+ # Référence visuelle : Dashboard Structure (Street).html (maquette-vitrine)
  #
- # Variables disponibles :
- #   - orgProfile : OrganizationProfile — profil de la structure (garanti non-null)
- #     .name, .location, .contactEmail, .website
- #     .structureActivatedAt (DateTimeInterface|null)
- #     .isStructurePartner() → bool
- #   - resources  : Resource[]  — ressources soumises, triées par date DESC
- #     .id, .title, .status (ResourceStatus enum, .value et .label())
- #     .publishedAt, .createdAt, .validatedAt
+ # Variables disponibles (StructureController::dashboard) :
+ #   - orgProfile : OrganizationProfile — profil de la structure (garanti non-null par le voter)
+ #       .name              — nom de la structure
+ #       .location          — ville / région (nullable)
+ #       .contactEmail      — email de contact (nullable)
+ #       .website           — URL site web (nullable)
+ #       .structureActivatedAt — date d'activation partenariat (DateTimeInterface|null)
+ #       .isStructurePartner() — bool, toujours true ici (voter vérifie)
+ #   - resources : Resource[] — ressources soumises, triées par date DESC
+ #       .id, .title, .status (ResourceStatus enum → .value)
+ #       .resourceType (.name, .icon), .publishedAt, .createdAt, .validatedAt
  #
- # Accès : ROLE_STRUCTURE uniquement (StructureVoter::STRUCTURE_VIEW_DASHBOARD)
+ # Accès : ROLE_STRUCTURE + isStructurePartner = true (StructureVoter)
+ #
+ # Design Street :
+ #   border-radius: 0 partout, bordures nettes 1px/2px --ink
+ #   fond --bg (#F2EFE6), encre --ink (#0D0D0D)
+ #   accent vert acide --accent (#C6F24E), orange --accent-2 (#FF6B2C)
+ #   Typographie : --display (Archivo Black), --body (Space Grotesk), --mono (JetBrains Mono)
+ #   --serif (Instrument Serif) pour les accents italiques
  #}
 
-{% block title %}Espace Structure — {{ orgProfile.name }} — BazaArt{% endblock %}
+{% block title %}Espace Structure — {{ orgProfile.name|e }} — BazaArt{% endblock %}
 {% block page_title %}Espace Structure{% endblock %}
+
+{#
+ # ── SIDEBAR STRUCTURE ──────────────────────────────────────────────────────
+ #
+ # Injectée dans le bloc "sidebar" de base_dashboard.html.twig.
+ # Structure : logo + pill "STRUCT." | sections Mes activités / Structure / Compte | utilisateur.
+ #
+ # Routes vérifiées dans src/Controller/ :
+ #   app_structure_dashboard       → StructureController#dashboard
+ #   app_resource_submit           → ResourceController#submit
+ #   app_resource_my               → ResourceController#my
+ #   app_org_profile_show          → OrganizationProfileController#show (sans paramètre {id})
+ #                                   Note : le brief indiquait "app_organization_profile_show"
+ #                                   avec un param {id}, mais la vraie route est "app_org_profile_show"
+ #                                   sans paramètre (affiche le profil de l'utilisateur connecté).
+ #   app_org_profile_edit          → OrganizationProfileController#edit
+ #   app_messaging_index           → MessagingController#index
+ #   app_logout                    → AuthController#logout
+ #
+ # ROUTE ABSENTE : "app_organization_profile_show" (du brief)
+ #   → La vraie route est "app_org_profile_show" (préfixe "app_org_profile_" + "show").
+ #     Vérification : src/Controller/OrganizationProfileController.php.
+ #}
+{% block sidebar %}
+
+    {# ── Logo + pill de rôle structure ── #}
+    <div class="sd-logo">
+        {#
+            Même logique que le dashboard artiste : le logo est cliquable
+            et renvoie vers l'accueil public. Comportement UX standard.
+        #}
+        <a href="{{ path('app_home') }}" class="sd-wordmark-link" title="Retour à l'accueil" aria-label="BazaArt — accueil">
+            <span class="sd-wordmark">BazaArt</span>
+        </a>
+        {#
+            Pill "STRUCT." — variante orange (.sd-role-pill--struct).
+            Abréviation avec point car "STRUCTURE" est trop long (7 chars vs 6 max visuel).
+        #}
+        <span class="sd-role-pill sd-role-pill--struct">STRUCT.</span>
+    </div>
+
+    {# ── Section : Mes activités ── #}
+    <div class="sd-section">Mes activités</div>
+    <nav class="sd-nav" aria-label="Mes activités">
+
+        {# Vue d'ensemble du dashboard structure #}
+        <a href="{{ path('app_structure_dashboard') }}"
+           class="sd-link {{ app.request.attributes.get('_route') == 'app_structure_dashboard' ? 'sd-link--active' : '' }}">
+            {# Icône 4 rectangles (tableau de bord) #}
+            <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3"  y="3"  width="7" height="9"/>
+                <rect x="14" y="3"  width="7" height="5"/>
+                <rect x="14" y="12" width="7" height="9"/>
+                <rect x="3"  y="16" width="7" height="5"/>
+            </svg>
+            Vue d'ensemble
+        </a>
+
+        {# Soumettre une nouvelle opportunité #}
+        <a href="{{ path('app_resource_submit') }}"
+           class="sd-link {{ app.request.attributes.get('_route') == 'app_resource_submit' ? 'sd-link--active' : '' }}">
+            {# Icône "+" (ajouter) #}
+            <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14"/>
+            </svg>
+            Publier une offre
+        </a>
+
+        {#
+            Mes publications — liste des ressources soumises par la structure.
+            Même route que "Mes candidatures" côté artiste (ResourceController#my),
+            mais le libellé est adapté au contexte structure.
+        #}
+        <a href="{{ path('app_resource_my') }}"
+           class="sd-link {{ app.request.attributes.get('_route') == 'app_resource_my' ? 'sd-link--active' : '' }}">
+            {# Icône livre ouvert #}
+            <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 4h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H4z"/>
+                <path d="M20 4h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"/>
+            </svg>
+            Mes publications
+        </a>
+
+    </nav>
+
+    {# ── Section : Structure ── #}
+    <div class="sd-section">Structure</div>
+    <nav class="sd-nav" aria-label="Structure">
+
+        {#
+            Page publique de la structure (profil organisation).
+            Route réelle : app_org_profile_show (sans paramètre — affiche le profil
+            de l'utilisateur connecté). Le brief indiquait app_organization_profile_show
+            avec un {id}, mais cette route n'existe pas dans OrganizationProfileController.
+        #}
+        <a href="{{ path('app_org_profile_show') }}"
+           class="sd-link {{ app.request.attributes.get('_route') == 'app_org_profile_show' ? 'sd-link--active' : '' }}">
+            {# Icône maison / bâtiment #}
+            <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 9 12 2l9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            </svg>
+            Page publique
+        </a>
+
+        {# Paramètres du profil organisation #}
+        <a href="{{ path('app_org_profile_edit') }}"
+           class="sd-link {{ app.request.attributes.get('_route') == 'app_org_profile_edit' ? 'sd-link--active' : '' }}">
+            {# Icône engrenage #}
+            <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            Paramètres
+        </a>
+
+    </nav>
+
+    {# ── Section : Compte ── #}
+    <div class="sd-section">Compte</div>
+    <nav class="sd-nav" aria-label="Compte">
+
+        {# Messagerie privée #}
+        <a href="{{ path('app_messaging_index') }}"
+           class="sd-link {{ app.request.attributes.get('_route') starts with 'app_messaging_' ? 'sd-link--active' : '' }}">
+            {# Icône bulle de message #}
+            <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M22 11.4a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L4 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9 8.5 8.5 0 0 1 8.5 8.5z"/>
+            </svg>
+            Messages
+        </a>
+
+    </nav>
+
+    {# ── Utilisateur en bas du sidebar ── #}
+    {#
+        Pour la structure, on affiche le nom de l'organisation (orgProfile.name)
+        plutôt que l'email. orgProfile est la variable transmise par StructureController.
+        Si la variable orgProfile n'est pas disponible depuis le layout (ce layout peut
+        être rendu sans elle), on tombe en fallback sur l'email de l'utilisateur.
+    #}
+    <div class="sd-user">
+        {% if app.user %}
+            {#
+                Détermine le nom à afficher :
+                - Si orgProfile est définie et non null → nom de la structure
+                - Sinon → partie locale de l'email
+                Le layout base_dashboard est générique : orgProfile peut ne pas
+                être passée si ce bloc sidebar est rendu hors contexte structure.
+            #}
+            {% set orgName = (orgProfile is defined and orgProfile is not null)
+                ? orgProfile.name
+                : app.user.email|split('@')|first %}
+            {% set initials = orgName|slice(0,2)|upper %}
+
+            {#
+                Avatar orange pour la structure (--accent-2) au lieu du vert artiste (--accent).
+                Style inline pour surcharger la couleur de .sd-avatar sans créer une classe dédiée.
+            #}
+            <div class="sd-avatar" style="background: var(--accent-2); border-color: var(--accent-2);" aria-hidden="true">
+                {{ initials|e }}
+            </div>
+            <div style="min-width: 0; flex: 1; overflow: hidden;">
+                <span class="sd-user__name">{{ orgName|e }}</span>
+                <span class="sd-user__role">Structure</span>
+            </div>
+            {# Lien de déconnexion — icône porte de sortie #}
+            <a href="{{ path('app_logout') }}" class="sd-logout" title="Se déconnecter">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.5"
+                     stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+            </a>
+        {% endif %}
+    </div>
+
+{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
+{#
+    Pas de <link rel="preload"> ici : base_app.html.twig preload déjà
+    archivo-black-400.woff2 et space-grotesk-400.woff2.
+#}
 <style>
-    /* =========================================================
-       DASHBOARD STRUCTURE — Thème Street
-       Règles de design à respecter :
-         - border-radius : 0 partout (design carré, pas d'arrondi)
-         - bordures : 2px solid var(--ink) sur les blocs structurants,
-                     1px solid var(--ink) sur les bordures internes
-         - typographie : var(--display) pour les chiffres et grands titres,
-                        var(--body) pour le texte courant,
-                        var(--mono) pour les métadonnées et labels
-         - accents : var(--accent) = vert lime, var(--accent-2) = orange
-    ========================================================= */
+
+/* ================================================================
+   DASHBOARD STRUCTURE — Thème Street V3
+   Référence : Dashboard Structure (Street).html
+   Préfixe CSS : .str- pour éviter les collisions
+
+   Convention Street :
+     - border-radius: 0 partout (aucun arrondi)
+     - Bordures 1px solid --ink (séparateurs internes),
+                2px solid --ink (blocs structurants)
+     - Pas de box-shadow sauf shadow-offset 2D au hover (effet affiche)
+     - Tokens CSS design-tokens.css : --bg, --ink, --accent, --accent-2,
+       --bg-alt, --ink-mute, --display, --body, --mono, --serif
+================================================================ */
 
 
-    /* ── En-tête bandeau sombre ──────────────────────────────────────────────
-       On reprend le pattern du prototype : fond --ink (quasi-noir),
-       texte blanc, grand titre en Archivo Black.
-       Inspiré de la section supérieure de ScreenStructureDashboard.
-    ────────────────────────────────────────────────────────────────────────── */
-    .str-hero {
-        background: var(--ink);
-        color: var(--bg);
-        padding: var(--space-xl) var(--space-xl) var(--space-lg);
-        /* Pas de border-radius dans le thème Street — bords francs */
-        margin-bottom: var(--space-xl);
-    }
+/* .sd-wordmark-link : défini dans base_dashboard.html.twig — ne pas dupliquer ici */
 
-    /* Sur-titre eyebrow : petit point carré + texte mono uppercase */
-    .str-hero__eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--eyebrow-gap);
-        font-family: var(--mono);
-        font-size: var(--eyebrow-font-size);
-        font-weight: var(--eyebrow-font-weight);
-        letter-spacing: var(--eyebrow-letter-spacing);
-        text-transform: uppercase;
-        color: rgba(242, 239, 230, 0.5); /* --bg à 50% d'opacité sur fond noir */
-        margin-bottom: var(--space-sm);
-    }
-    /* Point carré accent — signature du thème Street */
-    .str-hero__eyebrow::before {
-        content: '';
-        display: inline-block;
-        width: var(--eyebrow-dot-size);
-        height: var(--eyebrow-dot-size);
-        background: var(--accent);
-        flex-shrink: 0;
-    }
 
-    /* Layout horizontal initiales + texte + badge */
-    .str-hero__body {
+/* ── 1. PROFILE BANNER ──────────────────────────────────────────
+   Bandeau sombre pleine largeur (même vocabulaire que dashboard artiste).
+   Fond --ink (quasi-noir), texte --bg (sable), nom en Archivo Black.
+   Grille 3 colonnes : avatar | corps (nom + meta + chips) | URL box + CTA.
+
+   margin: 0 -32px → déborde du padding .app-content pour coller aux bords.
+----------------------------------------------------------------- */
+.str-banner {
+    background: var(--ink);
+    color: var(--bg);
+    margin: -28px -32px 0;
+    padding: 28px 32px 24px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 24px;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid rgba(242, 239, 230, .10);
+}
+
+/* Trait décoratif vertical (motif affiche Street) */
+.str-banner::after {
+    content: '';
+    position: absolute;
+    right: 220px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(242, 239, 230, .08);
+}
+
+/* Carré d'initiales — même pattern que le dashboard artiste, taille xl */
+.str-banner__avatar {
+    width: 64px;
+    height: 64px;
+    background: var(--accent);  /* vert acide sur fond noir : fort contraste */
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    /* Street = carré, pas de border-radius */
+}
+
+/* Corps central : eyebrow + nom + meta + chips */
+.str-banner__body {
+    min-width: 0;
+}
+
+/* Eyebrow : statut "Structure · Vérifiée" en mono discret */
+.str-banner__eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: rgba(242, 239, 230, .45);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Point vert (signature eyebrow Street) */
+.str-banner__eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    flex-shrink: 0;
+}
+
+/* Nom de la structure en Archivo Black géant
+   Première ligne uppercase blanc, deuxième ligne en Instrument Serif italic */
+.str-banner__name {
+    font-family: var(--display);
+    font-size: clamp(28px, 4.5vw, 52px);
+    line-height: .92;
+    letter-spacing: -.02em;
+    text-transform: uppercase;
+    color: var(--bg);
+    margin: 0 0 12px;
+}
+
+/* Partie italique du nom (Instrument Serif, non uppercase, orange) */
+.str-banner__name .it {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--accent-2);
+    text-transform: none;
+    letter-spacing: -.01em;
+}
+
+/* Métadonnées : ville · type · année partenariat */
+.str-banner__meta {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: rgba(242, 239, 230, .50);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+}
+
+/* Séparateur · entre les meta */
+.str-banner__sep {
+    opacity: .35;
+    margin: 0 8px;
+}
+
+/* Chips de statut dans la bannière */
+.str-banner__chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Chip générique dans la bannière */
+.str-chip {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border: 1px solid rgba(242, 239, 230, .30);
+    color: rgba(242, 239, 230, .75);
+    border-radius: 0;
+}
+
+/* Chip accent (lime) — "Vérifiée" */
+.str-chip--accent {
+    background: var(--accent);
+    color: var(--ink);
+    border-color: var(--accent);
+}
+
+/* Zone droite : URL + CTA */
+.str-banner__cta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+/* Boîte URL publique (inverse de la bannière : fond ink encore plus sombre) */
+.str-banner__url {
+    background: rgba(0, 0, 0, .3);
+    border: 1px solid rgba(242, 239, 230, .15);
+    padding: 10px 14px;
+    min-width: 180px;
+}
+
+.str-banner__url-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: rgba(198, 242, 78, .6);   /* --accent avec opacité */
+    margin-bottom: 4px;
+}
+
+.str-banner__url-value {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+/* Bouton CTA "Publier une opportunité" */
+.str-btn-cta {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    background: var(--accent);
+    color: var(--ink);
+    border: 1px solid var(--accent);
+    text-decoration: none;
+    transition: background .12s, color .12s, border-color .12s;
+    white-space: nowrap;
+    text-align: center;
+    border-radius: 0;
+}
+
+.str-btn-cta:hover {
+    background: transparent;
+    color: var(--accent);
+}
+
+/* Badge partenaire (inline, utilisé dans les chips) */
+.str-badge-partner {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    background: var(--accent);
+    color: var(--ink);
+    padding: 3px 8px;
+    border-radius: 0;
+}
+
+
+/* ── 2. STATS KPI ───────────────────────────────────────────────
+   4 cases colorées inspirées du "kpi-grid" du prototype.
+   Chaque couleur correspond à un statut : lime, orange, ink, bg-alt.
+   margin latéral identique à la bannière (débordement bords).
+----------------------------------------------------------------- */
+.str-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    margin: 0 -32px 32px;
+    border: 1px solid var(--ink);
+    border-top: none;      /* la bannière fait déjà séparateur */
+}
+
+.str-kpi {
+    padding: 22px 24px;
+    border-right: 1px solid var(--ink);
+    position: relative;
+}
+
+.str-kpi:last-child {
+    border-right: none;
+}
+
+/* Valeur chiffrée en Archivo Black grand */
+.str-kpi__num {
+    font-family: var(--display);
+    font-size: clamp(40px, 5vw, 60px);
+    line-height: .9;
+    letter-spacing: -.02em;
+    color: var(--ink);
+    display: block;
+}
+
+/* Label sous la valeur */
+.str-kpi__label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: var(--ink);
+    opacity: .65;
+    margin-top: 10px;
+}
+
+/* Petite variation texte delta (optionnelle, réservée V2) */
+.str-kpi__delta {
+    display: block;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: .06em;
+    color: var(--ink);
+    opacity: .45;
+    margin-top: 4px;
+}
+
+/* KPI 1 — fond sombre, chiffre lime : Total actif */
+.str-kpi--total {
+    background: var(--ink);
+}
+.str-kpi--total .str-kpi__num { color: var(--accent); }
+.str-kpi--total .str-kpi__label { color: var(--bg); }
+.str-kpi--total .str-kpi__delta { color: var(--bg); }
+
+/* KPI 2 — fond vert acide : Publiées */
+.str-kpi--published {
+    background: var(--accent);
+}
+
+/* KPI 3 — fond orange : En attente */
+.str-kpi--pending {
+    background: var(--accent-2);
+}
+.str-kpi--pending .str-kpi__num { color: var(--bg); }
+.str-kpi--pending .str-kpi__label { color: var(--bg); opacity: .75; }
+
+/* KPI 4 — fond sable alternatif : Refusées
+   Couleur du chiffre : --ink (neutre), pas --ok (vert succès — sémantiquement incohérent
+   pour une case "refusées"). Un orange serait trop alarmiste, le noir est sobre. */
+.str-kpi--rejected {
+    background: var(--bg-alt);
+}
+.str-kpi--rejected .str-kpi__num { color: var(--ink); }
+
+
+/* ── 3. EN-TÊTE DE SECTION ──────────────────────────────────────
+   Barre horizontale : titre à gauche, CTA à droite.
+   Bordure bas sépare le titre de la liste.
+----------------------------------------------------------------- */
+.str-section-bar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 14px;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 0;   /* pas d'espace entre la barre et la liste */
+    flex-wrap: wrap;
+}
+
+/* Titre de section en Archivo Black */
+.str-section-bar__title {
+    font-family: var(--display);
+    font-size: clamp(24px, 3vw, 36px);
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: -.01em;
+    margin: 0;
+    color: var(--ink);
+}
+
+/* Bouton primaire Street */
+.str-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: var(--accent);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border: 1px solid var(--ink);
+    cursor: pointer;
+    transition: background .12s, color .12s, box-shadow .12s;
+    white-space: nowrap;
+    border-radius: 0;
+}
+
+.str-btn:hover {
+    background: var(--ink);
+    color: var(--accent);
+    box-shadow: 4px 4px 0 var(--ink);  /* effet affiche Street */
+}
+
+/* Bouton outline (secondaire) */
+.str-btn--outline {
+    background: transparent;
+    color: var(--ink);
+}
+
+.str-btn--outline:hover {
+    background: var(--ink);
+    color: var(--accent);
+}
+
+
+/* ── 4. LISTE "PUB-ROW" (publication rows) ──────────────────────
+   Inspiré du "pub-row" du prototype : chaque ligne est une ressource.
+   Colonne 1 = bloc-type coloré (icône), colonne 2 = titre + meta,
+   colonnes 3-4 = statut + date + action.
+   Remplace le tableau HTML (trop rigide sur mobile).
+----------------------------------------------------------------- */
+.str-pub-list {
+    border: 2px solid var(--ink);
+    border-top: none;  /* la section-bar ferme déjà le haut */
+}
+
+/* En-tête de la liste (colonnes labels) — masqué sur mobile */
+.str-pub-list__head {
+    display: grid;
+    grid-template-columns: 56px 1fr 120px 100px 80px;
+    gap: 14px;
+    padding: 10px 18px;
+    background: var(--bg-alt);
+    border-bottom: 2px solid var(--ink);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+}
+
+/* Ligne de ressource */
+.str-pub-row {
+    display: grid;
+    grid-template-columns: 56px 1fr 120px 100px 80px;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line-soft);
+    transition: background .12s;
+}
+
+.str-pub-row:last-child {
+    border-bottom: none;
+}
+
+.str-pub-row:hover {
+    background: var(--bg-alt);
+}
+
+/* Bloc-type : case colorée avec abréviation du type */
+.str-pub-row__type-block {
+    width: 46px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    border: 1px solid var(--ink);
+    flex-shrink: 0;
+    /* La couleur est ajoutée inline selon le type de ressource */
+}
+
+/* Corps : titre + sous-type */
+.str-pub-row__title {
+    min-width: 0;
+}
+
+.str-pub-row__title strong {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.str-pub-row__title small {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+}
+
+/* Date en mono */
+.str-pub-row__date {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    white-space: nowrap;
+}
+
+/* Lien "Voir →" — action */
+.str-pub-row__action {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ink);
+    text-decoration: none;
+    padding: 4px 10px;
+    border: 1px solid var(--line-soft);
+    transition: background .12s, border-color .12s;
+    white-space: nowrap;
+    border-radius: 0;
+}
+
+.str-pub-row__action:hover {
+    background: var(--accent);
+    border-color: var(--ink);
+}
+
+/* Lien du titre de la ressource */
+.str-pub-row__link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.str-pub-row__link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+
+/* ── 5. BADGES DE STATUT ────────────────────────────────────────
+   Chips style Street : mono uppercase, 0 radius, fond coloré.
+   Identiques aux badges du dashboard artiste pour cohérence.
+----------------------------------------------------------------- */
+.str-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    border-radius: 0;
+}
+
+/* Publiée → vert acide */
+.str-status--published {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+/* En attente → orange */
+.str-status--pending {
+    background: var(--accent-2);
+    color: var(--bg);
+}
+
+/* Refusée → fond sombre avec texte rouge texte */
+.str-status--rejected {
+    background: var(--ink);
+    color: var(--bg);
+    border: 1px solid var(--ink);
+}
+
+/* Brouillon / Archivée → gris neutre */
+.str-status--draft,
+.str-status--archived {
+    background: var(--bg-alt);
+    color: var(--ink-mute);
+    border: 1px solid var(--line-soft);
+}
+
+
+/* ── 6. ÉTAT VIDE ───────────────────────────────────────────────
+   Affiché quand la structure n'a soumis aucune ressource.
+   Bordure 2px solid --ink + CTA central.
+----------------------------------------------------------------- */
+.str-empty {
+    border: 2px solid var(--ink);
+    border-top: none;
+    padding: 48px 32px;
+    text-align: center;
+    background: var(--bg);
+}
+
+.str-empty__icon {
+    font-size: 36px;
+    margin-bottom: 16px;
+    opacity: .3;
+    display: block;
+}
+
+.str-empty__title {
+    font-family: var(--display);
+    font-size: 28px;
+    text-transform: uppercase;
+    letter-spacing: -.01em;
+    color: var(--ink);
+    margin: 0 0 8px;
+}
+
+.str-empty__text {
+    font-family: var(--body);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--ink-mute);
+    margin: 0 0 24px;
+    max-width: 440px;
+    margin-inline: auto;
+}
+
+
+/* ── 7. LISTE MOBILE (visible < 768px) ─────────────────────────
+   Sur mobile : la liste pub-row est masquée, remplacée par des
+   cartes empilées. Même technique que l'ancienne version.
+----------------------------------------------------------------- */
+.str-card-list { display: none; }
+
+@media (max-width: 768px) {
+
+    /* Cache la liste pub-row sur mobile */
+    .str-pub-list__head,
+    .str-pub-list { display: none; }
+
+    /* Affiche les cartes */
+    .str-card-list {
         display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        gap: var(--space-xl);
-        flex-wrap: wrap;
-        margin-top: var(--space-sm);
-    }
-
-    /* Bloc gauche : initiales + nom + métadonnées */
-    .str-hero__left {
-        display: flex;
-        align-items: flex-end;
-        gap: var(--space-lg);
-    }
-
-    /*
-       Carré d'initiales — intentionnellement carré (0 radius), fond accent.
-       C'est le seul point coloré lime sur fond noir — accentue la hiérarchie.
-       Inspiré du composant Avatar du prototype, adapté en carré plutôt qu'en rond.
-    */
-    .str-hero__initials {
-        width: 64px;
-        height: 64px;
-        background: var(--accent);
-        color: var(--ink);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: var(--mono);
-        font-size: 22px;
-        font-weight: 700;
-        letter-spacing: .04em;
-        flex-shrink: 0;
-        /* border-radius intentionnellement absent : style carré "affiche" */
-    }
-
-    .str-hero__name {
-        font-family: var(--display);
-        /* clamp() : taille fluide entre 40px (mobile) et 72px (desktop) */
-        font-size: clamp(40px, 6vw, 72px);
-        line-height: 0.9;
-        letter-spacing: -.02em;
-        text-transform: uppercase;
-        color: var(--bg);
-        margin: 0;
-    }
-
-    /* Métadonnées sous le nom : ville, email, date partenariat */
-    .str-hero__meta {
-        font-family: var(--mono);
-        font-size: 12px;
-        letter-spacing: .08em;
-        color: rgba(242, 239, 230, 0.5); /* texte secondaire sur fond noir */
-        margin-top: var(--space-sm);
-        text-transform: uppercase;
-    }
-    /* Séparateur entre les méta : fine barre verticale */
-    .str-hero__meta-sep {
-        opacity: 0.3;
-        margin: 0 var(--space-sm);
-    }
-
-    /*
-       Badge "Partenaire Bazaart" — fond accent (vert lime), texte ink.
-       Chip style Street : mono uppercase, 0 radius.
-       Inspiré du chip chip-accent dans le prototype.
-    */
-    .badge-partner {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--space-xs);
-        background: var(--accent);
-        color: var(--ink);
-        font-family: var(--mono);
-        font-size: var(--chip-font-size);
-        font-weight: var(--chip-font-weight);
-        letter-spacing: var(--chip-letter-spacing);
-        text-transform: uppercase;
-        padding: var(--chip-padding);
-        /* Pas de radius — règle du thème Street */
-    }
-
-
-    /* ── Grille de statistiques ──────────────────────────────────────────────
-       Inspiré de la "stats strip" du prototype : grille de 4 cases
-       séparées par des bordures verticales (pas d'espace entre elles).
-       Fond blanc, grands chiffres en Archivo Black.
-    ────────────────────────────────────────────────────────────────────────── */
-    .stats-strip {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        /* Bordure extérieure du bloc entier (2px = structurant) */
+        flex-direction: column;
+        gap: 0;
         border: 2px solid var(--ink);
-        margin-bottom: var(--space-xl);
+        border-top: none;
     }
-    .stat-item {
-        padding: var(--space-lg) var(--space-xl);
-        /* Séparateur vertical entre les cellules */
-        border-right: 1px solid var(--ink);
+
+    /* Bannière : 2 colonnes sur mobile (cache la URL box) */
+    .str-banner {
+        grid-template-columns: auto 1fr;
+        margin: -28px -16px 0;
+        padding: 20px 16px 16px;
     }
-    .stat-item:last-child {
-        border-right: none;
+
+    .str-banner__cta { display: none; }
+
+    .str-banner__name {
+        font-size: clamp(24px, 8vw, 40px);
     }
-    .stat-item__number {
-        font-family: var(--display);
-        /* Grand chiffre très visible — caractéristique du thème Street */
-        font-size: clamp(48px, 5vw, 64px);
-        line-height: 0.9;
+
+    /* Stats KPI : 2×2 sur mobile */
+    .str-kpis {
+        grid-template-columns: 1fr 1fr;
+        margin: 0 -16px 24px;
+    }
+
+    .str-kpi:nth-child(2) { border-right: none; }
+    .str-kpi:nth-child(3) { border-top: 1px solid var(--ink); }
+    .str-kpi:nth-child(4) { border-top: 1px solid var(--ink); border-right: none; }
+
+    /* Section bar : colonne sur mobile */
+    .str-section-bar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .str-section-bar .str-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Carte mobile */
+    .str-card {
+        border-bottom: 1px solid var(--line-soft);
+        padding: 14px 16px;
+        background: var(--bg);
+    }
+
+    .str-card:last-child { border-bottom: none; }
+
+    .str-card__header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .str-card__title {
+        font-size: 14px;
+        font-weight: 700;
         color: var(--ink);
+        text-decoration: none;
+        flex: 1;
+        line-height: 1.3;
     }
-    .stat-item__label {
+
+    .str-card__meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .str-card__type {
         font-family: var(--mono);
-        font-size: 11px;
-        letter-spacing: .08em;
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: .06em;
         text-transform: uppercase;
         color: var(--ink-mute);
-        margin-top: var(--space-sm);
-    }
-    /* Couleurs distinctives par statut — le chiffre prend la couleur du statut */
-    .stat-item--published .stat-item__number { color: var(--ok); }
-    .stat-item--pending   .stat-item__number { color: var(--accent-2); }
-    /* Pour rejected, on utilise var(--danger) car il n'y a pas de token "rouge" nommé autrement */
-    .stat-item--rejected  .stat-item__number { color: var(--danger); }
-
-
-    /* ── Section "Mes ressources" ────────────────────────────────────────────
-       En-tête de section avec titre à gauche, bouton CTA à droite.
-       Inspiré du SectionHeader du prototype (bordure bas + numéro).
-    ────────────────────────────────────────────────────────────────────────── */
-    .section-bar {
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        gap: var(--space-lg);
-        padding-bottom: var(--space-md);
-        border-bottom: 1px solid var(--ink);
-        margin-bottom: var(--space-md);
-        flex-wrap: wrap;
-    }
-    .section-bar__title {
-        font-family: var(--display);
-        font-size: clamp(28px, 3vw, 40px);
-        line-height: 1;
-        text-transform: uppercase;
-        margin: 0;
-        color: var(--ink);
     }
 
-
-    /* ── Boutons ─────────────────────────────────────────────────────────────
-       Style Street : fond accent, texte ink, uppercase, 0 radius, bold.
-       Ombre décalée au hover (effet "affiche").
-    ────────────────────────────────────────────────────────────────────────── */
-    .btn-street {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--space-sm);
-        padding: var(--btn-padding);
-        background: var(--btn-primary-bg);
-        color: var(--btn-primary-color);
-        font-family: var(--body);
-        font-size: var(--btn-font-size);
-        font-weight: var(--btn-font-weight);
-        letter-spacing: var(--btn-letter-spacing);
-        text-transform: uppercase;
-        text-decoration: none;
-        border: none;
-        cursor: pointer;
-        transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
-    }
-    .btn-street:hover {
-        background: var(--btn-primary-hover-bg);
-        color: var(--btn-primary-hover-color);
-        /* Ombre décalée "affiche" — effet signature du thème Street */
-        box-shadow: var(--shadow-offset-sm);
-    }
-
-    /* Variante outline (bouton secondaire) */
-    .btn-street--outline {
-        background: transparent;
-        color: var(--ink);
-        border: 2px solid var(--ink);
-    }
-    .btn-street--outline:hover {
-        background: var(--ink);
-        color: var(--accent);
-        box-shadow: var(--shadow-offset-sm);
-    }
-
-
-    /* ── Tableau des ressources (desktop) ───────────────────────────────────
-       Bordure extérieure 2px, séparateurs internes 1px.
-       Thème Street : pas d'arrondi, pas d'ombre, juste des bordures nettes.
-    ────────────────────────────────────────────────────────────────────────── */
-    .resources-table {
-        width: 100%;
-        border-collapse: collapse;
-        border: 2px solid var(--ink);
-        font-family: var(--body);
-        font-size: 13px;
-        background: white;
-    }
-    .resources-table th {
-        background: var(--bg-alt);
-        padding: var(--space-sm) var(--space-md);
+    .str-card__date {
         font-family: var(--mono);
         font-size: 10px;
-        font-weight: 700;
         color: var(--ink-mute);
-        text-transform: uppercase;
-        letter-spacing: .1em;
-        text-align: left;
-        border-bottom: 2px solid var(--ink);
     }
-    .resources-table td {
-        padding: var(--space-md);
-        border-bottom: 1px solid var(--line-soft);
-        color: var(--ink);
-        vertical-align: middle;
-    }
-    .resources-table tr:last-child td {
-        border-bottom: none;
-    }
-    .resources-table tr:hover td {
-        background: var(--bg-alt);
-    }
+}
 
-    /* Lien titre dans le tableau */
-    .resources-table__link {
-        color: var(--ink);
-        text-decoration: none;
-        font-weight: 600;
-    }
-    .resources-table__link:hover {
-        text-decoration: underline;
-        text-underline-offset: 3px;
-    }
-
-    /* Texte type ressource */
-    .resources-table__type {
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--ink-mute);
-        letter-spacing: .04em;
-    }
-
-    /* Date soumission */
-    .resources-table__date {
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--ink-mute);
-        white-space: nowrap;
-    }
-
-    /* Lien "Voir" dans la colonne Actions */
-    .resources-table__action {
-        font-family: var(--mono);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: .04em;
-        color: var(--ink);
-        text-decoration: none;
-        text-transform: uppercase;
-        padding: 4px 8px;
-        border: 1px solid var(--line-soft);
-        transition: background var(--transition-fast);
-    }
-    .resources-table__action:hover {
-        background: var(--accent);
-        border-color: var(--accent);
-    }
-
-
-    /* ── Badges de statut ────────────────────────────────────────────────────
-       Chips style Street : mono uppercase, 0 radius, fond coloré.
-       Chaque statut a sa couleur sémantique.
-    ────────────────────────────────────────────────────────────────────────── */
-    .status-chip {
-        display: inline-flex;
-        align-items: center;
-        padding: var(--chip-padding);
-        font-family: var(--mono);
-        font-size: var(--chip-font-size);
-        font-weight: var(--chip-font-weight);
-        letter-spacing: var(--chip-letter-spacing);
-        text-transform: uppercase;
-        /* Pas de radius — règle du thème Street */
-        white-space: nowrap;
-    }
-    /* PUBLISHED : vert lime (accent principal) */
-    .status-chip--published {
-        background: var(--accent);
-        color: var(--ink);
-    }
-    /* PENDING : orange accent secondaire */
-    .status-chip--pending {
-        background: var(--accent-2);
-        color: white; /* blanc car orange est peu contrasté avec ink sur petite taille */
-    }
-    /* REJECTED : rouge danger — pas de token "rouge" nommé autrement dans le thème Street */
-    .status-chip--rejected {
-        background: var(--danger);
-        color: white;
-    }
-    /* DRAFT / ARCHIVED : gris neutre */
-    .status-chip--draft,
-    .status-chip--archived {
-        background: var(--bg-alt);
-        color: var(--ink-mute);
-        border: 1px solid var(--line-soft);
-    }
-
-
-    /* ── État vide (empty state) ─────────────────────────────────────────────
-       Bloc centré avec message et CTA quand la liste est vide.
-       Bordure 2px solid ink — style "avis" de la mise en page affiche.
-    ────────────────────────────────────────────────────────────────────────── */
-    .empty-state {
-        border: 2px solid var(--ink);
-        padding: var(--space-3xl) var(--space-2xl);
-        text-align: center;
-        background: white;
-    }
-    .empty-state__icon {
-        font-size: 40px;
-        margin-bottom: var(--space-md);
-        opacity: 0.3;
-    }
-    .empty-state__title {
-        font-family: var(--display);
-        font-size: 28px;
-        text-transform: uppercase;
-        color: var(--ink);
-        margin: 0 0 var(--space-sm);
-    }
-    .empty-state__text {
-        font-family: var(--body);
-        font-size: 14px;
-        line-height: 1.6;
-        color: var(--ink-mute);
-        margin: 0 0 var(--space-xl);
-        max-width: 420px;
-        margin-inline: auto;
-    }
-
-
-    /* ── Liste mobile (visible seulement < 768px) ────────────────────────────
-       Le tableau horizontal ne passe pas bien sur mobile.
-       On bascule sur une liste de cartes empilées (chaque ligne = une carte).
-
-       La technique : on cache le tableau et on affiche une liste de cartes.
-       Chaque .resource-card est visible uniquement en mobile.
-    ────────────────────────────────────────────────────────────────────────── */
-    .resource-cards { display: none; }
-
-    @media (max-width: 768px) {
-        /* Cache le tableau sur mobile */
-        .resources-table-wrap { display: none; }
-
-        /* Affiche les cartes sur mobile */
-        .resource-cards {
-            display: flex;
-            flex-direction: column;
-            gap: var(--space-sm);
-        }
-
-        .resource-card {
-            border: 2px solid var(--ink);
-            padding: var(--space-md);
-            background: white;
-        }
-        .resource-card__header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: var(--space-sm);
-            margin-bottom: var(--space-sm);
-        }
-        .resource-card__title {
-            font-family: var(--body);
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--ink);
-            text-decoration: none;
-            flex: 1;
-            line-height: 1.3;
-        }
-        .resource-card__meta {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-top: var(--space-sm);
-        }
-        .resource-card__date {
-            font-family: var(--mono);
-            font-size: 10px;
-            color: var(--ink-mute);
-            letter-spacing: .04em;
-        }
-
-        /* Adapte la grille de stats en 2×2 sur mobile */
-        .stats-strip {
-            grid-template-columns: repeat(2, 1fr);
-        }
-        .stat-item:nth-child(2) {
-            border-right: none;
-        }
-        .stat-item:nth-child(1),
-        .stat-item:nth-child(2) {
-            border-bottom: 1px solid var(--ink);
-        }
-
-        /* Hero : empilement vertical sur mobile */
-        .str-hero__body { flex-direction: column; align-items: flex-start; }
-        .str-hero__left { flex-direction: column; align-items: flex-start; gap: var(--space-md); }
-
-        /* Bouton hero passe en pleine largeur sur mobile */
-        .str-hero .btn-street { width: 100%; justify-content: center; margin-top: var(--space-md); }
-
-        /* Section bar : empilement vertical */
-        .section-bar { flex-direction: column; align-items: flex-start; }
-        .section-bar .btn-street { width: 100%; justify-content: center; }
-    }
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# ═══════════════════════════════════════════════════════════════════════════
-   EN-TÊTE DE LA STRUCTURE
-   Bandeau sombre pleine largeur avec initiales, nom, métadonnées et badge.
-   Inspiré de la section hero de ScreenStructureDashboard dans screens-dash.jsx.
-═══════════════════════════════════════════════════════════════════════════ #}
-<div class="str-hero">
-
-    {# Sur-titre eyebrow : indique le contexte "Structure · vérifiée" #}
-    <span class="str-hero__eyebrow" aria-label="Statut">Structure · Vérifiée</span>
-
-    <div class="str-hero__body">
-        <div class="str-hero__left">
-
-            {#
-               Carré d'initiales : on prend les 2 premiers caractères du nom
-               de la structure en majuscules. Même logique que pour l'avatar
-               utilisateur dans la sidebar, adapté en carré (pas en rond).
-            #}
-            {% set initials = orgProfile.name|slice(0, 2)|upper %}
-            <div class="str-hero__initials" aria-hidden="true">{{ initials }}</div>
-
-            <div>
-                {# Nom de la structure en grand — Archivo Black uppercase #}
-                <h1 class="str-hero__name">{{ orgProfile.name }}</h1>
-
-                {# Métadonnées : ville · email · date de partenariat #}
-                <p class="str-hero__meta">
-                    {%- if orgProfile.location -%}
-                        {{ orgProfile.location|upper }}
-                    {%- endif -%}
-                    {%- if orgProfile.location and orgProfile.contactEmail -%}
-                        <span class="str-hero__meta-sep">·</span>
-                    {%- endif -%}
-                    {%- if orgProfile.contactEmail -%}
-                        {{ orgProfile.contactEmail }}
-                    {%- endif -%}
-                    {%- if orgProfile.structureActivatedAt -%}
-                        <span class="str-hero__meta-sep">·</span>
-                        Partenaire depuis {{ orgProfile.structureActivatedAt|date('Y') }}
-                    {%- endif -%}
-                </p>
-            </div>
-        </div>
-
-        {#
-           Badge "Partenaire Bazaart" — visible uniquement si isStructurePartner() = true.
-           En théorie, cette page n'est accessible qu'aux structures validées,
-           donc le badge est presque toujours affiché. On garde la condition
-           au cas où la logique de droits évolue.
-        #}
-        {% if orgProfile.isStructurePartner() %}
-            <span class="badge-partner" role="status" aria-label="Structure partenaire confirmée">
-                ✓ Partenaire Bazaart
-            </span>
-        {% endif %}
-    </div>
-
-</div>
-
-
-{# ═══════════════════════════════════════════════════════════════════════════
-   GRILLE DE STATISTIQUES
-   4 cartes en rangée, séparées par des bordures verticales (pas d'espacement).
-   Design inspiré de la "stats strip" de StructureOverview dans screens-dash.jsx.
-
-   Les comptages sont faits ici en Twig avec |filter + |length.
-   Logique conservée du template d'origine — pas de modif back.
-   Note : la valeur backed de PendingValidation est 'pending' (cf. ResourceStatus enum).
-═══════════════════════════════════════════════════════════════════════════ #}
 {#
-   Calcul des compteurs par statut.
-   On distingue les statuts "actifs" (published, pending, rejected) des statuts
-   "inactifs" (draft, archived) pour ne pas gonfler le total affiché à la structure.
-   Une ressource archivée ou en brouillon n'a pas d'impact opérationnel quotidien.
+ # ── Préparation des variables ─────────────────────────────────────────────────
+ #
+ # Tous les calculs sont faits ici en une seule passe, avant le HTML.
+ # Les filtres Twig font les comptages sur le tableau $resources déjà chargé
+ # en mémoire (pas de nouvelle requête SQL).
+ #}
 
-   Valeurs backed de l'enum ResourceStatus :
-     'published' → publiée
-     'pending'   → en attente de validation (PendingValidation dans l'enum)
-     'rejected'  → refusée
-     'draft'     → brouillon (non soumis)
-     'archived'  → archivée
+{# Initiales de la structure (2 premiers chars du nom) #}
+{% set initials = orgProfile.name|slice(0, 2)|upper %}
+
+{#
+    Comptage des ressources par statut.
+    On lit .status.value (chaîne backed de l'enum ResourceStatus).
+    Valeurs possibles : 'published', 'pending', 'rejected', 'draft', 'archived'.
+    Les brouillons et archives ne sont pas comptés dans le "total actif"
+    (ils gonfleraient le total sans impact opérationnel quotidien).
 #}
 {% set published_count = resources|filter(r => r.status.value == 'published')|length %}
 {% set pending_count   = resources|filter(r => r.status.value == 'pending')|length %}
 {% set rejected_count  = resources|filter(r => r.status.value == 'rejected')|length %}
+{% set draft_count     = resources|filter(r => r.status.value == 'draft')|length %}
+{% set archived_count  = resources|filter(r => r.status.value == 'archived')|length %}
+{# Total actif = tout sauf brouillons et archives #}
+{% set active_count = resources|length - draft_count - archived_count %}
+
 {#
-   Ces deux compteurs ne sont pas affichés dans la grille (on a choisi 4 cases),
-   mais on les calcule pour obtenir le total "actif" = tout sauf draft et archived.
-   Formule : total_actif = total - draft - archived
+    Slug simplifié pour l'URL de profil publique.
+    Convertit le nom de la structure en kebab-case basique.
+    Note : les caractères accentués ne sont pas translitérés (usage affichage seul, pas href).
 #}
-{% set draft_count    = resources|filter(r => r.status.value == 'draft')|length %}
-{% set archived_count = resources|filter(r => r.status.value == 'archived')|length %}
-{% set active_count   = resources|length - draft_count - archived_count %}
+{% set nameSlug = orgProfile.name|lower|replace({' ': '-', "'": ''}) %}
 
-<div class="stats-strip" role="list" aria-label="Statistiques des ressources">
 
-    <div class="stat-item" role="listitem">
+{# ══════════════════════════════════════════════════════════════════════════════
+   1. PROFILE BANNER — bandeau sombre pleine largeur
+   Avatar (initiales, carré lime) + nom géant + meta + chips + URL + CTA
+══════════════════════════════════════════════════════════════════════════════ #}
+<div class="str-banner">
+
+    {# Avatar carré : initiales de la structure en Archivo Black #}
+    <div class="str-banner__avatar" aria-hidden="true">
+        {{ initials }}
+    </div>
+
+    {# Corps central #}
+    <div class="str-banner__body">
+
+        {# Eyebrow : statut contextuel avec point vert #}
+        <div class="str-banner__eyebrow">Structure · Partenaire Bazaart</div>
+
         {#
-           On affiche le total "actif" (hors brouillons et archives) plutôt que
-           resources|length. Raison : les brouillons et archives gonfleraient
-           le total sans être comptés dans les sous-totaux, créant une incohérence
-           visible (ex : Total = 10, mais Publiées 3 + En attente 2 + Refusées 1 = 6).
+            Nom de la structure en Archivo Black géant.
+            On tente de séparer le nom sur deux lignes pour l'effet affiche :
+            première partie uppercase blanc, deuxième en Instrument Serif italic orange.
+            Si le nom ne contient pas d'espace, on l'affiche en une ligne.
         #}
-        <div class="stat-item__number">{{ active_count }}</div>
-        <div class="stat-item__label">Total actif</div>
+        {% set nameParts = orgProfile.name|split(' ', 2) %}
+        <p class="str-banner__name">
+            {#
+                Utilise <p> et non <h1> — la topbar rend déjà "Espace Structure"
+                dans un <h1> via {% block page_title %}. Une seule balise H1 par page.
+                Le styling visuel est identique au prototype : Archivo Black, clamp taille.
+            #}
+            {{ nameParts[0]|e }}
+            {% if nameParts[1] is defined %}
+                <br><span class="it">{{ nameParts[1]|e }}.</span>
+            {% endif %}
+        </p>
+
+        {# Métadonnées : ville · type · année partenariat #}
+        <div class="str-banner__meta">
+            {% if orgProfile.location %}
+                {{ orgProfile.location|upper|e }}
+            {% endif %}
+            {% if orgProfile.location and orgProfile.structureActivatedAt %}
+                <span class="str-banner__sep">·</span>
+            {% endif %}
+            {% if orgProfile.structureActivatedAt %}
+                Membre {{ orgProfile.structureActivatedAt|date('Y') }}
+            {% endif %}
+            {% if active_count > 0 %}
+                <span class="str-banner__sep">·</span>
+                {{ active_count }} publication{{ active_count > 1 ? 's' : '' }}
+            {% endif %}
+        </div>
+
+        {# Chips de statut #}
+        <div class="str-banner__chips">
+            {# Badge "Vérifiée" — toujours affiché (voter garantit isStructurePartner) #}
+            <span class="str-chip str-chip--accent">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="3.5"
+                     stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true" style="display:inline-block; vertical-align:middle; margin-right:3px;">
+                    <path d="m5 12 5 5L20 7"/>
+                </svg>
+                Vérifiée
+            </span>
+
+            {# Localisation si disponible #}
+            {% if orgProfile.location %}
+                <span class="str-chip">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"
+                         aria-hidden="true" style="display:inline-block; vertical-align:middle; margin-right:3px; opacity:.7;">
+                        <path d="M12 2C8.1 2 5 5.1 5 9c0 5.3 7 13 7 13s7-7.7 7-13c0-3.9-3.1-7-7-7zm0 9.5c-1.4 0-2.5-1.1-2.5-2.5S10.6 6.5 12 6.5 14.5 7.6 14.5 9 13.4 11.5 12 11.5z"/>
+                    </svg>
+                    {{ orgProfile.location|e }}
+                </span>
+            {% endif %}
+
+            {# Stats inline #}
+            {% if active_count > 0 %}
+                <span class="str-chip">{{ active_count }} publication{{ active_count > 1 ? 's' : '' }}</span>
+            {% endif %}
+        </div>
+
     </div>
 
-    <div class="stat-item stat-item--published" role="listitem">
-        <div class="stat-item__number">{{ published_count }}</div>
-        <div class="stat-item__label">Publiées</div>
-    </div>
+    {# Zone droite : URL + bouton CTA (masquée sur mobile) #}
+    <div class="str-banner__cta">
 
-    <div class="stat-item stat-item--pending" role="listitem">
-        <div class="stat-item__number">{{ pending_count }}</div>
-        <div class="stat-item__label">En attente</div>
-    </div>
+        {# Boîte URL publique #}
+        <div class="str-banner__url">
+            <small class="str-banner__url-label">URL publique</small>
+            <span class="str-banner__url-value">bazaart.fr/struct/{{ nameSlug|e }}</span>
+        </div>
 
-    <div class="stat-item stat-item--rejected" role="listitem">
-        <div class="stat-item__number">{{ rejected_count }}</div>
-        <div class="stat-item__label">Refusées</div>
+        {# Bouton "Publier une opportunité" — CTA principal #}
+        <a href="{{ path('app_resource_submit') }}" class="str-btn-cta">
+            + Publier une opportunité
+        </a>
+
     </div>
 
 </div>
 
 
-{# ═══════════════════════════════════════════════════════════════════════════
-   SECTION "MES RESSOURCES"
-   En-tête avec titre + bouton CTA, puis tableau (desktop) / cartes (mobile).
-═══════════════════════════════════════════════════════════════════════════ #}
-<div class="section-bar">
-    <h2 class="section-bar__title">Mes opportunités</h2>
-    {# Bouton primaire Street : fond lime, texte ink, uppercase #}
-    <a href="{{ path('app_resource_submit') }}" class="btn-street">
+{# ══════════════════════════════════════════════════════════════════════════════
+   2. KPI STATS — 4 cases colorées (Total | Publiées | En attente | Refusées)
+   Inspiré du "kpi-grid" du prototype.
+   Les couleurs: ink (total), accent/lime (publiées), orange (pending), bg-alt (refusées)
+══════════════════════════════════════════════════════════════════════════════ #}
+<div class="str-kpis" role="list" aria-label="Statistiques des ressources">
+
+    {# KPI 1 — fond sombre : Total actif (hors brouillons et archives) #}
+    <div class="str-kpi str-kpi--total" role="listitem">
+        <span class="str-kpi__num">{{ active_count }}</span>
+        <span class="str-kpi__label">Total actif</span>
+    </div>
+
+    {# KPI 2 — vert acide : ressources publiées (visibles par les artistes) #}
+    <div class="str-kpi str-kpi--published" role="listitem">
+        <span class="str-kpi__num">{{ published_count }}</span>
+        <span class="str-kpi__label">Publiées</span>
+    </div>
+
+    {# KPI 3 — orange : en attente de validation admin #}
+    <div class="str-kpi str-kpi--pending" role="listitem">
+        <span class="str-kpi__num">{{ pending_count }}</span>
+        <span class="str-kpi__label">En attente</span>
+    </div>
+
+    {# KPI 4 — fond sable : refusées #}
+    <div class="str-kpi str-kpi--rejected" role="listitem">
+        <span class="str-kpi__num">{{ rejected_count }}</span>
+        <span class="str-kpi__label">Refusées</span>
+    </div>
+
+</div>
+
+
+{# ══════════════════════════════════════════════════════════════════════════════
+   3. EN-TÊTE DE SECTION + LISTE DE PUBLICATIONS
+   L'en-tête contient le titre "Mes opportunités" et le CTA "+ Publier".
+   La liste est en style "pub-row" (type block + titre + statut + date + action).
+══════════════════════════════════════════════════════════════════════════════ #}
+<div class="str-section-bar">
+    <h2 class="str-section-bar__title">Mes opportunités</h2>
+    <a href="{{ path('app_resource_submit') }}" class="str-btn">
         + Publier une opportunité
     </a>
 </div>
 
+
 {% if resources is empty %}
 
-    {# ── État vide ────────────────────────────────────────────────────────── #}
-    <div class="empty-state">
-        <div class="empty-state__icon" aria-hidden="true">◈</div>
-        <h3 class="empty-state__title">Aucune opportunité publiée</h3>
-        <p class="empty-state__text">
+    {# ── État vide ──────────────────────────────────────────────────────────── #}
+    <div class="str-empty">
+        {#
+            Icône symbolique (carré + losange = "ressource Street").
+            Pas d'emoji — convention du projet.
+        #}
+        <svg class="str-empty__icon" width="48" height="48" viewBox="0 0 24 24"
+             fill="none" stroke="var(--ink)" stroke-width="1.5"
+             stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true" style="display:block; margin: 0 auto 16px; opacity:.25;">
+            <rect x="3" y="3" width="7" height="9"/>
+            <rect x="14" y="3" width="7" height="5"/>
+            <rect x="14" y="12" width="7" height="9"/>
+            <rect x="3" y="16" width="7" height="5"/>
+        </svg>
+
+        <p class="str-empty__title">Aucune opportunité publiée</p>
+        <p class="str-empty__text">
             Vous n'avez pas encore soumis d'opportunité.<br>
-            En tant que structure partenaire, vos soumissions sont publiées directement sans validation manuelle.
+            En tant que structure partenaire, vos soumissions sont publiées
+            directement sans validation manuelle.
         </p>
-        <a href="{{ path('app_resource_submit') }}" class="btn-street">
+        <a href="{{ path('app_resource_submit') }}" class="str-btn">
             Publier ma première opportunité
         </a>
     </div>
 
 {% else %}
 
-    {# ══════════════════════════════════════════════════════════════════════
-       TABLEAU DESKTOP (caché sous 768px via CSS, remplacé par les cartes)
-    ══════════════════════════════════════════════════════════════════════ #}
-    <div class="resources-table-wrap">
-        <table class="resources-table" aria-label="Liste des ressources soumises">
-            <thead>
-                <tr>
-                    <th scope="col">Titre</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Statut</th>
-                    <th scope="col">Date de soumission</th>
-                    <th scope="col">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for resource in resources %}
-                    <tr>
-                        {# Titre — tronqué à 60 caractères pour ne pas écraser le tableau #}
-                        <td>
-                            <a href="{{ path('app_resource_show', {id: resource.id}) }}"
-                               class="resources-table__link">
-                                {{ resource.title|slice(0, 60) }}{{ resource.title|length > 60 ? '…' : '' }}
-                            </a>
-                        </td>
+    {# ──────────────────────────────────────────────────────────────────────────
+       LISTE "PUB-ROW" — visible sur desktop (masquée sur mobile par CSS)
+       Style inspiré du prototype : bloc-type coloré + titre/meta + statut + date + action
+    ──────────────────────────────────────────────────────────────────────────── #}
 
-                        {# Type de ressource — texte mono discret #}
-                        <td class="resources-table__type">
-                            {{ resource.resourceType.icon ?? '' }} {{ resource.resourceType.name }}
-                        </td>
+    {#
+        Conteneur unique pour l'en-tête + les lignes.
+        Le DOM est cohérent : une seule boîte .str-pub-list contient tout,
+        l'en-tête est un enfant du conteneur, pas un sibling.
+    #}
+    <div class="str-pub-list" role="list" aria-label="Liste des ressources soumises">
 
-                        {# Statut — chip colorée selon la valeur de l'enum #}
-                        <td>
-                            {#
-                              On lit resource.status.value (la chaîne backed de l'enum ResourceStatus).
-                              Valeurs possibles : 'published', 'pending', 'rejected', 'draft', 'archived'.
-                              La couleur de chaque chip est définie dans les règles .status-chip--* ci-dessus.
-                            #}
-                            {% set status_value = resource.status.value %}
-                            {% if status_value == 'published' %}
-                                <span class="status-chip status-chip--published">✓ Publiée</span>
-                            {% elseif status_value == 'pending' %}
-                                {# 'pending' est la valeur backed de PendingValidation dans ResourceStatus #}
-                                <span class="status-chip status-chip--pending">En attente</span>
-                            {% elseif status_value == 'rejected' %}
-                                <span class="status-chip status-chip--rejected">Refusée</span>
-                            {% elseif status_value == 'draft' %}
-                                <span class="status-chip status-chip--draft">Brouillon</span>
-                            {% elseif status_value == 'archived' %}
-                                <span class="status-chip status-chip--archived">Archivée</span>
-                            {% else %}
-                                {# Valeur inconnue — fallback sur le chip neutre #}
-                                <span class="status-chip status-chip--draft">{{ status_value }}</span>
-                            {% endif %}
-                        </td>
-
-                        {# Date de soumission — format court dd/mm/YYYY #}
-                        <td class="resources-table__date">
-                            {{ resource.createdAt|date('d/m/Y') }}
-                        </td>
-
-                        {# Lien "Voir" — accès à la page détail de la ressource #}
-                        <td>
-                            <a href="{{ path('app_resource_show', {id: resource.id}) }}"
-                               class="resources-table__action"
-                               aria-label="Voir la ressource {{ resource.title|slice(0, 30)|e('html_attr') }}">
-                                Voir →
-                            </a>
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    {# En-tête des colonnes (présentation, non annoncée aux lecteurs d'écran) #}
+    <div class="str-pub-list__head" aria-hidden="true">
+        <div></div>              {# colonne type block #}
+        <div>Titre</div>
+        <div>Statut</div>
+        <div>Date</div>
+        <div></div>              {# colonne action #}
     </div>
 
-    {# ══════════════════════════════════════════════════════════════════════
-       CARTES MOBILE (cachées au-dessus de 768px, visibles en dessous)
-       Chaque ressource devient une carte autonome avec toutes les infos clés.
-    ══════════════════════════════════════════════════════════════════════ #}
-    <ul class="resource-cards" aria-label="Liste des ressources soumises">
         {% for resource in resources %}
-            <li class="resource-card">
-                <div class="resource-card__header">
-                    {# Titre de la ressource — lien vers la page détail #}
-                    <a href="{{ path('app_resource_show', {id: resource.id}) }}"
-                       class="resource-card__title">
-                        {{ resource.title|slice(0, 80) }}{{ resource.title|length > 80 ? '…' : '' }}
-                    </a>
 
+            {#
+                Détermine la couleur et l'abréviation du bloc-type selon le type de ressource.
+                Le prototype utilise des couleurs distinctives par type (résidence, studio, etc.).
+                On s'appuie ici sur le nom du resourceType avec un mapping simple.
+                Valeurs inline car trop spécifiques pour une classe CSS générique.
+            #}
+            {% set typeName = resource.resourceType is not null ? resource.resourceType.name|lower : '' %}
+            {% if 'résidence' in typeName or 'residence' in typeName %}
+                {% set typeColor = 'background: var(--accent); color: var(--ink);' %}
+                {% set typeAbbr  = 'RÉS' %}
+            {% elseif 'studio' in typeName %}
+                {% set typeColor = 'background: var(--accent-2); color: var(--bg);' %}
+                {% set typeAbbr  = 'STU' %}
+            {% elseif 'bourse' in typeName or 'aide' in typeName %}
+                {% set typeColor = 'background: var(--ink); color: var(--accent);' %}
+                {% set typeAbbr  = 'AID' %}
+            {% elseif 'formation' in typeName %}
+                {% set typeColor = 'background: var(--bg-alt); color: var(--ink-mute);' %}
+                {% set typeAbbr  = 'FOR' %}
+            {% else %}
+                {% set typeColor = 'background: var(--bg-alt); color: var(--ink-mute);' %}
+                {% set typeAbbr  = resource.resourceType is not null ? resource.resourceType.name|slice(0, 3)|upper : 'RES' %}
+            {% endif %}
+
+            <div class="str-pub-row" role="listitem">
+
+                {# Bloc-type coloré (icône textuelle) #}
+                <div class="str-pub-row__type-block" style="{{ typeColor }}" aria-hidden="true">
+                    {{ typeAbbr }}
+                </div>
+
+                {# Titre + sous-type #}
+                <div class="str-pub-row__title">
+                    <strong>
+                        <a href="{{ path('app_resource_show', {id: resource.id}) }}"
+                           class="str-pub-row__link">
+                            {# Tronqué à 55 chars pour ne pas déborder #}
+                            {{ resource.title|slice(0, 55)|e }}{{ resource.title|length > 55 ? '…' : '' }}
+                        </a>
+                    </strong>
+                    <small>
+                        {{ resource.resourceType is not null ? resource.resourceType.name|upper|e : 'Ressource' }}
+                    </small>
+                </div>
+
+                {# Badge de statut — chip colorée selon l'enum ResourceStatus #}
+                <div>
                     {#
-                       Badge statut — réutilise les mêmes classes que dans le tableau desktop.
-                       IMPORTANT : tous les cas de l'enum ResourceStatus doivent être couverts
-                       explicitement ici. Un {% else %} générique afficherait la valeur brute
-                       en anglais ('archived', 'draft'...) au lieu d'un libellé traduit.
+                        On lit .status.value (chaîne backed de l'enum ResourceStatus).
+                        Tous les cas sont couverts explicitement (pas de {% else %} affichant la valeur brute anglaise).
                     #}
-                    {% set status_value = resource.status.value %}
-                    {% if status_value == 'published' %}
-                        <span class="status-chip status-chip--published">✓ Publiée</span>
-                    {% elseif status_value == 'pending' %}
-                        <span class="status-chip status-chip--pending">En attente</span>
-                    {% elseif status_value == 'rejected' %}
-                        <span class="status-chip status-chip--rejected">Refusée</span>
-                    {% elseif status_value == 'draft' %}
-                        <span class="status-chip status-chip--draft">Brouillon</span>
-                    {% elseif status_value == 'archived' %}
-                        {# Cas manquant (W3) — tombait dans le {% else %} qui affichait 'archived' en anglais brut #}
-                        <span class="status-chip status-chip--archived">Archivée</span>
+                    {% set sv = resource.status.value %}
+                    {% if sv == 'published' %}
+                        <span class="str-status str-status--published">Publiée</span>
+                    {% elseif sv == 'pending' %}
+                        <span class="str-status str-status--pending">En attente</span>
+                    {% elseif sv == 'rejected' %}
+                        <span class="str-status str-status--rejected">Refusée</span>
+                    {% elseif sv == 'draft' %}
+                        <span class="str-status str-status--draft">Brouillon</span>
+                    {% elseif sv == 'archived' %}
+                        <span class="str-status str-status--archived">Archivée</span>
                     {% else %}
-                        {# Valeur inconnue — fallback neutre pour ne pas casser l'affichage #}
-                        <span class="status-chip status-chip--draft">{{ status_value }}</span>
+                        {# Valeur inconnue → fallback neutre pour ne pas casser l'affichage #}
+                        <span class="str-status str-status--draft">{{ sv|e }}</span>
                     {% endif %}
                 </div>
 
-                <div class="resource-card__meta">
-                    {# Type de ressource #}
-                    <span class="resources-table__type">
-                        {{ resource.resourceType.icon ?? '' }} {{ resource.resourceType.name }}
+                {# Date de soumission #}
+                <div class="str-pub-row__date">
+                    {{ resource.createdAt|date('d/m/Y') }}
+                </div>
+
+                {# Action : lien "Voir →" #}
+                <div>
+                    <a href="{{ path('app_resource_show', {id: resource.id}) }}"
+                       class="str-pub-row__action"
+                       aria-label="Voir la ressource {{ resource.title|slice(0, 30)|e('html_attr') }}">
+                        Voir →
+                    </a>
+                </div>
+
+            </div>
+
+        {% endfor %}
+
+    </div>{# fin .str-pub-list (contient tête + toutes les lignes) #}
+
+
+    {# ──────────────────────────────────────────────────────────────────────────
+       CARTES MOBILES — visibles < 768px (la liste pub-row est masquée par CSS)
+    ──────────────────────────────────────────────────────────────────────────── #}
+    <ul class="str-card-list" aria-label="Liste des ressources soumises">
+
+        {% for resource in resources %}
+            <li class="str-card">
+
+                <div class="str-card__header">
+                    {# Titre — lien vers la page détail #}
+                    <a href="{{ path('app_resource_show', {id: resource.id}) }}"
+                       class="str-card__title">
+                        {{ resource.title|slice(0, 70)|e }}{{ resource.title|length > 70 ? '…' : '' }}
+                    </a>
+
+                    {# Badge de statut (même logique qu'en desktop) #}
+                    {% set sv = resource.status.value %}
+                    {% if sv == 'published' %}
+                        <span class="str-status str-status--published">Publiée</span>
+                    {% elseif sv == 'pending' %}
+                        <span class="str-status str-status--pending">En attente</span>
+                    {% elseif sv == 'rejected' %}
+                        <span class="str-status str-status--rejected">Refusée</span>
+                    {% elseif sv == 'draft' %}
+                        <span class="str-status str-status--draft">Brouillon</span>
+                    {% elseif sv == 'archived' %}
+                        <span class="str-status str-status--archived">Archivée</span>
+                    {% else %}
+                        <span class="str-status str-status--draft">{{ sv|e }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="str-card__meta">
+                    <span class="str-card__type">
+                        {{ resource.resourceType is not null ? resource.resourceType.name|upper|e : 'Ressource' }}
                     </span>
-                    {# Date de soumission #}
-                    <span class="resource-card__date">
+                    <span class="str-card__date">
                         {{ resource.createdAt|date('d/m/Y') }}
                     </span>
                 </div>
+
             </li>
         {% endfor %}
+
     </ul>
+
+    {# TODO V2 : ajouter la section "Candidatures reçues" (grille de profils artistes) #}
+    {# TODO V2 : ajouter les onglets (Publications / Créer / Candidatures / Équipe) #}
 
 {% endif %}
 

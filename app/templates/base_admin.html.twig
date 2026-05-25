@@ -22,333 +22,549 @@
 
 {% block stylesheets %}
 <style>
-    /* ── Variables couleurs admin ──────────────────────────────────────── */
-    :root {
-        --admin-sidebar-bg:    #1a1f2e;   /* fond sidebar — ardoise foncé */
-        --admin-sidebar-dark:  #13172280;  /* séparateurs */
-        --admin-sidebar-text:  #c8cdd8;   /* texte normal */
-        --admin-sidebar-muted: #5c6070;   /* labels sections */
-        --admin-accent:        #c8503a;   /* rouge BazaArt */
-        --admin-accent-light:  rgba(200, 80, 58, 0.12);
-    }
 
-    body { background: #f4f5f7; }
+{# ==========================================================================
+   CSS du layout admin — thème Street V3
+   Préfixe .sd-* pour le sidebar (partagé avec base_dashboard.html.twig),
+   classes .app-layout / .app-main / .topbar / .app-content pour la structure admin.
 
-    .app-layout {
-        display: flex;
-        min-height: 100vh;
-    }
+   TOKENS DESIGN (design-tokens.css) :
+     --bg (#F2EFE6)    --bg-alt (#EAE6D9)
+     --ink (#0D0D0D)   --ink-mute (#5b584f)
+     --accent (#C6F24E) — vert acide
+     --accent-2 (#FF6B2C) — orange
+     --line-soft : rgba(13,13,13,.14)
+     --display (Archivo Black)  --body (Space Grotesk)  --mono (JetBrains Mono)
+     --transition-fast (.12s ease)
 
-    /* ── Sidebar admin ──────────────────────────────────────────────────── */
-    .sidebar {
-        width: 240px;
-        min-height: 100vh;
-        background: var(--admin-sidebar-bg);
-        display: flex;
-        flex-direction: column;
-        flex-shrink: 0;
-        position: fixed;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        z-index: 100;
-    }
+   DESIGN STREET :
+     border-radius: 0 PARTOUT — aucun arrondi nulle part
+     Bordures 1px solid --ink
+     Pas d'emojis dans le HTML rendu
+   ========================================================================== #}
 
-    /* En-tête sidebar */
-    .sidebar__logo {
-        padding: 20px 24px 16px;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
+/* ── Layout principal : sidebar fixe + zone principale ─────────────────────
+ * Même structure que base_dashboard.html.twig.
+ * .sd-side est positionné en fixed (220px de large).
+ * .app-main compense avec margin-left: 220px.
+ */
+.app-layout {
+    display: flex;
+    min-height: 100vh;
+    background: var(--bg);
+}
 
-    .sidebar__logo-wordmark {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
+/* ══ SIDEBAR — classes .sd-* (identiques à base_dashboard.html.twig) ════════
+ *
+ * Le CSS du sidebar est copié ici car base_admin.html.twig n'étend pas
+ * base_dashboard.html.twig (ils ont des structures différentes).
+ * Si une refactorisation est faite, centraliser dans un fichier CSS externe.
+ */
 
-    .sidebar__logo-title {
-        font-family: var(--font-heading);
-        font-size: 18px;
-        color: #fff;
-        font-weight: 700;
-    }
+/* Sidebar fixe fond ink (#0D0D0D) */
+.sd-side {
+    width: 220px;
+    min-height: 100vh;
+    background: var(--ink);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 200;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: transform var(--transition-fast);
+}
 
-    /* Badge ADMIN à côté du logo */
-    .sidebar__admin-badge {
-        font-size: 8px;
-        font-weight: 800;
-        letter-spacing: 0.1em;
-        background: var(--admin-accent);
-        color: #fff;
-        padding: 2px 7px;
-        border-radius: 4px;
-        text-transform: uppercase;
-        margin-top: 2px;
-    }
+/* Logo + wordmark */
+.sd-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid rgba(242,239,230,.1);
+    flex-shrink: 0;
+}
 
-    /* Navigation */
-    .sidebar__nav {
-        padding: 16px 0;
-        flex: 1;
-        overflow-y: auto;
-    }
+.sd-wordmark {
+    font-family: var(--display);
+    font-size: 17px;
+    color: var(--accent);
+    letter-spacing: -.01em;
+    text-transform: uppercase;
+}
 
-    .sidebar__section-title {
-        font-size: 9px;
-        font-weight: 700;
-        color: var(--admin-sidebar-muted);
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        padding: 12px 24px 5px;
-    }
+/* Lien du logo — supprime la décoration de lien native */
+.sd-wordmark-link {
+    text-decoration: none;
+    display: block;
+}
+.sd-wordmark-link:hover .sd-wordmark {
+    opacity: .8;
+}
 
-    /* Lien de navigation */
-    .sidebar__link {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 9px 20px;
-        font-size: 13px;
-        color: var(--admin-sidebar-text);
-        text-decoration: none;
-        transition: background 0.12s;
-        position: relative;
-    }
-    .sidebar__link:hover {
-        background: rgba(255, 255, 255, 0.05);
-        color: #fff;
-    }
+/* Pill de rôle — 3 variantes : artiste (par défaut), structure (orange), admin (sable) */
+.sd-role-pill {
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 3px 6px;
+    background: var(--accent);
+    color: var(--ink);
+    border: 1px solid var(--accent);
+    white-space: nowrap;
+}
 
-    /* Lien actif */
-    .sidebar__link--active {
-        background: var(--admin-accent-light);
-        color: #e8896e;
-        font-weight: 600;
-    }
-    .sidebar__link--active::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 3px;
-        background: var(--admin-accent);
-        border-radius: 0 2px 2px 0;
-    }
+.sd-role-pill--admin {
+    background: var(--bg);
+    color: var(--ink);
+    border-color: var(--bg);
+}
 
-    /* Badge rouge (ex: nombre de ressources en attente) */
-    .sidebar__count {
-        margin-left: auto;
-        background: var(--admin-accent);
-        color: #fff;
-        font-size: 10px;
-        font-weight: 700;
-        min-width: 18px;
-        height: 18px;
-        border-radius: 9px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0 5px;
-    }
+/* Labels de section nav */
+.sd-section {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: rgba(242,239,230,.35);
+    padding: 16px 20px 5px;
+    flex-shrink: 0;
+}
 
-    .sidebar__icon { font-size: 13px; width: 18px; text-align: center; }
+.sd-nav {
+    display: flex;
+    flex-direction: column;
+}
 
-    /* Séparateur */
-    .sidebar__divider {
-        border: none;
-        border-top: 1px solid rgba(255,255,255,0.06);
-        margin: 8px 20px;
-    }
+/* Liens de navigation */
+.sd-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 20px;
+    font: 500 13px/1.3 var(--body);
+    color: rgba(242,239,230,.65);
+    text-decoration: none;
+    transition: background var(--transition-fast), color var(--transition-fast);
+    border-left: 2px solid transparent;
+    position: relative;
+}
 
-    /* Zone utilisateur en bas */
-    .sidebar__user {
-        padding: 14px 16px;
-        border-top: 1px solid rgba(255,255,255,0.06);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
+.sd-link:hover {
+    background: rgba(242,239,230,.05);
+    color: var(--bg);
+    border-left-color: rgba(198,242,78,.5);
+}
 
-    .avatar {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: var(--admin-accent);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 11px;
-        font-weight: 700;
-        color: white;
-        flex-shrink: 0;
-    }
+.sd-link--active {
+    color: var(--accent);
+    font-weight: 600;
+    border-left-color: var(--accent);
+    background: rgba(198,242,78,.07);
+}
 
-    .sidebar__user-name {
-        font-size: 12px;
-        font-weight: 600;
-        color: #fff;
-    }
-    .sidebar__user-role {
-        font-size: 10px;
-        color: var(--admin-sidebar-muted);
-    }
+.sd-link--active:hover {
+    background: rgba(198,242,78,.10);
+}
 
-    /* ── Zone principale ────────────────────────────────────────────────── */
-    .app-main {
-        margin-left: 240px;
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
-    }
+/* Icônes SVG inline */
+.sd-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    display: block;
+}
 
-    /* Topbar */
-    .topbar {
-        height: 56px;
-        background: #fff;
-        border-bottom: 1px solid var(--color-border);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 28px;
-        position: sticky;
-        top: 0;
-        z-index: 50;
-    }
+/* Badges numériques */
+.sd-badge {
+    margin-left: auto;
+    font: 700 9px/1 var(--mono);
+    letter-spacing: .04em;
+    padding: 2px 6px;
+    background: rgba(242,239,230,.12);
+    color: rgba(242,239,230,.8);
+    border: 1px solid rgba(242,239,230,.15);
+    white-space: nowrap;
+}
 
-    .topbar__title {
-        font-family: var(--font-heading);
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--color-text);
-    }
+.sd-badge--warn {
+    background: var(--accent-2);
+    color: var(--ink);
+    border-color: var(--accent-2);
+}
 
-    /* Lien "Voir l'app" dans la topbar */
-    .topbar__link {
-        font-size: 12px;
-        color: var(--admin-sidebar-muted);
-        text-decoration: none;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        transition: color 0.15s;
-    }
-    .topbar__link:hover { color: var(--color-text); }
+/* Utilisateur en bas du sidebar */
+.sd-user {
+    margin-top: auto;
+    padding: 14px 16px;
+    border-top: 1px solid rgba(242,239,230,.08);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
 
-    /* Contenu */
-    .app-content {
-        padding: 28px;
-        flex: 1;
-    }
+.sd-avatar {
+    width: 32px;
+    height: 32px;
+    background: var(--accent);
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: 700 11px var(--mono);
+    letter-spacing: .04em;
+    border: 1px solid rgba(198,242,78,.5);
+    flex-shrink: 0;
+}
 
-    /* Messages flash */
-    .flash {
-        padding: 12px 16px;
-        border-radius: var(--radius-sm);
-        margin-bottom: 16px;
-        font-size: 13px;
-        font-weight: 500;
-    }
-    .flash--success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-    .flash--error   { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-    .flash--info    { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+.sd-user__name {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--bg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sd-user__role {
+    display: block;
+    font: 600 9px var(--mono);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: rgba(242,239,230,.4);
+    margin-top: 1px;
+}
+
+.sd-logout {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    color: rgba(242,239,230,.35);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.sd-logout:hover { color: var(--accent-2); }
+
+/* ══ Zone principale admin ═══════════════════════════════════════════════════
+ * Mêmes règles que base_dashboard mais avec les classes historiques .app-main
+ * pour ne pas casser les templates enfants admin existants.
+ */
+.app-main {
+    margin-left: 220px; /* offset = largeur sidebar */
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background: var(--bg);
+}
+
+/* Topbar admin — identique à .sd-topbar pour cohérence visuelle */
+.topbar {
+    height: 56px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    flex-shrink: 0;
+}
+
+/* Titre de la page courante */
+.topbar__title {
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--ink);
+    letter-spacing: -.01em;
+}
+
+/* Lien discret dans la topbar (ex : "Voir la vitrine") */
+.topbar__link {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    text-decoration: none;
+    letter-spacing: .04em;
+    transition: color var(--transition-fast);
+}
+
+.topbar__link:hover { color: var(--ink); }
+
+/* Zone de contenu */
+.app-content {
+    padding: 28px;
+    flex: 1;
+}
+
+/* Flash messages — Street (bordure ink, aucun arrondi) */
+.flash {
+    padding: 12px 16px;
+    border: 1px solid var(--ink);
+    margin-bottom: 16px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.flash--success { background: #d4edda; color: #155724; }
+.flash--error   { background: #f8d7da; color: #721c24; }
+.flash--info    { background: #d1ecf1; color: #0c5460; }
+
+/* ── Responsive admin (< 900px) ─────────────────────────────────────────── */
+@media (max-width: 900px) {
+    .app-main  { margin-left: 0; }
+    .sd-side   { transform: translateX(-100%); }
+}
+
 </style>
 {% endblock %}
 
 {% block body %}
 <div class="app-layout">
 
-    {# ── SIDEBAR ADMIN ─────────────────────────────────────────────────────── #}
-    <aside class="sidebar">
+    {# ── SIDEBAR ADMIN — thème Street V3 ──────────────────────────────────── #}
+    {#
+        Sidebar refontée avec les classes .sd-* (identiques aux dashboards artiste/structure).
+        Les anciens styles --admin-* ont été supprimés.
 
-        {# Logo + badge admin #}
-        <div class="sidebar__logo">
-            <div class="sidebar__logo-wordmark">
-                <span class="sidebar__logo-title">BazaArt</span>
-                <span class="sidebar__admin-badge">Admin</span>
-            </div>
+        Routes vérifiées dans src/Controller/AdminController.php :
+          app_admin_dashboard           → AdminController#dashboard
+          app_admin_resources_pending   → AdminController#resourcesPending
+          app_admin_users               → AdminController#users
+          app_admin_structures_pending  → AdminController#structuresPending
+          app_admin_resources_all       → AdminController#resourcesAll (sans param de route)
+          app_admin_scraped_opportunities → AdminController#scrapedOpportunities
+          app_article_index             → ArticleController#index
+          app_home                      → HomeController#index
+          app_dashboard                 → DashboardController#index
+          app_logout                    → AuthController#logout
+
+        CORRECTION par rapport à l'ancienne sidebar :
+          L'ancien lien Opportunités utilisait path('app_admin_resources_all', {status: 'published'}).
+          Mais "status" n'est PAS un paramètre de route — c'est un query param (?status=published).
+          path() avec un paramètre non déclaré dans la route génère une erreur Symfony.
+          → Corrigé : path('app_admin_resources_all') sans paramètre.
+    #}
+    <aside class="sd-side" aria-label="Navigation admin">
+
+        {# ── Logo + badge ADMIN ── #}
+        <div class="sd-logo">
+            {#
+                Même comportement que les dashboards artiste et structure :
+                le logo renvoie vers l'accueil public.
+                Utile pour l'admin qui navigue entre l'espace admin et le site public.
+            #}
+            <a href="{{ path('app_home') }}" class="sd-wordmark-link" title="Retour à l'accueil" aria-label="BazaArt — accueil">
+                <span class="sd-wordmark">BazaArt</span>
+            </a>
+            {#
+                Pill "ADMIN" — variante sable (.sd-role-pill--admin).
+                Fond --bg (sable) sur fond --ink (noir) pour se distinguer des
+                variantes artiste (lime) et structure (orange).
+            #}
+            <span class="sd-role-pill sd-role-pill--admin">Admin</span>
         </div>
 
-        {# Navigation admin #}
-        <nav class="sidebar__nav">
+        {# ── Section : Pilotage ── #}
+        <div class="sd-section">Pilotage</div>
+        <nav class="sd-nav" aria-label="Pilotage">
 
-            <div class="sidebar__section-title">Tableau de bord</div>
-
+            {# Cockpit — vue d'ensemble admin #}
             <a href="{{ path('app_admin_dashboard') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_admin_dashboard' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">⊞</span> Vue d'ensemble
+               class="sd-link {{ app.request.attributes.get('_route') == 'app_admin_dashboard' ? 'sd-link--active' : '' }}">
+                {# Icône 4 rectangles (grille de bord) #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3"  y="3"  width="7" height="9"/>
+                    <rect x="14" y="3"  width="7" height="5"/>
+                    <rect x="14" y="12" width="7" height="9"/>
+                    <rect x="3"  y="16" width="7" height="5"/>
+                </svg>
+                Cockpit
             </a>
 
-            <hr class="sidebar__divider">
-            <div class="sidebar__section-title">Gestion</div>
-
-            {# Utilisateurs #}
-            <a href="{{ path('app_admin_users') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_admin_users' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">👥</span> Utilisateurs
-            </a>
-
-            {# Articles #}
-            <a href="{{ path('app_article_index') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_article' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">📝</span> Articles
-            </a>
-
-            {# Opportunités (ressources publiées) #}
-            <a href="{{ path('app_admin_resources_all', {status: 'published'}) }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_admin_resources_all' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">◈</span> Opportunités
-            </a>
-
-            {# Opportunités scrapées (depuis Google Sheets) #}
-            <a href="{{ path('app_admin_scraped_opportunities') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_admin_scraped_opportunities' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">🔍</span> Scraping Sheets
-            </a>
-
-            {# File de modération #}
+            {# Validation des ressources en attente #}
             <a href="{{ path('app_admin_resources_pending') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') == 'app_admin_resources_pending' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">📋</span> Modération
-                {# Affiche le nombre en attente si disponible via la variable globale #}
+               class="sd-link {{ app.request.attributes.get('_route') == 'app_admin_resources_pending' ? 'sd-link--active' : '' }}">
+                {# Icône coche / validation #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m5 12 5 5L20 7"/>
+                </svg>
+                Validation
+                {#
+                    TODO V2 : ajouter un badge avec le comptage des ressources en attente.
+                    Nécessite une variable globale Twig (TwigExtension ou GlobalVariable).
+                    Ex : <span class="sd-badge sd-badge--warn">{{ pending_count }}</span>
+                #}
             </a>
 
-            {# Structures partenaires — candidatures à valider #}
+            {# Gestion des utilisateurs #}
+            <a href="{{ path('app_admin_users') }}"
+               class="sd-link {{ app.request.attributes.get('_route') == 'app_admin_users' ? 'sd-link--active' : '' }}">
+                {# Icône groupe de personnes #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                Utilisateurs
+            </a>
+
+            {#
+                Structures partenaires — validation des demandes.
+                Actif pour toutes les routes "app_admin_structure*"
+                (structures_pending, structure_activate, structure_reject).
+            #}
             <a href="{{ path('app_admin_structures_pending') }}"
-               class="sidebar__link {% if app.request.attributes.get('_route') starts with 'app_admin_structure' %}sidebar__link--active{% endif %}">
-                <span class="sidebar__icon">🏛</span> Structures
+               class="sd-link {{ app.request.attributes.get('_route') starts with 'app_admin_structure' ? 'sd-link--active' : '' }}">
+                {# Icône colonnes / bâtiment institution #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="1.5,4.5 14.5,4.5"/>
+                    <polyline points="1.5,13.5 14.5,13.5"/>
+                    <line x1="4"  y1="4.5" x2="4"  y2="13.5"/>
+                    <line x1="8"  y1="4.5" x2="8"  y2="13.5"/>
+                    <line x1="12" y1="4.5" x2="12" y2="13.5"/>
+                </svg>
+                Structures
             </a>
 
-            <hr class="sidebar__divider">
-            <div class="sidebar__section-title">Liens rapides</div>
-
-            {# Voir la vitrine publique #}
-            <a href="{{ path('app_home') }}" target="_blank"
-               class="sidebar__link">
-                <span class="sidebar__icon">🌐</span> Voir la vitrine
-            </a>
-
-            {# Voir le dashboard utilisateur #}
-            <a href="{{ path('app_dashboard') }}"
-               class="sidebar__link">
-                <span class="sidebar__icon">↩</span> App utilisateur
+            {#
+                Toutes les opportunités (ressources, tous statuts).
+                Note : "status" est un query param, PAS un param de route.
+                path('app_admin_resources_all') sans paramètre est correct.
+                Pour filtrer, ajouter ?status=published dans l'URL directement.
+            #}
+            <a href="{{ path('app_admin_resources_all') }}"
+               class="sd-link {{ app.request.attributes.get('_route') == 'app_admin_resources_all' ? 'sd-link--active' : '' }}">
+                {# Icône globe #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/>
+                </svg>
+                Opportunités
             </a>
 
         </nav>
 
-        {# Zone utilisateur #}
-        <div class="sidebar__user">
+        {# ── Section : Contenu ── #}
+        <div class="sd-section">Contenu</div>
+        <nav class="sd-nav" aria-label="Contenu">
+
+            {#
+                Articles & Blog — actif pour toutes les routes "app_article_*".
+                Lien vers la liste admin des articles (même route que la liste publique
+                — les actions de création/édition sont disponibles pour les admins).
+            #}
+            <a href="{{ path('app_article_index') }}"
+               class="sd-link {{ app.request.attributes.get('_route') starts with 'app_article_' ? 'sd-link--active' : '' }}">
+                {# Icône livre ouvert #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 4h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H4z"/>
+                    <path d="M20 4h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"/>
+                </svg>
+                Articles
+            </a>
+
+            {#
+                Formations — module Formation V1.
+                Actif pour toutes les routes "app_admin_course_*".
+            #}
+            <a href="{{ path('app_admin_course_index') }}"
+               class="sd-link {{ app.request.attributes.get('_route') starts with 'app_admin_course' ? 'sd-link--active' : '' }}">
+                {# Icône mortier (enseignement) #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                    <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                </svg>
+                Formations
+            </a>
+
+            {# Opportunités scrapées depuis Google Sheets #}
+            <a href="{{ path('app_admin_scraped_opportunities') }}"
+               class="sd-link {{ app.request.attributes.get('_route') == 'app_admin_scraped_opportunities' ? 'sd-link--active' : '' }}">
+                {# Icône loupe (scraping / recherche) #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="m20 20-3.5-3.5"/>
+                </svg>
+                Scraping Sheets
+            </a>
+
+        </nav>
+
+        {# ── Section : Liens rapides ── #}
+        <div class="sd-section">Liens</div>
+        <nav class="sd-nav" aria-label="Liens rapides">
+
+            {# Voir la vitrine publique (ouvre dans un nouvel onglet) #}
+            <a href="{{ path('app_home') }}" target="_blank" rel="noopener" class="sd-link">
+                {# Icône lien externe #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                Vitrine publique
+            </a>
+
+            {# Retour vers le dashboard utilisateur standard #}
+            <a href="{{ path('app_dashboard') }}" class="sd-link">
+                {# Icône maison #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 11 12 4l9 7v9h-6v-6h-6v6H3z"/>
+                </svg>
+                App utilisateur
+            </a>
+
+        </nav>
+
+        {# ── Utilisateur en bas ── #}
+        <div class="sd-user">
             {% if app.user %}
-                {% set initials = app.user.email|slice(0, 2)|upper %}
-                <div class="avatar">{{ initials }}</div>
-                <div>
-                    <div class="sidebar__user-name">{{ app.user.email|split('@')|first }}</div>
-                    <div class="sidebar__user-role">Administrateur</div>
+                {#
+                    Initiales : 2 premiers caractères de la partie locale de l'email.
+                    |e pour protection XSS.
+                    Avatar orange (--accent-2) pour distinguer l'admin des artistes (vert).
+                #}
+                {% set adminInitials = app.user.email|split('@')|first|slice(0,2)|upper %}
+                <div class="sd-avatar"
+                     style="background: var(--accent-2); border-color: var(--accent-2);"
+                     aria-hidden="true">
+                    {{ adminInitials|e }}
                 </div>
-                <a href="{{ path('app_logout') }}"
-                   style="margin-left:auto; font-size:18px; color:var(--admin-sidebar-muted); text-decoration:none;"
-                   title="Se déconnecter">⎋</a>
+                <div style="min-width: 0; flex: 1; overflow: hidden;">
+                    <span class="sd-user__name">{{ app.user.email|split('@')|first|e }}</span>
+                    <span class="sd-user__role">Administrateur</span>
+                </div>
+                {# Icône porte de sortie — déconnexion #}
+                <a href="{{ path('app_logout') }}" class="sd-logout" title="Se déconnecter">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                </a>
             {% endif %}
         </div>
 

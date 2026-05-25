@@ -19,3 +19,5 @@
 - [Collision tokens CSS — base.html.twig écrase design-tokens.css](feedback_design_tokens_collision.md) — Bloc :root inline dans base.html.twig redéfinit --color-* qui gagnent sur les nouveaux --bg/--ink/--accent
 - [Duplication CSS composants — pas de fichier components.css global](feedback_css_duplication_components.md) — Chaque template recrée .btn, .chip, .eyebrow localement au lieu de classes globales partagées
 - [Nav Street — audit déplacement vers base.html.twig — mai 2026](feedback_base_app_nav_street.md) — Double layout admin (nav Street + sidebar), skip link cassé login/register/admin, CSS .lp-nav* orphelin dans vitrine
+- [Dashboard artiste — patterns et anti-patterns identifiés](feedback_twig_dashboard_patterns.md) — Double H1 (page_title + h1 bannière), preloads polices dupliqués, emoji 📍 non conforme convention, URL profil accents non encodés
+- [Module Formation — patterns et anti-patterns identifiés](feedback_formation_module_patterns.md) — videoUrl non validée côté PHP, N+1 liste admin, double flush recalculate, race condition UX bouton complétion, videoBunnyId affiché dans placeholder public

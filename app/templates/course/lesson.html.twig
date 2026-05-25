@@ -1,0 +1,774 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # course/lesson.html.twig — Lecteur de leçon
+ #
+ # Affiche la vidéo d'une leçon avec navigation prev/next et bouton de complétion.
+ #
+ # Variables disponibles :
+ #   - course         : Course
+ #   - lesson         : Lesson (la leçon courante)
+ #   - enrollment     : CourseEnrollment|null
+ #   - lessonProgress : LessonProgress|null (progression sur cette leçon)
+ #   - prevLesson     : Lesson|null (leçon précédente dans l'ordre)
+ #   - nextLesson     : Lesson|null (leçon suivante dans l'ordre)
+ #
+ # TODO sécurité: configurer frame-src dans Content-Security-Policy
+ # (config/packages/nelmio_security.yaml ou header Nginx Content-Security-Policy)
+ # pour autoriser les domaines vidéo :
+ #   - youtube.com / www.youtube.com
+ #   - player.vimeo.com
+ #   - iframe.mediadelivery.net (Bunny Stream)
+ # Sans cette config, les iframes vidéo seront bloquées par le navigateur en prod.
+ #}
+
+{% block page_title %}{{ lesson.title|e }}{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+    /*
+     * ── LECTEUR DE LEÇON — Styles ────────────────────────────────────────────
+     * Préfixe .cf- (course-formation)
+     * border-radius: 0 partout
+     */
+
+    /* ── Fil d'Ariane / navigation contextuelle ─────────────────────────── */
+    .cf-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    .cf-breadcrumb a {
+        color: var(--ink-mute);
+        text-decoration: none;
+        transition: color var(--transition-fast);
+    }
+
+    .cf-breadcrumb a:hover { color: var(--ink); }
+
+    .cf-breadcrumb__sep { opacity: .4; }
+
+    /* ── Lecteur vidéo ───────────────────────────────────────────────────── */
+    .cf-player {
+        margin-bottom: 24px;
+        border: 1px solid var(--ink);
+    }
+
+    /* Wrapper responsive 16/9 */
+    .cf-player__embed {
+        position: relative;
+        padding-bottom: 56.25%;
+        height: 0;
+        overflow: hidden;
+        background: #000;
+    }
+
+    .cf-player__embed iframe {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        border: none;
+    }
+
+    /* Message "vidéo non disponible" */
+    .cf-player__unavailable {
+        aspect-ratio: 16 / 9;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        background: var(--bg-alt);
+        color: var(--ink-mute);
+    }
+
+    .cf-player__unavailable p {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        margin: 0;
+    }
+
+    /*
+     * Placeholder vidéo Bunny Stream (intégration player prévue en V2).
+     * Remplace l'ancien bloc qui affichait l'identifiant technique brut.
+     * L'identifiant Bunny ne doit JAMAIS apparaître dans le HTML visible.
+     * border-radius: 0 conformément aux conventions de design du projet.
+     */
+    .cf-video-placeholder {
+        aspect-ratio: 16 / 9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-alt);
+        border: 1px solid var(--ink);
+    }
+
+    .cf-video-placeholder p {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin: 0;
+    }
+
+    /* ── Infos de la leçon ───────────────────────────────────────────────── */
+    .cf-lesson-info {
+        margin-bottom: 20px;
+    }
+
+    .cf-lesson-title {
+        font-family: var(--display);
+        font-size: clamp(1.1rem, 2.5vw, 1.6rem);
+        letter-spacing: -.02em;
+        text-transform: uppercase;
+        margin: 0 0 8px;
+        line-height: 1.2;
+    }
+
+    .cf-lesson-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+
+    .cf-lesson-description {
+        margin-top: 16px;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--ink);
+        white-space: pre-line;
+    }
+
+    /* ── Bouton "Marquer comme terminée" ─────────────────────────────────── */
+    .cf-complete-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        border: 1px solid var(--ink);
+        background: transparent;
+        color: var(--ink);
+        cursor: pointer;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+
+    .cf-complete-btn:hover:not(:disabled) {
+        background: var(--accent);
+        border-color: var(--accent);
+    }
+
+    /* État "déjà terminée" */
+    .cf-complete-btn--done {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--ink);
+        cursor: default;
+    }
+
+    /* ── Ressources téléchargeables ──────────────────────────────────────── */
+    .cf-resources {
+        margin-top: 24px;
+        border: 1px solid var(--ink);
+    }
+
+    .cf-resources__header {
+        padding: 10px 16px;
+        background: var(--ink);
+        color: var(--bg);
+    }
+
+    .cf-resources__title {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        margin: 0;
+    }
+
+    .cf-resources__list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .cf-resources__item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 13px;
+    }
+
+    .cf-resources__item:last-child { border-bottom: none; }
+
+    .cf-resources__link {
+        color: var(--ink);
+        text-decoration: none;
+        flex: 1;
+        transition: color var(--transition-fast);
+    }
+
+    .cf-resources__link:hover { color: var(--ink-mute); }
+
+    .cf-resources__size {
+        font-family: var(--mono);
+        font-size: 9px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+
+    /* ── Navigation prev/next ────────────────────────────────────────────── */
+    .cf-nav {
+        display: flex;
+        gap: 0;
+        margin-top: 32px;
+        border: 1px solid var(--ink);
+    }
+
+    .cf-nav__btn {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 16px;
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: var(--ink);
+        text-decoration: none;
+        transition: background var(--transition-fast);
+        border: none;
+    }
+
+    .cf-nav__btn:hover {
+        background: var(--bg-alt);
+    }
+
+    /* Bouton "précédent" — aligné à gauche */
+    .cf-nav__btn--prev {
+        border-right: 1px solid var(--ink);
+    }
+
+    /* Bouton "suivant" — aligné à droite */
+    .cf-nav__btn--next {
+        justify-content: flex-end;
+    }
+
+    /* Bouton désactivé (première/dernière leçon) */
+    .cf-nav__btn--disabled {
+        opacity: .3;
+        pointer-events: none;
+    }
+
+    .cf-nav__label {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .cf-nav__direction {
+        font-size: 8px;
+        letter-spacing: .1em;
+        color: var(--ink-mute);
+    }
+
+    .cf-nav__title {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+    }
+    </style>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+    /*
+     * ── Script du lecteur de leçon ────────────────────────────────────────────
+     *
+     * Deux fonctionnalités JavaScript :
+     *
+     * 1. Bouton "Marquer comme terminée" (AJAX) :
+     *    Envoie un POST JSON à /formations/{slug}/learn/{id}/progress
+     *    avec { completed: true } pour marquer la leçon comme terminée.
+     *    Met à jour le bouton visuellement sans rechargement de page.
+     *
+     * 2. Sauvegarde de position (périodique) :
+     *    Toutes les 30 secondes, envoie la position actuelle de l'iframe.
+     *    Note : pour une iframe YouTube, l'API YouTube Player est nécessaire.
+     *    En V1 on fait une approximation : on envoie 0 (position inconnue).
+     *    En V2, intégrer l'API YouTube Player ou Bunny Stream pour lire currentTime.
+     *
+     * CSRF : les routes AJAX de progression n'utilisent pas de token CSRF
+     * (l'attribut #[IsGranted('IS_AUTHENTICATED_FULLY')] suffit pour les
+     * routes POST JSON — le SameSite cookie de session protège contre le CSRF
+     * pour les requêtes same-origin avec XMLHttpRequest).
+     */
+    (function () {
+        'use strict';
+
+        // ── Éléments DOM ────────────────────────────────────────────────────
+        var completeBtn   = document.getElementById('cf-complete-btn');
+        var progressUrl   = document.getElementById('cf-progress-url');
+
+        // Si les éléments n'existent pas (admin sans enrollment), ne rien faire
+        if (!progressUrl) return;
+
+        var url = progressUrl.value;   // URL de la route AJAX (data attribute)
+
+        /**
+         * Envoie la progression au serveur via fetch (API moderne, pas de jQuery).
+         *
+         * IMPORTANT : cette fonction retourne la Promise fetch() pour permettre
+         * au callback appelant de s'enchaîner via .then() et d'attendre la
+         * résolution réelle du serveur avant toute mise à jour de l'interface.
+         * Ancienne version : utilisait setTimeout(500ms) → bouton mis à jour
+         * AVANT la réponse serveur → race condition si réseau lent.
+         *
+         * @param {number}  position   Position en secondes (0 en V1 — API player non intégrée)
+         * @param {boolean} completed  true si on marque la leçon comme terminée
+         * @returns {Promise}          La Promise fetch pour chaînage .then() / .catch()
+         */
+        function sendProgress(position, completed) {
+            return fetch(url, {
+                method:  'POST',
+                headers: {
+                    'Content-Type':     'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'   // identifié comme requête AJAX
+                },
+                body: JSON.stringify({ position: position, completed: completed })
+            })
+            .then(function (response) {
+                // Si la réponse HTTP est en erreur (4xx, 5xx), on retourne null
+                // pour que le .then() suivant puisse détecter l'échec proprement.
+                return response.ok ? response.json() : null;
+            })
+            .then(function (data) {
+                if (!data || !data.success) return data;
+                // Mise à jour du pourcentage global affiché si la réponse le contient
+                var pctEl = document.getElementById('cf-progress-percent');
+                if (pctEl && typeof data.progressPercent === 'number') {
+                    pctEl.textContent = data.progressPercent + '%';
+                }
+                return data;
+            });
+            // Note : pas de .catch() ici — la sauvegarde périodique est silencieuse.
+            // Le bouton "Marquer comme terminée" gère son propre .catch() ci-dessous.
+        }
+
+        // ── 1. Bouton "Marquer comme terminée" ──────────────────────────────
+        if (completeBtn && !completeBtn.classList.contains('cf-complete-btn--done')) {
+            // Mémoriser le libellé d'origine pour le restaurer en cas d'erreur
+            var originalBtnHtml = completeBtn.innerHTML;
+
+            completeBtn.addEventListener('click', function () {
+                // Désactiver immédiatement pour éviter les double-clics pendant l'appel
+                completeBtn.disabled = true;
+                completeBtn.textContent = 'Enregistrement…';
+
+                // sendProgress() retourne une Promise : on attend la vraie réponse
+                // serveur avant de mettre à jour le bouton (correction race condition).
+                // Ancien code : setTimeout(500ms) → UX incorrecte sur réseau lent.
+                sendProgress(0, true)
+                    .then(function (data) {
+                        if (data && data.success) {
+                            // Serveur a bien persisté → mise à jour visuelle définitive
+                            completeBtn.classList.add('cf-complete-btn--done');
+                            completeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg> Leçon terminée';
+                            completeBtn.disabled = true;
+                        } else {
+                            // Serveur a renvoyé success: false → on restaure le bouton
+                            completeBtn.innerHTML = originalBtnHtml;
+                            completeBtn.disabled = false;
+                            // Affiche un message d'erreur discret sous le bouton
+                            var errMsg = document.getElementById('cf-complete-error');
+                            if (errMsg) {
+                                errMsg.textContent = 'Erreur lors de l\'enregistrement. Veuillez réessayer.';
+                                errMsg.removeAttribute('hidden');
+                            }
+                        }
+                    })
+                    .catch(function () {
+                        // Erreur réseau (fetch rejeté) → on restaure le bouton
+                        completeBtn.innerHTML = originalBtnHtml;
+                        completeBtn.disabled = false;
+                        var errMsg = document.getElementById('cf-complete-error');
+                        if (errMsg) {
+                            errMsg.textContent = 'Erreur réseau. Vérifiez votre connexion et réessayez.';
+                            errMsg.removeAttribute('hidden');
+                        }
+                    });
+            });
+        }
+
+        // ── 2. Sauvegarde périodique de la position ──────────────────────────
+        // Toutes les 30 secondes, on envoie position = 0 (V1 sans API player).
+        // En V2, récupérer la position réelle via l'API YouTube/Bunny.
+        var positionTimer = setInterval(function () {
+            sendProgress(0, false);
+        }, 30000);
+
+        // Nettoyage du timer quand la page est fermée (bonne pratique)
+        window.addEventListener('beforeunload', function () {
+            clearInterval(positionTimer);
+        });
+
+    }());
+    </script>
+{% endblock %}
+
+{% block content %}
+
+{# ── FIL D'ARIANE ─────────────────────────────────────────────────────────── #}
+<nav class="cf-breadcrumb" aria-label="Fil d'Ariane">
+    <a href="{{ path('app_course_index') }}">Formations</a>
+    <span class="cf-breadcrumb__sep" aria-hidden="true">›</span>
+    <a href="{{ path('app_course_show', {slug: course.slug}) }}">{{ course.title|e }}</a>
+    <span class="cf-breadcrumb__sep" aria-hidden="true">›</span>
+    <a href="{{ path('app_course_learn', {slug: course.slug}) }}">Mon parcours</a>
+    <span class="cf-breadcrumb__sep" aria-hidden="true">›</span>
+    <span aria-current="page">{{ lesson.title|e }}</span>
+</nav>
+
+{#
+ # ── LECTEUR VIDÉO ────────────────────────────────────────────────────────────
+ # Si lesson.videoUrl est renseignée → iframe responsive.
+ # Sinon → message "Vidéo bientôt disponible".
+ #
+ # TODO sécurité: voir la note en en-tête du template pour configurer frame-src.
+ #}
+<div class="cf-player">
+
+    {% if lesson.videoUrl is not null %}
+        {#
+         # OPTION B : iframe embed direct.
+         # allow="..." = permissions accordées à l'iframe.
+         # allowfullscreen = autorise le plein écran (UX lecteur vidéo).
+         # loading="lazy" = chargement différé (performance page).
+         # |e sur l'URL : échappement HTML pour éviter XSS.
+         #}
+        <div class="cf-player__embed">
+            <iframe src="{{ lesson.videoUrl|e }}"
+                    title="{{ lesson.title|e }}"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                    allowfullscreen
+                    loading="lazy">
+            </iframe>
+        </div>
+
+    {% elseif lesson.videoBunnyId is not null %}
+        {#
+         # Bunny Stream — identifiant présent mais player non encore intégré (V2).
+         #
+         # IMPORTANT : on n'affiche PAS l'identifiant Bunny dans le HTML visible.
+         # Raison : videoBunnyId est un identifiant interne (UUID technique de la
+         # bibliothèque Bunny Stream). Le diffuser dans le DOM permet à n'importe
+         # quel visiteur de tenter d'accéder directement à la vidéo hors contexte.
+         # En V2, le player Bunny Stream sera intégré ici avec un token signé.
+         # Pour l'instant, on affiche un message générique neutre.
+         #
+         # En V2 : créer un TwigExtension ou injecter BUNNY_STREAM_LIBRARY_ID
+         # depuis le controller pour construire l'URL iframe signée.
+         #}
+        <div class="cf-video-placeholder">
+            <p>Vidéo en cours de mise en ligne — disponible prochainement</p>
+        </div>
+
+    {% else %}
+        {# Pas de vidéo renseignée → message de placeholder #}
+        <div class="cf-player__unavailable">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+                <rect x="2" y="2" width="20" height="20"/>
+                <line x1="2" y1="9" x2="22" y2="9"/>
+                <line x1="9" y1="2" x2="9" y2="22"/>
+            </svg>
+            <p>Vidéo bientôt disponible</p>
+        </div>
+    {% endif %}
+
+</div>{# /.cf-player #}
+
+{# ── INFOS DE LA LEÇON ────────────────────────────────────────────────────── #}
+<div class="cf-lesson-info">
+
+    {# Titre de la leçon — affiché en grand sous le player #}
+    <h2 class="cf-lesson-title">{{ lesson.title|e }}</h2>
+
+    {# Méta : durée + statut isFreePreview #}
+    <div class="cf-lesson-meta">
+        {% if lesson.durationMinutes is not null %}
+            <span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" aria-hidden="true" style="display:inline;vertical-align:middle;margin-right:2px;">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                {{ lesson.durationMinutes }}&#8239;min
+            </span>
+        {% endif %}
+
+        {% if lesson.isFreePreview %}
+            <span style="background: var(--accent); color: var(--ink);
+                         padding: 2px 6px; font-size: 8px; font-weight: 700;">
+                APERÇU GRATUIT
+            </span>
+        {% endif %}
+
+        {#
+         # Indicateur de progression courant sur cette leçon.
+         # id="cf-progress-percent" : mis à jour par le JS AJAX après complétion.
+         #}
+        {% if lessonProgress is not null %}
+            {% if lessonProgress.isCompleted() %}
+                <span style="color: var(--ok);">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2.5"
+                         stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true" style="display:inline;vertical-align:middle;margin-right:2px;">
+                        <path d="M20 6L9 17l-5-5"/>
+                    </svg>
+                    Terminée le {{ lessonProgress.completedAt|date('d/m/Y') }}
+                </span>
+            {% elseif lessonProgress.isStarted() %}
+                <span>En cours</span>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    {# Description de la leçon (objectifs pédagogiques) #}
+    {% if lesson.description is not null %}
+        <div class="cf-lesson-description">{{ lesson.description|e }}</div>
+    {% endif %}
+
+</div>{# /.cf-lesson-info #}
+
+{#
+ # ── BOUTON "MARQUER COMME TERMINÉE" ─────────────────────────────────────────
+ # Visible uniquement si l'utilisateur a un enrollment (pas l'admin en prévisualisation).
+ # Le JS du bloc javascripts gère l'envoi AJAX.
+ #
+ # On stocke l'URL AJAX dans un input hidden pour que le JS puisse la lire
+ # sans duplication (path() Twig n'est pas accessible en JS directement).
+ #}
+{% if enrollment is not null %}
+
+    {# URL AJAX stockée pour le JavaScript #}
+    <input type="hidden"
+           id="cf-progress-url"
+           value="{{ path('app_course_lesson_progress', {slug: course.slug, lessonId: lesson.id}) }}">
+
+    <div style="margin-bottom: 24px;">
+        {% if lessonProgress is not null and lessonProgress.isCompleted() %}
+            {# Déjà terminée → bouton "done" non cliquable #}
+            <button type="button"
+                    id="cf-complete-btn"
+                    class="cf-complete-btn cf-complete-btn--done"
+                    disabled
+                    aria-label="Leçon déjà marquée comme terminée">
+                {# Icône coche #}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2.5"
+                     stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true">
+                    <path d="M20 6L9 17l-5-5"/>
+                </svg>
+                Leçon terminée
+            </button>
+        {% else %}
+            {# À terminer → bouton actif #}
+            <button type="button"
+                    id="cf-complete-btn"
+                    class="cf-complete-btn"
+                    aria-label="Marquer la leçon comme terminée">
+                {# Icône coche vide #}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M8 12l3 3 5-5"/>
+                </svg>
+                Marquer comme terminée
+            </button>
+
+            {# Affichage du pourcentage global (mis à jour par JS) #}
+            <span style="margin-left: 12px; font-family: var(--mono); font-size: 10px;
+                         color: var(--ink-mute); letter-spacing: .04em; text-transform: uppercase;">
+                Progression globale :
+                <span id="cf-progress-percent">
+                    {{ enrollment.progressPercent }}%
+                </span>
+            </span>
+
+            {#
+             # Zone de message d'erreur AJAX — masquée par défaut (attribut hidden).
+             # Le JavaScript la rend visible uniquement si le serveur répond
+             # success: false ou si une erreur réseau survient (catch).
+             # Pas d'emoji, pas de rounded-*, couleur via --accent-2 (erreur).
+             #}
+            <p id="cf-complete-error"
+               hidden
+               role="alert"
+               style="margin-top: 8px;
+                      font-family: var(--mono);
+                      font-size: 10px;
+                      letter-spacing: .04em;
+                      color: var(--accent-2);">
+            </p>
+        {% endif %}
+    </div>
+
+{% endif %}
+
+{#
+ # ── RESSOURCES TÉLÉCHARGEABLES ───────────────────────────────────────────────
+ # Affichées uniquement si la leçon a des ressources attachées.
+ #}
+{% if lesson.resources is not empty %}
+
+    <div class="cf-resources">
+        <div class="cf-resources__header">
+            <h3 class="cf-resources__title">Ressources à télécharger</h3>
+        </div>
+        <ul class="cf-resources__list">
+            {% for resource in lesson.resources %}
+                <li class="cf-resources__item">
+                    {# Icône fichier générique #}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="var(--ink-mute)" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+                        <polyline points="13 2 13 9 20 9"/>
+                    </svg>
+                    {#
+                     # Lien de téléchargement vers le fichier.
+                     # asset() génère l'URL publique depuis le chemin relatif.
+                     # download : attribut HTML5 qui force le téléchargement plutôt que l'affichage.
+                     # |e sur le titre et le chemin : protection XSS.
+                     #}
+                    <a href="{{ asset(resource.filePath|e) }}"
+                       class="cf-resources__link"
+                       download="{{ resource.title|e }}">
+                        {{ resource.title|e }}
+                    </a>
+                    {# Taille du fichier si renseignée #}
+                    {% if resource.fileSize is not null %}
+                        <span class="cf-resources__size">
+                            {{ (resource.fileSize / 1024 / 1024)|number_format(1) }}&#8239;Mo
+                        </span>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+{% endif %}
+
+{#
+ # ── NAVIGATION PREV / NEXT ───────────────────────────────────────────────────
+ # Les leçons sont dans l'ordre du plan de cours.
+ # prevLesson et nextLesson sont calculés dans le controller.
+ #}
+<nav class="cf-nav" aria-label="Navigation entre les leçons">
+
+    {# Bouton "Leçon précédente" #}
+    {% if prevLesson is not null %}
+        <a href="{{ path('app_course_lesson', {slug: course.slug, lessonId: prevLesson.id}) }}"
+           class="cf-nav__btn cf-nav__btn--prev"
+           aria-label="Leçon précédente : {{ prevLesson.title|e }}">
+            {# Icône flèche gauche #}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+                <line x1="19" y1="12" x2="5" y2="12"/>
+                <polyline points="12 19 5 12 12 5"/>
+            </svg>
+            <div class="cf-nav__label">
+                <span class="cf-nav__direction">Précédente</span>
+                <span class="cf-nav__title">{{ prevLesson.title|e }}</span>
+            </div>
+        </a>
+    {% else %}
+        {# Pas de leçon précédente — bouton désactivé pour maintenir l'alignement #}
+        <span class="cf-nav__btn cf-nav__btn--prev cf-nav__btn--disabled" aria-hidden="true">
+            <div class="cf-nav__label">
+                <span class="cf-nav__direction">Première leçon</span>
+            </div>
+        </span>
+    {% endif %}
+
+    {# Bouton "Leçon suivante" #}
+    {% if nextLesson is not null %}
+        <a href="{{ path('app_course_lesson', {slug: course.slug, lessonId: nextLesson.id}) }}"
+           class="cf-nav__btn cf-nav__btn--next"
+           aria-label="Leçon suivante : {{ nextLesson.title|e }}">
+            <div class="cf-nav__label" style="text-align: right;">
+                <span class="cf-nav__direction">Suivante</span>
+                <span class="cf-nav__title">{{ nextLesson.title|e }}</span>
+            </div>
+            {# Icône flèche droite #}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="12 5 19 12 12 19"/>
+            </svg>
+        </a>
+    {% else %}
+        {# Dernière leçon — proposition de retour au plan de cours #}
+        <a href="{{ path('app_course_learn', {slug: course.slug}) }}"
+           class="cf-nav__btn cf-nav__btn--next"
+           aria-label="Retourner au plan de cours">
+            <div class="cf-nav__label" style="text-align: right;">
+                <span class="cf-nav__direction">Fin de la formation</span>
+                <span class="cf-nav__title">Retour au plan de cours</span>
+            </div>
+            {# Icône maison #}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+                <path d="M3 11 12 4l9 7v9h-6v-6h-6v6H3z"/>
+            </svg>
+        </a>
+    {% endif %}
+
+</nav>
+
+{% endblock %}

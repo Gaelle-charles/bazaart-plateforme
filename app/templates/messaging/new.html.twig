@@ -1,4 +1,9 @@
-{% extends 'base_app.html.twig' %}
+{% extends 'base_dashboard.html.twig' %}
+
+{% block sidebar %}
+    {# Sidebar commune à toutes les pages du dashboard artiste — voir _partials/sidebar_artiste.html.twig #}
+    {% include '_partials/sidebar_artiste.html.twig' %}
+{% endblock %}
 
 {% block title %}Démarrer une conversation avec {{ otherUser.email|split('@')|first }} — BazaArt{% endblock %}
 {% block page_title %}Messages{% endblock %}

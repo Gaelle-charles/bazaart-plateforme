@@ -1,4 +1,4 @@
-{% extends 'base_app.html.twig' %}
+{% extends 'base_dashboard.html.twig' %}
 
 {#
  # resource/my.html.twig — Mes ressources soumises
@@ -11,6 +11,11 @@
  #   resources      — collection de Resource soumises par l'utilisateur connecté
  #   statusFilter   — string|null (statut actif pour le filtre : 'pending', 'published', 'rejected', ou null = tous)
  #}
+
+{% block sidebar %}
+    {# Sidebar commune à toutes les pages du dashboard artiste — voir _partials/sidebar_artiste.html.twig #}
+    {% include '_partials/sidebar_artiste.html.twig' %}
+{% endblock %}
 
 {% block title %}Mes soumissions — Bazaart{% endblock %}
 {% block page_title %}Mes soumissions{% endblock %}

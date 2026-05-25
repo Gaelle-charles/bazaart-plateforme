@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Entity\User;
 use App\Repository\ArtistProfileRepository;
+use App\Repository\DisciplineRepository;
 use App\Service\ArtistProfileService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -24,6 +25,9 @@ class ArtistProfileController extends AbstractController
     public function __construct(
         private readonly ArtistProfileService $profileService,
         private readonly ArtistProfileRepository $profileRepository,
+        // Injecté pour alimenter la liste des disciplines dans le formulaire d'édition
+        // et les filtres de l'annuaire (prêt pour V1).
+        private readonly DisciplineRepository $disciplineRepository,
     ) {}
 
     /**
@@ -84,8 +88,13 @@ class ArtistProfileController extends AbstractController
             return $this->redirectToRoute('app_artist_profile_show');
         }
 
+        // Charge toutes les disciplines disponibles triées alphabétiquement.
+        // Elles sont passées au template pour construire la grille de checkboxes.
+        $allDisciplines = $this->disciplineRepository->findBy([], ['name' => 'ASC']);
+
         return $this->render('artist_profile/edit.html.twig', [
-            'profile' => $profile, // null si nouveau profil, objet si existant
+            'profile'        => $profile,        // null si nouveau profil, objet si existant
+            'allDisciplines' => $allDisciplines, // pour la section "Disciplines artistiques"
         ]);
     }
 

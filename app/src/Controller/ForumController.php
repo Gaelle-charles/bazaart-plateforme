@@ -389,6 +389,65 @@ class ForumController extends AbstractController
         return $this->redirectToRoute('app_forum_category', ['categorySlug' => $categorySlug]);
     }
 
+    // ─── Signalement d'un thread ──────────────────────────────────────────────
+
+    /**
+     * Signale un thread inapproprié à l'équipe de modération.
+     *
+     * Correction 3 — fonctionnalité CDC manquante.
+     *
+     * Règles métier :
+     *   - Seuls les utilisateurs authentifiés peuvent signaler (IS_AUTHENTICATED_FULLY).
+     *   - Un utilisateur ne peut pas signaler son propre thread (anti-spam).
+     *   - Le signalement envoie un email à l'admin via ForumService::reportThread().
+     *   - Pas de persistance en BDD en V1 (pas de migration nécessaire).
+     *
+     * Sécurité :
+     *   - Token CSRF unique par thread : "report_{thread.id}"
+     *   - IS_AUTHENTICATED_FULLY vérifié par #[IsGranted] au niveau de la classe
+     *     (tous les utilisateurs connectés via la déclaration sur ForumController)
+     *
+     * Route : POST /forum/thread/{id}/report (name: app_forum_report)
+     */
+    #[Route('/thread/{id}/report', name: 'report', methods: ['POST'])]
+    public function report(ForumThread $thread, Request $request): Response
+    {
+        // ── Vérification CSRF ─────────────────────────────────────────────────
+        // Token unique par thread pour éviter le rejeu entre différents threads.
+        if (!$this->isCsrfTokenValid('report_' . $thread->getId(), $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+            return $this->redirectToRoute('app_forum_thread', [
+                'categorySlug' => $thread->getCategory()->getSlug(),
+                'threadSlug'   => $thread->getSlug(),
+            ]);
+        }
+
+        /** @var User $user */
+        $user = $this->getUser();
+
+        // ── Anti-spam : on ne peut pas signaler son propre thread ─────────────
+        // Comparer les instances d'entité Doctrine est correct ici car elles sont
+        // toutes les deux dans le même EntityManager et donc potentiellement identiques.
+        // On compare les IDs pour être certain (évite les problèmes de proxy lazy).
+        if ($thread->getAuthor()->getId() === $user->getId()) {
+            $this->addFlash('warning', 'Vous ne pouvez pas signaler votre propre sujet.');
+            return $this->redirectToRoute('app_forum_thread', [
+                'categorySlug' => $thread->getCategory()->getSlug(),
+                'threadSlug'   => $thread->getSlug(),
+            ]);
+        }
+
+        // ── Délégation au service (toute la logique d'envoi d'email est là-bas) ──
+        $this->forumService->reportThread($thread, $user);
+
+        $this->addFlash('success', 'Votre signalement a bien été transmis à l\'équipe de modération. Merci.');
+
+        return $this->redirectToRoute('app_forum_thread', [
+            'categorySlug' => $thread->getCategory()->getSlug(),
+            'threadSlug'   => $thread->getSlug(),
+        ]);
+    }
+
     /**
      * Supprime une réponse (et décrémente le compteur du thread).
      * Autorisé à l'auteur, aux admins et modérateurs (ForumVoter::FORUM_DELETE).

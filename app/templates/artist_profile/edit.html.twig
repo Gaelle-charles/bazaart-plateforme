@@ -1,4 +1,4 @@
-{% extends 'base_app.html.twig' %}
+{% extends 'base_dashboard.html.twig' %}
 
 {#
  # artist_profile/edit.html.twig — Formulaire d'édition du profil artiste
@@ -17,6 +17,11 @@
  # Variables reçues du contrôleur :
  #   - profile : ArtistProfile|null (null = création)
  #}
+
+{% block sidebar %}
+    {# Sidebar commune à toutes les pages du dashboard artiste — voir _partials/sidebar_artiste.html.twig #}
+    {% include '_partials/sidebar_artiste.html.twig' %}
+{% endblock %}
 
 {% block title %}{{ profile ? 'Modifier mon profil' : 'Créer mon profil artiste' }} — BazaArt{% endblock %}
 {% block page_title %}{{ profile ? 'Modifier mon profil artiste' : 'Créer mon profil artiste' }}{% endblock %}
@@ -245,6 +250,63 @@
 .ap-btn-cancel:hover { color: var(--ink); }
 
 /* ============================================================
+   DISCIPLINES — Grille de cases à cocher
+   Chaque discipline s'affiche comme un label cliquable
+   avec une case à cocher intégrée, style Street :
+   bords francs, fond lime quand coché.
+   ============================================================ */
+
+/* Grille responsive : 2 colonnes sur mobile, 3 sur desktop */
+.ap-disciplines-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-sm);
+}
+
+@media (min-width: 480px) {
+    .ap-disciplines-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Label cliquable — tout le bloc est la zone de clic */
+.ap-discipline-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    cursor: pointer;
+    font-family: var(--body);
+    font-size: 13px;
+    color: var(--ink);
+    /* Transition douce pour le survol / sélection */
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+    /* border-radius: 0 — bords francs du thème Street */
+    user-select: none;
+}
+
+.ap-discipline-item:hover {
+    border-color: var(--ink);
+    background: var(--bg-alt, #f5f5f0);
+}
+
+/* Quand la case est cochée : fond lime, texte noir — indicateur clair */
+.ap-discipline-item:has(input:checked) {
+    background: var(--accent);    /* lime */
+    border-color: var(--ink);
+}
+
+/* La case à cocher elle-même : on la garde visible mais discrète */
+.ap-discipline-item input[type="checkbox"] {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    accent-color: var(--ink);     /* Couleur de la coche — noir sur lime */
+    cursor: pointer;
+}
+
+/* ============================================================
    APERÇU AVATAR ACTUEL
    ============================================================ */
 .ap-avatar-preview {
@@ -428,9 +490,50 @@
             </div>
         </div>
 
-        {# ── Section 4 : Avatar ── #}
+        {#
+           ── Section 4 : Disciplines artistiques ──
+           On boucle sur toutes les disciplines passées par le contrôleur
+           via 'allDisciplines'. Pour chaque discipline, on affiche une checkbox.
+           :has(input:checked) en CSS s'occupe de l'état visuel coché/décoché.
+
+           Note : profile.disciplines.contains(discipline) appelle la méthode
+           contains() de ArrayCollection de Doctrine — elle compare par identité
+           d'objet (même ID en BDD). C'est la bonne façon de pré-cocher.
+        #}
         <div class="ap-edit-section">
-            <div class="ap-edit-section__header">04 — Avatar</div>
+            <div class="ap-edit-section__header">04 — Disciplines artistiques</div>
+            <div class="ap-edit-section__body">
+
+                <div class="ap-field">
+                    <p class="ap-field-hint" style="margin-bottom: var(--space-md);">
+                        Sélectionnez une ou plusieurs disciplines qui correspondent à votre pratique.
+                    </p>
+
+                    {% if allDisciplines is defined and allDisciplines is not empty %}
+                        <div class="ap-disciplines-grid">
+                            {% for discipline in allDisciplines %}
+                                <label class="ap-discipline-item">
+                                    <input
+                                        type="checkbox"
+                                        name="disciplines[]"
+                                        value="{{ discipline.id }}"
+                                        {% if profile and profile.disciplines.contains(discipline) %}checked{% endif %}>
+                                    <span>{{ discipline.name }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {# Cas de secours si aucune discipline n'est configurée en BDD #}
+                        <p class="ap-field-hint">Aucune discipline disponible pour le moment.</p>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+
+        {# ── Section 5 : Avatar ── #}
+        <div class="ap-edit-section">
+            <div class="ap-edit-section__header">05 — Avatar</div>
             <div class="ap-edit-section__body">
 
                 {# Afficher l'avatar actuel ou les initiales #}

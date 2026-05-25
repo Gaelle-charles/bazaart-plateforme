@@ -1,0 +1,222 @@
+{#
+ # _partials/sidebar_artiste.html.twig — Sidebar de navigation artiste
+ #
+ # Partial réutilisable inclus via {% include '_partials/sidebar_artiste.html.twig' %}
+ # dans TOUS les templates étendant base_dashboard.html.twig pour un utilisateur artiste.
+ #
+ # Pourquoi un partial ?
+ #   La sidebar doit apparaître sur TOUTES les pages du dashboard artiste
+ #   (profil, candidatures, messages, notifications, paramètres...).
+ #   Plutôt que de dupliquer 180 lignes dans chaque template, on centralise ici
+ #   et on inclut. Une seule modification = impacte partout.
+ #
+ # Détection du lien actif :
+ #   app.request.attributes.get('_route') retourne le nom de la route Symfony courante.
+ #   On compare avec le nom exact ou un préfixe (starts with) selon le cas.
+ #
+ # Routes couvertes :
+ #   app_dashboard           → DashboardController
+ #   app_artist_profile_show → ArtistProfileController#show
+ #   app_artist_profile_edit → ArtistProfileController#edit (= "Paramètres")
+ #   app_resource_my         → ResourceController#my (= "Mes candidatures")
+ #   app_messaging_*         → MessagingController (toutes sous-routes)
+ #   app_resource_index      → ResourceController#index
+ #   app_forum_*             → ForumController (toutes sous-routes)
+ #   app_article_*           → ArticleController (toutes sous-routes)
+ #   app_notification_index  → NotificationController#index
+ #   app_logout              → AuthController#logout
+ #}
+
+{# ── Logo + pill de rôle ── #}
+<div class="sd-logo">
+    {#
+        Le logo est un lien vers l'accueil.
+        .sd-wordmark-link : supprime l'underline du <a> (défini dans base_dashboard.html.twig).
+        aria-label précise la destination pour les lecteurs d'écran.
+    #}
+    <a href="{{ path('app_home') }}" class="sd-wordmark-link" title="Retour à l'accueil" aria-label="BazaArt — accueil">
+        <span class="sd-wordmark">BazaArt</span>
+    </a>
+    {#
+        Pill "ARTISTE" — couleur --accent (vert acide) par défaut.
+        .sd-role-pill sans modificateur = variante artiste.
+    #}
+    <span class="sd-role-pill">ARTISTE</span>
+</div>
+
+{# ── Section : Mon espace ── #}
+<div class="sd-section">Mon espace</div>
+<nav class="sd-nav" aria-label="Mon espace">
+
+    {# Tableau de bord — page d'accueil du dashboard artiste #}
+    <a href="{{ path('app_dashboard') }}"
+       class="sd-link {{ app.request.attributes.get('_route') == 'app_dashboard' ? 'sd-link--active' : '' }}">
+        {# Icône maison — viewBox 0 0 24 24, style ligne Street #}
+        <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11 12 4l9 7v9h-6v-6h-6v6H3z"/>
+        </svg>
+        Tableau de bord
+    </a>
+
+    {#
+        Profil public artiste.
+        Route : app_artist_profile_show (affiche le profil de l'utilisateur connecté).
+        Actif aussi sur app_artist_profile_public (profil vu par un tiers).
+    #}
+    <a href="{{ path('app_artist_profile_show') }}"
+       class="sd-link {{ app.request.attributes.get('_route') == 'app_artist_profile_show' ? 'sd-link--active' : '' }}">
+        {#
+            Actif UNIQUEMENT sur app_artist_profile_show (profil de l'utilisateur connecté).
+            On exclut volontairement app_artist_profile_public (profil d'un tiers) pour ne pas
+            allumer "Profil public" quand on consulte le profil d'un autre artiste.
+        #}
+        {# Icône silhouette humaine #}
+        <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M4 21a8 8 0 0 1 16 0"/>
+        </svg>
+        Profil public
+    </a>
+
+    {#
+        Mes candidatures — liste des ressources soumises par l'artiste.
+        Route : app_resource_my (ResourceController#my).
+    #}
+    <a href="{{ path('app_resource_my') }}"
+       class="sd-link {{ app.request.attributes.get('_route') == 'app_resource_my' ? 'sd-link--active' : '' }}">
+        {# Icône livre ouvert (représente les ressources / candidatures) #}
+        <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 4h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H4z"/>
+            <path d="M20 4h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"/>
+        </svg>
+        Mes candidatures
+    </a>
+
+    {#
+        Messagerie privée.
+        Lien actif si la route commence par "app_messaging_" (index, show, new, send...).
+    #}
+    <a href="{{ path('app_messaging_index') }}"
+       class="sd-link {{ app.request.attributes.get('_route') starts with 'app_messaging_' ? 'sd-link--active' : '' }}">
+        {# Icône bulle de message #}
+        <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M22 11.4a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L4 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9 8.5 8.5 0 0 1 8.5 8.5z"/>
+        </svg>
+        Messages
+    </a>
+
+</nav>
+
+{# ── Section : Explorer ── #}
+<div class="sd-section">Explorer</div>
+<nav class="sd-nav" aria-label="Explorer">
+
+    {# Toutes les opportunités (ressources publiées) #}
+    <a href="{{ path('app_resource_index') }}"
+       class="sd-link {{ app.request.attributes.get('_route') == 'app_resource_index' ? 'sd-link--active' : '' }}">
+        {# Icône globe / monde #}
+        <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/>
+        </svg>
+        Opportunités
+    </a>
+
+    {#
+        Forum communautaire.
+        Actif pour toutes les routes "app_forum_*".
+    #}
+    <a href="{{ path('app_forum_index') }}"
+       class="sd-link {{ app.request.attributes.get('_route') starts with 'app_forum_' ? 'sd-link--active' : '' }}">
+        {# Icône bulle de conversation #}
+        <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        Forum
+    </a>
+
+    {#
+        Articles & Blog.
+        Actif pour toutes les routes "app_article_*".
+    #}
+    <a href="{{ path('app_article_index') }}"
+       class="sd-link {{ app.request.attributes.get('_route') starts with 'app_article_' ? 'sd-link--active' : '' }}">
+        {# Icône page avec lignes (fichier texte) — différent de "Mes candidatures" (livre) #}
+        <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <line x1="10" y1="9" x2="8" y2="9"/>
+        </svg>
+        Articles &amp; Blog
+    </a>
+
+</nav>
+
+{# ── Section : Compte ── #}
+<div class="sd-section">Compte</div>
+<nav class="sd-nav" aria-label="Compte">
+
+    {#
+        Notifications.
+        ATTENTION : la route réelle est "app_notification_index" (sans "s" final).
+    #}
+    <a href="{{ path('app_notification_index') }}"
+       class="sd-link {{ app.request.attributes.get('_route') == 'app_notification_index' ? 'sd-link--active' : '' }}">
+        {# Icône cloche #}
+        <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 8a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/>
+            <path d="M10 18a2 2 0 0 0 4 0"/>
+        </svg>
+        Notifications
+    </a>
+
+    {#
+        Paramètres — édition du profil artiste.
+        Route : app_artist_profile_edit.
+    #}
+    <a href="{{ path('app_artist_profile_edit') }}"
+       class="sd-link {{ app.request.attributes.get('_route') == 'app_artist_profile_edit' ? 'sd-link--active' : '' }}">
+        {# Icône engrenage (paramètres) #}
+        <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        Paramètres
+    </a>
+
+</nav>
+
+{# ── Utilisateur en bas du sidebar ── #}
+{#
+    Bloc fixé en bas grâce au "margin-top: auto" de .sd-user.
+    Affiche avatar (initiales), nom (partie locale de l'email) et rôle.
+    Lien de déconnexion discret à droite.
+#}
+<div class="sd-user">
+    {% if app.user %}
+        {#
+            Initiales : 2 premiers caractères de la partie locale de l'email.
+            |upper pour cohérence visuelle.
+            |e pour l'échappement XSS.
+        #}
+        {% set initials = app.user.email|split('@')|first|slice(0,2)|upper %}
+        <div class="sd-avatar" aria-hidden="true">{{ initials|e }}</div>
+        <div style="min-width: 0; flex: 1; overflow: hidden;">
+            <span class="sd-user__name">{{ app.user.email|split('@')|first|e }}</span>
+            <span class="sd-user__role">Artiste</span>
+        </div>
+        {# Lien de déconnexion — icône "porte de sortie" SVG #}
+        <a href="{{ path('app_logout') }}" class="sd-logout" title="Se déconnecter">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+        </a>
+    {% endif %}
+</div>

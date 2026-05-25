@@ -1,4 +1,4 @@
-{% extends 'base_app.html.twig' %}
+{% extends 'base_dashboard.html.twig' %}
 
 {#
  # notifications/index.html.twig — Centre de notifications (thème Street)
@@ -12,6 +12,11 @@
  #   fond blanc sur non-lu (avec barre latérale orange --accent-2),
  #   fond --bg-alt sur lu.
  #}
+
+{% block sidebar %}
+    {# Sidebar commune à toutes les pages du dashboard artiste — voir _partials/sidebar_artiste.html.twig #}
+    {% include '_partials/sidebar_artiste.html.twig' %}
+{% endblock %}
 
 {% block title %}Mes notifications — BazaArt{% endblock %}
 {% block page_title %}Notifications{% endblock %}

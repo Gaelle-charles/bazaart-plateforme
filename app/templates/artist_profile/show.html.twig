@@ -1,4 +1,4 @@
-{% extends 'base_app.html.twig' %}
+{% extends 'base_dashboard.html.twig' %}
 
 {#
  # artist_profile/show.html.twig — Profil public d'un artiste
@@ -14,6 +14,11 @@
  # Variables reçues du contrôleur :
  #   - profile : ArtistProfile (entité)
  #}
+
+{% block sidebar %}
+    {# Sidebar commune à toutes les pages du dashboard artiste — voir _partials/sidebar_artiste.html.twig #}
+    {% include '_partials/sidebar_artiste.html.twig' %}
+{% endblock %}
 
 {% block title %}{{ profile.displayName }} — BazaArt{% endblock %}
 {% block page_title %}Profil artiste{% endblock %}
@@ -376,13 +381,13 @@
             #}
             {% if app.user %}
                 {#
-                   TODO back-end : la route app_messaging_new n'existe pas encore en V1.
-                   À décommenter quand le module messagerie sera en place.
-                   Pour l'instant on affiche le bouton sans action (href="#").
+                    La route app_messaging_new prend l'ID de l'utilisateur cible (userId),
+                    pas l'ID du profil artiste. profile.user.id = ID de l'User propriétaire
+                    du profil artiste.
+                    Le MessagingController vérifie que la conversation n'existe pas déjà
+                    avant d'en créer une nouvelle (pas de doublons).
                 #}
-                {# <a href="{{ path('app_messaging_new', {userId: profile.user.id}) }}" class="ap-btn-ghost">Envoyer un message</a> #}
-                <a href="#" class="ap-btn-ghost" aria-disabled="true"
-                   title="Messagerie disponible prochainement">
+                <a href="{{ path('app_messaging_new', {userId: profile.user.id}) }}" class="ap-btn-ghost">
                     Envoyer un message
                 </a>
             {% endif %}

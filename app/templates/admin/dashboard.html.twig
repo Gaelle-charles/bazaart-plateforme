@@ -4,18 +4,21 @@
  # admin/dashboard.html.twig — Tableau de bord admin (vue d'ensemble)
  #
  # Thème : Street (tokens CSS depuis design-tokens.css)
- # Layout parent : base_admin.html.twig (sidebar ardoise fixe)
+ # Layout parent : base_admin.html.twig (sidebar ardoise fixe, topbar avec {% block page_title %})
+ # IMPORTANT : ne pas ajouter de <h1> ici — la topbar du layout parent en affiche déjà un.
  #
  # Variables disponibles (injectées par AdminController::dashboard()) :
- #   - pendingCount    : int   — nombre de ressources en attente de modération
- #   - publishedCount  : int   — nombre de ressources publiées
- #   - totalUsers      : int   — nombre total d'utilisateurs
- #   - totalOrgs       : int   — nombre total d'organisations
- #   - verifiedOrgs    : int   — nombre d'organisations vérifiées
- #   - pendingResources : Resource[] — les 5 premières ressources en attente (max 5)
+ #   - pendingCount      : int          — nombre de ressources en attente de modération
+ #   - publishedCount    : int          — nombre de ressources publiées
+ #   - totalUsers        : int          — nombre total d'utilisateurs
+ #   - totalOrgs         : int          — nombre total d'organisations
+ #   - verifiedOrgs      : int          — nombre d'organisations vérifiées
+ #   - pendingResources  : Resource[]   — les 5 premières ressources en attente (max 5)
  #}
 
 {% block title %}Administration — BazaArt{% endblock %}
+
+{# Le contenu de ce bloc est rendu par la topbar du layout parent dans un <h1 class="topbar__title"> #}
 {% block page_title %}Cockpit admin{% endblock %}
 
 {% block stylesheets %}
@@ -53,6 +56,7 @@
         text-transform: uppercase;
         margin-bottom: 4px;
     }
+    /* Titre principal : deux niveaux typographiques — "COCKPIT" en display + "BazaArt." en serif italic */
     .adm-page-header__title {
         font-family: var(--display);   /* Archivo Black */
         font-size: 28px;
@@ -60,6 +64,15 @@
         text-transform: uppercase;
         letter-spacing: -.01em;
         color: var(--bg);
+    }
+    /* Sous-titre serif italic — correspond au "BazaArt." du prototype Street */
+    .adm-page-header__serif {
+        font-family: var(--serif);     /* Instrument Serif */
+        font-style: italic;
+        font-size: 22px;               /* légèrement plus petit que le display au-dessus */
+        letter-spacing: 0;
+        text-transform: none;          /* annule l'uppercase hérité du parent */
+        display: block;                /* s'assure que le line-height s'applique correctement */
     }
     .adm-page-header__meta {
         font-family: var(--mono);
@@ -134,6 +147,15 @@
         margin-top: 4px;
     }
 
+    /* ── Sparkline SVG décorative sous chaque KPI ──────────────────────────── */
+    /* Petite polyline statique — purement décorative, tirée du prototype Street */
+    .adm-kpi-sparkline {
+        display: block;
+        width: 100%;
+        height: 28px;
+        margin-top: 8px;
+    }
+
     /* ── Grille deux colonnes : accès rapides + file d'attente ─────────────── */
     .adm-two-col {
         display: grid;
@@ -146,6 +168,7 @@
     .adm-block {
         border: 1px solid var(--ink);
         background: var(--bg);
+        border-radius: 0;              /* thème Street : aucun border-radius */
     }
     .adm-block__header {
         padding: 13px 18px;
@@ -162,6 +185,9 @@
         text-transform: uppercase;
         font-weight: 700;
         color: var(--ink-mute);
+        display: flex;
+        align-items: center;
+        gap: 6px;                      /* espace entre l'icône SVG et le texte */
     }
 
     /* ── Liens rapides (grille 2×3) ─────────────────────────────────────────── */
@@ -196,11 +222,11 @@
         width: 36px;
         height: 36px;
         border: 1px solid var(--ink);
+        border-radius: 0;              /* thème Street : carré strict */
         background: var(--bg-alt);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 16px;
         flex-shrink: 0;
     }
     .adm-shortcut__label {
@@ -226,11 +252,11 @@
         padding: 13px 18px;
         border-top: 1px solid var(--line-soft);
     }
-    /* Pastille de statut */
+    /* Indicateur de statut "en attente" — carré orange strict (thème Street : pas de border-radius) */
     .adm-queue-dot {
         width: 8px;
         height: 8px;
-        border-radius: 50%;
+        border-radius: 0;              /* carré, pas de pastille ronde — convention Street */
         background: var(--accent-2);   /* orange — "en attente" */
         flex-shrink: 0;
     }
@@ -260,49 +286,50 @@
     }
 
     /* ── Boutons d'action Street ────────────────────────────────────────────── */
-    /* Valider : fond vert acide */
+    /* Valider : fond vert acide — SVG checkmark à l'intérieur */
     .adm-btn-ok {
         width: 28px;
         height: 28px;
         background: var(--accent);
         border: 1px solid var(--ink);
+        border-radius: 0;              /* thème Street : carré strict */
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        font-size: 13px;
-        font-weight: 700;
-        color: var(--ink);
         padding: 0;
         transition: box-shadow var(--transition-fast);
     }
     .adm-btn-ok:hover { box-shadow: var(--shadow-offset-sm); }
 
-    /* Rejeter : fond blanc / bordure ink */
+    /* Rejeter : fond blanc / bordure ink — SVG croix à l'intérieur */
     .adm-btn-ko {
         width: 28px;
         height: 28px;
         background: var(--bg);
         border: 1px solid var(--ink);
+        border-radius: 0;              /* thème Street : carré strict */
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        font-size: 13px;
-        font-weight: 700;
-        color: var(--danger);
         padding: 0;
-        transition: box-shadow var(--transition-fast);
+        transition: box-shadow var(--transition-fast), background var(--transition-fast);
     }
     .adm-btn-ko:hover {
         background: var(--danger);
-        color: var(--bg);
         box-shadow: var(--shadow-offset-sm);
     }
+    /* Le SVG hérite de currentColor — on adapte la couleur selon l'état du bouton */
+    .adm-btn-ko svg { color: var(--danger); }
+    .adm-btn-ko:hover svg { color: var(--bg); }
 
     /* ── Lien "Voir toutes" en bas de la file ───────────────────────────────── */
     .adm-queue-footer {
-        display: block;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
         width: 100%;
         padding: 13px 18px;
         border-top: 1px solid var(--ink);
@@ -313,9 +340,9 @@
         letter-spacing: .1em;
         font-weight: 700;
         text-decoration: none;
-        text-align: center;
         text-transform: uppercase;
         transition: opacity var(--transition-fast);
+        box-sizing: border-box;
     }
     .adm-queue-footer:hover { opacity: .8; }
 
@@ -328,10 +355,14 @@
         color: var(--ink-mute);
         letter-spacing: .06em;
     }
+    /* L'icône est maintenant un SVG — on supprime le font-size qui servait aux emojis */
     .adm-empty__icon {
-        font-size: 24px;
-        display: block;
-        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 10px;           /* centrage horizontal + espace sous l'icône */
+        width: 32px;
+        height: 32px;
     }
 
     /* ── Badge "EN ATTENTE" affiché dans l'en-tête de la file ──────────────── */
@@ -343,6 +374,7 @@
         padding: 3px 9px;
         background: var(--accent-2);
         color: var(--ink);
+        border-radius: 0;              /* thème Street : pas de border-radius */
         text-transform: uppercase;
     }
 
@@ -360,17 +392,26 @@
 
 {% block content %}
 
-{# ── En-tête de page : bandeau noir avec eyebrow + titre display ───────────── #}
+{# ── En-tête de page : bandeau noir avec eyebrow + titre deux niveaux (prototype Street) ── #}
+{#
+   Typographie bipolaire Street :
+   — "COCKPIT" : Archivo Black, uppercase, grand
+   — "BazaArt." : Instrument Serif italic, plus petit, couleur sable (var(--bg))
+#}
 <div class="adm-page-header">
     <div class="adm-page-header__inner">
         <div>
             {# Eyebrow : sur-titre mono uppercase avec point acide — convention Street #}
             <div class="adm-page-header__eyebrow">● Espace admin · accès restreint</div>
-            <div class="adm-page-header__title">Cockpit BazaArt</div>
+            <div class="adm-page-header__title">
+                COCKPIT<br>
+                <span class="adm-page-header__serif">BazaArt.</span>
+            </div>
         </div>
         <div class="adm-page-header__meta">
             {{ "now"|date('d/m/Y') }}<br>
-            Connecté comme <strong>{{ app.user.email|split('@')|first|upper }}</strong>
+            {# |e = filtre Twig d'échappement XSS — toujours appliquer sur les données utilisateur #}
+            Connecté comme <strong>{{ app.user.email|split('@')|first|upper|e }}</strong>
         </div>
     </div>
 </div>
@@ -383,9 +424,29 @@
     <div class="adm-kpi-cell {{ pendingCount > 0 ? 'adm-kpi-cell--alert' : '' }}">
         <div class="adm-kpi-label">En attente de validation</div>
         <div class="adm-kpi-value">{{ pendingCount }}</div>
-        <a href="{{ path('app_admin_resources_pending') }}" class="adm-kpi-link">
-            {{ pendingCount > 0 ? 'Modérer →' : 'Tout traité ✓' }}
-        </a>
+        {% if pendingCount > 0 %}
+            <a href="{{ path('app_admin_resources_pending') }}" class="adm-kpi-link">Modérer →</a>
+        {% else %}
+            {# Lien "Tout traité" avec SVG checkmark inline à la place de l'emoji ✓ #}
+            <a href="{{ path('app_admin_resources_pending') }}" class="adm-kpi-link">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+                     aria-hidden="true"
+                     xmlns="http://www.w3.org/2000/svg">
+                    <polyline points="1.5,6.5 4.5,9.5 10.5,2.5"
+                              stroke="currentColor" stroke-width="1.5"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Tout traité
+            </a>
+        {% endif %}
+        {# Sparkline décorative — tracé ascendant orange si alerte, couleur neutre sinon #}
+        <svg class="adm-kpi-sparkline" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+            <polyline points="0,22 15,18 30,20 45,14 60,16 75,10 90,12 100,6"
+                      fill="none"
+                      stroke="var(--accent-2)"
+                      stroke-width="1.5"
+                      opacity="0.5"/>
+        </svg>
     </div>
 
     {# Opportunités publiées #}
@@ -393,6 +454,14 @@
         <div class="adm-kpi-label">Opportunités publiées</div>
         <div class="adm-kpi-value">{{ publishedCount }}</div>
         <a href="{{ path('app_admin_resources_all', {status: 'published'}) }}" class="adm-kpi-link">Voir →</a>
+        {# Sparkline décorative — tracé ascendant vert (accent) pour symboliser la croissance #}
+        <svg class="adm-kpi-sparkline" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+            <polyline points="0,24 15,20 30,18 45,14 60,12 75,8 90,6 100,4"
+                      fill="none"
+                      stroke="var(--accent)"
+                      stroke-width="1.5"
+                      opacity="0.6"/>
+        </svg>
     </div>
 
     {# Utilisateurs inscrits #}
@@ -400,6 +469,14 @@
         <div class="adm-kpi-label">Utilisateurs inscrits</div>
         <div class="adm-kpi-value">{{ totalUsers }}</div>
         <a href="{{ path('app_admin_users') }}" class="adm-kpi-link">Gérer →</a>
+        {# Sparkline décorative — tracé irrégulier couleur ink atténuée #}
+        <svg class="adm-kpi-sparkline" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+            <polyline points="0,26 14,22 28,24 42,18 56,16 70,16 84,10 100,6"
+                      fill="none"
+                      stroke="var(--ink)"
+                      stroke-width="1.5"
+                      opacity="0.25"/>
+        </svg>
     </div>
 
     {# Organisations #}
@@ -409,6 +486,14 @@
         <div class="adm-kpi-note">
             {{ verifiedOrgs }} vérifiée{{ verifiedOrgs > 1 ? 's' : '' }} sur {{ totalOrgs }}
         </div>
+        {# Sparkline décorative — tracé plus court, légèrement ascendant #}
+        <svg class="adm-kpi-sparkline" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+            <polyline points="0,20 20,16 40,18 60,12 80,10 100,8"
+                      fill="none"
+                      stroke="var(--ink)"
+                      stroke-width="1.5"
+                      opacity="0.2"/>
+        </svg>
     </div>
 
 </div>
@@ -426,7 +511,20 @@
             {# File de modération — en alerte si des ressources attendent #}
             <a href="{{ path('app_admin_resources_pending') }}"
                class="adm-shortcut {{ pendingCount > 0 ? 'adm-shortcut--alert' : '' }}">
-                <div class="adm-shortcut__icon">📋</div>
+                {#
+                   SVG clipboard/checklist — remplace l'emoji 📋
+                   stroke="currentColor" pour hériter de la couleur du contexte
+                #}
+                <div class="adm-shortcut__icon">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                         aria-hidden="true"
+                         xmlns="http://www.w3.org/2000/svg">
+                        <rect x="4" y="1.5" width="8" height="2" rx="0" stroke="#0d0d0d" stroke-width="1.2"/>
+                        <rect x="2" y="3" width="12" height="11.5" rx="0" stroke="#0d0d0d" stroke-width="1.2"/>
+                        <line x1="5" y1="7" x2="11" y2="7" stroke="#0d0d0d" stroke-width="1.2" stroke-linecap="square"/>
+                        <line x1="5" y1="9.5" x2="9" y2="9.5" stroke="#0d0d0d" stroke-width="1.2" stroke-linecap="square"/>
+                    </svg>
+                </div>
                 <div>
                     <div class="adm-shortcut__label">
                         File de modération{% if pendingCount > 0 %} ({{ pendingCount }}){% endif %}
@@ -437,14 +535,29 @@
 
             {# Structures en attente #}
             <a href="{{ path('app_admin_structures_pending') }}" class="adm-shortcut">
-                <div class="adm-shortcut__icon">🏛</div>
+                {#
+                   SVG building/pillars — remplace l'emoji 🏛
+                   Représentation simplifiée : fronton + colonnes
+                #}
+                <div class="adm-shortcut__icon">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                         aria-hidden="true"
+                         xmlns="http://www.w3.org/2000/svg">
+                        <line x1="1.5" y1="4.5" x2="14.5" y2="4.5" stroke="#0d0d0d" stroke-width="1.2" stroke-linecap="square"/>
+                        <line x1="1.5" y1="13.5" x2="14.5" y2="13.5" stroke="#0d0d0d" stroke-width="1.2" stroke-linecap="square"/>
+                        <polyline points="8,1.5 14.5,4.5 1.5,4.5" stroke="#0d0d0d" stroke-width="1.2" stroke-linejoin="miter"/>
+                        <line x1="4" y1="4.5" x2="4" y2="13.5" stroke="#0d0d0d" stroke-width="1.2" stroke-linecap="square"/>
+                        <line x1="8" y1="4.5" x2="8" y2="13.5" stroke="#0d0d0d" stroke-width="1.2" stroke-linecap="square"/>
+                        <line x1="12" y1="4.5" x2="12" y2="13.5" stroke="#0d0d0d" stroke-width="1.2" stroke-linecap="square"/>
+                    </svg>
+                </div>
                 <div>
                     <div class="adm-shortcut__label">Structures</div>
                     <div class="adm-shortcut__desc">Candidatures en attente</div>
                 </div>
             </a>
 
-            {# Toutes les ressources #}
+            {# Toutes les ressources — icône géométrique conservée (◈ était déjà en texte, pas emoji) #}
             <a href="{{ path('app_admin_resources_all') }}" class="adm-shortcut">
                 <div class="adm-shortcut__icon">◈</div>
                 <div>
@@ -455,7 +568,18 @@
 
             {# Opportunités scrapées #}
             <a href="{{ path('app_admin_scraped_opportunities') }}" class="adm-shortcut">
-                <div class="adm-shortcut__icon">🔍</div>
+                {#
+                   SVG loupe — remplace l'emoji 🔍
+                   Cercle + tige en bas à droite
+                #}
+                <div class="adm-shortcut__icon">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                         aria-hidden="true"
+                         xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="6.5" cy="6.5" r="4" stroke="#0d0d0d" stroke-width="1.2"/>
+                        <line x1="9.5" y1="9.5" x2="14" y2="14" stroke="#0d0d0d" stroke-width="1.5" stroke-linecap="square"/>
+                    </svg>
+                </div>
                 <div>
                     <div class="adm-shortcut__label">Scraping Sheets</div>
                     <div class="adm-shortcut__desc">Vérifier · Publier</div>
@@ -464,16 +588,52 @@
 
             {# Utilisateurs #}
             <a href="{{ path('app_admin_users') }}" class="adm-shortcut">
-                <div class="adm-shortcut__icon">👥</div>
+                {#
+                   SVG users (deux silhouettes) — remplace l'emoji 👥
+                   Deux cercles (têtes) + deux demi-arcs (corps)
+                #}
+                <div class="adm-shortcut__icon">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                         aria-hidden="true"
+                         xmlns="http://www.w3.org/2000/svg">
+                        {# Silhouette de droite (arrière-plan) #}
+                        <circle cx="10.5" cy="5.5" r="2" stroke="#0d0d0d" stroke-width="1.1"/>
+                        <path d="M7 14c0-2 1.6-3.5 3.5-3.5S14 12 14 14"
+                              stroke="#0d0d0d" stroke-width="1.1" stroke-linecap="square"/>
+                        {# Silhouette de gauche (avant-plan) #}
+                        <circle cx="6" cy="5" r="2.2" stroke="#0d0d0d" stroke-width="1.2"/>
+                        <path d="M2 14c0-2.2 1.8-4 4-4s4 1.8 4 4"
+                              stroke="#0d0d0d" stroke-width="1.2" stroke-linecap="square"/>
+                    </svg>
+                </div>
                 <div>
                     <div class="adm-shortcut__label">Utilisateurs</div>
+                    {# Donnée utilisateur échappée avec |e par sécurité, même si c'est un int ici #}
                     <div class="adm-shortcut__desc">{{ totalUsers }} inscrits</div>
                 </div>
             </a>
 
             {# Articles (route externe au contrôleur admin) #}
             <a href="{{ path('app_article_index') }}" class="adm-shortcut">
-                <div class="adm-shortcut__icon">📝</div>
+                {#
+                   SVG document/pen — remplace l'emoji 📝
+                   Feuille avec coin plié + trait de stylo
+                #}
+                <div class="adm-shortcut__icon">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                         aria-hidden="true"
+                         xmlns="http://www.w3.org/2000/svg">
+                        {# Corps du document avec coin plié en haut à droite #}
+                        <polyline points="2,1.5 9.5,1.5 13.5,5.5 13.5,14.5 2,14.5 2,1.5"
+                                  stroke="#0d0d0d" stroke-width="1.2" stroke-linejoin="miter"/>
+                        {# Coin plié #}
+                        <polyline points="9.5,1.5 9.5,5.5 13.5,5.5"
+                                  stroke="#0d0d0d" stroke-width="1.2" stroke-linejoin="miter"/>
+                        {# Ligne de texte + stylo diagonal #}
+                        <line x1="5" y1="8" x2="10.5" y2="8" stroke="#0d0d0d" stroke-width="1.1" stroke-linecap="square"/>
+                        <line x1="5" y1="10.5" x2="8.5" y2="10.5" stroke="#0d0d0d" stroke-width="1.1" stroke-linecap="square"/>
+                    </svg>
+                </div>
                 <div>
                     <div class="adm-shortcut__label">Articles</div>
                     <div class="adm-shortcut__desc">Gérer les publications</div>
@@ -485,11 +645,27 @@
 
     {# ── Colonne droite : file de validation (les 5 premières en attente) ─────── #}
     <div class="adm-block">
-        {# En-tête de la file : couleur accent-2 si en attente, fond ink sinon #}
+        {#
+           En-tête de la file :
+           — fond accent-2 (orange) si des ressources attendent
+           — fond bg-alt (neutre) sinon
+        #}
         <div class="adm-block__header"
              style="{{ pendingCount > 0 ? 'background:var(--accent-2);' : 'background:var(--bg-alt);' }}">
+            {#
+               Icône SVG triangle-warning — remplace l'emoji ⚠
+               Triangle équilatéral avec point d'exclamation à l'intérieur
+            #}
             <span class="adm-block__heading">
-                ⚠ File de validation
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                     aria-hidden="true"
+                     xmlns="http://www.w3.org/2000/svg">
+                    <polyline points="8,1.5 14.5,13.5 1.5,13.5 8,1.5"
+                              stroke="#0d0d0d" stroke-width="1.2" stroke-linejoin="miter"/>
+                    <line x1="8" y1="6.5" x2="8" y2="9.5" stroke="#0d0d0d" stroke-width="1.2" stroke-linecap="square"/>
+                    <line x1="8" y1="11.5" x2="8" y2="11.5" stroke="#0d0d0d" stroke-width="2" stroke-linecap="square"/>
+                </svg>
+                File de validation
             </span>
             {% if pendingCount > 0 %}
                 <span class="adm-badge-warn">{{ pendingCount }} en attente</span>
@@ -497,46 +673,106 @@
         </div>
 
         {% if pendingResources is empty %}
-            {# État vide : bonne nouvelle, rien à traiter #}
+            {# État vide : bonne nouvelle, rien à traiter — SVG checkmark remplace l'emoji ✓ #}
             <div class="adm-empty">
-                <span class="adm-empty__icon">✓</span>
+                <span class="adm-empty__icon">
+                    {#
+                       SVG checkmark 24×24 — état vide "tout traité"
+                       stroke="#0d0d0d" codé en dur (pas currentColor) pour éviter
+                       tout problème d'héritage dans le contexte de l'état vide
+                    #}
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                         aria-label="Tout traité"
+                         xmlns="http://www.w3.org/2000/svg">
+                        <polyline points="3,12 9,18 21,6"
+                                  stroke="#0d0d0d" stroke-width="2"
+                                  stroke-linecap="square" stroke-linejoin="miter"/>
+                    </svg>
+                </span>
                 Aucune soumission en attente.<br>Tout est traité.
             </div>
         {% else %}
             {# Boucle sur les 5 premières ressources en attente #}
             {% for resource in pendingResources %}
                 <div class="adm-queue-row">
-                    {# Pastille orange "en attente" #}
+                    {#
+                       Indicateur de statut "en attente" — carré orange 8×8px
+                       border-radius: 0 dans le CSS (thème Street = pas de ronds)
+                    #}
                     <div class="adm-queue-dot"></div>
 
                     <div class="adm-queue-info">
-                        <div class="adm-queue-title">{{ resource.title }}</div>
+                        {# |e : filtre XSS obligatoire sur toutes les données issues de la BDD #}
+                        <div class="adm-queue-title">{{ resource.title|e }}</div>
                         <div class="adm-queue-meta">
-                            {# Nom du type + organisation + date #}
-                            {{ resource.resourceType.name|upper }}
-                            · {{ resource.organization ? resource.organization.name|upper : 'SANS ORG' }}
+                            {# Nom du type + organisation + date — null-safe sur organization #}
+                            {{ resource.resourceType.name|upper|e }}
+                            · {{ resource.organization ? resource.organization.name|upper|e : 'SANS ORG' }}
                             · {{ resource.createdAt|date('d/m/Y') }}
                         </div>
                     </div>
 
                     <div class="adm-queue-actions">
-                        {# Formulaire Valider — token CSRF nommé 'resource_action_{id}' #}
-                        <form method="post" action="{{ path('app_admin_resource_publish', {id: resource.id}) }}">
-                            <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
-                            <button type="submit" class="adm-btn-ok" title="Publier cette ressource">✓</button>
+                        {#
+                           Formulaire Valider
+                           Token CSRF nommé 'resource_action_{id}' — granularité par ressource.
+                           IMPORTANT : ne pas modifier ce nommage, le controller le vérifie exactement.
+                        #}
+                        <form method="post"
+                              action="{{ path('app_admin_resource_publish', {id: resource.id}) }}">
+                            <input type="hidden"
+                                   name="_token"
+                                   value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                            {#
+                               SVG checkmark 12×12 — remplace le caractère ✓ dans le bouton Valider
+                               stroke="#0d0d0d" codé en dur pour contraste garanti sur fond vert acide
+                            #}
+                            <button type="submit" class="adm-btn-ok" title="Publier cette ressource">
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+                                     aria-hidden="true"
+                                     xmlns="http://www.w3.org/2000/svg">
+                                    <polyline points="1.5,6.5 4.5,9.5 10.5,2.5"
+                                              stroke="#0d0d0d" stroke-width="1.8"
+                                              stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
                         </form>
 
-                        {# Formulaire Rejeter — même token CSRF (granularité par resource.id) #}
-                        <form method="post" action="{{ path('app_admin_resource_reject', {id: resource.id}) }}"
+                        {#
+                           Formulaire Rejeter
+                           Même token CSRF que Valider (les deux actions partagent le même token par resource).
+                           onsubmit confirm() : demande de confirmation avant soumission.
+                           IMPORTANT : conserver ce comportement — il évite les rejets accidentels.
+                        #}
+                        <form method="post"
+                              action="{{ path('app_admin_resource_reject', {id: resource.id}) }}"
                               onsubmit="return confirm('Rejeter cette ressource ?')">
-                            <input type="hidden" name="_token" value="{{ csrf_token('resource_action_' ~ resource.id) }}">
-                            <button type="submit" class="adm-btn-ko" title="Rejeter cette ressource">✗</button>
+                            <input type="hidden"
+                                   name="_token"
+                                   value="{{ csrf_token('resource_action_' ~ resource.id) }}">
+                            {#
+                               SVG croix/X 12×12 — remplace le caractère ✗ dans le bouton Rejeter
+                               stroke="currentColor" pour hériter de la couleur CSS du bouton (.adm-btn-ko svg)
+                               La couleur passe de danger à bg au hover via la règle CSS .adm-btn-ko:hover svg
+                            #}
+                            <button type="submit" class="adm-btn-ko" title="Rejeter cette ressource">
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+                                     aria-hidden="true"
+                                     xmlns="http://www.w3.org/2000/svg">
+                                    <line x1="2" y1="2" x2="10" y2="10"
+                                          stroke="currentColor" stroke-width="1.8"
+                                          stroke-linecap="round"/>
+                                    <line x1="10" y1="2" x2="2" y2="10"
+                                          stroke="currentColor" stroke-width="1.8"
+                                          stroke-linecap="round"/>
+                                </svg>
+                            </button>
                         </form>
                     </div>
                 </div>
             {% endfor %}
 
-            {# Lien "Voir toutes" si plus de 5 ressources en attente #}
+            {# Lien "Voir toutes" si plus de 5 ressources en attente — avec SVG checkmark inline #}
             {% if pendingCount > 5 %}
                 <a href="{{ path('app_admin_resources_pending') }}" class="adm-queue-footer">
                     Ouvrir la file complète ({{ pendingCount }}) →
@@ -547,5 +783,10 @@
     </div>
 
 </div>
+
+{# ── Commentaires V2 : fonctionnalités prévues mais hors périmètre V1 ────────── #}
+{# TODO V2 : ajouter ici le graphique "Revenus & Inscriptions · 12 mois" (SVG dynamique, données Stripe) #}
+{# TODO V2 : ajouter le tableau "Utilisateurs récents" avec export CSV #}
+{# TODO V2 : ajouter le graphique en donut "Répartition par discipline" #}
 
 {% endblock %}

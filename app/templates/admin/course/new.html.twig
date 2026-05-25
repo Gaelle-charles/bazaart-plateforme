@@ -1,0 +1,347 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/course/new.html.twig — Formulaire de création d'une formation
+ #
+ # Variables disponibles :
+ #   - levels : CourseLevel[] (les cas de l'enum, pour le <select>)
+ #
+ # Token CSRF : 'new_course' — validé dans AdminCourseController::new()
+ # Champs requis : title, level
+ # Champs optionnels : subtitle, instructorName, trailerVideoUrl, description
+ #}
+
+{% block page_title %}Nouvelle formation{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+    /*
+     * ── FORMULAIRE NOUVELLE FORMATION — Styles ───────────────────────────────
+     * Préfixe .adc- (admin-dashboard-course)
+     * border-radius: 0 partout
+     */
+
+    /* ── Navigation retour ───────────────────────────────────────────────── */
+    .adc-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        text-decoration: none;
+        margin-bottom: 24px;
+        transition: color var(--transition-fast);
+    }
+
+    .adc-back:hover { color: var(--ink); }
+
+    /* ── Formulaire ──────────────────────────────────────────────────────── */
+    .adc-form {
+        max-width: 700px;
+        border: 1px solid var(--ink);
+    }
+
+    .adc-form__header {
+        padding: 14px 20px;
+        background: var(--ink);
+        color: var(--bg);
+    }
+
+    .adc-form__title {
+        font-family: var(--display);
+        font-size: 16px;
+        font-weight: 400;
+        letter-spacing: -.01em;
+        text-transform: uppercase;
+        margin: 0;
+    }
+
+    .adc-form__body {
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    /* ── Champ de formulaire ─────────────────────────────────────────────── */
+    .adc-field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .adc-field__label {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink);
+    }
+
+    /* Marqueur "requis" en orange */
+    .adc-field__required {
+        color: var(--accent-2);
+        margin-left: 2px;
+    }
+
+    .adc-field__help {
+        font-size: 11px;
+        color: var(--ink-mute);
+    }
+
+    /* Styles communs aux inputs, select, textarea */
+    .adc-input,
+    .adc-select,
+    .adc-textarea {
+        width: 100%;
+        padding: 9px 12px;
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+        background: var(--bg);
+        border: 1px solid var(--ink);
+        outline: none;
+        transition: border-color var(--transition-fast), background var(--transition-fast);
+        box-sizing: border-box;
+        /* border-radius: 0 — par défaut en CSS si on ne le spécifie pas,
+           mais on le force pour éviter les navigateurs qui arrondissent par défaut. */
+        border-radius: 0;
+        -webkit-appearance: none;
+        appearance: none;
+    }
+
+    .adc-input:focus,
+    .adc-select:focus,
+    .adc-textarea:focus {
+        background: var(--bg-alt);
+        border-color: var(--ink);
+        box-shadow: 0 0 0 2px var(--accent);  /* focus ring visible en vert acide */
+        outline: none;
+    }
+
+    .adc-textarea {
+        resize: vertical;
+        min-height: 100px;
+        line-height: 1.6;
+    }
+
+    /* ── Séparateur de section ─────────────────────────────────────────── */
+    .adc-form__sep {
+        border: none;
+        border-top: 1px solid var(--line-soft);
+        margin: 0;
+    }
+
+    .adc-form__section-label {
+        font-family: var(--mono);
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: -6px;   /* réduire l'espace visuel avec le premier champ */
+    }
+
+    /* ── Footer formulaire ───────────────────────────────────────────────── */
+    .adc-form__footer {
+        padding: 16px 24px;
+        border-top: 1px solid var(--line-soft);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .adc-btn-submit {
+        padding: 10px 20px;
+        font-family: var(--display);
+        font-size: 13px;
+        font-weight: 400;
+        letter-spacing: -.01em;
+        text-transform: uppercase;
+        border: 1px solid var(--ink);
+        background: var(--ink);
+        color: var(--bg);
+        cursor: pointer;
+        border-radius: 0;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+
+    .adc-btn-submit:hover {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--ink);
+    }
+
+    .adc-cancel-link {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        text-decoration: none;
+        transition: color var(--transition-fast);
+    }
+
+    .adc-cancel-link:hover { color: var(--ink); }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+{# Lien de retour vers la liste #}
+<a href="{{ path('app_admin_course_index') }}" class="adc-back">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round"
+         aria-hidden="true">
+        <line x1="19" y1="12" x2="5" y2="12"/>
+        <polyline points="12 19 5 12 12 5"/>
+    </svg>
+    Toutes les formations
+</a>
+
+{# ── FORMULAIRE ──────────────────────────────────────────────────────────── #}
+<form class="adc-form"
+      method="POST"
+      action="{{ path('app_admin_course_new') }}"
+      aria-label="Nouvelle formation">
+
+    {# Token CSRF — protège contre les requêtes forgées (CSRF) #}
+    <input type="hidden" name="_token" value="{{ csrf_token('new_course') }}">
+
+    <div class="adc-form__header">
+        <h2 class="adc-form__title">Nouvelle formation</h2>
+    </div>
+
+    <div class="adc-form__body">
+
+        {# ── SECTION : Informations principales ──────────────────────────── #}
+        <p class="adc-form__section-label">Informations principales</p>
+
+        {# Titre (requis) #}
+        <div class="adc-field">
+            <label class="adc-field__label" for="field-title">
+                Titre <span class="adc-field__required">*</span>
+            </label>
+            <input type="text"
+                   id="field-title"
+                   name="title"
+                   class="adc-input"
+                   placeholder="Ex : Introduction à la musique afrobeats"
+                   maxlength="255"
+                   required
+                   autocomplete="off">
+            <span class="adc-field__help">
+                Le slug URL sera généré automatiquement depuis le titre.
+            </span>
+        </div>
+
+        {# Sous-titre (optionnel) #}
+        <div class="adc-field">
+            <label class="adc-field__label" for="field-subtitle">
+                Sous-titre
+            </label>
+            <input type="text"
+                   id="field-subtitle"
+                   name="subtitle"
+                   class="adc-input"
+                   placeholder="Ex : Apprenez les bases des percussions en 5 semaines"
+                   maxlength="255"
+                   autocomplete="off">
+        </div>
+
+        {# Niveau (requis — select) #}
+        <div class="adc-field">
+            <label class="adc-field__label" for="field-level">
+                Niveau <span class="adc-field__required">*</span>
+            </label>
+            <select id="field-level" name="level" class="adc-select" required>
+                {#
+                 # levels = CourseLevel::cases() passé depuis le controller.
+                 # .value = 'beginner' | 'intermediate' | 'advanced'
+                 # .label() = 'Débutant' | 'Intermédiaire' | 'Avancé'
+                 #}
+                {% for level in levels %}
+                    <option value="{{ level.value|e }}">{{ level.label() }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <hr class="adc-form__sep">
+
+        {# ── SECTION : Formateur ─────────────────────────────────────────── #}
+        <p class="adc-form__section-label">Formateur·rice</p>
+
+        <div class="adc-field">
+            <label class="adc-field__label" for="field-instructor">
+                Nom du formateur / de la formatrice
+            </label>
+            <input type="text"
+                   id="field-instructor"
+                   name="instructorName"
+                   class="adc-input"
+                   placeholder="Ex : Wendie Zahibo"
+                   maxlength="255"
+                   autocomplete="off">
+        </div>
+
+        <hr class="adc-form__sep">
+
+        {# ── SECTION : Vidéo de présentation ─────────────────────────────── #}
+        <p class="adc-form__section-label">Vidéo de présentation (trailer)</p>
+
+        <div class="adc-field">
+            <label class="adc-field__label" for="field-trailer">
+                URL d'embed du trailer
+            </label>
+            <input type="url"
+                   id="field-trailer"
+                   name="trailerVideoUrl"
+                   class="adc-input"
+                   placeholder="https://www.youtube.com/embed/..."
+                   maxlength="500"
+                   autocomplete="off">
+            <span class="adc-field__help">
+                URL iframe embed YouTube, Vimeo ou Bunny Stream.
+                Ex : https://www.youtube.com/embed/VIDEO_ID
+            </span>
+        </div>
+
+        <hr class="adc-form__sep">
+
+        {# ── SECTION : Description ────────────────────────────────────────── #}
+        <p class="adc-form__section-label">Description</p>
+
+        <div class="adc-field">
+            <label class="adc-field__label" for="field-description">
+                Description complète
+            </label>
+            <textarea id="field-description"
+                      name="description"
+                      class="adc-textarea"
+                      rows="5"
+                      placeholder="Décrivez les objectifs de la formation, le public cible, les prérequis…"></textarea>
+            <span class="adc-field__help">
+                Les sauts de ligne sont conservés à l'affichage.
+            </span>
+        </div>
+
+    </div>{# /.adc-form__body #}
+
+    <div class="adc-form__footer">
+        <button type="submit" class="adc-btn-submit">
+            Créer la formation
+        </button>
+        <a href="{{ path('app_admin_course_index') }}" class="adc-cancel-link">
+            Annuler
+        </a>
+    </div>
+
+</form>
+
+{% endblock %}

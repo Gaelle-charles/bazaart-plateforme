@@ -7,6 +7,7 @@ namespace App\Service;
 use App\Entity\ArtistProfile;
 use App\Entity\User;
 use App\Repository\ArtistProfileRepository;
+use App\Repository\DisciplineRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
@@ -22,6 +23,7 @@ class ArtistProfileService
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly ArtistProfileRepository $repository,
+        private readonly DisciplineRepository $disciplineRepository,
         // %kernel.project_dir% est injecté via services.yaml automatiquement
         private readonly string $projectDir,
     ) {}
@@ -52,6 +54,13 @@ class ArtistProfileService
         // Construit le tableau socialLinks depuis les champs du formulaire
         $profile->setSocialLinks($this->buildSocialLinks($data));
 
+        // ── Gestion des disciplines ──────────────────────────────────────────
+        // Le formulaire envoie un tableau d'IDs via disciplines[] (checkboxes).
+        // On commence par retirer toutes les disciplines actuellement associées,
+        // puis on recharge uniquement celles cochées par l'utilisateur.
+        // C'est la stratégie "clear + re-add" : simple et sans risque de doublon.
+        $this->syncDisciplines($profile, $data['disciplines'] ?? []);
+
         // Gestion de l'avatar uploadé
         if ($avatarFile !== null) {
             // Supprime l'ancien avatar si il existe
@@ -67,6 +76,45 @@ class ArtistProfileService
         $this->em->flush();
 
         return $profile;
+    }
+
+    /**
+     * Synchronise les disciplines du profil artiste avec les IDs envoyés par le formulaire.
+     *
+     * Stratégie "clear + re-add" :
+     *   1. On retire toutes les disciplines existantes du profil.
+     *   2. On charge chaque Discipline depuis la BDD par son ID (findAll éviterait N+1,
+     *      mais le nombre de disciplines reste limité — on garde find() pour la lisibilité).
+     *   3. On ajoute les disciplines valides (celles trouvées en BDD).
+     *
+     * Les IDs inconnus ou invalides sont simplement ignorés (find() retourne null).
+     *
+     * @param ArtistProfile $profile  Profil à mettre à jour
+     * @param mixed[]       $ids      Tableau d'IDs de disciplines (chaînes ou entiers)
+     */
+    private function syncDisciplines(ArtistProfile $profile, array $ids): void
+    {
+        // Étape 1 : retirer toutes les disciplines actuelles
+        // On itère sur une copie (toArray) pour éviter de modifier la collection
+        // pendant qu'on l'itère — comportement indéfini avec Doctrine.
+        foreach ($profile->getDisciplines()->toArray() as $discipline) {
+            $profile->removeDiscipline($discipline);
+        }
+
+        // Étape 2 : ajouter les nouvelles disciplines
+        foreach ($ids as $id) {
+            // Sécurité : s'assurer que l'ID est un entier valide
+            $id = (int) $id;
+            if ($id <= 0) {
+                continue; // Ignorer les IDs invalides (0, négatifs, chaînes vides)
+            }
+
+            $discipline = $this->disciplineRepository->find($id);
+            if ($discipline !== null) {
+                // addDiscipline() vérifie en interne les doublons via contains()
+                $profile->addDiscipline($discipline);
+            }
+        }
     }
 
     /**

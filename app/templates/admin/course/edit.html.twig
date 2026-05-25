@@ -1,0 +1,816 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/course/edit.html.twig — Édition d'une formation
+ #
+ # 3 sections :
+ #   1. Infos de la formation (formulaire POST → app_admin_course_update)
+ #   2. Modules + leçons : hiérarchie avec formulaires inline d'ajout
+ #   3. Publication (si non publié)
+ #
+ # Variables disponibles :
+ #   - course  : Course (la formation à éditer)
+ #   - modules : Collection<CourseModule> (modules de la formation)
+ #   - levels  : CourseLevel[] (pour le <select>)
+ #}
+
+{% block page_title %}Éditer — {{ course.title|e }}{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+    /*
+     * ── ÉDITION FORMATION ADMIN — Styles ─────────────────────────────────────
+     * Préfixe .adc- (admin-dashboard-course)
+     * border-radius: 0 partout
+     */
+
+    /* ── Navigation retour ────────────────────────────────────────────────── */
+    .adc-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        text-decoration: none;
+        margin-bottom: 20px;
+        transition: color var(--transition-fast);
+    }
+    .adc-back:hover { color: var(--ink); }
+
+    /* ── Layout : deux colonnes ─────────────────────────────────────────── */
+    .adc-edit-layout {
+        display: grid;
+        grid-template-columns: 1fr 380px;
+        gap: 24px;
+        align-items: start;
+    }
+
+    @media (max-width: 900px) {
+        .adc-edit-layout { grid-template-columns: 1fr; }
+    }
+
+    /* ── Card générique ──────────────────────────────────────────────────── */
+    .adc-card {
+        border: 1px solid var(--ink);
+        margin-bottom: 20px;
+    }
+
+    .adc-card__header {
+        padding: 12px 20px;
+        background: var(--ink);
+        color: var(--bg);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .adc-card__title {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        margin: 0;
+    }
+
+    .adc-card__body {
+        padding: 20px;
+    }
+
+    /* ── Champs de formulaire ────────────────────────────────────────────── */
+    .adc-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 14px;
+    }
+
+    .adc-field:last-child { margin-bottom: 0; }
+
+    .adc-field__label {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink);
+    }
+
+    .adc-field__required { color: var(--accent-2); margin-left: 2px; }
+
+    .adc-field__help {
+        font-size: 11px;
+        color: var(--ink-mute);
+    }
+
+    .adc-input, .adc-select, .adc-textarea {
+        width: 100%;
+        padding: 8px 10px;
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+        background: var(--bg);
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        outline: none;
+        box-sizing: border-box;
+        -webkit-appearance: none;
+        appearance: none;
+        transition: background var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .adc-input:focus, .adc-select:focus, .adc-textarea:focus {
+        background: var(--bg-alt);
+        box-shadow: 0 0 0 2px var(--accent);
+    }
+
+    .adc-textarea {
+        resize: vertical;
+        min-height: 80px;
+        line-height: 1.6;
+    }
+
+    .adc-form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    @media (max-width: 640px) { .adc-form-row { grid-template-columns: 1fr; } }
+
+    /* ── Boutons ────────────────────────────────────────────────────────── */
+    .adc-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        border: 1px solid var(--ink);
+        background: var(--ink);
+        color: var(--bg);
+        cursor: pointer;
+        border-radius: 0;
+        text-decoration: none;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+
+    .adc-btn:hover {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--ink);
+    }
+
+    .adc-btn--sm {
+        padding: 5px 10px;
+        font-size: 9px;
+    }
+
+    .adc-btn--outline {
+        background: transparent;
+        color: var(--ink);
+    }
+
+    .adc-btn--publish {
+        background: var(--ok);
+        border-color: var(--ok);
+        color: #fff;
+        font-size: 12px;
+        padding: 10px 20px;
+    }
+
+    .adc-btn--publish:hover {
+        background: #155724;
+        border-color: #155724;
+        color: #fff;
+    }
+
+    /* ── Séparateur ────────────────────────────────────────────────────── */
+    .adc-sep {
+        border: none;
+        border-top: 1px solid var(--line-soft);
+        margin: 14px 0;
+    }
+
+    /* ── Hiérarchie modules/leçons ─────────────────────────────────────── */
+    .adc-module {
+        border: 1px solid var(--ink);
+        margin-bottom: 12px;
+    }
+
+    .adc-module:last-child { margin-bottom: 0; }
+
+    .adc-module__header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        background: var(--bg-alt);
+        border-bottom: 1px solid var(--line-soft);
+    }
+
+    .adc-module__position {
+        font-family: var(--mono);
+        font-size: 9px;
+        color: var(--ink-mute);
+        flex-shrink: 0;
+    }
+
+    .adc-module__title {
+        font-family: var(--display);
+        font-size: 13px;
+        font-weight: 400;
+        letter-spacing: -.01em;
+        margin: 0;
+        flex: 1;
+    }
+
+    /* Liste des leçons du module */
+    .adc-lessons {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .adc-lesson {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px 8px 24px;   /* indent pour la hiérarchie */
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 12px;
+    }
+
+    .adc-lesson:last-child { border-bottom: none; }
+
+    .adc-lesson__pos {
+        font-family: var(--mono);
+        font-size: 9px;
+        color: var(--ink-mute);
+        width: 20px;
+        flex-shrink: 0;
+    }
+
+    .adc-lesson__title { flex: 1; color: var(--ink); }
+
+    .adc-lesson__meta {
+        font-family: var(--mono);
+        font-size: 9px;
+        color: var(--ink-mute);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    /* Badge preview gratuit */
+    .adc-lesson__preview {
+        font-family: var(--mono);
+        font-size: 7px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        padding: 1px 4px;
+        background: var(--accent);
+        color: var(--ink);
+    }
+
+    /* Formulaire inline d'ajout de leçon #}*/
+    .adc-add-lesson-form {
+        padding: 10px 14px 10px 24px;
+        background: rgba(13,13,13,.02);
+        border-top: 1px dashed var(--line-soft);
+    }
+
+    .adc-inline-fields {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+
+    .adc-inline-field {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .adc-inline-label {
+        font-family: var(--mono);
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    .adc-input--sm {
+        padding: 5px 8px;
+        font-size: 12px;
+    }
+
+    /* Checkbox custom style */
+    .adc-checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: auto;
+        padding-bottom: 5px;  /* aligner avec les inputs */
+    }
+
+    .adc-checkbox-row input[type="checkbox"] {
+        accent-color: var(--ink);
+        width: 13px;
+        height: 13px;
+    }
+
+    .adc-checkbox-row label {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink);
+        cursor: pointer;
+    }
+
+    /* ── Badge statut publication ──────────────────────────────────────── */
+    .adc-pub-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+
+    .adc-pub-dot {
+        width: 8px;
+        height: 8px;
+        border: 1px solid;
+        flex-shrink: 0;
+    }
+
+    .adc-pub-dot--published { background: var(--ok); border-color: var(--ok); }
+    .adc-pub-dot--draft     { background: transparent; border-color: var(--ink-mute); }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+{# Lien retour #}
+<a href="{{ path('app_admin_course_index') }}" class="adc-back">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round"
+         aria-hidden="true">
+        <line x1="19" y1="12" x2="5" y2="12"/>
+        <polyline points="12 19 5 12 12 5"/>
+    </svg>
+    Liste des formations
+</a>
+
+<div class="adc-edit-layout">
+
+    {# ══════════════════════════════════════════════════════════════
+       COLONNE PRINCIPALE : modules + leçons
+       ══════════════════════════════════════════════════════════════ #}
+    <div>
+
+        {# ── SECTION 1 : Infos de la formation ─────────────────────────── #}
+        <div class="adc-card">
+            <div class="adc-card__header">
+                <h2 class="adc-card__title">Informations de la formation</h2>
+                {# Statut de publication #}
+                <span class="adc-pub-status">
+                    <span class="adc-pub-dot {% if course.isPublished() %}adc-pub-dot--published{% else %}adc-pub-dot--draft{% endif %}"></span>
+                    {% if course.isPublished() %}Publié{% else %}Brouillon{% endif %}
+                </span>
+            </div>
+            <div class="adc-card__body">
+
+                <form method="POST"
+                      action="{{ path('app_admin_course_update', {id: course.id}) }}"
+                      aria-label="Modifier la formation">
+
+                    {# Token CSRF — identifiant unique par formation #}
+                    <input type="hidden" name="_token"
+                           value="{{ csrf_token('update_course_' ~ course.id) }}">
+
+                    {# Titre + Sous-titre en ligne #}
+                    <div class="adc-form-row">
+                        <div class="adc-field">
+                            <label class="adc-field__label" for="edit-title">
+                                Titre <span class="adc-field__required">*</span>
+                            </label>
+                            <input type="text"
+                                   id="edit-title"
+                                   name="title"
+                                   class="adc-input"
+                                   value="{{ course.title|e }}"
+                                   maxlength="255"
+                                   required>
+                        </div>
+                        <div class="adc-field">
+                            <label class="adc-field__label" for="edit-level">
+                                Niveau <span class="adc-field__required">*</span>
+                            </label>
+                            <select id="edit-level" name="level" class="adc-select">
+                                {% for level in levels %}
+                                    <option value="{{ level.value|e }}"
+                                            {% if course.level.value == level.value %}selected{% endif %}>
+                                        {{ level.label() }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="adc-field">
+                        <label class="adc-field__label" for="edit-subtitle">Sous-titre</label>
+                        <input type="text"
+                               id="edit-subtitle"
+                               name="subtitle"
+                               class="adc-input"
+                               value="{{ course.subtitle is not null ? course.subtitle|e : '' }}"
+                               maxlength="255">
+                    </div>
+
+                    <div class="adc-form-row">
+                        <div class="adc-field">
+                            <label class="adc-field__label" for="edit-instructor">Formateur·rice</label>
+                            <input type="text"
+                                   id="edit-instructor"
+                                   name="instructorName"
+                                   class="adc-input"
+                                   value="{{ course.instructorName is not null ? course.instructorName|e : '' }}"
+                                   maxlength="255">
+                        </div>
+                        <div class="adc-field">
+                            <label class="adc-field__label" for="edit-trailer">URL trailer</label>
+                            <input type="url"
+                                   id="edit-trailer"
+                                   name="trailerVideoUrl"
+                                   class="adc-input"
+                                   value="{{ course.trailerVideoUrl is not null ? course.trailerVideoUrl|e : '' }}"
+                                   maxlength="500"
+                                   placeholder="https://www.youtube.com/embed/...">
+                        </div>
+                    </div>
+
+                    <div class="adc-field">
+                        <label class="adc-field__label" for="edit-description">Description</label>
+                        <textarea id="edit-description"
+                                  name="description"
+                                  class="adc-textarea"
+                                  rows="4">{{ course.description is not null ? course.description|e : '' }}</textarea>
+                    </div>
+
+                    {# Slug informatif (non modifiable — calculé depuis le titre) #}
+                    <div class="adc-field">
+                        <span class="adc-field__label">Slug URL</span>
+                        <code style="font-family: var(--mono); font-size: 11px;
+                                     color: var(--ink-mute); padding: 6px 10px;
+                                     background: var(--bg-alt); border: 1px solid var(--line-soft);">
+                            /formations/{{ course.slug|e }}
+                        </code>
+                        <span class="adc-field__help">
+                            Mis à jour automatiquement si le titre change.
+                        </span>
+                    </div>
+
+                    <hr class="adc-sep">
+                    <button type="submit" class="adc-btn">Enregistrer les modifications</button>
+
+                </form>
+
+            </div>
+        </div>{# /.adc-card infos #}
+
+        {#
+         # ── SECTION 2 : MODULES ET LEÇONS ────────────────────────────────
+         # Hiérarchie : Module → Leçons (triées par orderPosition)
+         # Pour chaque module : formulaire inline d'ajout de leçon.
+         # En bas : formulaire d'ajout de module.
+         #}
+        <div class="adc-card">
+            <div class="adc-card__header">
+                <h2 class="adc-card__title">
+                    Modules
+                    ({{ modules|length }})
+                </h2>
+            </div>
+            <div class="adc-card__body" style="padding: 0;">
+
+                {% if modules is empty %}
+                    <p style="padding: 16px; font-size: 13px; color: var(--ink-mute); margin: 0;">
+                        Aucun module. Ajoutez le premier module ci-dessous.
+                    </p>
+                {% endif %}
+
+                {# ── Parcours des modules ───────────────────────────────── #}
+                {% for module in modules %}
+                    <div class="adc-module">
+
+                        {# En-tête du module #}
+                        <div class="adc-module__header">
+                            <span class="adc-module__position">{{ loop.index }}</span>
+                            <h3 class="adc-module__title">{{ module.title|e }}</h3>
+                            <span style="font-family: var(--mono); font-size: 9px; color: var(--ink-mute);">
+                                {{ module.lessons|length }} leçon{{ module.lessons|length > 1 ? 's' : '' }}
+                            </span>
+                        </div>
+
+                        {# Liste des leçons existantes #}
+                        {% if module.lessons is not empty %}
+                            <ul class="adc-lessons">
+                                {% for lesson in module.lessons %}
+                                    <li class="adc-lesson">
+                                        <span class="adc-lesson__pos">{{ loop.index }}</span>
+                                        <span class="adc-lesson__title">{{ lesson.title|e }}</span>
+                                        <span class="adc-lesson__meta">
+                                            {% if lesson.durationMinutes is not null %}
+                                                {{ lesson.durationMinutes }}min
+                                            {% endif %}
+                                            {% if lesson.videoUrl is not null %}
+                                                {# Icône vidéo #}
+                                                <svg width="10" height="10" viewBox="0 0 24 24"
+                                                     fill="none" stroke="currentColor"
+                                                     stroke-width="2" stroke-linecap="round"
+                                                     stroke-linejoin="round" aria-label="Vidéo">
+                                                    <polygon points="23 7 16 12 23 17 23 7"/>
+                                                    <rect x="1" y="5" width="15" height="14"/>
+                                                </svg>
+                                            {% endif %}
+                                            {% if lesson.isFreePreview %}
+                                                <span class="adc-lesson__preview">Gratuit</span>
+                                            {% endif %}
+                                        </span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+
+                        {#
+                         # ── Formulaire inline d'ajout de leçon ──────────────
+                         # POST vers app_admin_course_lesson_add
+                         # Token CSRF : 'add_lesson_{moduleId}'
+                         #}
+                        <div class="adc-add-lesson-form">
+                            <form method="POST"
+                                  action="{{ path('app_admin_course_lesson_add', {id: course.id, moduleId: module.id}) }}"
+                                  aria-label="Ajouter une leçon au module {{ module.title|e }}">
+
+                                <input type="hidden" name="_token"
+                                       value="{{ csrf_token('add_lesson_' ~ module.id) }}">
+
+                                <div class="adc-inline-fields">
+
+                                    {# Titre de la leçon #}
+                                    <div class="adc-inline-field" style="flex: 2; min-width: 160px;">
+                                        <label class="adc-inline-label" for="lesson-title-{{ module.id }}">
+                                            Titre leçon *
+                                        </label>
+                                        <input type="text"
+                                               id="lesson-title-{{ module.id }}"
+                                               name="lessonTitle"
+                                               class="adc-input adc-input--sm"
+                                               placeholder="Titre de la leçon"
+                                               required>
+                                    </div>
+
+                                    {# URL vidéo (option B : embed direct) #}
+                                    <div class="adc-inline-field" style="flex: 2; min-width: 160px;">
+                                        <label class="adc-inline-label" for="lesson-video-{{ module.id }}">
+                                            URL vidéo (embed)
+                                        </label>
+                                        <input type="url"
+                                               id="lesson-video-{{ module.id }}"
+                                               name="videoUrl"
+                                               class="adc-input adc-input--sm"
+                                               placeholder="https://www.youtube.com/embed/…">
+                                    </div>
+
+                                    {# Durée en secondes #}
+                                    <div class="adc-inline-field" style="width: 80px;">
+                                        <label class="adc-inline-label" for="lesson-dur-{{ module.id }}">
+                                            Durée (sec)
+                                        </label>
+                                        <input type="number"
+                                               id="lesson-dur-{{ module.id }}"
+                                               name="durationSeconds"
+                                               class="adc-input adc-input--sm"
+                                               min="0"
+                                               placeholder="720">
+                                    </div>
+
+                                    {# Case à cocher "Aperçu gratuit" #}
+                                    <div class="adc-checkbox-row">
+                                        <input type="checkbox"
+                                               id="lesson-preview-{{ module.id }}"
+                                               name="isFreePreview"
+                                               value="1">
+                                        <label for="lesson-preview-{{ module.id }}">Gratuit</label>
+                                    </div>
+
+                                    {# Bouton ajouter #}
+                                    <div class="adc-inline-field" style="justify-content: flex-end;">
+                                        <span class="adc-inline-label" aria-hidden="true">&nbsp;</span>
+                                        <button type="submit" class="adc-btn adc-btn--sm">
+                                            + Leçon
+                                        </button>
+                                    </div>
+
+                                </div>
+                            </form>
+                        </div>
+
+                    </div>{# /.adc-module #}
+                {% endfor %}
+
+                {#
+                 # ── Formulaire d'ajout de module ─────────────────────────────
+                 # POST vers app_admin_course_module_add
+                 # Token CSRF : 'add_module_{courseId}'
+                 #}
+                <div style="padding: 16px; border-top: 1px solid var(--line-soft);">
+                    <form method="POST"
+                          action="{{ path('app_admin_course_module_add', {id: course.id}) }}"
+                          aria-label="Ajouter un module">
+
+                        <input type="hidden" name="_token"
+                               value="{{ csrf_token('add_module_' ~ course.id) }}">
+
+                        <div style="display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;">
+                            <div class="adc-field" style="flex: 1; min-width: 180px; margin-bottom: 0;">
+                                <label class="adc-field__label" for="module-title">
+                                    Titre du module *
+                                </label>
+                                <input type="text"
+                                       id="module-title"
+                                       name="moduleTitle"
+                                       class="adc-input"
+                                       placeholder="Ex : Histoire et origines"
+                                       required>
+                            </div>
+                            <button type="submit" class="adc-btn">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                     stroke="currentColor" stroke-width="2"
+                                     stroke-linecap="round" aria-hidden="true">
+                                    <line x1="12" y1="5" x2="12" y2="19"/>
+                                    <line x1="5" y1="12" x2="19" y2="12"/>
+                                </svg>
+                                Ajouter le module
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
+
+            </div>
+        </div>{# /.adc-card modules #}
+
+    </div>{# /colonne principale #}
+
+    {# ══════════════════════════════════════════════════════════════
+       COLONNE DROITE : publication + infos rapides
+       ══════════════════════════════════════════════════════════════ #}
+    <div>
+
+        {# ── SECTION 3 : PUBLICATION ─────────────────────────────────────── #}
+        {% if not course.isPublished() %}
+            <div class="adc-card">
+                <div class="adc-card__header">
+                    <h2 class="adc-card__title">Publication</h2>
+                </div>
+                <div class="adc-card__body">
+
+                    <p style="font-size: 13px; line-height: 1.6; color: var(--ink-mute); margin: 0 0 14px;">
+                        Cette formation est en brouillon.
+                        Une fois publiée, elle sera visible dans le catalogue public.
+                    </p>
+
+                    {# Résumé du contenu #}
+                    {% set lessonCount = 0 %}
+                    {% for module in modules %}
+                        {% set lessonCount = lessonCount + module.lessons|length %}
+                    {% endfor %}
+
+                    <div style="font-family: var(--mono); font-size: 10px; color: var(--ink-mute);
+                                padding: 10px 12px; background: var(--bg-alt);
+                                border: 1px solid var(--line-soft); margin-bottom: 16px;">
+                        {{ modules|length }} module{{ modules|length > 1 ? 's' : '' }}
+                        · {{ lessonCount }} leçon{{ lessonCount > 1 ? 's' : '' }}
+                    </div>
+
+                    {# Vérification préalable : au moins un module avec une leçon #}
+                    {% if modules is empty or lessonCount == 0 %}
+                        <p style="font-size: 11px; color: var(--accent-2); font-weight: 700;
+                                  font-family: var(--mono); letter-spacing: .04em;">
+                            ↳ Ajoutez au moins 1 module et 1 leçon avant de publier.
+                        </p>
+                    {% else %}
+                        <form method="POST"
+                              action="{{ path('app_admin_course_publish', {id: course.id}) }}"
+                              onsubmit="return confirm('Publier cette formation ? Elle sera visible publiquement.')">
+                            <input type="hidden" name="_token"
+                                   value="{{ csrf_token('publish_course_' ~ course.id) }}">
+                            <button type="submit" class="adc-btn adc-btn--publish" style="width: 100%; justify-content: center;">
+                                {# Icône monde/globe #}
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                     stroke="currentColor" stroke-width="2"
+                                     stroke-linecap="round" stroke-linejoin="round"
+                                     aria-hidden="true">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M2 12h20M12 2a14 14 0 0 1 0 20 14 14 0 0 1 0-20z"/>
+                                </svg>
+                                Publier la formation
+                            </button>
+                        </form>
+                    {% endif %}
+
+                </div>
+            </div>
+        {% else %}
+            {# Formation déjà publiée — affichage du statut #}
+            <div class="adc-card">
+                <div class="adc-card__header">
+                    <h2 class="adc-card__title">Publication</h2>
+                </div>
+                <div class="adc-card__body">
+                    <p style="font-size: 13px; color: var(--ok); font-weight: 600; margin: 0 0 10px;">
+                        Formation publiée
+                        {% if course.publishedAt is not null %}
+                            le {{ course.publishedAt|date('d/m/Y') }}
+                        {% endif %}
+                    </p>
+                    <a href="{{ path('app_course_show', {slug: course.slug}) }}"
+                       class="adc-btn adc-btn--outline" target="_blank" rel="noopener"
+                       style="display: inline-flex; font-size: 10px; padding: 7px 12px;">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                            <polyline points="15 3 21 3 21 9"/>
+                            <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                        Voir la page publique
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+
+        {# ── Infos rapides ──────────────────────────────────────────────── #}
+        <div class="adc-card">
+            <div class="adc-card__header">
+                <h2 class="adc-card__title">Infos</h2>
+            </div>
+            <div class="adc-card__body">
+                <dl style="display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;
+                           font-size: 12px; margin: 0;">
+                    <dt style="color: var(--ink-mute); font-family: var(--mono); font-size: 9px;
+                               text-transform: uppercase; letter-spacing: .06em; align-self: center;">
+                        Niveau
+                    </dt>
+                    <dd style="margin: 0;">{{ course.level.label() }}</dd>
+
+                    <dt style="color: var(--ink-mute); font-family: var(--mono); font-size: 9px;
+                               text-transform: uppercase; letter-spacing: .06em; align-self: center;">
+                        Slug
+                    </dt>
+                    <dd style="margin: 0; font-family: var(--mono); font-size: 10px;
+                               word-break: break-all;">
+                        {{ course.slug|e }}
+                    </dd>
+
+                    <dt style="color: var(--ink-mute); font-family: var(--mono); font-size: 9px;
+                               text-transform: uppercase; letter-spacing: .06em; align-self: center;">
+                        Créé le
+                    </dt>
+                    <dd style="margin: 0;">{{ course.createdAt|date('d/m/Y H:i') }}</dd>
+
+                    {% if course.updatedAt is not null %}
+                        <dt style="color: var(--ink-mute); font-family: var(--mono); font-size: 9px;
+                                   text-transform: uppercase; letter-spacing: .06em; align-self: center;">
+                            Modifié le
+                        </dt>
+                        <dd style="margin: 0;">{{ course.updatedAt|date('d/m/Y H:i') }}</dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+
+    </div>{# /colonne droite #}
+
+</div>{# /.adc-edit-layout #}
+
+{% endblock %}

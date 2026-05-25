@@ -11,12 +11,14 @@ use App\Entity\User;
 use App\Enum\NotificationType;
 use App\Repository\ForumThreadRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Mime\Email;
 
 /**
  * ForumService — logique métier du forum communautaire Bazaart.
  *
  * Ce service centralise toutes les opérations sur les threads et réponses :
- * création, suppression, modération (pin/lock), compteurs de vues.
+ * création, suppression, modération (pin/lock), compteurs de vues, signalements.
  *
  * Principe de séparation des responsabilités :
  *   - Le controller gère HTTP (request, response, CSRF, redirects, flash messages)
@@ -27,11 +29,24 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 class ForumService
 {
+    /**
+     * Segments d'URL réservés par le routeur du forum.
+     *
+     * Si un titre génère exactement l'un de ces slugs, il entrerait en collision
+     * avec une route Symfony existante (ex : /forum/{cat}/nouveau → app_forum_new_thread).
+     * On leur ajoute automatiquement un suffixe aléatoire court pour éviter le conflit.
+     *
+     * Tenir cette liste à jour dès qu'une nouvelle route est ajoutée avec un segment fixe.
+     */
+    private const RESERVED_SLUGS = ['nouveau', 'new'];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly ForumThreadRepository $threadRepository,
         // Injecté pour notifier l'auteur du thread lors d'une nouvelle réponse
         private readonly NotificationService $notificationService,
+        // Injecté pour envoyer des emails de signalement à l'admin
+        private readonly MailerInterface $mailer,
     ) {}
 
     // ─── Threads ──────────────────────────────────────────────────────────────
@@ -93,6 +108,19 @@ class ForumService
         // symfony/string n'est pas une dépendance directe dans ce projet,
         // donc on utilise une translittération maison (iconv + regex) pour rester autonome.
         $slug = $this->slugify($title);
+
+        // ── Correction 1 : protection contre les slugs réservés ──────────────
+        // Certains segments d'URL sont utilisés par le routeur Symfony comme routes fixes.
+        // Exemple : un titre "Nouveau" génère le slug "nouveau", qui intercepte la route
+        // /forum/{cat}/nouveau (app_forum_new_thread) et rend le thread inaccessible.
+        //
+        // On vérifie EN PREMIER (avant la déduplication) car le slug doit être valide
+        // comme base avant de chercher des doublons en BDD.
+        if (in_array($slug, self::RESERVED_SLUGS, true)) {
+            // On ajoute 6 caractères hexadécimaux aléatoires : "nouveau" → "nouveau-a1b2c3"
+            // bin2hex(random_bytes(3)) génère 6 caractères hex cryptographiquement sûrs
+            $slug .= '-' . substr(bin2hex(random_bytes(3)), 0, 6);
+        }
 
         // ⚠️ IMPORTANT : le slug est UNIQUE en BDD sur toute la table (pas par catégorie).
         // Si deux threads de catégories différentes ont le même titre (même slug candidat),
@@ -326,18 +354,92 @@ class ForumService
     }
 
     /**
-     * Incrémente le compteur de vues d'un thread.
+     * Incrémente le compteur de vues d'un thread de façon ATOMIQUE.
      *
      * Appelé à chaque affichage de la page du thread (ForumController::thread()).
      * En V1, le compteur est brut (pas de déduplication par session/IP/user).
      * Cela donne une indication d'intérêt relatif mais pas une mesure exacte.
      *
-     * Note performance : un UPDATE dédié (sans recharger l'entité) serait plus
-     * efficace à grande échelle, mais suffisant pour la V1.
+     * Correction 4 — Race condition :
+     *   L'ancienne implémentation faisait lecture → +1 → écriture sur l'entité.
+     *   Si deux requêtes HTTP arrivent simultanément, elles lisent toutes les deux
+     *   viewsCount = 42, et écrivent toutes les deux 43 → une vue est perdue.
+     *
+     *   Solution : un UPDATE SQL direct avec une expression "t.viewsCount + 1".
+     *   La base de données garantit l'atomicité de cet incrément, peu importe
+     *   la concurrence. C'est le pattern standard pour les compteurs haute-fréquence.
+     *
+     * Note : on n'appelle pas flush() ici — la requête DQL UPDATE s'exécute
+     * directement en base sans passer par l'Unit of Work de Doctrine.
      */
     public function incrementViews(ForumThread $thread): void
     {
-        $thread->incrementViews();
-        $this->em->flush();
+        // UPDATE forum_thread SET views_count = views_count + 1 WHERE id = :id
+        // L'incrément est atomique côté PostgreSQL — pas de race condition possible.
+        $this->threadRepository->createQueryBuilder('t')
+            ->update()
+            ->set('t.viewsCount', 't.viewsCount + 1')
+            ->where('t.id = :id')
+            ->setParameter('id', $thread->getId())
+            ->getQuery()
+            ->execute();
+        // Pas de flush() nécessaire : DQL UPDATE contourne l'Unit of Work de Doctrine
+        // et exécute la requête immédiatement en base.
+    }
+
+    /**
+     * Envoie un email de signalement à l'administrateur du forum.
+     *
+     * Correction 3 — fonctionnalité CDC manquante.
+     *
+     * Règles métier :
+     *   - Un utilisateur NE PEUT PAS signaler son propre thread (vérification dans le controller).
+     *   - Le signalement n'est pas persisté en BDD en V1 (pas de nouvelle entité, pas de migration).
+     *   - L'email est envoyé via Symfony Mailer (DSN Mailpit en dev, Brevo en prod).
+     *
+     * En dev : l'email est capturé par Mailpit → http://localhost:8025
+     * En prod : Mailpit est remplacé par Brevo ou Resend via MAILER_DSN dans .env
+     *
+     * @param ForumThread $thread   Le thread signalé
+     * @param User        $reporter L'utilisateur qui signale
+     */
+    public function reportThread(ForumThread $thread, User $reporter): void
+    {
+        // ── Adresse de destination ────────────────────────────────────────────
+        // TODO : déplacer 'admin@bazaart.fr' en paramètre de service (services.yaml)
+        // pour pouvoir la modifier sans toucher au code.
+        // Exemple dans services.yaml :
+        //   parameters:
+        //     app.admin_email: '%env(ADMIN_EMAIL)%'
+        // Puis dans le constructeur : private readonly string $adminEmail
+        // (injecté via $adminEmail: '%app.admin_email%' dans services.yaml)
+        $adminEmail = 'admin@bazaart.fr';
+
+        // ── Construction de l'email ───────────────────────────────────────────
+        // On utilise symfony/mailer avec Email (email texte simple — pas de template Twig).
+        // Pour un email HTML complet, on utiliserait TemplatedEmail (cf. ResourceAlertService).
+        $email = (new Email())
+            ->from('noreply@bazaart.fr')
+            ->to($adminEmail)
+            ->subject('[Forum Bazaart] Signalement — ' . $thread->getTitle())
+            ->text(implode("\n\n", [
+                'Un thread du forum a été signalé.',
+                // Titre du thread signalé
+                'Sujet    : ' . $thread->getTitle(),
+                // Partie locale de l'email de l'auteur (avant le @) — RGPD : pas l'email complet
+                'Auteur   : ' . explode('@', $thread->getAuthor()->getEmail())[0],
+                // Partie locale du signaleur
+                'Signalé par : ' . explode('@', $reporter->getEmail())[0],
+                // ID du thread — permet à l'admin de le retrouver facilement
+                'ID thread  : #' . $thread->getId(),
+                '',
+                'Connectez-vous au back-office pour modérer ce sujet.',
+            ]));
+
+        // ── Envoi via Symfony Mailer ──────────────────────────────────────────
+        // MailerInterface::send() lève une TransportExceptionInterface si l'envoi échoue.
+        // En V1 on laisse l'exception remonter — elle sera gérée dans le controller
+        // (flash 'error' + redirection) si nécessaire.
+        $this->mailer->send($email);
     }
 }
