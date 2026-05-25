@@ -13,6 +13,21 @@ services:
     _defaults:
         autowire: true      # Automatically injects dependencies in your services.
         autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+        # ── Bindings des rate limiters ────────────────────────────────────────
+        #
+        # Symfony génère automatiquement des services "limiter.{nom}.limiter"
+        # pour chaque rate_limiter défini dans framework.yaml.
+        # L'autowiring par nom de variable (ex: $registerLimiter) ne fonctionne
+        # PAS directement — il faut binder explicitement le service au nom du paramètre.
+        #
+        # Convention Symfony (doc officielle) :
+        #   rate_limiter nommé "register_limiter" → service "limiter.register_limiter"
+        #   On bind ce service vers la variable $registerLimiter dans les constructeurs.
+        #
+        # Sans ce binding, Symfony lève une erreur :
+        #   "Cannot autowire service AuthController: argument $registerLimiter..."
+        bind:
+            Symfony\Component\RateLimiter\RateLimiterFactory $registerLimiter: '@limiter.register_limiter'
 
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name

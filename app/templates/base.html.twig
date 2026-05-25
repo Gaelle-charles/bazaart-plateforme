@@ -836,5 +836,194 @@
 </script>
 {% endblock %}
 
+{# ── BANNIÈRE DE CONSENTEMENT COOKIES (RGPD) ──────────────────────────────── #}
+{#
+    Implémentation légère sans bibliothèque externe (pas de tarteaucitron en V1).
+
+    Fonctionnement :
+    1. Le script vérifie si le cookie "cookie_consent" existe.
+    2. Si absent → la bannière est affichée (display: flex).
+    3. Au clic sur "Accepter" → cookie posé (max-age: 1 an), bannière masquée.
+    4. Au clic sur "Refuser" → cookie posé (max-age: 1 an), bannière masquée.
+
+    Pourquoi un cookie et pas localStorage ?
+    - Les cookies peuvent être lus côté serveur (pour décider d'injecter des scripts
+      analytiques ou non côté Twig à terme).
+    - localStorage est bloqué par certains modes de navigation privée.
+    - La durée de vie explicite (1 an) est lisible et configurable.
+
+    SameSite=Lax :
+    - Valeur recommandée par défaut (depuis Chrome 80+).
+    - Empêche l'envoi du cookie dans les requêtes cross-site de type POST.
+    - Plus permissif que SameSite=Strict (permet le suivi de liens entre sites).
+
+    Design : fond --ink (noir), texte --bg (sable), boutons cohérents avec la nav.
+    Position : fixed en bas (bottom: 0), z-index 1000 (au-dessus de tout).
+#}
+<div id="cookie-banner"
+     role="alertdialog"
+     aria-labelledby="cookie-banner-title"
+     aria-describedby="cookie-banner-desc"
+     style="
+        display: none;         /* caché par défaut, affiché par JS si pas de consentement */
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: var(--ink, #0D0D0D);
+        color: var(--bg, #F2EFE6);
+        border-top: 2px solid var(--accent, #C6F24E);
+        padding: 16px 24px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        font-family: var(--body, 'Space Grotesk', sans-serif);
+     ">
+
+    {# Texte informatif #}
+    <div style="flex: 1; min-width: 280px;">
+        <span id="cookie-banner-title"
+              style="font-family: var(--mono, 'JetBrains Mono', monospace);
+                     font-size: 10px;
+                     font-weight: 700;
+                     letter-spacing: .1em;
+                     text-transform: uppercase;
+                     color: var(--accent, #C6F24E);
+                     display: block;
+                     margin-bottom: 4px;">
+            Cookies
+        </span>
+        <p id="cookie-banner-desc"
+           style="font-size: 13px; line-height: 1.5; margin: 0; opacity: .85;">
+            Ce site utilise des cookies nécessaires à son fonctionnement (session, authentification).
+            <a href="{{ path('app_legal_privacy') }}"
+               style="color: var(--accent, #C6F24E); text-decoration: underline;">
+                En savoir plus
+            </a>
+        </p>
+    </div>
+
+    {# Boutons de choix #}
+    <div style="display: flex; gap: 10px; flex-shrink: 0;">
+
+        {# Bouton "Refuser" — outline discret #}
+        <button id="cookie-refuse"
+                type="button"
+                onclick="cookieConsent('refused')"
+                style="
+                    padding: 8px 16px;
+                    font: 700 11px/1 var(--body, 'Space Grotesk', sans-serif);
+                    letter-spacing: .05em;
+                    text-transform: uppercase;
+                    background: transparent;
+                    color: var(--bg, #F2EFE6);
+                    border: 1px solid rgba(242,239,230,.4);
+                    cursor: pointer;
+                    transition: border-color .12s, background .12s;
+                "
+                onmouseover="this.style.borderColor='var(--bg)'"
+                onmouseout="this.style.borderColor='rgba(242,239,230,.4)'">
+            Refuser
+        </button>
+
+        {# Bouton "Accepter" — fond vert acide (CTA) #}
+        <button id="cookie-accept"
+                type="button"
+                onclick="cookieConsent('accepted')"
+                style="
+                    padding: 8px 16px;
+                    font: 700 11px/1 var(--body, 'Space Grotesk', sans-serif);
+                    letter-spacing: .05em;
+                    text-transform: uppercase;
+                    background: var(--accent, #C6F24E);
+                    color: var(--ink, #0D0D0D);
+                    border: 1px solid var(--accent, #C6F24E);
+                    cursor: pointer;
+                    transition: background .12s, color .12s;
+                "
+                onmouseover="this.style.background='var(--bg)'; this.style.color='var(--ink)'"
+                onmouseout="this.style.background='var(--accent)'; this.style.color='var(--ink)'">
+            Accepter
+        </button>
+
+    </div>
+
+</div>
+
+<script>
+/*
+ * Gestion du consentement cookies — bannière RGPD.
+ *
+ * Convention IIFE : portée isolée pour ne pas polluer le scope global.
+ *
+ * Lecture/écriture des cookies :
+ *   - document.cookie est une string spéciale : lire retourne TOUS les cookies
+ *     concaténés, écrire ajoute ou modifie UN SEUL cookie.
+ *   - Pour lire un cookie spécifique, on split et on cherche par nom.
+ *
+ * maxAge : 31536000 secondes = 365 jours.
+ * Path=/ : le cookie est valide sur tout le domaine (pas seulement /profil/rgpd).
+ * SameSite=Lax : protection CSRF standard (Chrome 80+ l'impose de toute façon).
+ */
+(function () {
+    'use strict';
+
+    var COOKIE_NAME = 'cookie_consent';
+    var COOKIE_MAX_AGE = 31536000; /* 1 an en secondes */
+    var banner = document.getElementById('cookie-banner');
+
+    /**
+     * Lit la valeur d'un cookie par son nom.
+     * Retourne null si le cookie n'existe pas.
+     *
+     * @param {string} name - Nom du cookie à lire
+     * @return {string|null}
+     */
+    function getCookie(name) {
+        var cookies = document.cookie.split('; ');
+        for (var i = 0; i < cookies.length; i++) {
+            var parts = cookies[i].split('=');
+            if (parts[0] === name) {
+                return decodeURIComponent(parts[1]);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Pose le cookie de consentement et masque la bannière.
+     * Appelée par les boutons "Accepter" et "Refuser".
+     *
+     * @param {string} value - 'accepted' ou 'refused'
+     */
+    window.cookieConsent = function (value) {
+        /* Écriture du cookie : un seul cookie à la fois avec document.cookie */
+        document.cookie = COOKIE_NAME + '=' + value
+            + '; max-age=' + COOKIE_MAX_AGE
+            + '; path=/'
+            + '; SameSite=Lax'
+            /* Secure : ajouté uniquement en HTTPS (production).
+             * En HTTP (dev sur localhost:8080), les navigateurs ignorent silencieusement
+             * un cookie Secure → la bannière réapparaîtrait à chaque rechargement.
+             * location.protocol === 'https:' évite ce problème sans changer le code serveur. */
+            + (location.protocol === 'https:' ? '; Secure' : '');
+
+        /* Masque la bannière sans la supprimer du DOM */
+        if (banner) {
+            banner.style.display = 'none';
+        }
+    };
+
+    /* Au chargement de la page : afficher la bannière si pas encore de consentement */
+    if (banner && getCookie(COOKIE_NAME) === null) {
+        /* display: flex car la bannière utilise flexbox */
+        banner.style.display = 'flex';
+    }
+
+}());
+</script>
+
 </body>
 </html>

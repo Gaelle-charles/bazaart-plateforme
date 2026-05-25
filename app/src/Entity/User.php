@@ -35,6 +35,28 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private bool $isVerified = false;
 
     /**
+     * Date d'anonymisation RGPD de ce compte.
+     *
+     * Null → compte actif normal.
+     * Non null → compte anonymisé (email remplacé, mot de passe invalidé).
+     *
+     * On préfère l'anonymisation à la suppression pour :
+     *   1. Préserver l'intégrité référentielle (les posts/ressources restent en BDD)
+     *   2. Conserver une trace minimale (date de suppression) pour les obligations légales
+     *
+     * Après anonymisation :
+     *   - email → anonymise_{id}@bazaart-deleted.fr
+     *   - password → hash aléatoire inutilisable
+     *   - roles → ["ROLE_USER"]
+     *   - isVerified → false
+     *   - anonymizedAt → datetime de l'opération
+     *
+     * Convention Doctrine : nullable: true (null = non anonymisé, état par défaut)
+     */
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $anonymizedAt = null;
+
+    /**
      * Relation inverse vers ArtistProfile.
      * mappedBy = 'user' fait référence à la propriété $user dans ArtistProfile.
      * Ici orphanRemoval = true : si on retire le profil de l'utilisateur, il est supprimé en BDD.
@@ -118,6 +140,35 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function eraseCredentials(): void
     {
         // Si tu stockes des données sensibles temporaires, efface-les ici
+    }
+
+    /**
+     * Retourne la date d'anonymisation RGPD, ou null si le compte est actif.
+     */
+    public function getAnonymizedAt(): ?\DateTimeInterface
+    {
+        return $this->anonymizedAt;
+    }
+
+    /**
+     * Définit la date d'anonymisation RGPD.
+     * Appelé uniquement par RgpdService::anonymizeUser().
+     */
+    public function setAnonymizedAt(?\DateTimeInterface $anonymizedAt): static
+    {
+        $this->anonymizedAt = $anonymizedAt;
+
+        return $this;
+    }
+
+    /**
+     * Raccourci : indique si ce compte a été anonymisé.
+     * Utilisé dans les templates Twig et les voters pour bloquer l'accès
+     * aux comptes supprimés qui auraient des sessions résiduelles.
+     */
+    public function isAnonymized(): bool
+    {
+        return $this->anonymizedAt !== null;
     }
 
     public function getArtistProfile(): ?ArtistProfile

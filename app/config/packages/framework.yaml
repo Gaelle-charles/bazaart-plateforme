@@ -5,8 +5,60 @@ framework:
     # Note that the session will be started ONLY if you read or write from it.
     session: true
 
+    # ── Proxies de confiance ────────────────────────────────────────────────
+    #
+    # Sans cette configuration, Symfony lit l'IP directe de la connexion TCP
+    # (l'IP du load balancer / proxy DigitalOcean), et non la vraie IP du client.
+    # Conséquence : le rate limiter (/login, /register) bloquerait le PROXY
+    # au lieu du client malveillant — toutes les connexions seraient bloquées !
+    #
+    # REMOTE_ADDR : Symfony fait confiance au proxy qui fait la requête directe
+    # (quelle que soit son IP). C'est adapté quand on est seul sur le droplet.
+    # Alternative plus stricte pour production : mettre l'IP fixe du load balancer.
+    #
+    # trusted_headers : liste des en-têtes HTTP que Symfony lit pour obtenir
+    # la vraie IP client (X-Forwarded-For), le protocole (X-Forwarded-Proto),
+    # le nom d'hôte (X-Forwarded-Host) et le port (X-Forwarded-Port).
+    trusted_proxies: '127.0.0.1,REMOTE_ADDR'
+    # x-forwarded-host est retiré : Nginx pose l'en-tête Host directement vers
+    # PHP-FPM — inutile ici, et laisser ce header de confiance crée une surface
+    # d'attaque potentielle (Host header injection si un proxy mal configuré l'injecte).
+    trusted_headers: ['x-forwarded-for', 'x-forwarded-port', 'x-forwarded-proto']
+
     #esi: true
     #fragments: true
+
+    # ── Rate Limiting (RGPD / Sécurité) ─────────────────────────────────────
+    #
+    # Symfony RateLimiter (composant Symfony 5.2+).
+    # Chaque "limiter" est une fabrique de jetons (token bucket / sliding window).
+    #
+    # Note : il n'y a PAS de "login_limiter" ici — c'est intentionnel.
+    # Le throttling du login est géré directement par "login_throttling" dans
+    # security.yaml (max_attempts + interval). Symfony Security l'implémente
+    # nativement, sans passer par un service RateLimiterFactory custom.
+    # Avoir un login_limiter ici ET login_throttling dans security.yaml serait
+    # du code mort et une source de confusion.
+    #
+    # Seul register_limiter est déclaré ici : il est injecté manuellement dans
+    # AuthController::register() via "RateLimiterFactory $registerLimiter".
+    #
+    # Politique "sliding_window" :
+    #   Contrairement à "fixed_window" (fenêtre fixe calée sur l'heure),
+    #   "sliding_window" calcule les tentatives sur les 15 dernières minutes
+    #   glissantes à partir du dernier hit. Plus équitable pour l'utilisateur.
+    #
+    # Stockage des compteurs :
+    #   Par défaut, Symfony utilise l'adaptateur de cache configuré (cache.app).
+    #   En production, ce sera Redis (configuré dans config/packages/cache.yaml).
+    #   En dev, filesystem. Aucune configuration supplémentaire nécessaire.
+    rate_limiter:
+        register_limiter:
+            # Sliding window : 5 tentatives maximum sur une fenêtre glissante de 15 min
+            # (limite les créations de comptes en masse / attaques par bot)
+            policy: 'sliding_window'
+            limit: 5
+            interval: '15 minutes'
 
 when@test:
     framework:

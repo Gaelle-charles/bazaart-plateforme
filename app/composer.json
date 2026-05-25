@@ -26,6 +26,7 @@
         "symfony/mailer": "7.4.*",
         "symfony/messenger": "7.4.*",
         "symfony/mime": "7.4.*",
+        "symfony/rate-limiter": "7.4.*",
         "symfony/runtime": "7.4.*",
         "symfony/security-bundle": "7.4.*",
         "symfony/twig-bundle": "7.4.*",

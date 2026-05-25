@@ -36,6 +36,10 @@ security:
             pattern: ^/(_profiler|_wdt|assets|build)/
             security: false
         main:
+            # UserChecker vérifie l'état du compte (ex: anonymisé RGPD) avant toute
+            # authentification — que ce soit via formulaire login ou Google OAuth.
+            # Sans ce checker, Google OAuth pourrait recréer un compte anonymisé.
+            user_checker: App\Security\UserChecker
             lazy: true
             provider: app_user_provider
             form_login:
@@ -56,6 +60,22 @@ security:
             # Avec plusieurs authenticators, Symfony doit savoir lequel gère
             # la redirection des utilisateurs non connectés vers la page de login
             entry_point: App\Security\GoogleAuthenticator
+            # ── Throttling du login (RGPD / Sécurité CDC V3 §9) ──────────────
+            #
+            # login_throttling : Symfony Security gère le rate limiting nativement
+            # à partir de max_attempts + interval — aucun service RateLimiterFactory
+            # custom n'est nécessaire ici (il n'y a pas de "login_limiter" dans
+            # framework.yaml, c'est intentionnel).
+            #
+            # Symfony se charge automatiquement de bloquer l'authentification si la
+            # limite est dépassée et retourne TooManyLoginAttemptsAuthenticationException.
+            # Cela couvre TOUTES les méthodes du firewall (form_login + Google OAuth).
+            #
+            # Pour /register, le throttling est géré manuellement dans
+            # AuthController::register() via RateLimiterFactory $registerLimiter.
+            login_throttling:
+                max_attempts: 5
+                interval: '15 minutes'
 
     access_control:
         - { path: ^/login, roles: PUBLIC_ACCESS }
@@ -65,6 +85,13 @@ security:
         # Page d'accueil et formulaire de contact — accessibles sans être connecté
         - { path: ^/$, roles: PUBLIC_ACCESS }
         - { path: ^/contact, roles: PUBLIC_ACCESS }
+        # ── Pages légales RGPD — PUBLIQUES (obligation légale) ────────────────
+        # Ces pages doivent être consultables AVANT la création d'un compte
+        # (politique de confidentialité, CGU, mentions légales).
+        # LCEN art. 6-III oblige les mentions légales à être accessibles sans restriction.
+        - { path: ^/confidentialite, roles: PUBLIC_ACCESS }
+        - { path: ^/cgu, roles: PUBLIC_ACCESS }
+        - { path: ^/mentions-legales, roles: PUBLIC_ACCESS }
         # Espace structure : réservé aux comptes structure activés (ROLE_STRUCTURE)
         # Note : la vérification isStructurePartner = true est faite dans StructureVoter,
         # car access_control ne peut pas lire les champs BDD.

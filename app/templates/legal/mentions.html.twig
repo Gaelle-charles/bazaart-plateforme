@@ -1,0 +1,181 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # legal/mentions.html.twig — Mentions légales de Bazaart
+ #
+ # Page PUBLIQUE — accessible sans connexion.
+ # Obligation légale française : LCEN art. 6-III-1.
+ # Tout site web publiant des informations en ligne doit afficher ses mentions légales.
+ #
+ # Informations obligatoires (LCEN) :
+ #   - Identité de l'éditeur (personne physique ou morale)
+ #   - Directeur de la publication
+ #   - Hébergeur
+ #   - Conditions de contact
+ #
+ # Sections marquées [À COMPLÉTER — ...] : à renseigner avec les informations
+ # définitives de l'association Bazaart.
+#}
+
+{% block page_title %}Mentions légales{% endblock %}
+
+{% block content %}
+<div class="legal-page">
+
+    {# ── En-tête ─────────────────────────────────────────────────────────── #}
+    <div class="legal-header">
+        <h1 class="legal-title">Mentions légales</h1>
+        <p class="legal-meta">Conformément à la Loi pour la Confiance dans l'Économie Numérique (LCEN)</p>
+        <p class="legal-intro">
+            Ces mentions légales concernent le site <strong>bazaart.fr</strong>
+            et l'ensemble de ses sous-domaines.
+        </p>
+    </div>
+
+    {# ── Section 1 : Éditeur ──────────────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="ml-editeur">
+        <h2 id="ml-editeur" class="legal-h2">1. Éditeur du site</h2>
+
+        <div class="legal-info-block">
+            <p><strong>Dénomination :</strong> [À COMPLÉTER — raison sociale officielle de l'association Bazaart]</p>
+            <p><strong>Forme juridique :</strong> [À COMPLÉTER — ex: Association loi 1901]</p>
+            <p><strong>SIRET :</strong> [À COMPLÉTER — numéro SIRET de l'association]</p>
+            <p><strong>Numéro RNA :</strong> [À COMPLÉTER — si association : numéro RNA]</p>
+            <p><strong>Adresse du siège social :</strong> [À COMPLÉTER — adresse postale complète]</p>
+            <p><strong>Email :</strong> <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a></p>
+            <p><strong>Téléphone :</strong> [À COMPLÉTER — numéro de téléphone de l'association]</p>
+        </div>
+    </section>
+
+    {# ── Section 2 : Directeur de publication ────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="ml-directeur">
+        <h2 id="ml-directeur" class="legal-h2">2. Directeur de la publication</h2>
+
+        <div class="legal-info-block">
+            <p><strong>Nom et prénom :</strong> [À COMPLÉTER — nom complet du directeur de la publication]</p>
+            <p><strong>Qualité :</strong> [À COMPLÉTER — ex: Présidente de l'association]</p>
+            <p><strong>Email de contact :</strong> <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a></p>
+        </div>
+    </section>
+
+    {# ── Section 3 : Hébergement ─────────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="ml-hebergement">
+        <h2 id="ml-hebergement" class="legal-h2">3. Hébergement</h2>
+
+        <p>Le site <strong>bazaart.fr</strong> est hébergé par :</p>
+
+        <div class="legal-info-block">
+            <p><strong>Société :</strong> DigitalOcean LLC</p>
+            <p><strong>Adresse :</strong> 101 6th Ave, New York, NY 10013, États-Unis</p>
+            <p><strong>Site web :</strong> <a href="https://www.digitalocean.com" target="_blank" rel="noopener">digitalocean.com</a></p>
+            <p><strong>Adresse IP du serveur :</strong> 206.189.3.112</p>
+            <p>
+                Le serveur est physiquement situé en Europe (région : [À COMPLÉTER — ex: Frankfurt, Allemagne]).
+                Les données sont donc hébergées dans l'Union Européenne.
+            </p>
+        </div>
+    </section>
+
+    {# ── Section 4 : Contact ─────────────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="ml-contact">
+        <h2 id="ml-contact" class="legal-h2">4. Contact</h2>
+
+        <p>Pour toute question relative à ce site ou pour signaler un contenu illicite :</p>
+
+        <div class="legal-info-block">
+            <p><strong>Email général :</strong> <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a></p>
+            <p><strong>Signalement RGPD :</strong> <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a></p>
+            <p><strong>Formulaire de contact :</strong> <a href="{{ path('app_contact') }}">bazaart.fr/contact</a></p>
+        </div>
+    </section>
+
+    {# ── Section 5 : Propriété intellectuelle ────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="ml-pi">
+        <h2 id="ml-pi" class="legal-h2">5. Propriété intellectuelle</h2>
+
+        <p>
+            L'ensemble des éléments constitutifs du site <strong>bazaart.fr</strong>
+            (textes, graphismes, logotype, base de données, code source, structure)
+            est protégé par les dispositions du Code de la propriété intellectuelle.
+        </p>
+
+        <p>
+            La reproduction, représentation, modification ou exploitation totale ou partielle
+            des éléments du site sans autorisation préalable écrite de Bazaart est interdite.
+        </p>
+
+        <p>
+            Les contenus publiés par les utilisateurs (textes, images, profils) restent
+            la propriété de leurs auteurs. Bazaart détient une licence d'utilisation limitée
+            au bon fonctionnement de la plateforme (affichage, indexation).
+        </p>
+    </section>
+
+    {# ── Section 6 : Données personnelles ────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="ml-rgpd">
+        <h2 id="ml-rgpd" class="legal-h2">6. Protection des données personnelles</h2>
+
+        <p>
+            Le traitement des données personnelles collectées sur ce site est soumis
+            au Règlement Général sur la Protection des Données (RGPD — UE 2016/679)
+            et à la Loi Informatique et Libertés.
+        </p>
+
+        <p>
+            Pour plus d'informations, consultez notre
+            <a href="{{ path('app_legal_privacy') }}">Politique de confidentialité</a>.
+        </p>
+
+        <p>
+            Pour exercer vos droits (accès, rectification, effacement, portabilité) :
+            <a href="{{ path('app_rgpd_index') }}">Espace RGPD</a>
+            ou <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a>.
+        </p>
+    </section>
+
+    {# ── Section 7 : Cookies ─────────────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="ml-cookies">
+        <h2 id="ml-cookies" class="legal-h2">7. Cookies</h2>
+
+        <p>
+            Ce site utilise des cookies nécessaires à son fonctionnement (session,
+            authentification). Pour plus d'informations, consultez notre
+            <a href="{{ path('app_legal_privacy') }}#section-cookies">politique de cookies</a>.
+        </p>
+    </section>
+
+    {# ── Section 8 : Loi applicable ──────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="ml-loi">
+        <h2 id="ml-loi" class="legal-h2">8. Droit applicable</h2>
+
+        <p>
+            Le présent site est soumis au droit français. En cas de litige,
+            les juridictions françaises sont seules compétentes.
+        </p>
+    </section>
+
+</div>{# fin .legal-page #}
+{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+/* Styles des pages légales — identiques aux autres pages légales */
+.legal-page { max-width: 800px; margin: 0 auto; padding: 32px 0; }
+.legal-header { margin-bottom: 40px; padding-bottom: 24px; border-bottom: 2px solid var(--ink, #0D0D0D); }
+.legal-title { font-family: var(--display, 'Archivo Black', sans-serif); font-size: 28px; color: var(--ink, #0D0D0D); letter-spacing: -.02em; margin-bottom: 8px; }
+.legal-meta { font-size: 12px; color: var(--ink-mute, #5b584f); font-family: var(--mono, 'JetBrains Mono', monospace); margin-bottom: 12px; }
+.legal-intro { font-size: 15px; line-height: 1.6; color: var(--ink, #0D0D0D); }
+.legal-section { margin-bottom: 40px; padding-bottom: 32px; border-bottom: 1px solid rgba(13,13,13,.12); }
+.legal-section:last-child { border-bottom: none; }
+.legal-h2 { font-family: var(--display, 'Archivo Black', sans-serif); font-size: 18px; color: var(--ink, #0D0D0D); margin-bottom: 16px; letter-spacing: -.01em; }
+.legal-page p { font-size: 14px; line-height: 1.65; color: var(--ink, #0D0D0D); margin-bottom: 12px; }
+.legal-list { padding-left: 20px; margin-bottom: 12px; }
+.legal-list li { font-size: 14px; line-height: 1.65; color: var(--ink, #0D0D0D); margin-bottom: 8px; }
+.legal-info-block { background: rgba(13,13,13,.04); border: 1px solid rgba(13,13,13,.12); padding: 16px 20px; margin: 16px 0; }
+.legal-info-block p { margin-bottom: 6px; }
+.legal-page a { color: var(--ink, #0D0D0D); text-decoration: underline; text-decoration-color: var(--accent, #C6F24E); text-underline-offset: 2px; }
+.legal-page a:hover { background: var(--accent, #C6F24E); text-decoration: none; }
+@media (max-width: 767px) { .legal-page { padding: 16px 0; } .legal-title { font-size: 22px; } }
+</style>
+{% endblock %}

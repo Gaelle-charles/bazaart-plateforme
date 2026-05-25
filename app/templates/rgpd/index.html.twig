@@ -1,0 +1,516 @@
+{% extends 'base_dashboard.html.twig' %}
+
+{#
+ # rgpd/index.html.twig — Espace RGPD de l'utilisateur connecté
+ #
+ # Ce template étend base_dashboard.html.twig (layout sidebar + topbar).
+ # Il affiche :
+ #   1. Les droits RGPD de l'utilisateur expliqués simplement
+ #   2. Un bouton pour télécharger ses données en JSON
+ #   3. Un formulaire de demande de suppression / anonymisation du compte
+ #
+ # Sécurité :
+ #   - Le formulaire de suppression utilise un token CSRF
+ #   - La sidebar artiste est incluse (même sidebar que les autres pages du dashboard)
+ #
+ # Routes concernées :
+ #   GET  app_rgpd_index   → cette page
+ #   GET  app_rgpd_export  → téléchargement JSON (lien <a>)
+ #   POST app_rgpd_delete  → anonymisation (formulaire)
+#}
+
+{% block page_title %}Mes données{% endblock %}
+
+{% block sidebar %}
+    {#
+        On inclut la sidebar artiste standard.
+        Le lien "Mes données" y sera actif grâce à la détection de route
+        "app_rgpd_" (starts with dans le partial).
+    #}
+    {% include '_partials/sidebar_artiste.html.twig' %}
+{% endblock %}
+
+{% block content %}
+
+{# ── Bannière d'introduction ─────────────────────────────────────────────── #}
+{#
+    db-banner : bannière pleine largeur (même style que le reste du dashboard).
+    Marges négatives compensées par le padding .sd-content pour toucher les bords.
+#}
+<div class="db-banner" style="
+    background: var(--ink);
+    color: var(--bg);
+    padding: 24px 32px;
+    margin: -28px -32px 28px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid var(--ink);
+">
+    {# Icône bouclier — symbolise la confidentialité / protection des données #}
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+         stroke="var(--accent)" stroke-width="1.5"
+         stroke-linecap="round" stroke-linejoin="round"
+         aria-hidden="true">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+    <div>
+        <p style="font-family: var(--display); font-size: 18px; letter-spacing: -.01em; margin-bottom: 4px;">
+            Vos données personnelles
+        </p>
+        <p style="font-size: 13px; opacity: .7;">
+            Conformément au RGPD (UE 2016/679), vous pouvez accéder à vos données,
+            les exporter ou demander la suppression de votre compte.
+        </p>
+    </div>
+</div>
+
+{# ── Grille deux colonnes : export + suppression ─────────────────────────── #}
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+
+    {# ════════════════════════════════════════════════════════════════════════
+     # CARTE 1 : Export des données
+     # ════════════════════════════════════════════════════════════════════════ #}
+    <div class="rgpd-card">
+
+        <div class="rgpd-card__icon">
+            {# Icône téléchargement #}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+        </div>
+
+        <h2 class="rgpd-card__title">Exporter mes données</h2>
+
+        <p class="rgpd-card__desc">
+            Téléchargez une copie complète de toutes vos données personnelles
+            au format JSON (lisible par tout logiciel de traitement de données).
+        </p>
+
+        <p class="rgpd-card__desc">
+            Ce fichier contient : votre profil, vos ressources soumises,
+            vos posts, messages envoyés, fils de discussion forum,
+            notifications et inscriptions aux lives.
+        </p>
+
+        <div class="rgpd-card__rights">
+            <span class="rgpd-badge">Art. 15 — Droit d'accès</span>
+            <span class="rgpd-badge">Art. 20 — Droit à la portabilité</span>
+        </div>
+
+        {#
+            Lien vers app_rgpd_export.
+            L'en-tête Content-Disposition dans le controller force le téléchargement.
+            download="" indique au navigateur de télécharger plutôt qu'afficher.
+        #}
+        <a href="{{ path('app_rgpd_export') }}"
+           class="rgpd-btn rgpd-btn--primary"
+           download>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Télécharger mes données (JSON)
+        </a>
+
+    </div>{# fin .rgpd-card export #}
+
+    {# ════════════════════════════════════════════════════════════════════════
+     # CARTE 2 : Demande de suppression
+     # ════════════════════════════════════════════════════════════════════════ #}
+    <div class="rgpd-card rgpd-card--danger">
+
+        <div class="rgpd-card__icon" style="color: var(--accent-2, #FF6B2C);">
+            {# Icône corbeille — suppression #}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                <line x1="10" y1="11" x2="10" y2="17"/>
+                <line x1="14" y1="11" x2="14" y2="17"/>
+            </svg>
+        </div>
+
+        <h2 class="rgpd-card__title">Demander la suppression de mon compte</h2>
+
+        <p class="rgpd-card__desc">
+            Cette action est <strong>irréversible</strong>.
+        </p>
+
+        <p class="rgpd-card__desc">
+            Votre compte sera <strong>anonymisé</strong> (et non supprimé) pour
+            préserver l'intégrité des données communautaires. Concrètement :
+        </p>
+
+        <ul class="rgpd-list">
+            <li>Votre email sera remplacé par un pseudonyme non identifiant</li>
+            <li>Votre mot de passe sera invalidé (connexion impossible)</li>
+            <li>Vos profils artiste / organisation resteront mais sans lien vers votre identité</li>
+            <li>Vos posts et messages resteront en base mais détachés de votre identité réelle</li>
+            <li>Vous serez déconnecté immédiatement</li>
+        </ul>
+
+        <div class="rgpd-card__rights">
+            <span class="rgpd-badge rgpd-badge--danger">Art. 17 — Droit à l'effacement</span>
+        </div>
+
+        {#
+            Formulaire de suppression — méthode POST avec token CSRF.
+
+            CSRF (Cross-Site Request Forgery) : le token est généré par Symfony
+            et stocké en session. Il est unique par utilisateur et par session.
+            Un site tiers qui enverrait ce formulaire ne connaîtrait pas le token
+            et serait rejeté par RgpdController::deleteRequest().
+
+            La double confirmation JavaScript (confirm()) est une protection UX
+            supplémentaire pour éviter les clics accidentels.
+        #}
+        <form id="form-delete-account"
+              action="{{ path('app_rgpd_delete') }}"
+              method="POST"
+              onsubmit="return confirmDeletion(event)">
+
+            {#
+                Token CSRF de Symfony.
+                L'identifiant 'rgpd_delete' doit correspondre exactement à celui
+                vérifié dans RgpdController::deleteRequest() :
+                $this->isCsrfTokenValid('rgpd_delete', $request->request->get('_token'))
+            #}
+            <input type="hidden" name="_token" value="{{ csrf_token('rgpd_delete') }}">
+
+            <button type="submit" class="rgpd-btn rgpd-btn--danger">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.5"
+                     stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+                Supprimer mon compte
+            </button>
+
+        </form>
+
+    </div>{# fin .rgpd-card suppression #}
+
+</div>{# fin grille #}
+
+{# ── Section informative : vos droits ────────────────────────────────────── #}
+<div class="rgpd-info-section">
+
+    <h2 class="rgpd-info-title">Vos droits RGPD en résumé</h2>
+
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+
+        <div class="rgpd-right-item">
+            <span class="rgpd-right-badge">Art. 15</span>
+            <h3 class="rgpd-right-title">Droit d'accès</h3>
+            <p class="rgpd-right-desc">Obtenez une copie de toutes vos données personnelles que nous détenons.</p>
+        </div>
+
+        <div class="rgpd-right-item">
+            <span class="rgpd-right-badge">Art. 16</span>
+            <h3 class="rgpd-right-title">Droit de rectification</h3>
+            <p class="rgpd-right-desc">
+                Modifiez vos informations depuis vos
+                <a href="{{ path('app_artist_profile_edit') }}">paramètres de profil</a>.
+            </p>
+        </div>
+
+        <div class="rgpd-right-item">
+            <span class="rgpd-right-badge">Art. 17</span>
+            <h3 class="rgpd-right-title">Droit à l'effacement</h3>
+            <p class="rgpd-right-desc">Demandez l'anonymisation de votre compte via le formulaire ci-dessus.</p>
+        </div>
+
+        <div class="rgpd-right-item">
+            <span class="rgpd-right-badge">Art. 20</span>
+            <h3 class="rgpd-right-title">Droit à la portabilité</h3>
+            <p class="rgpd-right-desc">Téléchargez vos données dans un format structuré et lisible par machine (JSON).</p>
+        </div>
+
+        <div class="rgpd-right-item">
+            <span class="rgpd-right-badge">Art. 21</span>
+            <h3 class="rgpd-right-title">Droit d'opposition</h3>
+            <p class="rgpd-right-desc">
+                Opposez-vous à certains traitements en nous écrivant à
+                <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a>.
+            </p>
+        </div>
+
+        <div class="rgpd-right-item">
+            <span class="rgpd-right-badge">CNIL</span>
+            <h3 class="rgpd-right-title">Réclamation</h3>
+            <p class="rgpd-right-desc">
+                Si vos droits ne sont pas respectés, vous pouvez saisir la
+                <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener">CNIL</a>.
+            </p>
+        </div>
+
+    </div>
+
+    <p class="rgpd-contact-note">
+        Pour toute demande relative à vos données :
+        <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a>
+        — Délai de réponse : 30 jours maximum (délai légal RGPD).
+    </p>
+
+</div>
+
+{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+/*
+ * Styles de la page RGPD utilisateur.
+ * Toutes les classes sont préfixées ".rgpd-" pour éviter les conflits.
+ * Thème Street : bordures 1px, pas de border-radius, tokens CSS V2.
+ */
+
+/* ── Cartes principales ─────────────────────────────────────────────────── */
+.rgpd-card {
+    background: var(--bg, #F2EFE6);
+    border: 1px solid var(--ink, #0D0D0D);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Variante "danger" — cartes de suppression avec bordure orange */
+.rgpd-card--danger {
+    border-color: var(--accent-2, #FF6B2C);
+    border-width: 2px;
+}
+
+.rgpd-card__icon {
+    color: var(--accent, #C6F24E);
+}
+
+.rgpd-card__title {
+    font-family: var(--display, 'Archivo Black', sans-serif);
+    font-size: 16px;
+    color: var(--ink, #0D0D0D);
+    letter-spacing: -.01em;
+}
+
+.rgpd-card__desc {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--ink, #0D0D0D);
+}
+
+.rgpd-list {
+    padding-left: 18px;
+    margin: 0;
+}
+
+.rgpd-list li {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--ink, #0D0D0D);
+    margin-bottom: 4px;
+}
+
+/* ── Badges droits RGPD (dans les cartes) ──────────────────────────────── */
+.rgpd-card__rights {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.rgpd-badge {
+    font-family: var(--mono, 'JetBrains Mono', monospace);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    background: rgba(13,13,13,.08);
+    color: var(--ink, #0D0D0D);
+    border: 1px solid rgba(13,13,13,.2);
+}
+
+.rgpd-badge--danger {
+    background: rgba(255,107,44,.1);
+    color: var(--accent-2, #FF6B2C);
+    border-color: var(--accent-2, #FF6B2C);
+}
+
+/* ── Boutons d'action ─────────────────────────────────────────────────────── */
+.rgpd-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    font: 700 12px/1 var(--body, 'Space Grotesk', sans-serif);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border: 1px solid var(--ink, #0D0D0D);
+    cursor: pointer;
+    background: none;
+    transition: background .12s, color .12s;
+    margin-top: auto; /* pousse le bouton en bas de la carte */
+}
+
+/* Bouton primaire — fond vert acide */
+.rgpd-btn--primary {
+    background: var(--accent, #C6F24E);
+    color: var(--ink, #0D0D0D);
+    border-color: var(--accent, #C6F24E);
+}
+
+.rgpd-btn--primary:hover {
+    background: var(--ink, #0D0D0D);
+    color: var(--accent, #C6F24E);
+    border-color: var(--ink, #0D0D0D);
+}
+
+/* Bouton danger — fond orange (suppression) */
+.rgpd-btn--danger {
+    background: var(--accent-2, #FF6B2C);
+    color: var(--bg, #F2EFE6);
+    border-color: var(--accent-2, #FF6B2C);
+}
+
+.rgpd-btn--danger:hover {
+    background: var(--ink, #0D0D0D);
+    border-color: var(--ink, #0D0D0D);
+}
+
+/* ── Section informative (droits RGPD) ──────────────────────────────────── */
+.rgpd-info-section {
+    margin-top: 40px;
+    padding-top: 32px;
+    border-top: 1px solid rgba(13,13,13,.15);
+}
+
+.rgpd-info-title {
+    font-family: var(--display, 'Archivo Black', sans-serif);
+    font-size: 16px;
+    color: var(--ink, #0D0D0D);
+    letter-spacing: -.01em;
+    margin-bottom: 20px;
+}
+
+.rgpd-right-item {
+    background: rgba(13,13,13,.04);
+    border: 1px solid rgba(13,13,13,.1);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.rgpd-right-badge {
+    font-family: var(--mono, 'JetBrains Mono', monospace);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent, #C6F24E);
+    background: var(--ink, #0D0D0D);
+    padding: 2px 6px;
+    align-self: flex-start;
+}
+
+.rgpd-right-title {
+    font: 700 12px var(--body, 'Space Grotesk', sans-serif);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--ink, #0D0D0D);
+}
+
+.rgpd-right-desc {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink, #0D0D0D);
+    opacity: .75;
+}
+
+.rgpd-right-desc a,
+.rgpd-info-section a {
+    color: var(--ink, #0D0D0D);
+    text-decoration: underline;
+    text-decoration-color: var(--accent, #C6F24E);
+}
+
+.rgpd-contact-note {
+    margin-top: 20px;
+    font-size: 12px;
+    color: var(--ink, #0D0D0D);
+    opacity: .7;
+    font-style: italic;
+}
+
+.rgpd-contact-note a {
+    color: var(--ink, #0D0D0D);
+    text-decoration: underline;
+    opacity: 1;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+    /* Grille deux colonnes → une colonne sur mobile */
+    div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+    /* Grille 3 colonnes des droits → une colonne sur mobile */
+    div[style*="grid-template-columns: repeat(3, 1fr)"] {
+        grid-template-columns: 1fr !important;
+    }
+    /* Bannière : padding réduit */
+    .db-banner { padding: 16px !important; margin: -16px -16px 16px !important; }
+}
+</style>
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+<script>
+/**
+ * Confirmation avant anonymisation du compte.
+ *
+ * Pourquoi JavaScript et pas seulement le CSRF ?
+ *   Le CSRF protège contre les attaques externes.
+ *   Ce confirm() protège contre les clics accidentels de l'utilisateur lui-même.
+ *   Les deux mécanismes sont complémentaires, pas redondants.
+ *
+ * confirm() bloque l'envoi du formulaire et affiche un dialogue natif du navigateur.
+ * L'utilisateur doit explicitement cliquer "OK" pour confirmer.
+ *
+ * Retourne false pour annuler la soumission du formulaire si l'utilisateur refuse.
+ */
+function confirmDeletion(event) {
+    'use strict';
+    var confirmed = window.confirm(
+        'Êtes-vous certain(e) de vouloir supprimer votre compte ?\n\n' +
+        'Cette action est IRRÉVERSIBLE.\n\n' +
+        'Votre compte sera anonymisé et vous serez déconnecté(e) immédiatement.\n' +
+        'Vos contenus publiés resteront visibles mais ne seront plus rattachés à votre identité.'
+    );
+
+    if (!confirmed) {
+        /* L'utilisateur a annulé → on bloque la soumission */
+        event.preventDefault();
+        return false;
+    }
+
+    return true;
+}
+</script>
+{% endblock %}

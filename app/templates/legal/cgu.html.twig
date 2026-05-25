@@ -1,0 +1,235 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # legal/cgu.html.twig — Conditions Générales d'Utilisation de Bazaart
+ #
+ # Page PUBLIQUE — accessible sans connexion.
+ # Ces CGU doivent être acceptées lors de l'inscription.
+ # Obligation légale en France (Loi Confiance dans l'économie numérique).
+ #
+ # Sections marquées [À COMPLÉTER — ...] : informations légales à renseigner
+ # par Gaëlle / le responsable légal de l'association Bazaart.
+#}
+
+{% block page_title %}Conditions Générales d'Utilisation{% endblock %}
+
+{% block content %}
+<div class="legal-page">
+
+    {# ── En-tête ─────────────────────────────────────────────────────────── #}
+    <div class="legal-header">
+        <h1 class="legal-title">Conditions Générales d'Utilisation</h1>
+        <p class="legal-meta">Version en vigueur depuis : mai 2026</p>
+        <p class="legal-intro">
+            En créant un compte sur <strong>bazaart.fr</strong>, vous acceptez les présentes
+            Conditions Générales d'Utilisation. Veuillez les lire attentivement.
+        </p>
+    </div>
+
+    {# ── Article 1 : Présentation ─────────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="cgu-1">
+        <h2 id="cgu-1" class="legal-h2">Article 1 — Présentation de la plateforme</h2>
+
+        <p>
+            <strong>Bazaart</strong> est une plateforme numérique dédiée aux artistes
+            de la diaspora afro-atlantique. Elle est éditée par :
+        </p>
+
+        <div class="legal-info-block">
+            <p><strong>Raison sociale :</strong> [À COMPLÉTER — raison sociale de l'association]</p>
+            <p><strong>SIRET :</strong> [À COMPLÉTER]</p>
+            <p><strong>Adresse :</strong> [À COMPLÉTER]</p>
+            <p><strong>Email :</strong> <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a></p>
+        </div>
+
+        <p>
+            La plateforme propose les services suivants :
+        </p>
+        <ul class="legal-list">
+            <li>Ressourcerie : découverte et soumission d'opportunités (résidences, appels à projets, financements)</li>
+            <li>Forum communautaire : échanges entre membres</li>
+            <li>Messagerie privée : communication entre utilisateurs</li>
+            <li>Formations : accès à des contenus pédagogiques vidéo</li>
+            <li>Lives : webinaires et événements en direct</li>
+        </ul>
+    </section>
+
+    {# ── Article 2 : Inscription ─────────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="cgu-2">
+        <h2 id="cgu-2" class="legal-h2">Article 2 — Conditions d'inscription</h2>
+
+        <p>
+            L'utilisation des services nécessite la création d'un compte.
+            L'inscription est réservée aux personnes physiques majeures (18 ans et plus)
+            ou aux mineurs avec l'autorisation de leur représentant légal.
+        </p>
+
+        <p>
+            Lors de l'inscription, vous vous engagez à fournir des informations exactes,
+            notamment une adresse email valide. Vous êtes responsable de la confidentialité
+            de votre mot de passe et de toute activité effectuée depuis votre compte.
+        </p>
+
+        <p>
+            Votre mot de passe doit comporter au minimum 10 caractères, dont une majuscule
+            et un chiffre.
+        </p>
+    </section>
+
+    {# ── Article 3 : Comportement ────────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="cgu-3">
+        <h2 id="cgu-3" class="legal-h2">Article 3 — Règles de comportement</h2>
+
+        <p>En utilisant la plateforme, vous vous engagez à :</p>
+
+        <ul class="legal-list">
+            <li>Respecter les autres membres de la communauté</li>
+            <li>Ne pas publier de contenu haineux, discriminatoire, obscène ou illicite</li>
+            <li>Ne pas utiliser la plateforme à des fins commerciales non autorisées</li>
+            <li>Ne pas tenter de contourner les mesures de sécurité de la plateforme</li>
+            <li>Ne pas créer de faux comptes ou usurper l'identité d'un tiers</li>
+            <li>Ne pas publier de spam, contenu promotionnel non sollicité ou liens malveillants</li>
+            <li>Respecter les droits de propriété intellectuelle des autres créateurs</li>
+        </ul>
+
+        <p>
+            Bazaart se réserve le droit de supprimer tout contenu non conforme à ces règles
+            et de suspendre ou supprimer tout compte en violation des présentes CGU.
+        </p>
+    </section>
+
+    {# ── Article 4 : Propriété intellectuelle ────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="cgu-4">
+        <h2 id="cgu-4" class="legal-h2">Article 4 — Propriété intellectuelle</h2>
+
+        <p>
+            Les contenus que vous publiez sur la plateforme (textes, images, profil)
+            restent votre propriété. En les publiant, vous accordez à Bazaart une licence
+            non exclusive, mondiale et gratuite pour les afficher sur la plateforme.
+        </p>
+
+        <p>
+            Les éléments constitutifs de la plateforme (code source, design, logo, marque)
+            sont la propriété exclusive de Bazaart et sont protégés par le droit d'auteur.
+            Toute reproduction non autorisée est interdite.
+        </p>
+    </section>
+
+    {# ── Article 5 : Modération ──────────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="cgu-5">
+        <h2 id="cgu-5" class="legal-h2">Article 5 — Modération</h2>
+
+        <p>
+            Bazaart dispose d'une équipe de modération bénévole ayant le rôle
+            <strong>MODÉRATEUR</strong>. Les modérateurs peuvent masquer, supprimer ou
+            signaler des contenus non conformes aux présentes CGU.
+        </p>
+
+        <p>
+            Si vous estimez qu'un contenu est contraire aux règles, vous pouvez le signaler
+            à <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a>.
+        </p>
+    </section>
+
+    {# ── Article 6 : Responsabilité ──────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="cgu-6">
+        <h2 id="cgu-6" class="legal-h2">Article 6 — Limitation de responsabilité</h2>
+
+        <p>
+            Bazaart s'efforce d'assurer la disponibilité de la plateforme sans interruption,
+            mais ne peut garantir une disponibilité permanente à 100 %.
+        </p>
+
+        <p>
+            Les opportunités (résidences, appels à projets) publiées sur la Ressourcerie
+            sont informatives. Bazaart ne peut être tenu responsable de l'exactitude
+            des informations publiées ni de l'issue des candidatures.
+        </p>
+
+        <p>
+            Les messages privés échangés entre utilisateurs sont sous la responsabilité
+            de leurs auteurs. Bazaart n'est pas responsable du contenu des échanges privés.
+        </p>
+    </section>
+
+    {# ── Article 7 : Données personnelles ────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="cgu-7">
+        <h2 id="cgu-7" class="legal-h2">Article 7 — Données personnelles</h2>
+
+        <p>
+            Le traitement de vos données personnelles est détaillé dans notre
+            <a href="{{ path('app_legal_privacy') }}">Politique de confidentialité</a>.
+        </p>
+
+        <p>
+            Vous disposez de droits sur vos données (accès, portabilité, effacement)
+            exercisables depuis votre
+            <a href="{{ path('app_rgpd_index') }}">espace RGPD</a>
+            ou par email à <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a>.
+        </p>
+    </section>
+
+    {# ── Article 8 : Résiliation ─────────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="cgu-8">
+        <h2 id="cgu-8" class="legal-h2">Article 8 — Résiliation et suppression de compte</h2>
+
+        <p>
+            Vous pouvez demander la suppression (anonymisation) de votre compte à tout
+            moment depuis votre <a href="{{ path('app_rgpd_index') }}">espace RGPD</a>.
+        </p>
+
+        <p>
+            Bazaart peut résilier votre accès en cas de violation grave des présentes CGU,
+            sans préavis pour les violations graves (contenu illicite, harcèlement).
+        </p>
+    </section>
+
+    {# ── Article 9 : Droit applicable ────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="cgu-9">
+        <h2 id="cgu-9" class="legal-h2">Article 9 — Droit applicable et juridiction</h2>
+
+        <p>
+            Les présentes CGU sont soumises au droit français.
+            En cas de litige, les parties s'engagent à rechercher une solution amiable.
+            À défaut, les tribunaux compétents seront ceux du ressort de
+            [À COMPLÉTER — ville du siège social de l'association].
+        </p>
+    </section>
+
+    {# ── Article 10 : Modifications ──────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="cgu-10">
+        <h2 id="cgu-10" class="legal-h2">Article 10 — Modifications des CGU</h2>
+
+        <p>
+            Bazaart se réserve le droit de modifier les présentes CGU.
+            Toute modification significative vous sera notifiée par email au moins
+            15 jours avant son entrée en vigueur. La poursuite de l'utilisation
+            de la plateforme après ce délai vaut acceptation des nouvelles CGU.
+        </p>
+    </section>
+
+</div>{# fin .legal-page #}
+{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+/* Styles partagés pages légales — identiques à privacy.html.twig */
+.legal-page { max-width: 800px; margin: 0 auto; padding: 32px 0; }
+.legal-header { margin-bottom: 40px; padding-bottom: 24px; border-bottom: 2px solid var(--ink, #0D0D0D); }
+.legal-title { font-family: var(--display, 'Archivo Black', sans-serif); font-size: 28px; color: var(--ink, #0D0D0D); letter-spacing: -.02em; margin-bottom: 8px; }
+.legal-meta { font-size: 12px; color: var(--ink-mute, #5b584f); font-family: var(--mono, 'JetBrains Mono', monospace); margin-bottom: 12px; }
+.legal-intro { font-size: 15px; line-height: 1.6; color: var(--ink, #0D0D0D); }
+.legal-section { margin-bottom: 40px; padding-bottom: 32px; border-bottom: 1px solid rgba(13,13,13,.12); }
+.legal-section:last-child { border-bottom: none; }
+.legal-h2 { font-family: var(--display, 'Archivo Black', sans-serif); font-size: 18px; color: var(--ink, #0D0D0D); margin-bottom: 16px; letter-spacing: -.01em; }
+.legal-page p { font-size: 14px; line-height: 1.65; color: var(--ink, #0D0D0D); margin-bottom: 12px; }
+.legal-list { padding-left: 20px; margin-bottom: 12px; }
+.legal-list li { font-size: 14px; line-height: 1.65; color: var(--ink, #0D0D0D); margin-bottom: 8px; }
+.legal-info-block { background: rgba(13,13,13,.04); border: 1px solid rgba(13,13,13,.12); padding: 16px 20px; margin: 16px 0; }
+.legal-info-block p { margin-bottom: 6px; }
+.legal-page a { color: var(--ink, #0D0D0D); text-decoration: underline; text-decoration-color: var(--accent, #C6F24E); text-underline-offset: 2px; }
+.legal-page a:hover { background: var(--accent, #C6F24E); text-decoration: none; }
+@media (max-width: 767px) { .legal-page { padding: 16px 0; } .legal-title { font-size: 22px; } }
+</style>
+{% endblock %}

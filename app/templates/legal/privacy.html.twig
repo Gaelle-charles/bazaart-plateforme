@@ -1,0 +1,457 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # legal/privacy.html.twig — Politique de confidentialité Bazaart
+ #
+ # Page PUBLIQUE (pas de ROLE_USER requis).
+ # Obligatoire RGPD articles 13 et 14 : l'utilisateur doit être informé
+ # des traitements de données AVANT de créer son compte.
+ #
+ # Structure de la page :
+ #   1. Introduction (qui sommes-nous, contact)
+ #   2. Données collectées
+ #   3. Finalités et bases légales
+ #   4. Durée de conservation
+ #   5. Sous-traitants et hébergeurs
+ #   6. Droits des utilisateurs
+ #   7. Cookies
+ #
+ # Sections marquées [À COMPLÉTER — ...] = placeholders à remplir par Gaëlle
+ # avec les informations légales définitives de l'association Bazaart.
+ #
+ # Dernière mise à jour : mai 2026
+#}
+
+{% block page_title %}Politique de confidentialité{% endblock %}
+
+{% block content %}
+<div class="legal-page">
+
+    {# ── En-tête de la page ─────────────────────────────────────────────── #}
+    <div class="legal-header">
+        <h1 class="legal-title">Politique de confidentialité</h1>
+        <p class="legal-meta">Dernière mise à jour : mai 2026</p>
+        <p class="legal-intro">
+            Bazaart s'engage à protéger la vie privée de ses utilisateurs.
+            Cette politique explique quelles données nous collectons, pourquoi,
+            combien de temps nous les conservons et quels sont vos droits.
+        </p>
+    </div>
+
+    {# ── Section 1 : Responsable du traitement ───────────────────────────── #}
+    <section class="legal-section" aria-labelledby="section-responsable">
+        <h2 id="section-responsable" class="legal-h2">1. Responsable du traitement</h2>
+
+        <p>
+            Le responsable du traitement des données personnelles collectées sur
+            la plateforme <strong>bazaart.fr</strong> est :
+        </p>
+
+        <div class="legal-info-block">
+            <p><strong>Raison sociale :</strong> [À COMPLÉTER — raison sociale officielle de l'association Bazaart]</p>
+            <p><strong>SIRET :</strong> [À COMPLÉTER — numéro SIRET]</p>
+            <p><strong>Adresse :</strong> [À COMPLÉTER — adresse postale du siège social]</p>
+            <p><strong>Email de contact :</strong> <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a></p>
+            <p><strong>Responsable du traitement :</strong> [À COMPLÉTER — nom et prénom du DPO ou du dirigeant responsable]</p>
+        </div>
+    </section>
+
+    {# ── Section 2 : Données collectées ─────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="section-donnees">
+        <h2 id="section-donnees" class="legal-h2">2. Données que nous collectons</h2>
+
+        <p>Nous collectons les données suivantes lorsque vous utilisez la plateforme :</p>
+
+        <h3 class="legal-h3">Lors de la création de compte</h3>
+        <ul class="legal-list">
+            <li>Adresse email (identifiant de connexion, unique)</li>
+            <li>Mot de passe (hashé avec bcrypt — non lisible, même par notre équipe)</li>
+        </ul>
+
+        <h3 class="legal-h3">Via votre profil artiste</h3>
+        <ul class="legal-list">
+            <li>Nom de scène / nom d'affichage</li>
+            <li>Biographie (texte libre)</li>
+            <li>Ville et pays de résidence</li>
+            <li>URL de site web personnel</li>
+            <li>URL de compte Instagram</li>
+            <li>Disciplines artistiques pratiquées</li>
+        </ul>
+
+        <h3 class="legal-h3">Via vos activités sur la plateforme</h3>
+        <ul class="legal-list">
+            <li>Ressources soumises (opportunités, résidences, appels à projets)</li>
+            <li>Posts dans le fil d'actualité communautaire</li>
+            <li>Commentaires et réactions</li>
+            <li>Messages privés échangés avec d'autres utilisateurs</li>
+            <li>Fils de discussion créés dans le forum</li>
+            <li>Réponses aux discussions du forum</li>
+            <li>Inscriptions aux lives planifiés</li>
+        </ul>
+
+        <h3 class="legal-h3">Données techniques</h3>
+        <ul class="legal-list">
+            <li>Adresse IP (journaux d'accès serveur, conservation 30 jours)</li>
+            <li>Date et heure de connexion</li>
+            <li>User-agent du navigateur (journaux serveur)</li>
+        </ul>
+    </section>
+
+    {# ── Section 3 : Finalités et bases légales ──────────────────────────── #}
+    <section class="legal-section" aria-labelledby="section-finalites">
+        <h2 id="section-finalites" class="legal-h2">3. Finalités et bases légales</h2>
+
+        <div class="legal-table-wrapper">
+            <table class="legal-table">
+                <thead>
+                    <tr>
+                        <th>Finalité</th>
+                        <th>Base légale (RGPD)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Gestion de votre compte et authentification</td>
+                        <td>Exécution d'un contrat (art. 6.1.b)</td>
+                    </tr>
+                    <tr>
+                        <td>Affichage de votre profil artiste public</td>
+                        <td>Consentement (art. 6.1.a) — vous choisissez de rendre votre profil public</td>
+                    </tr>
+                    <tr>
+                        <td>Publication de ressources et opportunités</td>
+                        <td>Exécution d'un contrat (art. 6.1.b)</td>
+                    </tr>
+                    <tr>
+                        <td>Messagerie privée entre utilisateurs</td>
+                        <td>Exécution d'un contrat (art. 6.1.b)</td>
+                    </tr>
+                    <tr>
+                        <td>Envoi de notifications et alertes email</td>
+                        <td>Intérêt légitime (art. 6.1.f) — amélioration de l'expérience</td>
+                    </tr>
+                    <tr>
+                        <td>Sécurité de la plateforme (logs, rate limiting)</td>
+                        <td>Intérêt légitime (art. 6.1.f) — protection contre les abus</td>
+                    </tr>
+                    <tr>
+                        <td>Statistiques d'usage anonymes</td>
+                        <td>Intérêt légitime (art. 6.1.f)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {# ── Section 4 : Durée de conservation ──────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="section-conservation">
+        <h2 id="section-conservation" class="legal-h2">4. Durée de conservation</h2>
+
+        <ul class="legal-list">
+            <li>
+                <strong>Données de compte actif :</strong> conservées pendant toute la durée
+                de vie du compte.
+            </li>
+            <li>
+                <strong>Comptes inactifs :</strong> après 3 ans d'inactivité, nous envoyons
+                un email de relance. Sans réponse sous 30 jours, les données personnelles
+                sont anonymisées (l'email et le mot de passe sont remplacés par des valeurs
+                non identifiantes — les contenus publiés restent en base mais ne sont plus
+                rattachés à votre identité).
+            </li>
+            <li>
+                <strong>Logs serveur (IP) :</strong> 30 jours maximum.
+            </li>
+            <li>
+                <strong>Données après anonymisation :</strong> [À COMPLÉTER — durée de conservation
+                des données anonymisées selon votre politique de nettoyage]
+            </li>
+        </ul>
+    </section>
+
+    {# ── Section 5 : Sous-traitants et hébergeurs ────────────────────────── #}
+    <section class="legal-section" aria-labelledby="section-sous-traitants">
+        <h2 id="section-sous-traitants" class="legal-h2">5. Sous-traitants et hébergeurs</h2>
+
+        <p>Vos données transitent ou sont hébergées chez les prestataires suivants :</p>
+
+        <div class="legal-info-block">
+            <h3 class="legal-h3">Hébergement</h3>
+            <p>
+                <strong>DigitalOcean LLC</strong><br>
+                101 6th Ave, New York, NY 10013, États-Unis<br>
+                Datacenter DigitalOcean, région Frankfurt (Allemagne), conformément au RGPD (transfert intra-EEE)<br>
+                Politique de confidentialité : <a href="https://www.digitalocean.com/legal/privacy-policy" target="_blank" rel="noopener">digitalocean.com/legal/privacy-policy</a>
+            </p>
+
+            <h3 class="legal-h3">Envoi d'emails transactionnels</h3>
+            <p>
+                <strong>[À COMPLÉTER — Brevo ou Resend selon le choix final]</strong><br>
+                [Adresse, pays]<br>
+                Politique de confidentialité : [URL]
+            </p>
+
+            <h3 class="legal-h3">Hébergement vidéo (formations)</h3>
+            <p>
+                <strong>Bunny.net (BunnyWay d.o.o.)</strong><br>
+                Utilisé pour l'hébergement des vidéos de formations.<br>
+                Vos vidéos de cours sont diffusées via leur réseau CDN.<br>
+                Politique de confidentialité : <a href="https://bunny.net/privacy" target="_blank" rel="noopener">bunny.net/privacy</a>
+            </p>
+
+            <h3 class="legal-h3">Suivi des erreurs</h3>
+            <p>
+                <strong>Sentry (Functional Software, Inc.)</strong><br>
+                Utilisé pour la détection et l'analyse des erreurs techniques.<br>
+                Les données de débogage peuvent inclure des traces de requêtes.<br>
+                Politique de confidentialité : <a href="https://sentry.io/privacy/" target="_blank" rel="noopener">sentry.io/privacy</a>
+            </p>
+        </div>
+    </section>
+
+    {# ── Section 6 : Vos droits RGPD ────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="section-droits">
+        <h2 id="section-droits" class="legal-h2">6. Vos droits</h2>
+
+        <p>Conformément au RGPD, vous disposez des droits suivants :</p>
+
+        <ul class="legal-list">
+            <li>
+                <strong>Droit d'accès (art. 15) :</strong> vous pouvez demander une copie
+                de toutes vos données personnelles.
+                <a href="{{ path('app_rgpd_export') }}">Télécharger mes données (JSON)</a>
+            </li>
+            <li>
+                <strong>Droit à la portabilité (art. 20) :</strong> vos données vous sont
+                fournies dans un format lisible par machine (JSON).
+            </li>
+            <li>
+                <strong>Droit de rectification (art. 16) :</strong> vous pouvez modifier
+                vos informations depuis votre
+                <a href="{{ path('app_artist_profile_edit') }}">espace de paramètres</a>.
+            </li>
+            <li>
+                <strong>Droit à l'effacement (art. 17) :</strong> vous pouvez demander
+                la suppression de votre compte depuis votre
+                <a href="{{ path('app_rgpd_index') }}">espace RGPD</a>.
+                En V1, votre compte sera anonymisé (vos contenus publiés restent en base
+                mais ne sont plus rattachés à votre identité).
+            </li>
+            <li>
+                <strong>Droit d'opposition (art. 21) :</strong> vous pouvez vous opposer
+                au traitement de vos données pour les finalités basées sur l'intérêt
+                légitime en écrivant à <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a>.
+            </li>
+            <li>
+                <strong>Droit à la limitation (art. 18) :</strong> dans certains cas,
+                vous pouvez demander la limitation du traitement de vos données.
+            </li>
+        </ul>
+
+        <p>
+            Pour exercer ces droits ou pour toute question relative à vos données,
+            contactez-nous à : <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a>
+        </p>
+
+        <p>
+            Si vous estimez que vos droits ne sont pas respectés, vous pouvez déposer
+            une réclamation auprès de la <strong>CNIL</strong> :
+            <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener">cnil.fr/fr/plaintes</a>
+        </p>
+    </section>
+
+    {# ── Section 7 : Cookies ─────────────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="section-cookies">
+        <h2 id="section-cookies" class="legal-h2">7. Cookies</h2>
+
+        <p>Nous utilisons les cookies suivants :</p>
+
+        <ul class="legal-list">
+            <li>
+                <strong>Cookie de session Symfony (PHPSESSID) :</strong> nécessaire au
+                fonctionnement de la plateforme (authentification). Durée : session navigateur.
+                Base légale : intérêt légitime.
+            </li>
+            <li>
+                <strong>Cookie Remember Me :</strong> si vous cochez "Se souvenir de moi"
+                lors de la connexion. Durée : 7 jours. Base légale : consentement explicite.
+            </li>
+            <li>
+                <strong>Cookie de consentement (cookie_consent) :</strong> mémorise votre
+                choix concernant les cookies analytiques. Durée : 1 an.
+            </li>
+            <li>
+                <strong>Cookies analytiques :</strong> [À COMPLÉTER — si vous utilisez
+                Matomo, Plausible ou un autre outil de mesure d'audience, le détailler ici].
+            </li>
+        </ul>
+    </section>
+
+    {# ── Section 8 : Modifications ───────────────────────────────────────── #}
+    <section class="legal-section" aria-labelledby="section-modifications">
+        <h2 id="section-modifications" class="legal-h2">8. Modifications de cette politique</h2>
+
+        <p>
+            Nous pouvons mettre à jour cette politique de confidentialité.
+            En cas de modification significative, vous serez informé par email.
+            La date de "dernière mise à jour" en haut de cette page indique
+            la version en vigueur.
+        </p>
+    </section>
+
+</div>{# fin .legal-page #}
+
+{# ── Styles spécifiques aux pages légales ─────────────────────────────── #}
+{# Injectés dans le bloc stylesheets pour ne pas impacter les autres pages #}
+{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+/*
+ * Styles des pages légales.
+ * Toutes les classes sont préfixées ".legal-" pour éviter les conflits.
+ * Thème Street : bordures 1px --ink, pas de border-radius, Space Grotesk.
+ */
+
+.legal-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 32px 0;
+}
+
+.legal-header {
+    margin-bottom: 40px;
+    padding-bottom: 24px;
+    border-bottom: 2px solid var(--ink, #0D0D0D);
+}
+
+.legal-title {
+    font-family: var(--display, 'Archivo Black', sans-serif);
+    font-size: 28px;
+    color: var(--ink, #0D0D0D);
+    letter-spacing: -.02em;
+    margin-bottom: 8px;
+}
+
+.legal-meta {
+    font-size: 12px;
+    color: var(--ink-mute, #5b584f);
+    font-family: var(--mono, 'JetBrains Mono', monospace);
+    margin-bottom: 12px;
+}
+
+.legal-intro {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink, #0D0D0D);
+}
+
+.legal-section {
+    margin-bottom: 40px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid rgba(13,13,13,.12);
+}
+
+.legal-section:last-child {
+    border-bottom: none;
+}
+
+.legal-h2 {
+    font-family: var(--display, 'Archivo Black', sans-serif);
+    font-size: 18px;
+    color: var(--ink, #0D0D0D);
+    margin-bottom: 16px;
+    letter-spacing: -.01em;
+}
+
+.legal-h3 {
+    font-family: var(--body, 'Space Grotesk', sans-serif);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink, #0D0D0D);
+    margin: 16px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.legal-page p {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--ink, #0D0D0D);
+    margin-bottom: 12px;
+}
+
+.legal-list {
+    padding-left: 20px;
+    margin-bottom: 12px;
+}
+
+.legal-list li {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--ink, #0D0D0D);
+    margin-bottom: 8px;
+}
+
+.legal-info-block {
+    background: rgba(13,13,13,.04);
+    border: 1px solid rgba(13,13,13,.12);
+    padding: 16px 20px;
+    margin: 16px 0;
+}
+
+.legal-info-block p {
+    margin-bottom: 6px;
+}
+
+.legal-table-wrapper {
+    overflow-x: auto;
+    margin: 16px 0;
+}
+
+.legal-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.legal-table th {
+    background: var(--ink, #0D0D0D);
+    color: var(--accent, #C6F24E);
+    padding: 10px 14px;
+    text-align: left;
+    font-family: var(--mono, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.legal-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(13,13,13,.1);
+    line-height: 1.5;
+}
+
+.legal-table tr:hover td {
+    background: rgba(13,13,13,.03);
+}
+
+.legal-page a {
+    color: var(--ink, #0D0D0D);
+    text-decoration: underline;
+    text-decoration-color: var(--accent, #C6F24E);
+    text-underline-offset: 2px;
+}
+
+.legal-page a:hover {
+    background: var(--accent, #C6F24E);
+    text-decoration: none;
+}
+
+@media (max-width: 767px) {
+    .legal-page { padding: 16px 0; }
+    .legal-title { font-size: 22px; }
+}
+</style>
+{% endblock %}
