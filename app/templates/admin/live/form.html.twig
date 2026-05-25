@@ -1,0 +1,375 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/live/form.html.twig — Formulaire de création / édition d'un live
+ #
+ # Ce template est partagé entre les actions new et edit.
+ # La variable `live` est null pour une création, et une instance de Live pour une édition.
+ #
+ # Variables injectées :
+ #   - live     : App\Entity\Live|null — null si nouveau, entité si édition
+ #   - users    : App\Entity\User[]   — liste des utilisateurs pour le sélecteur d'hôte
+ #   - statuses : App\Enum\LiveStatus[] — tous les cas de l'enum pour le sélecteur de statut
+ #
+ # Thème Street : border-radius 0, tokens CSS, préfixe .adm-lf- (admin live form)
+ #}
+
+{% set isEdit = live is not null %}
+{% set formTitle = isEdit ? 'Éditer le live' : 'Nouveau live' %}
+{% set formAction = isEdit
+    ? path('app_admin_live_edit', {id: live.id})
+    : path('app_admin_live_new')
+%}
+{% set csrfIntent = isEdit ? 'admin_live_edit_' ~ live.id : 'admin_live_new' %}
+
+{% block title %}{{ formTitle }} — Admin BazaArt{% endblock %}
+{% block page_title %}{{ formTitle }}{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+/* ── Styles du formulaire admin live — préfixe .adm-lf- ───────────────────── */
+
+/* Fil d'Ariane */
+.adm-lf-breadcrumb {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    margin-bottom: 24px;
+}
+.adm-lf-breadcrumb a { color: var(--ink-mute); text-decoration: none; }
+.adm-lf-breadcrumb a:hover { color: var(--ink); }
+.adm-lf-breadcrumb span { margin: 0 6px; }
+
+/* Layout du formulaire — deux colonnes sur écran large */
+.adm-lf-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+}
+@media (min-width: 900px) {
+    .adm-lf-layout {
+        grid-template-columns: 2fr 1fr;
+        align-items: start;
+    }
+}
+
+/* Groupes de champs */
+.adm-lf-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 18px;
+}
+
+/* Label */
+.adm-lf-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink);
+}
+.adm-lf-label--required::after {
+    content: ' *';
+    color: var(--accent-2);
+}
+
+/* Hint / aide contextuelle sous le label */
+.adm-lf-hint {
+    font-family: var(--body);
+    font-size: 11px;
+    color: var(--ink-mute);
+    margin-top: 2px;
+}
+
+/* Champs de saisie */
+.adm-lf-input,
+.adm-lf-select,
+.adm-lf-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 13px;
+    border-radius: 0; /* Street — pas d'arrondi */
+    box-sizing: border-box;
+    transition: border-color .12s ease;
+}
+.adm-lf-input:focus,
+.adm-lf-select:focus,
+.adm-lf-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(198,242,78,.25);
+}
+.adm-lf-textarea {
+    resize: vertical;
+    min-height: 120px;
+}
+
+/* Panneau latéral (statut, hôte, image) */
+.adm-lf-panel {
+    background: var(--bg-alt);
+    border: 1px solid rgba(13,13,13,.14);
+    padding: 20px;
+}
+.adm-lf-panel__title {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(13,13,13,.12);
+}
+
+/* Boutons du bas de formulaire */
+.adm-lf-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding-top: 16px;
+    border-top: 1px solid rgba(13,13,13,.1);
+    flex-wrap: wrap;
+}
+.adm-lf-submit {
+    font-family: var(--body);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 12px 28px;
+    background: var(--ink);
+    color: var(--bg);
+    border: 1px solid var(--ink);
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease;
+    border-radius: 0;
+}
+.adm-lf-submit:hover { background: var(--accent); color: var(--ink); border-color: var(--accent); }
+
+.adm-lf-cancel {
+    font-family: var(--body);
+    font-size: 13px;
+    color: var(--ink-mute);
+    text-decoration: none;
+}
+.adm-lf-cancel:hover { color: var(--ink); text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Fil d'Ariane ──────────────────────────────────────────────────────────── #}
+<nav class="adm-lf-breadcrumb" aria-label="Fil d'Ariane">
+    <a href="{{ path('app_admin_live_index') }}">Lives</a>
+    <span aria-hidden="true">/</span>
+    <span>{{ formTitle }}</span>
+</nav>
+
+{# ── Formulaire principal ───────────────────────────────────────────────────── #}
+<form method="post" action="{{ formAction }}" novalidate>
+
+    {#
+        Token CSRF — obligatoire pour tous les formulaires POST Bazaart.
+        L'intention varie selon création / édition pour éviter les collisions.
+    #}
+    <input type="hidden" name="_token" value="{{ csrf_token(csrfIntent) }}">
+
+    <div class="adm-lf-layout">
+
+        {# ── Colonne principale : champs principaux ─────────────────────────── #}
+        <div>
+
+            {# Titre #}
+            <div class="adm-lf-group">
+                <label class="adm-lf-label adm-lf-label--required" for="live_title">
+                    Titre du live
+                </label>
+                <span class="adm-lf-hint">Entre 5 et 255 caractères — affiché dans le calendrier et les emails.</span>
+                <input type="text"
+                       id="live_title"
+                       name="title"
+                       class="adm-lf-input"
+                       maxlength="255"
+                       required
+                       value="{{ isEdit ? live.title|e : '' }}"
+                       placeholder="Ex : Live Q&R — Financement de projet artistique">
+            </div>
+
+            {# Description #}
+            <div class="adm-lf-group">
+                <label class="adm-lf-label" for="live_description">
+                    Description
+                </label>
+                <span class="adm-lf-hint">
+                    Présentation du sujet, de l'intervenant, du déroulé. Optionnel mais recommandé.
+                </span>
+                <textarea id="live_description"
+                          name="description"
+                          class="adm-lf-textarea"
+                          placeholder="Décrivez le live : sujet, intervenants, format...">{{ isEdit ? live.description|e : '' }}</textarea>
+            </div>
+
+            {# Date et heure #}
+            <div class="adm-lf-group">
+                <label class="adm-lf-label adm-lf-label--required" for="live_scheduled_at">
+                    Date et heure du live
+                </label>
+                <span class="adm-lf-hint">
+                    L'heure est celle du début prévu. Les rappels email seront envoyés 24h avant.
+                </span>
+                <input type="datetime-local"
+                       id="live_scheduled_at"
+                       name="scheduledAt"
+                       class="adm-lf-input"
+                       required
+                       value="{{ isEdit ? live.scheduledAt|date('Y-m-d\\TH:i') : '' }}">
+            </div>
+
+            {# URL du live externe #}
+            <div class="adm-lf-group">
+                <label class="adm-lf-label adm-lf-label--required" for="live_external_url">
+                    Lien vers le live (URL externe)
+                </label>
+                <span class="adm-lf-hint">
+                    URL Twitch, Jitsi Meet, Google Meet, YouTube Live... Doit commencer par https://.
+                </span>
+                <input type="url"
+                       id="live_external_url"
+                       name="externalUrl"
+                       class="adm-lf-input"
+                       maxlength="500"
+                       required
+                       value="{{ isEdit ? live.externalUrl|e : '' }}"
+                       placeholder="https://meet.jit.si/bazaart-live-...">
+            </div>
+
+            {# URL du replay (optionnelle — renseignée APRÈS le live) #}
+            <div class="adm-lf-group">
+                <label class="adm-lf-label" for="live_replay_url">
+                    Lien replay (optionnel)
+                </label>
+                <span class="adm-lf-hint">
+                    À renseigner après le live. URL YouTube VOD, Twitch VOD, etc.
+                </span>
+                <input type="url"
+                       id="live_replay_url"
+                       name="replayUrl"
+                       class="adm-lf-input"
+                       maxlength="500"
+                       value="{{ isEdit and live.replayUrl ? live.replayUrl|e : '' }}"
+                       placeholder="https://youtube.com/watch?v=...">
+            </div>
+
+            {# Boutons d'action #}
+            <div class="adm-lf-actions">
+                <button type="submit" class="adm-lf-submit">
+                    {{ isEdit ? 'Enregistrer les modifications' : 'Créer le live' }}
+                </button>
+                <a href="{{ path('app_admin_live_index') }}" class="adm-lf-cancel">
+                    Annuler
+                </a>
+            </div>
+
+        </div>{# fin colonne principale #}
+
+        {# ── Panneau latéral : publication, hôte, image ─────────────────────── #}
+        <div>
+            <div class="adm-lf-panel">
+                <div class="adm-lf-panel__title">Paramètres</div>
+
+                {#
+                    Statut — sélecteur déroulant avec toutes les valeurs de l'enum LiveStatus.
+                    En création, pré-sélectionne SCHEDULED (valeur par défaut).
+                    En édition, sélectionne le statut actuel du live.
+                #}
+                <div class="adm-lf-group">
+                    <label class="adm-lf-label adm-lf-label--required" for="live_status">
+                        Statut
+                    </label>
+                    <select id="live_status" name="status" class="adm-lf-select" required>
+                        {% for status in statuses %}
+                            <option value="{{ status.value }}"
+                                {% if isEdit and live.status == status %}selected{% endif %}
+                                {% if not isEdit and status.value == 'scheduled' %}selected{% endif %}>
+                                {{ status.label() }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {#
+                    Hôte / animateur — sélecteur parmi tous les utilisateurs.
+                    En V1, l'admin choisit l'hôte parmi tous les comptes existants.
+                    En V2, on pourra filtrer sur ROLE_ARTIST ou ROLE_ADMIN.
+                #}
+                <div class="adm-lf-group">
+                    <label class="adm-lf-label adm-lf-label--required" for="live_host">
+                        Hôte / animateur
+                    </label>
+                    <span class="adm-lf-hint">
+                        L'utilisateur qui anime le live.
+                    </span>
+                    <select id="live_host" name="hostId" class="adm-lf-select" required>
+                        <option value="">-- Sélectionner un hôte --</option>
+                        {% for user in users %}
+                            <option value="{{ user.id }}"
+                                {% if isEdit and live.hostedBy == user %}selected{% endif %}>
+                                {{ user.email }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {# Image de couverture — URL externe #}
+                <div class="adm-lf-group">
+                    <label class="adm-lf-label" for="live_cover_image">
+                        Image de couverture (optionnel)
+                    </label>
+                    <span class="adm-lf-hint">
+                        URL d'une image (HTTPS). Format recommandé : 16:9, min. 800px de large.
+                    </span>
+                    <input type="url"
+                           id="live_cover_image"
+                           name="coverImageUrl"
+                           class="adm-lf-input"
+                           maxlength="500"
+                           value="{{ isEdit and live.coverImageUrl ? live.coverImageUrl|e : '' }}"
+                           placeholder="https://...">
+                </div>
+
+                {#
+                    Si c'est une édition, affiche un résumé des inscrits
+                    pour informer l'admin avant d'annuler ou modifier.
+                #}
+                {% if isEdit %}
+                    <div style="padding-top: 12px; border-top: 1px solid rgba(13,13,13,.1);">
+                        <div class="adm-lf-hint" style="margin-bottom: 4px;">Inscrits actuels :</div>
+                        <div style="font-family: var(--display); font-size: 24px; color: var(--ink);">
+                            {{ live.attendees|length }}
+                        </div>
+                        {% if live.attendees|length > 0 %}
+                            <div class="adm-lf-hint">
+                                {% if live.status.value == 'scheduled' %}
+                                    Ces personnes recevront un rappel 24h avant le live.
+                                {% elseif live.status.value == 'cancelled' %}
+                                    Ces personnes ont reçu un email d'annulation.
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endif %}
+
+            </div>{# fin .adm-lf-panel #}
+        </div>
+
+    </div>{# fin .adm-lf-layout #}
+
+</form>
+
+{% endblock %}

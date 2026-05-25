@@ -1,0 +1,306 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/live/index.html.twig — Tableau de bord admin des lives planifiés
+ #
+ # Affiche la liste de tous les lives (tous statuts), avec les actions :
+ #   - Éditer (titre, description, URL, replay, statut, hôte)
+ #   - Annuler (SCHEDULED ou LIVE → CANCELLED, avec notification des inscrits)
+ #   - Supprimer (SCHEDULED uniquement)
+ #
+ # Variables injectées par AdminLiveController::index() :
+ #   - lives : App\Entity\Live[] — tous les lives, triés par scheduledAt DESC
+ #
+ # Thème : Street (tokens CSS base_admin.html.twig)
+ # Préfixe CSS : .adm-live- pour éviter les conflits
+ #}
+
+{% block title %}Admin — Lives planifiés — BazaArt{% endblock %}
+{% block page_title %}Lives planifiés{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+/* ── Styles spécifiques à la liste admin des lives ─────────────────────────── */
+
+/* En-tête de page avec bouton de création */
+.adm-live-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.adm-live-header__title {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 400;
+    color: var(--ink);
+    margin: 0;
+}
+
+/* Bouton de création */
+.adm-btn-create {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--body);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 18px;
+    background: var(--ink);
+    color: var(--bg);
+    border: 1px solid var(--ink);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease;
+}
+.adm-btn-create:hover { background: var(--accent); color: var(--ink); border-color: var(--accent); }
+
+/* Tableau principal */
+.adm-live-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--body);
+    font-size: 13px;
+}
+.adm-live-table th {
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--ink);
+    color: var(--bg);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-weight: 700;
+    border-bottom: 2px solid var(--ink);
+    white-space: nowrap;
+}
+.adm-live-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(13,13,13,.1);
+    vertical-align: middle;
+}
+.adm-live-table tr:hover td { background: var(--bg-alt); }
+
+/* Badge de statut — même logique que les pages publiques */
+.lv-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+}
+.lv-badge--scheduled { color: var(--accent); border-color: var(--accent); background: rgba(198,242,78,.12); }
+.lv-badge--live      { color: var(--accent-2); border-color: var(--accent-2); background: rgba(255,107,44,.12); }
+.lv-badge--ended     { color: var(--ink-mute); }
+.lv-badge--cancelled { color: #999; }
+
+/* Titre du live — lien vers l'édition */
+.adm-live-title {
+    font-weight: 600;
+    color: var(--ink);
+    text-decoration: none;
+}
+.adm-live-title:hover { text-decoration: underline; color: var(--accent-2); }
+
+/* Zone d'actions — boutons inline */
+.adm-live-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+
+/* Boutons d'action */
+.adm-act-btn {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease;
+    white-space: nowrap;
+}
+.adm-act-btn:hover { background: var(--ink); color: var(--bg); }
+
+/* Variante danger (annuler, supprimer) */
+.adm-act-btn--danger {
+    border-color: var(--accent-2);
+    color: var(--accent-2);
+}
+.adm-act-btn--danger:hover { background: var(--accent-2); color: var(--ink); }
+
+/* État vide */
+.adm-live-empty {
+    text-align: center;
+    padding: 40px;
+    color: var(--ink-mute);
+    border: 1px dashed rgba(13,13,13,.2);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── En-tête avec bouton de création ─────────────────────────────────────────── #}
+<div class="adm-live-header">
+    <h1 class="adm-live-header__title">Gestion des lives</h1>
+    <a href="{{ path('app_admin_live_new') }}" class="adm-btn-create">
+        {# Icône "+" #}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Nouveau live
+    </a>
+</div>
+
+{% if lives is empty %}
+    <div class="adm-live-empty">
+        Aucun live planifié pour l'instant.
+        <br>
+        <a href="{{ path('app_admin_live_new') }}" style="color: var(--accent-2);">
+            Créer le premier live
+        </a>
+    </div>
+{% else %}
+    {#
+        Tableau de tous les lives — triés par scheduledAt DESC côté repository.
+        L'admin voit tous les statuts : SCHEDULED, LIVE, ENDED, CANCELLED.
+    #}
+    <table class="adm-live-table">
+        <thead>
+            <tr>
+                <th>Titre</th>
+                <th>Statut</th>
+                <th>Date prévue</th>
+                <th>Hôte</th>
+                <th>Inscrits</th>
+                <th>Replay</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for live in lives %}
+            <tr>
+                {# Titre — lien vers la page d'édition #}
+                <td>
+                    <a href="{{ path('app_admin_live_edit', {id: live.id}) }}"
+                       class="adm-live-title">
+                        {{ live.title|e }}
+                    </a>
+                </td>
+
+                {# Badge de statut — classes CSS selon LiveStatus::badgeClass() #}
+                <td>
+                    <span class="{{ live.status.badgeClass() }} lv-badge">
+                        {{ live.status.label() }}
+                    </span>
+                </td>
+
+                {# Date et heure #}
+                <td style="font-family: var(--mono); font-size: 11px; white-space: nowrap;">
+                    {{ live.scheduledAt|date('d/m/Y à H\\hi') }}
+                </td>
+
+                {# Hôte #}
+                <td>{{ live.hostedBy.email|split('@')|first|e }}</td>
+
+                {# Nombre d'inscrits — lien vers le détail du live pour voir la liste #}
+                <td style="text-align: center; font-family: var(--mono); font-size: 12px;">
+                    {{ live.attendees|length }}
+                </td>
+
+                {# Replay disponible ? #}
+                <td style="text-align: center;">
+                    {% if live.replayUrl %}
+                        {# Icône coche verte — replay disponible #}
+                        <a href="{{ live.replayUrl|e }}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           title="Voir le replay"
+                           style="color: var(--accent-2); text-decoration: none;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" aria-label="Replay disponible">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                        </a>
+                    {% else %}
+                        <span style="color: rgba(13,13,13,.2);">—</span>
+                    {% endif %}
+                </td>
+
+                {# Actions disponibles selon le statut #}
+                <td>
+                    <div class="adm-live-actions">
+                        {# Éditer — toujours disponible pour l'admin #}
+                        <a href="{{ path('app_admin_live_edit', {id: live.id}) }}"
+                           class="adm-act-btn">
+                            Éditer
+                        </a>
+
+                        {# Lien public vers la page de détail #}
+                        <a href="{{ path('app_live_show', {id: live.id}) }}"
+                           class="adm-act-btn"
+                           target="_blank">
+                            Voir
+                        </a>
+
+                        {#
+                            Annuler — uniquement pour SCHEDULED et LIVE.
+                            Action irréversible → confirmation JavaScript.
+                        #}
+                        {% if live.status.value == 'scheduled' or live.status.value == 'live' %}
+                            <form method="post"
+                                  action="{{ path('app_admin_live_cancel', {id: live.id}) }}"
+                                  onsubmit="return confirm(this.dataset.confirm);" data-confirm="Annuler ce live et notifier les inscrits ?"
+                                  style="display: inline;">
+                                <input type="hidden" name="_token"
+                                       value="{{ csrf_token('admin_live_cancel_' ~ live.id) }}">
+                                <button type="submit" class="adm-act-btn adm-act-btn--danger">
+                                    Annuler
+                                </button>
+                            </form>
+                        {% endif %}
+
+                        {#
+                            Supprimer — uniquement pour SCHEDULED.
+                            Suppression définitive avec cascade sur les inscrits.
+                            Double confirmation JavaScript.
+                        #}
+                        {% if live.status.value == 'scheduled' %}
+                            <form method="post"
+                                  action="{{ path('app_admin_live_delete', {id: live.id}) }}"
+                                  onsubmit="return confirm(this.dataset.confirm);" data-confirm="Supprimer ce live et tous ses inscrits ? Action irreversible."
+                                  style="display: inline;">
+                                <input type="hidden" name="_token"
+                                       value="{{ csrf_token('admin_live_delete_' ~ live.id) }}">
+                                <button type="submit" class="adm-act-btn adm-act-btn--danger">
+                                    Supprimer
+                                </button>
+                            </form>
+                        {% endif %}
+
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
+{% endblock %}

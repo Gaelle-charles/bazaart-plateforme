@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+{#
+    Template HTML de l'email de rappel live.
+
+    Variables disponibles (passées par LiveService::sendReminderEmail) :
+      - live    : App\Entity\Live — le live à venir
+      - user    : App\Entity\User — l'utilisateur destinataire
+      - subject : string          — le sujet de l'email (pour référence)
+
+    Règles de compatibilité email (Gmail, Outlook, Apple Mail) :
+      - Tables pour la mise en page (CSS flexbox/grid non supporté)
+      - CSS INLINE uniquement (les balises <style> sont ignorées par la plupart des clients)
+      - Pas de Google Fonts, pas de police externe
+      - URLs absolues via url() Twig (jamais path())
+      - Images avec largeur explicite (attribut width)
+#}
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rappel : {{ live.title|e }}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F2EFE6; font-family: Arial, Helvetica, sans-serif; font-size: 16px; color: #0D0D0D;">
+
+{# Conteneur principal centré — max 600px #}
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F2EFE6; padding: 24px 0;">
+    <tr>
+        <td align="center">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; background-color: #ffffff; border: 1px solid #0D0D0D;">
+
+                {# ══════════════════════════════════════════════════════════════ #}
+                {# HEADER — fond ink (#0D0D0D), logo BAZAART en vert acide       #}
+                {# ══════════════════════════════════════════════════════════════ #}
+                <tr>
+                    <td style="background-color: #0D0D0D; padding: 24px 32px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                            <tr>
+                                <td>
+                                    {# Logo texte — Archivo Black non disponible dans les emails, Georgia fallback #}
+                                    <span style="font-family: Georgia, serif; font-size: 26px; font-weight: bold; color: #C6F24E; letter-spacing: 2px;">
+                                        BAZAART
+                                    </span>
+                                </td>
+                                <td align="right">
+                                    {# Badge "RAPPEL" en mono style #}
+                                    <span style="font-family: monospace; font-size: 10px; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; color: #C6F24E; padding: 3px 10px; border: 1px solid #C6F24E;">
+                                        RAPPEL
+                                    </span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                {# ══════════════════════════════════════════════════════════════ #}
+                {# ACCROCHE — message de rappel personnalisé                      #}
+                {# ══════════════════════════════════════════════════════════════ #}
+                <tr>
+                    <td style="padding: 32px 32px 16px 32px;">
+                        {# Prénom approximatif : partie locale de l'email (avant @) #}
+                        {% set display_name = user.email|split('@')|first %}
+                        <p style="margin: 0 0 12px 0; font-size: 18px; font-weight: bold; color: #0D0D0D;">
+                            Bonjour {{ display_name }} !
+                        </p>
+                        <p style="margin: 0; font-size: 15px; color: #5b584f; line-height: 1.6;">
+                            Un live auquel vous êtes inscrit(e) commence dans
+                            <strong style="color: #FF6B2C;">moins de 24 heures</strong>.
+                        </p>
+                    </td>
+                </tr>
+
+                {# ══════════════════════════════════════════════════════════════ #}
+                {# CARTE DU LIVE — informations principales                       #}
+                {# ══════════════════════════════════════════════════════════════ #}
+                <tr>
+                    <td style="padding: 16px 32px 24px 32px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+                               style="border: 1px solid #0D0D0D; background-color: #F2EFE6;">
+                            {# Barre colorée en haut — vert acide Bazaart #}
+                            <tr>
+                                <td style="background-color: #C6F24E; height: 3px; font-size: 0;">&nbsp;</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 20px 24px;">
+
+                                    {# Badge statut PLANIFIÉ #}
+                                    <p style="margin: 0 0 12px 0;">
+                                        <span style="font-family: monospace; font-size: 9px; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; color: #C6F24E; padding: 2px 8px; border: 1px solid #C6F24E;">
+                                            PLANIFIÉ
+                                        </span>
+                                    </p>
+
+                                    {# Titre du live #}
+                                    <p style="margin: 0 0 16px 0; font-size: 20px; font-weight: bold; color: #0D0D0D; line-height: 1.3;">
+                                        {{ live.title|e }}
+                                    </p>
+
+                                    {# Date et heure #}
+                                    <table role="presentation" cellpadding="0" cellspacing="0">
+                                        <tr>
+                                            <td style="padding-right: 8px; color: #5b584f; font-size: 12px;">Date :</td>
+                                            <td style="font-weight: bold; color: #0D0D0D; font-size: 14px;">
+                                                {{ live.scheduledAt|date('d/m/Y à H\\hi') }}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding-right: 8px; color: #5b584f; font-size: 12px; padding-top: 6px;">Animé par :</td>
+                                            <td style="font-size: 13px; color: #0D0D0D; padding-top: 6px;">
+                                                {{ live.hostedBy.email|split('@')|first|e }}
+                                            </td>
+                                        </tr>
+                                    </table>
+
+                                    {# Description si disponible #}
+                                    {% if live.description %}
+                                        {#
+                                            Sécurité XSS : le filtre |e (escape) doit être appliqué
+                                            systématiquement sur toutes les données utilisateur,
+                                            y compris après |slice qui ne protège pas du HTML malveillant.
+                                        #}
+                                        <p style="margin: 16px 0 0 0; font-size: 13px; color: #5b584f; line-height: 1.6; border-top: 1px solid rgba(13,13,13,.1); padding-top: 12px;">
+                                            {% if live.description|length > 200 %}
+                                                {{ live.description|slice(0, 200)|e }}…
+                                            {% else %}
+                                                {{ live.description|e }}
+                                            {% endif %}
+                                        </p>
+                                    {% endif %}
+
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                {# ══════════════════════════════════════════════════════════════ #}
+                {# CTA — Bouton rejoindre le live                                 #}
+                {# ══════════════════════════════════════════════════════════════ #}
+                <tr>
+                    <td style="padding: 0 32px 32px 32px; text-align: center;">
+                        {#
+                            Le lien pointe directement vers la page de détail du live
+                            (pas vers l'URL externe directement — l'utilisateur peut
+                            consulter les infos avant de rejoindre).
+                        #}
+                        <a href="{{ url('app_live_show', {id: live.id}) }}"
+                           style="display: inline-block; background-color: #0D0D0D; color: #F2EFE6; text-decoration: none; padding: 14px 32px; font-size: 14px; font-weight: bold; border: 1px solid #0D0D0D; letter-spacing: 0.02em;">
+                            Rejoindre le live
+                        </a>
+                        <p style="margin: 12px 0 0 0; font-size: 12px; color: #5b584f;">
+                            Ou directement :
+                            <a href="{{ live.externalUrl|e }}" style="color: #FF6B2C; word-break: break-all;">
+                                {{ live.externalUrl|e }}
+                            </a>
+                        </p>
+                    </td>
+                </tr>
+
+                {# ══════════════════════════════════════════════════════════════ #}
+                {# LIEN DE DÉSINSCRIPTION — requis RGPD et bonne pratique UX      #}
+                {# L'utilisateur doit toujours pouvoir gérer son inscription       #}
+                {# directement depuis l'email sans chercher le lien sur le site.   #}
+                {# ══════════════════════════════════════════════════════════════ #}
+                <tr>
+                    <td style="padding: 0 32px 24px 32px; text-align: center;">
+                        <p style="margin: 0; font-size: 12px; color: #5b584f;">
+                            Vous ne souhaitez plus participer ?
+                            <a href="{{ url('app_live_show', {id: live.id}) }}"
+                               style="color: #FF6B2C; text-decoration: underline;">
+                                Gérer mon inscription
+                            </a>
+                        </p>
+                    </td>
+                </tr>
+
+                {# ══════════════════════════════════════════════════════════════ #}
+                {# FOOTER                                                          #}
+                {# ══════════════════════════════════════════════════════════════ #}
+                <tr>
+                    <td style="background-color: #0D0D0D; padding: 20px 32px;">
+                        <p style="margin: 0 0 8px 0; color: #5b584f; font-size: 12px; text-align: center; line-height: 1.6;">
+                            Vous recevez ce rappel car vous êtes inscrit(e) à ce live sur
+                            <a href="{{ url('app_home') }}" style="color: #C6F24E; text-decoration: none;">bazaart.fr</a>.
+                        </p>
+                        <p style="margin: 0; color: #5b584f; font-size: 12px; text-align: center;">
+                            <a href="{{ url('app_live_index') }}" style="color: #5b584f; text-decoration: underline;">
+                                Voir tous les lives
+                            </a>
+                        </p>
+                        <p style="margin: 12px 0 0 0; color: #333; font-size: 11px; text-align: center;">
+                            Bazaart — Pôle Lab — Plateforme dédiée aux artistes de la diaspora afro-atlantique
+                        </p>
+                    </td>
+                </tr>
+
+            </table>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+{#
+    Template HTML de l'email d'annulation d'un live.
+
+    Variables disponibles (passées par LiveService::sendCancellationEmail) :
+      - live : App\Entity\Live — le live annulé
+      - user : App\Entity\User — l'utilisateur destinataire inscrit
+
+    Compatibilité email : même règles que live_reminder.html.twig
+      - Tables pour la mise en page
+      - CSS inline uniquement
+      - URLs absolues via url()
+#}
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Annulation : {{ live.title|e }}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F2EFE6; font-family: Arial, Helvetica, sans-serif; font-size: 16px; color: #0D0D0D;">
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F2EFE6; padding: 24px 0;">
+    <tr>
+        <td align="center">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; background-color: #ffffff; border: 1px solid #0D0D0D;">
+
+                {# Header ink #}
+                <tr>
+                    <td style="background-color: #0D0D0D; padding: 24px 32px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                            <tr>
+                                <td>
+                                    <span style="font-family: Georgia, serif; font-size: 26px; font-weight: bold; color: #C6F24E; letter-spacing: 2px;">
+                                        BAZAART
+                                    </span>
+                                </td>
+                                <td align="right">
+                                    <span style="font-family: monospace; font-size: 10px; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; color: #FF6B2C; padding: 3px 10px; border: 1px solid #FF6B2C;">
+                                        ANNULATION
+                                    </span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                {# Message principal #}
+                <tr>
+                    <td style="padding: 32px 32px 16px 32px;">
+                        {% set display_name = user.email|split('@')|first %}
+                        <p style="margin: 0 0 12px 0; font-size: 18px; font-weight: bold; color: #0D0D0D;">
+                            Bonjour {{ display_name }},
+                        </p>
+                        <p style="margin: 0; font-size: 15px; color: #5b584f; line-height: 1.6;">
+                            Nous vous informons que le live auquel vous étiez inscrit(e)
+                            a été <strong style="color: #FF6B2C;">annulé</strong>.
+                        </p>
+                    </td>
+                </tr>
+
+                {# Carte du live annulé #}
+                <tr>
+                    <td style="padding: 16px 32px 24px 32px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+                               style="border: 1px solid #ccc; background-color: #f8f8f8;">
+                            <tr>
+                                <td style="background-color: #ccc; height: 3px; font-size: 0;">&nbsp;</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 20px 24px;">
+                                    <p style="margin: 0 0 4px 0;">
+                                        <span style="font-family: monospace; font-size: 9px; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; color: #999; padding: 2px 8px; border: 1px solid #ccc; text-decoration: line-through;">
+                                            ANNULÉ
+                                        </span>
+                                    </p>
+                                    <p style="margin: 10px 0 8px 0; font-size: 18px; font-weight: bold; color: #666; text-decoration: line-through; line-height: 1.3;">
+                                        {{ live.title|e }}
+                                    </p>
+                                    <p style="margin: 0; font-size: 13px; color: #888;">
+                                        Prévu le {{ live.scheduledAt|date('d/m/Y à H\\hi') }}
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                {# Message d'excuse et lien vers d'autres lives #}
+                <tr>
+                    <td style="padding: 0 32px 32px 32px; text-align: center;">
+                        <p style="margin: 0 0 20px 0; font-size: 14px; color: #5b584f; line-height: 1.6;">
+                            Nous nous excusons pour ce changement de programme.<br>
+                            D'autres lives seront bientôt planifiés sur la plateforme.
+                        </p>
+                        <a href="{{ url('app_live_index') }}"
+                           style="display: inline-block; background-color: #0D0D0D; color: #F2EFE6; text-decoration: none; padding: 12px 28px; font-size: 14px; font-weight: bold; border: 1px solid #0D0D0D;">
+                            Voir les prochains lives
+                        </a>
+                    </td>
+                </tr>
+
+                {# Footer #}
+                <tr>
+                    <td style="background-color: #0D0D0D; padding: 20px 32px;">
+                        <p style="margin: 0 0 8px 0; color: #5b584f; font-size: 12px; text-align: center; line-height: 1.6;">
+                            Vous receviez des rappels pour ce live car vous étiez inscrit(e) sur
+                            <a href="{{ url('app_home') }}" style="color: #C6F24E; text-decoration: none;">bazaart.fr</a>.
+                        </p>
+                        <p style="margin: 12px 0 0 0; color: #333; font-size: 11px; text-align: center;">
+                            Bazaart — Pôle Lab — Plateforme dédiée aux artistes de la diaspora afro-atlantique
+                        </p>
+                    </td>
+                </tr>
+
+            </table>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

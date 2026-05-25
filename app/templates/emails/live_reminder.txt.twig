@@ -1,0 +1,37 @@
+{% set display_name = user.email|split('@')|first %}
+Bonjour {{ display_name }} !
+
+RAPPEL — Votre live démarre dans moins de 24 heures
+
+════════════════════════════════════════════════════════
+
+{{ live.title|upper }}
+
+Date     : {{ live.scheduledAt|date('d/m/Y à H\\hi') }}
+Animé par : {{ live.hostedBy.email|split('@')|first }}
+
+{% if live.description %}
+Description :
+{{ live.description|slice(0, 300) }}{% if live.description|length > 300 %}…{% endif %}
+
+{% endif %}
+════════════════════════════════════════════════════════
+
+REJOINDRE LE LIVE :
+{{ live.externalUrl }}
+
+Ou consulter la page du live :
+{{ url('app_live_show', {id: live.id}) }}
+
+════════════════════════════════════════════════════════
+
+Vous ne souhaitez plus participer ? Gérer votre inscription :
+{{ url('app_live_show', {id: live.id}) }}
+
+════════════════════════════════════════════════════════
+
+Vous recevez ce rappel car vous êtes inscrit(e) à ce live sur bazaart.fr.
+
+Voir tous les lives : {{ url('app_live_index') }}
+
+Bazaart — Pôle Lab — Plateforme dédiée aux artistes de la diaspora afro-atlantique

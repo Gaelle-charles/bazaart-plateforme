@@ -1,0 +1,422 @@
+{% extends 'base_dashboard.html.twig' %}
+
+{#
+ # live/show.html.twig — Page de détail d'un live planifié
+ #
+ # Affiche :
+ #   - Titre, statut, date/heure, hôte, description
+ #   - Bouton "S'inscrire" / "Se désinscrire" (si SCHEDULED)
+ #   - Lien direct vers le live externe (Twitch, Jitsi, Meet)
+ #   - Replay si disponible (live ENDED avec replayUrl)
+ #
+ # Variables injectées par LiveController::show() :
+ #   - live         : App\Entity\Live
+ #   - isRegistered : bool — l'utilisateur courant est-il inscrit ?
+ #}
+
+{% block title %}{{ live.title|e }} — Lives BazaArt{% endblock %}
+{% block page_title %}Détail du live{% endblock %}
+
+{% block sidebar %}
+    {% include '_partials/sidebar_artiste.html.twig' %}
+{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+/* ── Styles page de détail live — préfixe .lv- ─────────────────────────────── */
+
+/* Fil d'Ariane (breadcrumb) */
+.lv-breadcrumb {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    margin-bottom: 20px;
+}
+.lv-breadcrumb a { color: var(--ink-mute); text-decoration: none; }
+.lv-breadcrumb a:hover { color: var(--ink); }
+.lv-breadcrumb span { margin: 0 6px; }
+
+/* Layout : image à gauche, infos à droite (sur écrans larges) */
+.lv-detail {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 28px;
+}
+@media (min-width: 768px) {
+    .lv-detail {
+        grid-template-columns: 360px 1fr;
+    }
+}
+
+/* Image de couverture */
+.lv-detail__cover {
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+    border: 1px solid var(--ink);
+    display: block;
+}
+.lv-detail__cover-placeholder {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: var(--ink);
+    border: 1px solid var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.lv-detail__cover-placeholder-text {
+    font-family: var(--display);
+    font-size: 48px;
+    color: var(--accent);
+}
+
+/* Colonne de droite */
+.lv-detail__info { display: flex; flex-direction: column; gap: 16px; }
+
+/* Badge statut */
+.lv-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border: 1px solid currentColor;
+}
+.lv-badge--scheduled { color: var(--accent); border-color: var(--accent); background: rgba(198,242,78,.12); }
+.lv-badge--live      { color: var(--accent-2); border-color: var(--accent-2); background: rgba(255,107,44,.12); }
+.lv-badge--ended     { color: var(--ink-mute); }
+.lv-badge--cancelled { color: #999; text-decoration: line-through; }
+
+/* Titre principal */
+.lv-detail__title {
+    font-family: var(--display);
+    font-size: 24px;
+    font-weight: 400;
+    color: var(--ink);
+    margin: 0;
+    line-height: 1.2;
+}
+
+/* Méta-données (date, hôte) */
+.lv-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.lv-meta__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-family: var(--body);
+    color: var(--ink-mute);
+}
+.lv-meta__icon {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+}
+.lv-meta__label { font-weight: 600; color: var(--ink); }
+
+/* Description longue */
+.lv-description {
+    background: var(--bg-alt);
+    border: 1px solid rgba(13,13,13,.12);
+    padding: 16px;
+    font-family: var(--body);
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--ink);
+    white-space: pre-wrap; /* préserve les sauts de ligne */
+}
+
+/* Zone d'action (bouton inscription + lien externe) */
+.lv-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Bouton principal */
+.lv-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: var(--body);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 12px 24px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--bg);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease;
+    text-align: center;
+}
+.lv-btn:hover { background: var(--accent); color: var(--ink); border-color: var(--accent); }
+
+/* Bouton désinscription — variante orange */
+.lv-btn--unregister {
+    background: transparent;
+    color: var(--accent-2);
+    border-color: var(--accent-2);
+}
+.lv-btn--unregister:hover { background: var(--accent-2); color: var(--ink); }
+
+/* Lien vers le live externe */
+.lv-external-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--body);
+    font-size: 13px;
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    padding: 8px 0;
+}
+.lv-external-link:hover { color: var(--accent-2); }
+
+/* Zone replay */
+.lv-replay {
+    border: 2px solid var(--accent);
+    padding: 16px;
+    background: rgba(198,242,78,.06);
+}
+.lv-replay__label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+}
+.lv-replay__title {
+    font-family: var(--body);
+    font-size: 13px;
+    color: var(--ink);
+    margin-bottom: 12px;
+}
+
+/* Message annulation */
+.lv-cancelled-notice {
+    border: 1px solid #ccc;
+    padding: 14px 16px;
+    background: #f8f8f8;
+    font-family: var(--body);
+    font-size: 13px;
+    color: #666;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Fil d'Ariane ──────────────────────────────────────────────────────────── #}
+<nav class="lv-breadcrumb" aria-label="Fil d'Ariane">
+    <a href="{{ path('app_live_index') }}">Lives</a>
+    <span aria-hidden="true">/</span>
+    <span>{{ live.title|e }}</span>
+</nav>
+
+{# ── Contenu principal en deux colonnes ────────────────────────────────────── #}
+<div class="lv-detail">
+
+    {# ── Colonne gauche : image de couverture ───────────────────────────────── #}
+    <div>
+        {% if live.coverImageUrl %}
+            <img src="{{ live.coverImageUrl|e }}"
+                 alt="Couverture de {{ live.title|e }}"
+                 class="lv-detail__cover">
+        {% else %}
+            <div class="lv-detail__cover-placeholder" aria-hidden="true">
+                <span class="lv-detail__cover-placeholder-text">
+                    {{ live.title|upper|slice(0, 2) }}
+                </span>
+            </div>
+        {% endif %}
+    </div>
+
+    {# ── Colonne droite : informations et actions ────────────────────────────── #}
+    <div class="lv-detail__info">
+
+        {# Badge de statut — ex: "PLANIFIÉ", "EN DIRECT", "TERMINÉ", "ANNULÉ" #}
+        <span class="{{ live.status.badgeClass() }} lv-badge">
+            {{ live.status.label() }}
+        </span>
+
+        <h1 class="lv-detail__title">{{ live.title|e }}</h1>
+
+        {# Méta-données : date et hôte #}
+        <div class="lv-meta">
+
+            {# Date et heure du live #}
+            <div class="lv-meta__item">
+                {# Icône calendrier #}
+                <svg class="lv-meta__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="18"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <span>
+                    <span class="lv-meta__label">Date :</span>
+                    {{ live.scheduledAt|date('d/m/Y à H\\hi') }}
+                </span>
+            </div>
+
+            {# Hôte / animateur #}
+            <div class="lv-meta__item">
+                {# Icône silhouette #}
+                <svg class="lv-meta__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4"/>
+                    <path d="M4 21a8 8 0 0 1 16 0"/>
+                </svg>
+                <span>
+                    <span class="lv-meta__label">Animé par :</span>
+                    {{ live.hostedBy.email|split('@')|first|e }}
+                </span>
+            </div>
+
+            {# Nombre d'inscrits #}
+            <div class="lv-meta__item">
+                {# Icône groupe #}
+                <svg class="lv-meta__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                <span>
+                    <span class="lv-meta__label">Inscrits :</span>
+                    {{ live.attendees|length }} participant(s)
+                </span>
+            </div>
+
+        </div>
+
+        {# Description longue — si renseignée #}
+        {% if live.description %}
+            <div class="lv-description">{{ live.description|e }}</div>
+        {% endif %}
+
+        {# ── Zone d'actions — selon le statut du live ────────────────────────── #}
+        <div class="lv-actions">
+
+            {% if live.status.value == 'scheduled' %}
+                {#
+                    Live planifié : bouton S'inscrire ou Se désinscrire.
+                    L'inscription permet de recevoir un rappel email 24h avant.
+                #}
+
+                {# Lien vers la plateforme externe (toujours visible, même avant inscription) #}
+                <a href="{{ live.externalUrl|e }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="lv-external-link"
+                   aria-label="Rejoindre le live sur la plateforme externe">
+                    {# Icône lien externe #}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        <polyline points="15 3 21 3 21 9"/>
+                        <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                    Lien vers le live ({{ live.externalUrl|e }})
+                </a>
+
+                {% if isRegistered %}
+                    {#
+                        L'utilisateur est déjà inscrit → bouton de désinscription.
+                        Formulaire POST avec token CSRF.
+                        Le token correspond à 'live_unattend_{id}' vérifié dans le controller.
+                    #}
+                    <p style="font-size: 13px; color: var(--ink-mute); font-family: var(--body);">
+                        Vous êtes inscrit(e) — vous recevrez un rappel email 24h avant le live.
+                    </p>
+                    <form method="post"
+                          action="{{ path('app_live_unattend', {id: live.id}) }}"
+                          onsubmit="return confirm('Confirmer la désinscription de ce live ?');">
+                        <input type="hidden" name="_token"
+                               value="{{ csrf_token('live_unattend_' ~ live.id) }}">
+                        <button type="submit" class="lv-btn lv-btn--unregister">
+                            Se désinscrire
+                        </button>
+                    </form>
+                {% else %}
+                    {#
+                        L'utilisateur n'est pas inscrit → bouton d'inscription.
+                        Formulaire POST avec token CSRF.
+                        Le token correspond à 'live_attend_{id}' vérifié dans le controller.
+                    #}
+                    <form method="post"
+                          action="{{ path('app_live_attend', {id: live.id}) }}">
+                        <input type="hidden" name="_token"
+                               value="{{ csrf_token('live_attend_' ~ live.id) }}">
+                        <button type="submit" class="lv-btn">
+                            S'inscrire — recevoir un rappel
+                        </button>
+                    </form>
+                {% endif %}
+
+            {% elseif live.status.value == 'live' %}
+                {#
+                    Live en cours → lien direct vers la plateforme externe.
+                    Le bouton est orange (--accent-2) pour signaler l'urgence.
+                #}
+                <a href="{{ live.externalUrl|e }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="lv-btn"
+                   style="background: var(--accent-2); border-color: var(--accent-2);">
+                    Rejoindre le live maintenant
+                </a>
+
+            {% elseif live.status.value == 'ended' %}
+                {# Live terminé → replay si disponible, sinon message d'attente #}
+                {% if live.replayUrl %}
+                    <div class="lv-replay">
+                        <div class="lv-replay__label">Replay disponible</div>
+                        <p class="lv-replay__title">
+                            Ce live est terminé. Le replay est disponible à l'adresse ci-dessous.
+                        </p>
+                        <a href="{{ live.replayUrl|e }}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="lv-btn">
+                            Regarder le replay
+                        </a>
+                    </div>
+                {% else %}
+                    <p style="font-size: 13px; color: var(--ink-mute); font-family: var(--body);">
+                        Ce live est terminé. Le replay sera disponible prochainement.
+                    </p>
+                {% endif %}
+
+            {% elseif live.status.value == 'cancelled' %}
+                {# Live annulé → message d'information #}
+                <div class="lv-cancelled-notice">
+                    Ce live a été annulé. Les inscrits ont été notifiés par email.
+                </div>
+            {% endif %}
+
+        </div>{# fin .lv-actions #}
+
+    </div>{# fin .lv-detail__info #}
+
+</div>{# fin .lv-detail #}
+
+{% endblock %}

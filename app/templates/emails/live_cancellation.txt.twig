@@ -1,0 +1,23 @@
+{% set display_name = user.email|split('@')|first %}
+Bonjour {{ display_name }},
+
+ANNULATION — Le live auquel vous étiez inscrit(e) n'aura pas lieu
+
+════════════════════════════════════════════════════════
+
+[ANNULÉ] {{ live.title|upper }}
+
+Prévu le : {{ live.scheduledAt|date('d/m/Y à H\\hi') }}
+
+════════════════════════════════════════════════════════
+
+Nous nous excusons pour ce changement de programme.
+D'autres lives seront bientôt planifiés sur la plateforme.
+
+Voir les prochains lives :
+{{ url('app_live_index') }}
+
+════════════════════════════════════════════════════════
+
+Bazaart — Pôle Lab — Plateforme dédiée aux artistes de la diaspora afro-atlantique
+bazaart.fr
