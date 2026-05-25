@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Entity\Conversation;
-use App\Entity\ConversationParticipant;
 use App\Entity\Message;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -48,42 +47,6 @@ class MessageRepository extends ServiceEntityRepository
             ->orderBy('m.createdAt', 'ASC')
             ->getQuery()
             ->getResult();
-    }
-
-    /**
-     * Compte les messages non lus pour un participant dans une conversation.
-     *
-     * Définition "non lu" :
-     *   - Le message a été créé APRÈS le lastReadAt du participant
-     *   - OU le participant n'a jamais ouvert la conversation (lastReadAt = null → tout est non lu)
-     *   - ET le message n'a PAS été envoyé par ce participant lui-même
-     *     (on ne compte pas ses propres messages comme "non lus")
-     *
-     * Ce compteur est affiché dans la liste des conversations (badge rouge)
-     * pour indiquer les conversations avec des messages non vus.
-     *
-     * @param ConversationParticipant $participant Le participant dont on calcule les non-lus
-     */
-    public function countUnreadForParticipant(ConversationParticipant $participant): int
-    {
-        $qb = $this->createQueryBuilder('m')
-            ->select('COUNT(m.id)')
-            ->where('m.conversation = :conversation')
-            ->setParameter('conversation', $participant->getConversation())
-            // On exclut les messages envoyés par le participant lui-même
-            ->andWhere('m.author != :user')
-            ->setParameter('user', $participant->getUser());
-
-        // Si l'utilisateur a déjà ouvert la conversation, on ne compte que les
-        // messages postérieurs à sa dernière ouverture.
-        // Si lastReadAt est null, il n'a jamais ouvert → TOUS les messages sont non lus
-        // (pas de clause supplémentaire nécessaire dans ce cas).
-        if ($participant->getLastReadAt() !== null) {
-            $qb->andWhere('m.createdAt > :lastReadAt')
-               ->setParameter('lastReadAt', $participant->getLastReadAt());
-        }
-
-        return (int) $qb->getQuery()->getSingleScalarResult();
     }
 
     /**

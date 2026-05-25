@@ -290,8 +290,18 @@
         </p>
     </div>
 
-    {# Bouton vers la page de création d'une nouvelle conversation #}
-    <a href="{{ path('app_messaging_new') }}" class="msg-btn-new">
+    {#
+        Pour démarrer une nouvelle conversation, l'utilisateur doit d'abord
+        trouver un artiste dans l'annuaire.
+
+        La route app_messaging_new/{userId} requiert un paramètre {userId} obligatoire —
+        on ne peut pas la générer sans connaître l'interlocuteur cible.
+        Appeler path('app_messaging_new') sans paramètre déclencherait une
+        MissingMandatoryParametersException au rendu Twig.
+
+        Le parcours correct est donc : Annuaire → profil artiste → "Contacter" → messaging/new/{userId}.
+    #}
+    <a href="{{ path('app_artist_profile_directory') }}" class="msg-btn-new">
         {# Icône "+" en SVG inline — pas de dépendance externe #}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
