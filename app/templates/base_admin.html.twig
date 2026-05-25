@@ -497,6 +497,24 @@
                 Formations
             </a>
 
+            {#
+                Lives planifiés — module Communauté V1.
+                Actif pour toutes les routes "app_admin_live_*".
+                Seuls les admins créent et gèrent les lives en V1.
+            #}
+            <a href="{{ path('app_admin_live_index') }}"
+               class="sd-link {{ app.request.attributes.get('_route') starts with 'app_admin_live' ? 'sd-link--active' : '' }}">
+                {# Icône signal / ondes radio — évoque un live / streaming #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="2"/>
+                    <path d="M8.93 6.93a5 5 0 0 0 0 10.14"/>
+                    <path d="M15.07 6.93a5 5 0 0 1 0 10.14"/>
+                    <path d="M5.1 3.1A11 11 0 0 0 5.1 20.9"/>
+                    <path d="M18.9 3.1A11 11 0 0 1 18.9 20.9"/>
+                </svg>
+                Lives
+            </a>
+
             {# Opportunités scrapées depuis Google Sheets #}
             <a href="{{ path('app_admin_scraped_opportunities') }}"
                class="sd-link {{ app.request.attributes.get('_route') == 'app_admin_scraped_opportunities' ? 'sd-link--active' : '' }}">
