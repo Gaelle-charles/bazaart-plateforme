@@ -297,9 +297,37 @@
     border-bottom: 1px solid var(--ink);
     position:      relative;
     overflow:      hidden;
-    /* Pas de min-height forcé : le hero se dimensionne à son contenu.
-       Le contenu (meta + H1 + grille desc/CTAs + marquee) suffit à
-       remplir visuellement la page sans laisser de vide. */
+    /* Pas de min-height sur la section : le hero grandit de son contenu
+       (container + marquee). C'est le container intérieur qui gère
+       la hauteur visible — voir .lp-hero > .lp-container ci-dessous. */
+}
+
+/* ── HAUTEUR PLEIN ÉCRAN DU HERO (sans min-height sur la section) ──────────
+   La navbar (.nav) est en position:sticky, height:64px, dans le flux normal.
+   Le hero section commence donc juste sous la navbar (pas d'overlap).
+   Pour que la zone de contenu du hero remplisse EXACTEMENT l'espace visible
+   sous la navbar, on applique min-height:calc(100dvh - 64px) sur ce container.
+
+   Résultat à 1280×720px :
+     - Navbar : 64px (y=0 → y=64)
+     - Container hero : 720-64 = 656px (y=64 → y=720) — remplit le viewport
+     - Marquee : commence à y=720 → juste sous la ligne de flottaison ✓
+     - Section Hubs : encore plus bas → nécessite de scroller ✓
+
+   justify-content:center centre verticalement le bloc (meta + H1 + grid)
+   dans les 656px disponibles, sans le coller en haut.
+
+   padding-bottom:48px : compense le padding-top:48px du .lp-hero__meta.
+   Sans ça, le centrage est asymétrique (le meta consomme 48px de padding
+   en haut du bloc, ce qui décale le centre visuel vers le bas).
+
+   ⚠️  Si la hauteur de la navbar change, mettre à jour cette valeur (64px). */
+.lp-hero > .lp-container {
+    min-height:      calc(100dvh - 64px);
+    display:         flex;
+    flex-direction:  column;
+    justify-content: center;
+    padding-bottom:  48px; /* symétrie avec padding-top:48px du meta */
 }
 
 /* Bandeau métadonnées (eyebrow + coordonnées) */
