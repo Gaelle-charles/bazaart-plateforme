@@ -123,13 +123,31 @@ class NotificationRepository extends ServiceEntityRepository
      */
     public function markAllAsReadForUser(User $user): void
     {
-        // DQL UPDATE : syntaxe proche du SQL mais orienté objet (on cible l'entité, pas la table)
+        // DQL UPDATE : syntaxe proche du SQL mais orienté objet (on cible l'entité, pas la table).
+        // On met à jour isRead ET readAt en une seule requête pour cohérence avec markAsRead().
+        //
+        // Pourquoi SET readAt uniquement sur les non-lus (andWhere 'n.isRead = false') ?
+        //   → On ne veut pas écraser la date de première lecture des notifs déjà lues.
+        //   → La condition sur is_read = false agit comme un filtre automatique :
+        //     seules les notifs non lues reçoivent leur readAt pour la première fois.
+        //
+        // ⚠️ Ce UPDATE DQL bypass le Unit of Work Doctrine.
+        //    Les entités déjà chargées en mémoire conservent leur ancien état.
+        //    NotificationService::markAllAsRead() appelle em->clear(Notification::class)
+        //    après cet appel pour invalider le cache et forcer un rechargement propre.
         $this->createQueryBuilder('n')
             ->update()
-            ->set('n.isRead', 'true')
+            // Paramètre bindé (pas de string littérale 'true') : Doctrine mappe
+            // le bool PHP vers le bon type SQL selon le driver (BOOLEAN en PG).
+            ->set('n.isRead', ':isRead')
+            // Enregistre la date de lecture pour la traçabilité et les statistiques admin
+            ->set('n.readAt', ':now')
             ->andWhere('n.recipient = :user')
+            // Filtre sur non-lus uniquement : on n'écrase pas readAt des déjà lues
             ->andWhere('n.isRead = false')
+            ->setParameter('isRead', true)
             ->setParameter('user', $user)
+            ->setParameter('now', new \DateTime())
             ->getQuery()
             ->execute();
     }

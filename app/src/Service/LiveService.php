@@ -8,8 +8,10 @@ use App\Entity\Live;
 use App\Entity\LiveAttendee;
 use App\Entity\User;
 use App\Enum\LiveStatus;
+use App\Enum\NotificationType;
 use App\Repository\LiveAttendeeRepository;
 use App\Repository\LiveRepository;
+use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
@@ -43,6 +45,10 @@ class LiveService
         private readonly Environment $twig,
         // Logger pour tracer les erreurs d'envoi sans bloquer le processus
         private readonly LoggerInterface $logger,
+        // UserRepository pour récupérer tous les utilisateurs lors de la notification NewLive
+        private readonly UserRepository $userRepository,
+        // NotificationService pour créer des notifications in-app aux utilisateurs
+        private readonly NotificationService $notificationService,
     ) {}
 
     // ─── Gestion des lives ────────────────────────────────────────────────────
@@ -80,6 +86,43 @@ class LiveService
             'title'      => $live->getTitle(),
             'scheduledAt' => $live->getScheduledAt()->format('Y-m-d H:i'),
             'host'       => $host->getEmail(),
+        ]);
+
+        // ── Notifications in-app : prévenir tous les utilisateurs du nouveau live ──
+        //
+        // En V1 (faible volumétrie d'utilisateurs), on envoie les notifications en boucle
+        // synchrone directement après la persistance du live.
+        //
+        // Pourquoi pas Messenger async en V1 ?
+        //   → Complexité inutile pour un petit nombre d'utilisateurs.
+        //   → Le planning serré (deadline 15 juin) privilégie le fonctionnel au scalable.
+        //   → À refactoriser en V2 avec un Message + Handler pour supporter N milliers d'utilisateurs.
+        //
+        // Note : NotificationService::create() gère l'anti-auto-notification (sender === recipient).
+        // On ne passe pas de $sender ici car c'est un live admin → tout le monde doit être notifié.
+        // createBatch() persist sans flush → on regroupe tous les INSERT en une transaction
+        // au lieu de N transactions individuelles (une par utilisateur avec create()).
+        $allUsers = $this->userRepository->findAll();
+        foreach ($allUsers as $user) {
+            $this->notificationService->createBatch(
+                recipient: $user,
+                type: NotificationType::NewLive,
+                relatedEntityType: 'live',
+                relatedEntityId: $live->getId(),
+                data: [
+                    // Titre du live pour l'affichage dans le centre de notifications
+                    'liveTitle'   => $live->getTitle(),
+                    // Date formatée en français : "25/05/2026 à 20h30"
+                    'scheduledAt' => $live->getScheduledAt()->format('d/m/Y à H\hi'),
+                ],
+            );
+        }
+        // Un seul flush pour tous les persist() — évite N BEGIN/COMMIT PostgreSQL
+        $this->em->flush();
+
+        $this->logger->info('Notifications NewLive envoyées', [
+            'live_id'     => $live->getId(),
+            'users_count' => count($allUsers),
         ]);
 
         return $live;

@@ -8,14 +8,17 @@ use App\DTO\RegisterDTO;
 use App\Entity\Resource;
 use App\Entity\ScrapedResource;
 use App\Entity\User;
+use App\Enum\NotificationType;
 use App\Enum\ResourceStatus;
 use App\Enum\ScrapedResourceStatus;
 use App\Repository\OrganizationProfileRepository;
+use App\Repository\ResourceAlertRepository;
 use App\Repository\ResourceRepository;
 use App\Repository\ResourceTypeRepository;
 use App\Repository\ScrapedResourceRepository;
 use App\Repository\UserRepository;
 use App\Service\AuthService;
+use App\Service\NotificationService;
 use App\Service\StructureService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -43,6 +46,10 @@ class AdminController extends AbstractController
         private readonly ScrapedResourceRepository $scrapedResourceRepository,
         private readonly ResourceTypeRepository $resourceTypeRepository,
         private readonly StructureService $structureService,
+        // NotificationService : crée les notifications in-app (ResourceValidated, ResourceMatch)
+        private readonly NotificationService $notificationService,
+        // ResourceAlertRepository : trouve les alertes correspondant à une ressource publiée
+        private readonly ResourceAlertRepository $resourceAlertRepository,
     ) {}
 
     /**
@@ -121,6 +128,50 @@ class AdminController extends AbstractController
 
         $this->em->flush();
 
+        // ── Notification ResourceValidated → auteur de la ressource ──────────
+        //
+        // On notifie le soumetteur (artiste ou structure) que sa ressource a été validée.
+        // getSubmittedBy() retourne toujours un User (non-nullable sur l'entité Resource).
+        $submitter = $resource->getSubmittedBy();
+        $this->notificationService->create(
+            recipient: $submitter,
+            type: NotificationType::ResourceValidated,
+            relatedEntityType: 'resource',
+            relatedEntityId: $resource->getId(),
+            data: [
+                'resourceTitle' => $resource->getTitle(),
+                // On précise le statut pour que le template Twig puisse afficher
+                // "Votre ressource X a été validée" ou "... refusée" selon le cas
+                'status' => 'validée',
+            ],
+        );
+
+        // ── Notifications ResourceMatch → utilisateurs avec alertes correspondantes ──
+        //
+        // Maintenant que la ressource est publiée, on notifie in-app les utilisateurs
+        // dont les préférences d'alertes correspondent à cette ressource.
+        //
+        // Note : ResourceAlertService gère aussi les emails batch (cron quotidien).
+        // Ici on envoie uniquement la notification in-app immédiate.
+        // Les deux canaux (in-app + email) sont complémentaires et indépendants.
+        $matchingAlerts = $this->resourceAlertRepository->findMatchingForResource($resource);
+        foreach ($matchingAlerts as $alert) {
+            // Exclure le soumetteur : il reçoit déjà ResourceValidated ci-dessus.
+            // Lui envoyer aussi ResourceMatch serait redondant et confus.
+            if ($alert->getUser()->getId() === $submitter->getId()) {
+                continue;
+            }
+            $this->notificationService->create(
+                recipient: $alert->getUser(),
+                type: NotificationType::ResourceMatch,
+                relatedEntityType: 'resource',
+                relatedEntityId: $resource->getId(),
+                data: [
+                    'resourceTitle' => $resource->getTitle(),
+                ],
+            );
+        }
+
         $this->addFlash('success', sprintf('La ressource "%s" a été publiée.', $resource->getTitle()));
         return $this->redirectToRoute('app_admin_resources_pending');
     }
@@ -143,6 +194,23 @@ class AdminController extends AbstractController
 
         $resource->setStatus(ResourceStatus::Rejected);
         $this->em->flush();
+
+        // ── Notification ResourceValidated (refus) → auteur de la ressource ──
+        //
+        // Même type de notification que pour la publication, mais avec status = 'refusée'.
+        // L'enum NotificationType::ResourceValidated couvre les deux cas (validation + rejet) :
+        // le champ data['status'] permet au template Twig de distinguer les deux situations.
+        $submitter = $resource->getSubmittedBy();
+        $this->notificationService->create(
+            recipient: $submitter,
+            type: NotificationType::ResourceValidated,
+            relatedEntityType: 'resource',
+            relatedEntityId: $resource->getId(),
+            data: [
+                'resourceTitle' => $resource->getTitle(),
+                'status'        => 'refusée',
+            ],
+        );
 
         $this->addFlash('success', sprintf('La ressource "%s" a été rejetée.', $resource->getTitle()));
         return $this->redirectToRoute('app_admin_resources_pending');

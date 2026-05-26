@@ -93,6 +93,43 @@ class NotificationService
         $this->em->flush();
     }
 
+    /**
+     * Crée et persiste une notification SANS flush immédiat.
+     *
+     * À utiliser dans les boucles de création groupée (ex: NewLive pour N utilisateurs).
+     * Évite N transactions SQL individuelles — l'appelant gère un seul flush() après la boucle.
+     *
+     * Voir create() pour la version avec flush immédiat (notifications unitaires).
+     *
+     * @param array<string, mixed> $data
+     */
+    public function createBatch(
+        User $recipient,
+        NotificationType $type,
+        ?string $relatedEntityType = null,
+        ?int $relatedEntityId = null,
+        array $data = [],
+        ?User $sender = null,
+    ): void {
+        // Règle anti-auto-notification — identique à create()
+        if ($sender !== null && $sender->getId() === $recipient->getId()) {
+            return;
+        }
+
+        $notification = new Notification();
+        $notification->setRecipient($recipient);
+        $notification->setType($type);
+        $notification->setRelatedEntityType($relatedEntityType);
+        $notification->setRelatedEntityId($relatedEntityId);
+
+        if (!empty($data)) {
+            $notification->setData($data);
+        }
+
+        // persist() uniquement — PAS de flush(). L'appelant est responsable du flush groupé.
+        $this->em->persist($notification);
+    }
+
     // ─── Marquage comme lu ────────────────────────────────────────────────────
 
     /**
@@ -139,7 +176,21 @@ class NotificationService
      */
     public function markAllAsRead(User $user): void
     {
-        // L'UPDATE DQL dans le repository est efficace même pour des centaines de notifs
+        // L'UPDATE DQL dans le repository est efficace même pour des centaines de notifs.
+        // Il met à jour isRead et readAt en une seule requête SQL.
         $this->notificationRepository->markAllAsReadForUser($user);
+
+        // ⚠️ Après un UPDATE DQL, le Unit of Work de Doctrine ne sait pas que les entités
+        // Notification ont changé en base. Si des instances de Notification sont déjà chargées
+        // en mémoire (dans l'Identity Map de Doctrine), elles gardent leur ancien état :
+        //   $notification->isRead() → false  (alors que la BDD dit true)
+        //
+        // em->clear(Notification::class) vide le cache de premier niveau pour cette entité.
+        // La prochaine fois qu'on charge une Notification, Doctrine la relit depuis la BDD.
+        //
+        // Note : cela invalide TOUTES les instances Notification du Unit of Work courant.
+        // C'est acceptable ici car markAllAsRead() est appelé en fin de requête
+        // (page /notifications ou action "Tout marquer comme lu").
+        $this->em->clear(Notification::class);
     }
 }

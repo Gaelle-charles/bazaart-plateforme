@@ -27,7 +27,10 @@ enum NotificationType: string
     /** Quelqu'un a répondu à un thread forum dont l'utilisateur est l'auteur */
     case NewReply = 'new_reply';
 
-    /** L'utilisateur a été mentionné (@user) dans un post ou une réponse */
+    /**
+     * L'utilisateur a été mentionné (@user) dans un post ou une réponse.
+     * TODO V2 — la détection de @username n'est pas implémentée en V1.
+     */
     case Mention = 'mention';
 
     /** Un live a été planifié par quelqu'un suivi par l'utilisateur */

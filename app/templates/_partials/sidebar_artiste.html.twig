@@ -162,8 +162,17 @@
     {#
         Notifications.
         ATTENTION : la route réelle est "app_notification_index" (sans "s" final).
+
+        id="notif-link" : requis par le script JS de polling (base_dashboard.html.twig)
+                          pour mettre à jour le badge en temps réel toutes les 60 secondes.
+        data-api        : URL de l'endpoint API qui retourne {"count": N}.
+                          Passée en data-attribute pour que le JS lise une URL dynamique
+                          plutôt qu'une URL codée en dur dans le script.
     #}
+    {% set unreadCount = unread_notifications_count() %}
     <a href="{{ path('app_notification_index') }}"
+       id="notif-link"
+       data-api="{{ path('app_api_notification_unread_count') }}"
        class="sd-link {{ app.request.attributes.get('_route') == 'app_notification_index' ? 'sd-link--active' : '' }}">
         {# Icône cloche #}
         <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -171,6 +180,24 @@
             <path d="M10 18a2 2 0 0 0 4 0"/>
         </svg>
         Notifications
+        {#
+            Badge de compteur des notifications non lues.
+            Deux états :
+              - count > 0 : badge orange visible, affiche le nombre (ou "99+" au-delà)
+              - count = 0 : span masqué (display:none) mais PRÉSENT dans le DOM pour que
+                            le JS de polling puisse le cibler et le mettre à jour sans
+                            avoir à créer l'élément dynamiquement.
+        #}
+        {% if unreadCount > 0 %}
+            <span id="notif-count"
+                  class="sd-badge sd-badge--warn"
+                  aria-label="{{ unreadCount }} notification(s) non lue(s)">
+                {{ unreadCount > 99 ? '99+' : unreadCount }}
+            </span>
+        {% else %}
+            {# Span vide mais présent — le JS polling le réaffichera si de nouvelles notifs arrivent #}
+            <span id="notif-count" style="display: none;" aria-hidden="true"></span>
+        {% endif %}
     </a>
 
     {#

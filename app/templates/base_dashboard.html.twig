@@ -602,4 +602,97 @@
     overlay.addEventListener('click', closeSidebar);
 }());
 </script>
+
+{#
+    Script de polling pour le badge de notifications en temps réel.
+
+    Principe :
+      - À chaque appel (au chargement + toutes les 60 secondes), on interroge l'API
+        "/api/notifications/unread-count" qui retourne {"count": N}.
+      - Si count > 0 → on affiche le badge #notif-count avec le nombre (ou "99+").
+      - Si count = 0 → on masque le badge (display: none).
+      - Si l'API est indisponible (réseau, 401...) → comportement silencieux, on ne plante pas.
+
+    Pourquoi 60 secondes ?
+      → Bon équilibre entre réactivité et nombre de requêtes (1 req/min par utilisateur actif).
+      → En V2, on pourra passer à WebSocket ou Mercure pour du temps réel vrai.
+
+    Prérequis HTML :
+      - Un élément avec id="notif-link" portant l'attribut data-api avec l'URL de l'endpoint.
+      - Un élément avec id="notif-count" (présent même quand masqué, cf. sidebar_artiste.html.twig).
+
+    Note : cette implémentation utilise du JS vanilla (pas de framework) pour rester
+    cohérente avec l'approche minimaliste V1 (Stimulus non encore utilisé ici).
+#}
+<script>
+/* ── Polling badge de notifications ─────────────────────────────────────────
+ * IIFE pour ne pas exposer les variables dans le scope global.
+ */
+(function () {
+    'use strict';
+
+    /* Récupère les éléments du DOM */
+    var link  = document.getElementById('notif-link');
+    var badge = document.getElementById('notif-count');
+
+    /* Si les éléments n'existent pas (page admin, page publique...) → on sort */
+    if (!link || !badge) { return; }
+
+    /* L'URL de l'API est passée via data-api sur le lien "Notifications" du sidebar.
+     * On utilise un data-attribute plutôt qu'une URL en dur pour rester générique
+     * (fonctionne même si le préfixe de route change). */
+    var apiUrl = link.dataset.api;
+
+    /* Sécurité : si data-api est absent, on ne fait rien (évite un fetch('undefined')) */
+    if (!apiUrl) { return; }
+
+    /**
+     * Interroge l'API et met à jour le badge.
+     * Erreurs absorbées silencieusement (réseau, 401, 500...) :
+     * le polling des notifs est non-critique, on ne veut pas planter la page.
+     */
+    function poll() {
+        fetch(apiUrl, {
+            /* credentials: 'same-origin' envoie les cookies de session Symfony
+             * → nécessaire pour que la route /api/notifications/unread-count
+             *   reconnaisse l'utilisateur connecté. */
+            credentials: 'same-origin'
+        })
+        .then(function (response) {
+            /* On n'essaie de parser le JSON que si la réponse est OK (2xx) */
+            return response.ok ? response.json() : null;
+        })
+        .then(function (data) {
+            if (!data) { return; } /* Réponse d'erreur ou parsing raté → on ignore */
+
+            var count = data.count || 0;
+
+            if (count > 0) {
+                /* Affiche le badge avec le nombre de notifications non lues.
+                 * "99+" si plus de 99 pour éviter un badge trop large. */
+                badge.textContent = count > 99 ? '99+' : String(count);
+                badge.style.display = ''; /* annule le display:none */
+                badge.setAttribute('aria-label', count + ' notification(s) non lue(s)');
+                badge.removeAttribute('aria-hidden');
+            } else {
+                /* Masque le badge si plus aucune notification non lue */
+                badge.style.display = 'none';
+                badge.textContent   = '';
+                badge.setAttribute('aria-hidden', 'true');
+                badge.removeAttribute('aria-label');
+            }
+        })
+        .catch(function () {
+            /* Échec réseau ou autre erreur → comportement silencieux.
+             * Le polling reprendra automatiquement à la prochaine itération. */
+        });
+    }
+
+    /* Premier appel immédiat au chargement de la page (sans attendre 60s) */
+    poll();
+
+    /* Puis interrogation périodique toutes les 60 secondes */
+    setInterval(poll, 60000);
+}());
+</script>
 {% endblock %}

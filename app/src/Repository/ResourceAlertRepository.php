@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Entity\Resource;
 use App\Entity\ResourceAlert;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -38,6 +39,71 @@ class ResourceAlertRepository extends ServiceEntityRepository
             ->setParameter('user', $user)
             ->getQuery()
             ->getOneOrNullResult();
+    }
+
+    /**
+     * Trouve les alertes actives dont les préférences correspondent à une ressource.
+     *
+     * Logique de matching V1 :
+     *   - L'alerte doit être active (notifyOnNewResource = true)
+     *   - Si l'alerte a des filtres de disciplines → au moins une doit matcher la ressource
+     *   - Si l'alerte a des filtres de types       → le type de la ressource doit être inclus
+     *   - Si l'alerte n'a pas de filtre            → elle matche toujours (filtre vide = "tout")
+     *
+     * Pourquoi cette approche en deux étapes (findAllActive + filtre PHP) plutôt qu'un DQL complexe ?
+     *   → En V1, le nombre d'alertes actives est faible (< 100 utilisateurs).
+     *   → Un filtre DQL avec deux LEFT JOIN + OR EMPTY_COLLECTION serait moins lisible.
+     *   → Si la volumétrie augmente en V2, on pourra écrire un DQL optimisé avec EXISTS.
+     *
+     * @return ResourceAlert[]
+     */
+    public function findMatchingForResource(Resource $resource): array
+    {
+        // On charge toutes les alertes actives avec leurs filtres (disciplines + types)
+        // en une seule requête grâce aux LEFT JOIN → pas de N+1
+        $activeAlerts = $this->findAllActive();
+
+        // On récupère les IDs des disciplines et du type de la ressource pour la comparaison
+        $resourceDisciplineIds = $resource->getDisciplines()
+            ->map(fn ($d) => $d->getId())
+            ->toArray();
+
+        $resourceTypeId = $resource->getResourceType()->getId();
+
+        // Filtre côté PHP : on ne garde que les alertes qui matchent la ressource
+        return array_values(array_filter($activeAlerts, function (ResourceAlert $alert) use ($resourceDisciplineIds, $resourceTypeId): bool {
+
+            // ── Filtre par type de ressource ─────────────────────────────────
+            // Si l'alerte a des filtres de types ET que le type de la ressource n'en fait pas partie
+            // → l'alerte ne matche pas
+            $filterTypeIds = $alert->getFilterResourceTypes()
+                ->map(fn ($t) => $t->getId())
+                ->toArray();
+
+            if (!empty($filterTypeIds) && !in_array($resourceTypeId, $filterTypeIds, true)) {
+                // Le type de la ressource n'est pas dans les préférences de l'alerte → pas de match
+                return false;
+            }
+
+            // ── Filtre par disciplines ────────────────────────────────────────
+            // Si l'alerte a des filtres de disciplines ET qu'aucune ne correspond
+            // à celles de la ressource → l'alerte ne matche pas
+            $filterDisciplineIds = $alert->getFilterDisciplines()
+                ->map(fn ($d) => $d->getId())
+                ->toArray();
+
+            if (!empty($filterDisciplineIds)) {
+                // On cherche au moins une discipline commune entre l'alerte et la ressource
+                $intersection = array_intersect($filterDisciplineIds, $resourceDisciplineIds);
+                if (empty($intersection)) {
+                    // Aucune discipline commune → pas de match
+                    return false;
+                }
+            }
+
+            // Tous les filtres sont satisfaits → cette alerte matche la ressource
+            return true;
+        }));
     }
 
     /**

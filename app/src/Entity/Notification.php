@@ -117,7 +117,7 @@ class Notification
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $data = null;
 
-    // ─── Timestamp ────────────────────────────────────────────────────────────
+    // ─── Timestamps ───────────────────────────────────────────────────────────
 
     /**
      * Date de création de la notification.
@@ -125,6 +125,23 @@ class Notification
      */
     #[ORM\Column(type: 'datetime', nullable: false)]
     private ?\DateTimeInterface $createdAt = null;
+
+    /**
+     * Date à laquelle la notification a été lue.
+     *
+     * Null si la notification n'a pas encore été lue.
+     * Rempli par markAsRead() au moment où l'utilisateur lit la notification.
+     *
+     * Utile pour :
+     *   - Les statistiques admin (ex: temps moyen avant lecture)
+     *   - Les purges automatiques (ex: supprimer les notifs lues vieilles de 3 mois)
+     *   - L'audit (savoir quand exactement l'utilisateur a lu telle notification)
+     *
+     * Note : on n'écrase jamais readAt si elle est déjà renseignée.
+     * La première lecture est la référence.
+     */
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $readAt = null;
 
     // ─── Lifecycle callbacks ──────────────────────────────────────────────────
 
@@ -183,6 +200,11 @@ class Notification
         return $this->createdAt;
     }
 
+    public function getReadAt(): ?\DateTimeInterface
+    {
+        return $this->readAt;
+    }
+
     // ─── Setters ──────────────────────────────────────────────────────────────
 
     public function setRecipient(User $recipient): static
@@ -223,6 +245,10 @@ class Notification
     /**
      * Marque cette notification comme lue.
      *
+     * Enregistre également la date de première lecture dans $readAt.
+     * On ne l'écrase pas si elle est déjà renseignée : la première lecture est
+     * la référence, les lectures suivantes n'ont pas d'intérêt métier.
+     *
      * Retourne $this (fluent interface) pour pouvoir chaîner si besoin :
      *   $notification->markAsRead();
      *   $em->flush();
@@ -230,6 +256,15 @@ class Notification
     public function markAsRead(): static
     {
         $this->isRead = true;
+
+        // On enregistre la date de lecture uniquement si c'est la première fois.
+        // Condition : readAt === null → c'est la première lecture.
+        // Si readAt est déjà renseignée, la notification avait déjà été lue : on conserve
+        // la date originale (la première lecture est celle qui compte).
+        if ($this->readAt === null) {
+            $this->readAt = new \DateTime();
+        }
+
         return $this;
     }
 
@@ -246,6 +281,10 @@ class Notification
      *   'forum_thread'  → '/forum' (pas de slug disponible ici en V1)
      *   'resource'      → '/resources/{id}'
      *   autre / null    → null
+     *
+     * @deprecated Utiliser path() dans Twig avec relatedEntityType + relatedEntityId.
+     *             Suppression prévue V2. Cette méthode construit des URLs en dur sans passer
+     *             par le Router Symfony.
      */
     public function getLink(): ?string
     {
