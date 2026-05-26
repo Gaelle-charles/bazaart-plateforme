@@ -91,6 +91,11 @@
     line-height: 1.5;
     /* Surcharge du body déclaré dans base.html.twig (font-size: 14px)
        pour cette page spécifique, sans toucher au body global. */
+
+    /* Correction responsive : empêche tout scroll horizontal sur mobile.
+       Sans cette règle, des enfants légèrement plus larges que le viewport
+       (textes clampés, grilles) peuvent créer un scrollbar horizontal. */
+    overflow-x:  hidden;
 }
 
 /* Conteneur centré — max 1440px, padding horizontal 32px (tokens Street) */
@@ -1220,24 +1225,68 @@
     }
 }
 
-@media (max-width: 480px) {
-    /* Réduction du padding horizontal sur très petit écran */
-    .lp-container {
-        padding-inline: 20px;
+/* ──────────────────────────────────────────────────────────────────────
+   RESPONSIVE 640px — Section headers avec bouton "Tout voir"
+   Entre 481px et 640px, le titre et le bouton risquent de se chevaucher
+   car .lp-section-header est en flex-direction:row (justify-content:space-between).
+   On bascule en colonne dès 640px pour éviter cet écrasement.
+────────────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+    /* Empile le titre et l'action (bouton "Tout voir" / "Aller au forum") */
+    .lp-section-header {
+        flex-direction: column;
+        align-items:    flex-start;
+        gap:            16px;
     }
 
-    /* Section header : empile gauche/droite */
+    /* Le bouton s'aligne à gauche, sous le titre */
+    .lp-section-header__action {
+        align-self: flex-start;
+    }
+
+    /* Titre de section : réduit le clamp pour 640px et moins.
+       La valeur haute passe de 56px à 36px — évite le débordement
+       sur les titres longs comme "La communauté en direct". */
+    .lp-section-header__title {
+        font-size: clamp(24px, 7vw, 36px);
+    }
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   RESPONSIVE 480px — Très petit mobile (iPhone SE : 375px)
+────────────────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+    /* Réduction du padding horizontal : 32px → 16px.
+       Sur 375px de viewport, 32px de padding de chaque côté ne laisserait
+       que 311px utiles — 16px donne 343px, nettement plus confortable. */
+    .lp-container {
+        padding-inline: 16px;
+    }
+
+    /* Section header : déjà en colonne à 640px, on garde la cohérence */
     .lp-section-header {
         flex-direction: column;
         align-items:    flex-start;
         gap:            12px;
     }
 
-    /* Hero méta : empile sur mobile étroit */
+    /* Hero méta : empile eyebrow + coordonnées en colonne sur mobile étroit.
+       Sans ça, les deux textes sur la même ligne se chevauchent. */
     .lp-hero__meta {
         flex-direction: column;
         align-items:    flex-start;
         gap:            8px;
+    }
+
+    /* H1 hero : réduit le minimum du clamp sur petit écran.
+       clamp(64px, 12vw, 180px) impose 64px minimum, soit 64px sur 375px.
+       Avec 16px de padding × 2 = 32px consommés → 343px utiles.
+       "LE BAZAR" en Archivo Black uppercase à 64px tient, mais "LES INTERMÉDIAIRES."
+       est plus long — on réduit le plancher à 44px pour plus de marge.
+       11vw sur 375px = ~41px, le clamp s'active donc à partir de ~400px. */
+    .lp-hero__h1 {
+        font-size:      clamp(44px, 11vw, 64px);
+        letter-spacing: -.02em; /* Légèrement réduit pour gagner quelques pixels */
     }
 }
 </style>
