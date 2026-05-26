@@ -1166,15 +1166,26 @@
     /* Grille hero : 1 colonne */
     .lp-hero__grid {
         grid-template-columns: 1fr;
+        margin-top: 32px;
     }
     /* Le texte description reprend 1 colonne entière */
     .lp-hero__desc {
         grid-column: 1;
+        font-size: clamp(16px, 4vw, 20px);
     }
     /* CTAs en ligne sur mobile */
     .lp-hero__ctas {
         flex-direction: row;
         flex-wrap:      wrap;
+    }
+    /* H1 hero : clamp(64px, 12vw, 180px) → minimum ramené à 32px.
+       "LES INTERMÉDIAIRES." en Archivo Black à 44px = ~490px pour ~710px disponibles
+       à 768px. À 375px avec 16px padding = 343px utiles : 9vw = 34px
+       → 18 chars × 34px × 0.42 = 257px → ça passe largement.
+       overflow-wrap en fallback si un mot dépasse malgré tout. */
+    .lp-hero__h1 {
+        font-size:     clamp(32px, 9vw, 64px);
+        overflow-wrap: break-word;
     }
 
     /* ─ Hubs ─ */
@@ -1187,10 +1198,35 @@
         border-right:  none;
         border-bottom: 1px solid var(--ink);
     }
+    /* Hub card : retire la hauteur minimale fixe (520px = taille desktop).
+       Sur mobile 1 colonne le contenu dicte la hauteur. Padding réduit. */
+    .lp-hub {
+        min-height: auto;
+        padding:    24px 20px;
+    }
+    /* Nom du hub : clamp(40px, 6vw, 64px) → minimum 40px trop large sur mobile.
+       "INGÉNIERIE" à 40px = 248px → OK sur 343px, mais on réduit pour plus d'air. */
+    .lp-hub__name {
+        font-size: clamp(28px, 7vw, 40px);
+    }
 
     /* ─ SaaS ─ */
+    /* 1 colonne, padding réduit, gap réduit */
     .lp-saas__grid {
         grid-template-columns: 1fr;
+        padding-block: 40px;
+        gap:           32px;
+    }
+    /* H2 SaaS : clamp(56px, 8vw, 108px) → minimum 56px conservé même sur mobile.
+       Sur 375px avec 16px padding = 343px utiles, 56px est trop grand.
+       On ramène à clamp(32px, 7vw, 56px). */
+    .lp-saas__h2 {
+        font-size: clamp(32px, 7vw, 56px);
+    }
+    /* Feature icon : 48px fixe avec flex-shrink:0, OK sur 1 colonne */
+    .lp-saas__feature {
+        padding: 16px 18px;
+        gap:     14px;
     }
 
     /* ─ Opportunités ─ */
@@ -1278,15 +1314,13 @@
         gap:            8px;
     }
 
-    /* H1 hero : réduit le minimum du clamp sur petit écran.
-       clamp(64px, 12vw, 180px) impose 64px minimum, soit 64px sur 375px.
-       Avec 16px de padding × 2 = 32px consommés → 343px utiles.
-       "LE BAZAR" en Archivo Black uppercase à 64px tient, mais "LES INTERMÉDIAIRES."
-       est plus long — on réduit le plancher à 44px pour plus de marge.
-       11vw sur 375px = ~41px, le clamp s'active donc à partir de ~400px. */
+    /* H1 hero : à 375px, 9vw = 33.75px — bien en dessous des 32px minimum.
+       Le clamp prend donc sa valeur plancher : 32px.
+       "LES INTERMÉDIAIRES." en Archivo Black à 32px ≈ 242px → tient dans 343px. */
     .lp-hero__h1 {
-        font-size:      clamp(44px, 11vw, 64px);
-        letter-spacing: -.02em; /* Légèrement réduit pour gagner quelques pixels */
+        font-size:      clamp(28px, 8vw, 36px);
+        letter-spacing: -.01em;
+        line-height:    .92; /* légèrement aéré pour la lisibilité à petite taille */
     }
 }
 </style>
