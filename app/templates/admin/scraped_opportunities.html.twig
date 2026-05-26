@@ -252,6 +252,83 @@
         text-transform: uppercase;
     }
 
+    /* ── Bandeau de contrôle du scraping (bouton Lancer + date dernier run) ─── */
+    /*
+      Flex horizontal : info à gauche, bouton à droite.
+      Séparé du reste par un trait sous le bandeau.
+    */
+    .adm-scraping-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--ink);
+        padding-bottom: 16px;
+        margin-bottom: 20px;
+    }
+    .adm-scraping-info {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+
+    /* Bouton "Lancer le scraping" — fond encre (inverse du thème sable) */
+    .adm-btn-run {
+        background: var(--ink);
+        color: var(--accent);     /* vert acide sur fond noir — contraste maximal */
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 0;         /* design Street : bords francs */
+        cursor: pointer;
+        transition: opacity var(--transition-fast);
+    }
+    .adm-btn-run:hover { opacity: .85; }
+
+    /* Bouton "Rejeter" — identique à adm-btn-verify mais fond pâle + texte encre */
+    .adm-btn-reject {
+        height: 30px;
+        padding: 0 14px;
+        background: var(--bg-alt);
+        color: var(--ink);
+        border: 1px solid var(--ink);
+        border-radius: 0; /* design Street : bords francs obligatoires */
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: box-shadow var(--transition-fast);
+    }
+    .adm-btn-reject:hover { box-shadow: var(--shadow-offset-sm); }
+
+    /* Groupe d'actions — place les boutons côte à côte avec un petit espace */
+    .adm-action-group {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+
+    /* Badge "Rejeté" — fond muted (gris encre atténué), texte clair */
+    .adm-badge-rejected {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 9px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        background: var(--ink-mute);
+        color: var(--bg);
+    }
+
 </style>
 {% endblock %}
 
@@ -260,13 +337,38 @@
 {# ── Retour dashboard ─────────────────────────────────────────────────────── #}
 <a href="{{ path('app_admin_dashboard') }}" class="adm-back">← Tableau de bord</a>
 
-{# Rappel de la commande pour lancer le scraping manuellement #}
-<p class="adm-hint">
-    Lancer le scraping :
-    <code>docker compose exec app php bin/console app:scrape-opportunities</code>
-</p>
+{#
+  ── Contrôles du scraping ──────────────────────────────────────────────────
+  Affiche la date du dernier scraping et un bouton pour en lancer un nouveau.
+  Le bouton déclenche une commande Symfony en arrière-plan (non-bloquant).
+#}
+<div class="adm-scraping-controls">
+    <div class="adm-scraping-info">
+        {# Dernier scraping : date formatée ou "jamais lancé" si table vide #}
+        Dernier scraping :
+        <strong>{{ latestScrapedAt ? latestScrapedAt|date('d/m/Y à H:i') : 'jamais lancé' }}</strong>
+        <br>
+        {# Rappel de la commande shell pour lancement manuel (hors interface) #}
+        Ou via terminal :
+        <code style="background:var(--ink);color:var(--accent);padding:2px 8px;font-size:11px;font-family:var(--mono);display:inline-block;margin-left:4px;">
+            docker compose exec app php bin/console app:scrape-opportunities
+        </code>
+    </div>
 
-{# ── Onglets À vérifier / Vérifié ─────────────────────────────────────────── #}
+    {#
+      Formulaire POST → runScraping() dans AdminController.
+      onsubmit : confirmation modale avant envoi (évite les lancements accidentels).
+      Token CSRF 'run_scraping' vérifié côté PHP.
+    #}
+    <form method="post"
+          action="{{ path('app_admin_scraping_run') }}"
+          onsubmit="return confirm('Lancer le scraping maintenant ? Cela peut prendre 1-2 minutes.')">
+        <input type="hidden" name="_token" value="{{ csrf_token('run_scraping') }}">
+        <button type="submit" class="adm-btn-run">▶ Lancer le scraping</button>
+    </form>
+</div>
+
+{# ── Onglets À vérifier / Vérifié / Rejeté ───────────────────────────────── #}
 {# role="tablist" + aria-selected pour l'accessibilité clavier #}
 <div class="adm-tabs" role="tablist">
     <button class="adm-tab-btn active"
@@ -284,6 +386,17 @@
             onclick="showTab('verified', this)">
         Vérifié
         <span class="adm-tab-count adm-tab-count--verified">{{ verified|length }}</span>
+    </button>
+    {# 3ème onglet : opportunités rejetées par l'admin — fond muted (gris atténué) #}
+    <button class="adm-tab-btn"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-rejected"
+            onclick="showTab('rejected', this)">
+        Rejeté
+        <span class="adm-tab-count" style="background:var(--ink-mute);color:var(--bg);">
+            {{ rejected|length }}
+        </span>
     </button>
 </div>
 
@@ -359,19 +472,32 @@
                             <td class="adm-date">{{ opp.scrapedAt|date('d/m/Y') }}</td>
 
                             {#
-                              Bouton Vérifier → appelle verifyScrapedOpportunity() dans AdminController :
-                                1. Passe ScrapedResource.status à "verified"
-                                2. Crée une Resource publiée dans la table Opportunités
-                              Token CSRF : 'verify_scraped_{id}' (vérifié côté PHP)
+                              Colonne Action : deux boutons côte à côte.
+                              - Vérifier → verifyScrapedOpportunity() : passe à "verified" + crée une Resource publiée
+                              - Rejeter  → rejectScrapedOpportunity()  : passe à "rejected" (hors sujet / doublon)
+                              Les deux utilisent un token CSRF distinct pour chaque action et chaque ID.
                             #}
                             <td>
-                                <form method="post"
-                                      action="{{ path('app_admin_scraped_opportunity_verify', {id: opp.id}) }}"
-                                      onsubmit="return confirm('Vérifier et ajouter « {{ opp.title|e('js') }} » aux Opportunités ?')">
-                                    <input type="hidden" name="_token"
-                                           value="{{ csrf_token('verify_scraped_' ~ opp.id) }}">
-                                    <button type="submit" class="adm-btn-verify">✓ Vérifier</button>
-                                </form>
+                                <div class="adm-action-group">
+                                    {# Bouton principal : valider et publier l'opportunité #}
+                                    <form method="post"
+                                          action="{{ path('app_admin_scraped_opportunity_verify', {id: opp.id}) }}"
+                                          onsubmit="return confirm('Vérifier et ajouter « {{ opp.title|e('js') }} » aux Opportunités ?')">
+                                        <input type="hidden" name="_token"
+                                               value="{{ csrf_token('verify_scraped_' ~ opp.id) }}">
+                                        <button type="submit" class="adm-btn-verify">✓ Vérifier</button>
+                                    </form>
+
+                                    {# Bouton secondaire : rejeter (hors sujet, doublon, non pertinent) #}
+                                    <form method="post"
+                                          action="{{ path('app_admin_scraped_opportunity_reject', {id: opp.id}) }}"
+                                          onsubmit="return confirm('Rejeter « {{ opp.title|e('js') }} » ?')"
+                                          style="display:inline;">
+                                        <input type="hidden" name="_token"
+                                               value="{{ csrf_token('reject_scraped_' ~ opp.id) }}">
+                                        <button type="submit" class="adm-btn-reject">✗ Rejeter</button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     {% endfor %}
@@ -430,6 +556,69 @@
                             <td class="adm-date">{{ opp.scrapedAt|date('d/m/Y') }}</td>
                             {# Badge "Vérifié" — fond vert acide : action accomplie #}
                             <td><span class="adm-badge-verified">✓ Vérifié</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+</div>
+
+{# ── Panneau : REJETÉ ─────────────────────────────────────────────────────── #}
+{#
+  Ce panneau liste les opportunités rejetées par un admin.
+  Pas d'action disponible ici : le rejet est définitif dans l'interface (l'URL restera
+  en BDD pour éviter de la rescaper, mais l'admin peut techniquement modifier le statut
+  via Doctrine si besoin de corriger une erreur).
+#}
+<div id="tab-rejected" class="adm-tab-panel" role="tabpanel">
+
+    {% if rejected is empty %}
+        <div class="adm-empty-state">Aucune opportunité rejetée.</div>
+    {% else %}
+        <div class="adm-table-wrap">
+            <table class="adm-table">
+                <thead>
+                    <tr>
+                        <th>Titre</th>
+                        <th>Type</th>
+                        <th>Source</th>
+                        <th>Deadline</th>
+                        <th>Score Afro</th>
+                        <th>Scrapé le</th>
+                        <th>Statut</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for opp in rejected %}
+                        <tr>
+                            <td style="max-width:320px;">
+                                <div class="adm-opp-title">
+                                    {% if opp.url %}
+                                        <a href="{{ opp.url }}" target="_blank" rel="noopener noreferrer">{{ opp.title }}</a>
+                                    {% else %}
+                                        {{ opp.title }}
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if opp.type %}
+                                    <span class="adm-chip">{{ opp.type }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="adm-date">{{ opp.sourceSite ?: '—' }}</td>
+                            <td class="adm-date">{{ opp.deadline ?: '—' }}</td>
+                            <td>
+                                <span class="adm-stars">
+                                    {% for i in 1..5 %}
+                                        {% if i <= opp.relevanceScore %}★{% else %}<span class="star-empty">☆</span>{% endif %}
+                                    {% endfor %}
+                                </span>
+                            </td>
+                            <td class="adm-date">{{ opp.scrapedAt|date('d/m/Y') }}</td>
+                            {# Badge "Rejeté" — fond ink-mute (gris), texte bg (clair) #}
+                            <td><span class="adm-badge-rejected">✗ Rejeté</span></td>
                         </tr>
                     {% endfor %}
                 </tbody>

@@ -566,7 +566,7 @@
                 </div>
             </a>
 
-            {# Opportunités scrapées #}
+            {# Opportunités scrapées — widget enrichi avec compteur en attente + date #}
             <a href="{{ path('app_admin_scraped_opportunities') }}" class="adm-shortcut">
                 {#
                    SVG loupe — remplace l'emoji 🔍
@@ -581,8 +581,36 @@
                     </svg>
                 </div>
                 <div>
-                    <div class="adm-shortcut__label">Scraping Sheets</div>
-                    <div class="adm-shortcut__desc">Vérifier · Publier</div>
+                    <div class="adm-shortcut__label">
+                        Scraping Sheets
+                        {# Badge orange si des opportunités sont en attente de vérification #}
+                        {% if scrapingPendingCount > 0 %}
+                            <span style="
+                                display:inline-flex;
+                                align-items:center;
+                                justify-content:center;
+                                min-width:18px;
+                                height:18px;
+                                padding:0 5px;
+                                margin-left:6px;
+                                background:var(--accent-2);
+                                color:var(--ink);
+                                font-family:var(--mono);
+                                font-size:10px;
+                                font-weight:700;
+                                vertical-align:middle;
+                            ">{{ scrapingPendingCount }}</span>
+                        {% endif %}
+                    </div>
+                    {# Ligne de description : nb en attente + date du dernier scraping #}
+                    <div class="adm-shortcut__desc">
+                        {% if scrapingPendingCount > 0 %}
+                            {{ scrapingPendingCount }} à vérifier
+                        {% else %}
+                            Aucune en attente
+                        {% endif %}
+                        · {{ latestScrapedAt ? latestScrapedAt|date('d/m') : 'jamais' }}
+                    </div>
                 </div>
             </a>
 

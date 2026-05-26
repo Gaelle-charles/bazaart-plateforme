@@ -113,8 +113,10 @@ class ScrapedResource
     public function getStatus(): ScrapedResourceStatus { return $this->status; }
     public function setStatus(ScrapedResourceStatus $status): static { $this->status = $status; return $this; }
 
-    public function isPending(): bool { return $this->status === ScrapedResourceStatus::Pending; }
+    public function isPending(): bool  { return $this->status === ScrapedResourceStatus::Pending; }
     public function isVerified(): bool { return $this->status === ScrapedResourceStatus::Verified; }
+    /** Vrai si l'opportunité a été rejetée par un admin (hors sujet ou doublon). */
+    public function isRejected(): bool { return $this->status === ScrapedResourceStatus::Rejected; }
 
     public function getScrapedAt(): \DateTimeInterface { return $this->scrapedAt; }
 }

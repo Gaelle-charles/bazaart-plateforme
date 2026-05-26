@@ -5,8 +5,10 @@ namespace App\Command;
 use App\Entity\ScrapedResource;
 use App\Repository\ScrapedResourceRepository;
 use App\Service\AfrodiasporaRelevanceScorer;
+use App\Service\Scraper\AdagpScraper;
 use App\Service\Scraper\CnapScraper;
 use App\Service\Scraper\CnmScraper;
+use App\Service\Scraper\CultureGouvScraper;
 use App\Service\Scraper\MusiquesActuellesScraper;
 use App\Service\Scraper\ProHelvetiaScraper;
 use App\Service\Scraper\SaifScraper;
@@ -48,6 +50,10 @@ class ScrapeOpportunitiesCommand extends Command
         private readonly ProHelvetiaScraper $proHelvetiaScraper,
         private readonly SaifScraper $saifScraper,
         private readonly MusiquesActuellesScraper $musiquesActuellesScraper,
+        // AdagpScraper et CultureGouvScraper existaient déjà dans src/Service/Scraper/
+        // mais n'étaient pas branchés dans cette commande. On les active ici.
+        private readonly AdagpScraper $adagpScraper,
+        private readonly CultureGouvScraper $cultureGouvScraper,
         private readonly AfrodiasporaRelevanceScorer $relevanceScorer,
         // EntityManager pour sauvegarder en BDD
         private readonly EntityManagerInterface $em,
@@ -88,11 +94,14 @@ class ScrapeOpportunitiesCommand extends Command
         // ── Liste des scrapers actifs ────────────────────────────────────────
         // Pour ajouter un site : créer son scraper et l'ajouter ici
         $scrapers = [
-            $this->cnapScraper,                // cnap.fr        — HTML (arts plastiques)
-            $this->cnmScraper,                 // cnm.fr         — RSS  (musique)
-            $this->proHelvetiaScraper,         // prohelvetia.ch — RSS  (multidiscipline)
-            $this->saifScraper,                // saif.fr        — HTML (image fixe)
-            $this->musiquesActuellesScraper,   // musiquesactuelles.fr — RSS (musique FR)
+            $this->cnapScraper,                // cnap.fr             — HTML (arts plastiques)
+            $this->cnmScraper,                 // cnm.fr              — RSS  (musique)
+            $this->proHelvetiaScraper,         // prohelvetia.ch      — RSS  (multidiscipline)
+            $this->saifScraper,                // saif.fr             — HTML (image fixe)
+            $this->musiquesActuellesScraper,   // musiquesactuelles.fr — RSS  (musique FR)
+            // Scrapers nouvellement activés (étaient dans Service/Scraper/ mais non branchés)
+            $this->adagpScraper,               // adagp.fr            — droits arts visuels
+            $this->cultureGouvScraper,         // culture.gouv.fr     — ministère de la Culture
         ];
 
         /** @var \App\DTO\ScrapedOpportunity[] $allOpportunities */

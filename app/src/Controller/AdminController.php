@@ -22,8 +22,10 @@ use App\Service\NotificationService;
 use App\Service\StructureService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Process\Process;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -50,6 +52,10 @@ class AdminController extends AbstractController
         private readonly NotificationService $notificationService,
         // ResourceAlertRepository : trouve les alertes correspondant à une ressource publiée
         private readonly ResourceAlertRepository $resourceAlertRepository,
+        // Chemin racine du projet Symfony, injecté via le paramètre kernel.project_dir.
+        // Nécessaire pour construire la commande bin/console dans runScraping().
+        #[Autowire('%kernel.project_dir%')]
+        private readonly string $projectDir,
     ) {}
 
     /**
@@ -74,6 +80,10 @@ class AdminController extends AbstractController
             'verifiedOrgs'   => $verifiedOrgs,
             // On affiche les 5 premières ressources en attente directement sur le dashboard
             'pendingResources' => array_slice($pendingResources, 0, 5),
+            // Widget scraping : nombre d'opportunités en attente + date du dernier scraping
+            // Utilisés dans le shortcut "Scraping Sheets" du dashboard pour enrichir l'affichage
+            'scrapingPendingCount' => $this->scrapedResourceRepository->countPending(),
+            'latestScrapedAt'      => $this->scrapedResourceRepository->findLatestScrapedAt(),
         ]);
     }
 
@@ -421,13 +431,18 @@ class AdminController extends AbstractController
     #[Route('/scraped-opportunities', name: 'scraped_opportunities')]
     public function scrapedOpportunities(): Response
     {
-        // Récupère d'abord les "pending" (À vérifier) triés par score, puis les "verified"
+        // Récupère les opportunités par statut pour alimenter les 3 onglets
         $pending  = $this->scrapedResourceRepository->findPending();
         $verified = $this->scrapedResourceRepository->findVerified();
+        // Nouveau : opportunités rejetées (onglet "Rejeté") + date du dernier scraping
+        $rejected       = $this->scrapedResourceRepository->findRejected();
+        $latestScrapedAt = $this->scrapedResourceRepository->findLatestScrapedAt();
 
         return $this->render('admin/scraped_opportunities.html.twig', [
-            'pending'  => $pending,
-            'verified' => $verified,
+            'pending'         => $pending,
+            'verified'        => $verified,
+            'rejected'        => $rejected,
+            'latestScrapedAt' => $latestScrapedAt,
         ]);
     }
 
@@ -637,5 +652,98 @@ class AdminController extends AbstractController
         );
 
         return $this->redirectToRoute('app_admin_structures_pending');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // MODÉRATION DES OPPORTUNITÉS SCRAPÉES — Rejet + Scraping à la demande
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Rejette une opportunité scrapée — la marque comme "rejected".
+     *
+     * Pourquoi un statut dédié plutôt qu'une suppression ?
+     *   - On garde une trace des URL rejetées pour éviter de les rescaper.
+     *   - L'admin peut consulter l'historique des rejets dans l'onglet "Rejeté".
+     *
+     * Contrainte : une opportunité déjà vérifiée (promue en Resource) ne peut pas
+     * être rejetée — elle a déjà produit une Resource publiée.
+     */
+    #[Route('/scraped-opportunities/{id}/reject', name: 'scraped_opportunity_reject', methods: ['POST'])]
+    public function rejectScrapedOpportunity(int $id, Request $request): Response
+    {
+        // Vérification CSRF — token spécifique à l'opportunité et à l'action reject
+        if (!$this->isCsrfTokenValid('reject_scraped_' . $id, $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+            return $this->redirectToRoute('app_admin_scraped_opportunities');
+        }
+
+        // Récupère l'opportunité scrapée (404 si inexistante)
+        $scraped = $this->scrapedResourceRepository->find($id);
+        if ($scraped === null) {
+            throw $this->createNotFoundException('Opportunité scrapée introuvable.');
+        }
+
+        // Garde-fou : une opportunité déjà vérifiée a déjà généré une Resource publiée.
+        // La rejeter à ce stade serait incohérent avec la Resource existante.
+        if ($scraped->isVerified()) {
+            $this->addFlash('error', 'Impossible de rejeter une opportunité déjà validée.');
+            return $this->redirectToRoute('app_admin_scraped_opportunities');
+        }
+
+        // Change le statut vers "rejected" et persiste en base
+        $scraped->setStatus(ScrapedResourceStatus::Rejected);
+        $this->em->flush();
+
+        $this->addFlash('success', sprintf('"%s" a été rejetée.', $scraped->getTitle()));
+        return $this->redirectToRoute('app_admin_scraped_opportunities');
+    }
+
+    /**
+     * Lance le scraping des opportunités en arrière-plan via symfony/process.
+     *
+     * Pourquoi en arrière-plan (Process::start()) ?
+     *   - Le scraping dure 1 à 2 minutes (5 à 7 sites, requêtes HTTP externes).
+     *   - Laisser le navigateur attendre entraînerait un timeout HTTP 504.
+     *   - start() retourne immédiatement ; la commande tourne en fond de tâche OS.
+     *
+     * Limite connue : si le container Docker est relancé pendant l'exécution,
+     * le processus de fond est tué. Acceptable pour un usage admin ponctuel.
+     * Pour une vraie planification, utiliser un cron (cf. ScrapeOpportunitiesCommand).
+     */
+    #[Route('/scraping/run', name: 'scraping_run', methods: ['POST'])]
+    public function runScraping(Request $request): Response
+    {
+        // Vérification CSRF — protège contre les requêtes cross-site
+        if (!$this->isCsrfTokenValid('run_scraping', $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+            return $this->redirectToRoute('app_admin_scraped_opportunities');
+        }
+
+        // Construction de la commande Symfony à exécuter dans le sous-processus.
+        // PHP_BINARY pointe vers l'interpréteur PHP en cours d'utilisation (fiable dans Docker).
+        // --env= transmet l'environnement courant (dev/prod) au processus enfant.
+        $process = new Process([
+            PHP_BINARY,
+            $this->projectDir . '/bin/console',
+            'app:scrape-opportunities',
+            '--env=' . $this->getParameter('kernel.environment'),
+        ]);
+
+        // Dossier de travail du processus : la racine du projet Symfony
+        $process->setWorkingDirectory($this->projectDir);
+
+        // Pas de timeout : le scraping peut durer plusieurs minutes
+        $process->setTimeout(null);
+
+        // start() lance le processus en arrière-plan et retourne immédiatement.
+        // Contrairement à run(), on n'attend PAS la fin de l'exécution.
+        $process->start();
+
+        $this->addFlash(
+            'success',
+            'Scraping lancé en arrière-plan. Les résultats apparaîtront dans quelques minutes.'
+        );
+
+        return $this->redirectToRoute('app_admin_scraped_opportunities');
     }
 }
