@@ -294,26 +294,12 @@
 ────────────────────────────────────────────────────────────────────── */
 
 .lp-hero {
-    border-bottom:  1px solid var(--ink);
-    position:       relative;
-    overflow:       hidden;
-    /* min-height: 100dvh = le hero occupe au moins tout le viewport.
-       dvh (dynamic viewport height) est la valeur correcte sur mobile :
-       elle exclut les barres d'UI du navigateur qui apparaissent/disparaissent,
-       contrairement à 100vh qui peut causer un décalage sur iOS Safari.
-       display:flex + flex-direction:column permettent au container intérieur
-       de s'étendre et à la marquee de coller en bas de section. */
-    min-height:     100dvh;
-    display:        flex;
-    flex-direction: column;
-}
-
-/* Le container intérieur du hero prend tout l'espace disponible
-   entre le bord haut et la marquee bande défilante (flex child 2).
-   Cela permet au contenu (meta + H1 + grid) d'être ancré en haut
-   tout en laissant l'espace grandir si le viewport est grand. */
-.lp-hero > .lp-container {
-    flex: 1;
+    border-bottom: 1px solid var(--ink);
+    position:      relative;
+    overflow:      hidden;
+    /* Pas de min-height forcé : le hero se dimensionne à son contenu.
+       Le contenu (meta + H1 + grille desc/CTAs + marquee) suffit à
+       remplir visuellement la page sans laisser de vide. */
 }
 
 /* Bandeau métadonnées (eyebrow + coordonnées) */
@@ -336,25 +322,32 @@
 /*
    H1 géant — le cœur du design Street.
    clamp() assure la fluidité du font-size entre les breakpoints :
-     - mobile 375px  : ~22px (limité par les media queries ≤480px et ≤768px)
-     - tablet 768px  : ~46px (6vw = 46.1px, dans le clamp naturellement)
-     - desktop 1280px: ~77px (6vw = 76.8px — tient dans le viewport !)
-     - large 1600px+ : 88px  (plafonné à 5.5rem)
-   Formule précédente (12vw, max 180px) rendait le H1 trop grand
-   sur desktop : à 1280px = 154px → le paragraphe + les CTAs
-   passaient sous le fold. La réduction à 6vw / 5.5rem corrige ça.
+     - mobile 375px  : limité par les media queries ≤480px et ≤768px
+     - tablet 768px  : ~54px (7vw = 53.8px, dans le clamp naturellement)
+     - desktop 1280px: ~90px (7vw = 89.6px — imposant ET dans le fold !)
+     - desktop 1440px: ~101px (7vw = 100.8px → dans la plage)
+     - large 1600px+ : 112px (plafonné à 7rem = 112px)
+
+   Historique des ajustements :
+     v1 — clamp(64px, 12vw, 180px) : trop grand → à 1280px = 154px,
+          le paragraphe + les CTAs passaient sous le fold.
+     v2 — clamp(2.5rem, 6vw, 5.5rem) : trop réduit → ~77px, titre trop
+          discret, plus imposant.
+     v3 (actuelle) — clamp(3rem, 7vw, 7rem) : entre-deux. À 1280px = 90px.
+          Le H1 sur 3 lignes ≈ 237px. Avec meta (92px) + grid (130px) +
+          marquee (100px) = 559px → tient dans 660px de viewport dédié.
+
    letter-spacing négatif (-0.03em) = style "affiche imprimée"
    line-height: .88 = lignes très serrées comme une affiche typographique
 */
 .lp-hero__h1 {
     font-family:    var(--display); /* Archivo Black */
     /* clamp(min, préférence-fluide, max) :
-       - min  2.5rem = 40px  → plancher mobile
-       - 6vw          → croît avec la largeur de la fenêtre
-       - max  5.5rem = 88px  → plafond desktop large
-       À 1280px de large : 6vw = 76.8px → H1 + sous-titre + CTAs
-       tiennent tous dans 720px de hauteur sans scroller. */
-    font-size:      clamp(2.5rem, 6vw, 5.5rem);
+       - min  3rem  = 48px → plancher mobile (réduit par @480px/@768px)
+       - 7vw        → croît fluidement avec la largeur du viewport
+       - max  7rem  = 112px → plafond desktop large
+       Imposant sur desktop, contenu visible sans scroll à partir de 1280px. */
+    font-size:      clamp(3rem, 7vw, 7rem);
     line-height:    .88;
     letter-spacing: -.03em;
     margin:         0;
@@ -1420,7 +1413,7 @@
                     - <span class="lp-hero__h1-lime">   : surlignage fond, pas de <mark>
                       (mark = "passage notable dans un résultat de recherche" — pas pertinent ici)
 
-                    font-size: clamp(2.5rem, 6vw, 5.5rem) → fluide entre mobile et desktop
+                    font-size: clamp(3rem, 7vw, 7rem) → fluide entre mobile et desktop
                     line-height: .88 → lignes très serrées, style "affiche imprimée"
                 #}
                 <h1 class="lp-hero__h1" id="lp-hero-title">
