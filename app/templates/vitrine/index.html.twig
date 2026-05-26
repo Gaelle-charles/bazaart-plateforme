@@ -294,9 +294,26 @@
 ────────────────────────────────────────────────────────────────────── */
 
 .lp-hero {
-    border-bottom: 1px solid var(--ink);
-    position:      relative;
-    overflow:      hidden;
+    border-bottom:  1px solid var(--ink);
+    position:       relative;
+    overflow:       hidden;
+    /* min-height: 100dvh = le hero occupe au moins tout le viewport.
+       dvh (dynamic viewport height) est la valeur correcte sur mobile :
+       elle exclut les barres d'UI du navigateur qui apparaissent/disparaissent,
+       contrairement à 100vh qui peut causer un décalage sur iOS Safari.
+       display:flex + flex-direction:column permettent au container intérieur
+       de s'étendre et à la marquee de coller en bas de section. */
+    min-height:     100dvh;
+    display:        flex;
+    flex-direction: column;
+}
+
+/* Le container intérieur du hero prend tout l'espace disponible
+   entre le bord haut et la marquee bande défilante (flex child 2).
+   Cela permet au contenu (meta + H1 + grid) d'être ancré en haut
+   tout en laissant l'espace grandir si le viewport est grand. */
+.lp-hero > .lp-container {
+    flex: 1;
 }
 
 /* Bandeau métadonnées (eyebrow + coordonnées) */
@@ -319,15 +336,25 @@
 /*
    H1 géant — le cœur du design Street.
    clamp() assure la fluidité du font-size entre les breakpoints :
-     - mobile (320px) : ~64px
-     - 960px desktop  : ~130px
-     - large (1440px) : 180px
+     - mobile 375px  : ~22px (limité par les media queries ≤480px et ≤768px)
+     - tablet 768px  : ~46px (6vw = 46.1px, dans le clamp naturellement)
+     - desktop 1280px: ~77px (6vw = 76.8px — tient dans le viewport !)
+     - large 1600px+ : 88px  (plafonné à 5.5rem)
+   Formule précédente (12vw, max 180px) rendait le H1 trop grand
+   sur desktop : à 1280px = 154px → le paragraphe + les CTAs
+   passaient sous le fold. La réduction à 6vw / 5.5rem corrige ça.
    letter-spacing négatif (-0.03em) = style "affiche imprimée"
    line-height: .88 = lignes très serrées comme une affiche typographique
 */
 .lp-hero__h1 {
     font-family:    var(--display); /* Archivo Black */
-    font-size:      clamp(64px, 12vw, 180px);
+    /* clamp(min, préférence-fluide, max) :
+       - min  2.5rem = 40px  → plancher mobile
+       - 6vw          → croît avec la largeur de la fenêtre
+       - max  5.5rem = 88px  → plafond desktop large
+       À 1280px de large : 6vw = 76.8px → H1 + sous-titre + CTAs
+       tiennent tous dans 720px de hauteur sans scroller. */
+    font-size:      clamp(2.5rem, 6vw, 5.5rem);
     line-height:    .88;
     letter-spacing: -.03em;
     margin:         0;
@@ -461,6 +488,16 @@
     flex-direction: column;
     gap:            20px;
     min-height:     520px;
+    /* ─── CORRECTION OVERFLOW GRID ─────────────────────────────────────
+       Problème : par défaut, les cellules CSS Grid ont min-width: auto.
+       Cela signifie qu'elles NE PEUVENT PAS rétrécir sous la taille de
+       leur contenu. Si "INGÉNIERIE" ou "CULTURELLE" dépasse 1fr, la
+       cellule force le grid à déborder → overflow-x visible.
+       Solution : min-width: 0 = la cellule peut rétrécir librement.
+       word-wrap sur .lp-hub__name prend ensuite le relais pour couper
+       les mots longs si nécessaire.
+       Voir : https://css-tricks.com/min-content-size-grid-items/ */
+    min-width:      0;
     /* border-right ajouté via modificateur .lp-hub--bordered */
 }
 
@@ -530,9 +567,15 @@
     letter-spacing: -.02em;
     margin:         0;
     color:          var(--ink);
-    /* white-space:pre-line permet les retours à la ligne forcés
-       (ex: "INGÉNIERIE\nCULTURELLE") */
+    /* pre-line : respecte les <br> HTML forcés
+       (ex: "INGÉNIERIE<br>CULTURELLE") sans créer de scrollbar. */
     white-space:    pre-line;
+    /* Filet de sécurité : si un seul mot (sans espace) dépasse la largeur
+       de la colonne malgré min-width:0 sur .lp-hub, il est coupé proprement.
+       overflow-wrap = coupage inter-mots (préféré), word-break = coupage brutal
+       de dernier recours. Les deux ensemble couvrent tous les navigateurs. */
+    overflow-wrap:  break-word;
+    word-break:     break-word;
 }
 
 /* Description du hub */
@@ -1178,13 +1221,13 @@
         flex-direction: row;
         flex-wrap:      wrap;
     }
-    /* H1 hero : clamp(64px, 12vw, 180px) → minimum ramené à 32px.
-       "LES INTERMÉDIAIRES." en Archivo Black à 44px = ~490px pour ~710px disponibles
-       à 768px. À 375px avec 16px padding = 343px utiles : 9vw = 34px
-       → 18 chars × 34px × 0.42 = 257px → ça passe largement.
-       overflow-wrap en fallback si un mot dépasse malgré tout. */
+    /* H1 hero : la base clamp(2.5rem, 6vw, 5.5rem) se comporte déjà bien
+       à 768px — 6vw = 46.1px, confortable sur tablette portrait.
+       Plus besoin de redéfinir le font-size ici (l'ancienne surcharge
+       à 9vw rendait le H1 PLUS grand que le desktop — bug de direction).
+       On conserve overflow-wrap en dernier recours (remplacé au niveau de
+       .lp-hub__name, mais utile ici aussi pour tous les navigateurs). */
     .lp-hero__h1 {
-        font-size:     clamp(32px, 9vw, 64px);
         overflow-wrap: break-word;
     }
 
@@ -1314,9 +1357,12 @@
         gap:            8px;
     }
 
-    /* H1 hero : à 375px, 9vw = 33.75px — bien en dessous des 32px minimum.
-       Le clamp prend donc sa valeur plancher : 32px.
-       "LES INTERMÉDIAIRES." en Archivo Black à 32px ≈ 242px → tient dans 343px. */
+    /* H1 hero : sur très petit écran (375px iPhone SE), la base 6vw = 22.5px
+       se heurte au min de 2.5rem = 40px → trop grand pour 343px utiles.
+       Cette surcharge @480px réduit à clamp(28px, 8vw, 36px) :
+         - à 375px : 8vw = 30px → 30px (entre 28 et 36, ok)
+         - à 480px : 8vw = 38.4px → plafonné à 36px
+       "LES INTERMÉDIAIRES." à 30px en Archivo Black ≈ 226px → tient en 343px. */
     .lp-hero__h1 {
         font-size:      clamp(28px, 8vw, 36px);
         letter-spacing: -.01em;
@@ -1374,7 +1420,7 @@
                     - <span class="lp-hero__h1-lime">   : surlignage fond, pas de <mark>
                       (mark = "passage notable dans un résultat de recherche" — pas pertinent ici)
 
-                    font-size: clamp(64px, 12vw, 180px) → fluide entre mobile et desktop
+                    font-size: clamp(2.5rem, 6vw, 5.5rem) → fluide entre mobile et desktop
                     line-height: .88 → lignes très serrées, style "affiche imprimée"
                 #}
                 <h1 class="lp-hero__h1" id="lp-hero-title">
