@@ -1,0 +1,603 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/scraping_source_edit.html.twig — Modification d'une source de scraping
+ #
+ # Thème : Street (tokens CSS depuis design-tokens.css, border-radius: 0 partout)
+ # Layout parent : base_admin.html.twig
+ #
+ # Variables disponibles (AdminScrapingSourceController::edit()) :
+ #   - source      : ScrapingSource — entité chargée depuis la BDD
+ #   - types       : ScrapingSourceType[] — types autorisés (RSS, HTML_LLM)
+ #   - known_slugs : string[] — slugs connus dans ScraperRegistry
+ #
+ # Champs modifiables :
+ #   nom, url, type, discipline, zone, scraperSlug, actif, estAgregateur
+ #
+ # Champs en lecture seule (bloc métadonnées) :
+ #   statutDernierRun, derniereExecution, nbItemsDernierRun, createdAt
+ #
+ # CSRF : token 'edit_scraping_source_{id}' — vérifié dans AdminScrapingSourceController::edit()
+ #}
+
+{% block title %}Modifier la source — Admin BazaArt{% endblock %}
+{% block page_title %}Modifier la source de scraping{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+
+    /* ── Fond de page ───────────────────────────────────────────────────────── */
+    .app-content {
+        background: var(--bg);
+        font-family: var(--body);
+    }
+
+    /* ── Lien retour — style mono compact (repris de scraped_opportunity_edit) ─ */
+    .adm-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
+        text-decoration: none;
+        margin-bottom: 20px;
+        transition: color var(--transition-fast);
+    }
+    .adm-back:hover { color: var(--ink); }
+
+    /* ── En-tête de page ────────────────────────────────────────────────────── */
+    .adm-edit-header {
+        margin-bottom: 28px;
+    }
+    .adm-edit-title {
+        font-family: var(--display);
+        font-size: 22px;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--ink);
+        margin-bottom: 6px;
+    }
+    .adm-edit-subtitle {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+
+    /* ── Grille : formulaire à gauche, métadonnées à droite ─────────────────── */
+    .adm-edit-grid {
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        gap: 24px;
+        align-items: start;
+    }
+    @media (max-width: 800px) {
+        .adm-edit-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Bloc formulaire ────────────────────────────────────────────────────── */
+    .adm-form {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+    }
+    .adm-form-header {
+        padding: 12px 18px;
+        background: var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        /* Accent vert acide — repris de scraped_opportunity_edit */
+        color: var(--accent);
+    }
+    .adm-form-body {
+        padding: 22px 18px;
+    }
+
+    /* ── Champs individuels ─────────────────────────────────────────────────── */
+    .adm-field {
+        margin-bottom: 18px;
+    }
+    .adm-field:last-child { margin-bottom: 0; }
+
+    .adm-label {
+        display: block;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .10em;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin-bottom: 6px;
+    }
+    /* Astérisque rouge sur les champs obligatoires */
+    .adm-label--required::after {
+        content: ' *';
+        color: var(--accent-2);
+    }
+
+    /* Inputs, selects — pas d'arrondi (thème Street) */
+    .adm-input,
+    .adm-select {
+        width: 100%;
+        padding: 9px 12px;
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+        background: var(--bg-alt);
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        outline: none;
+        transition: border-color var(--transition-fast), background var(--transition-fast);
+        box-sizing: border-box;
+    }
+    .adm-input:focus,
+    .adm-select:focus {
+        border-color: var(--accent);
+        background: #fff;
+    }
+
+    /* Note d'aide sous un champ */
+    .adm-field-hint {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+        margin-top: 5px;
+        line-height: 1.5;
+    }
+
+    /* ── Grille deux colonnes dans le formulaire (discipline + zone) ────────── */
+    .adm-fields-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+    @media (max-width: 600px) {
+        .adm-fields-row { grid-template-columns: 1fr; }
+    }
+
+    /* ── Cases à cocher style Street ────────────────────────────────────────── */
+    .adm-checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+    /* Checkbox native — on garde le look natif mais dans la cohérence du thème */
+    .adm-checkbox {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--accent);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .adm-checkbox-label {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink);
+        cursor: pointer;
+    }
+    .adm-checkbox-desc {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .03em;
+        margin-top: 3px;
+    }
+
+    /* ── Séparateur de section ───────────────────────────────────────────────── */
+    .adm-section-sep {
+        border: none;
+        border-top: 1px solid var(--line-soft);
+        margin: 22px 0 20px;
+    }
+
+    /* ── Barre d'actions (bas du formulaire) ────────────────────────────────── */
+    .adm-form-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 18px;
+        border-top: 1px solid var(--ink);
+        background: var(--bg-alt);
+    }
+    /* Bouton "Enregistrer" — fond vert acide (accent) */
+    .adm-btn-save {
+        height: 36px;
+        padding: 0 22px;
+        background: var(--accent);
+        color: var(--ink);
+        border: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: box-shadow var(--transition-fast);
+    }
+    .adm-btn-save:hover { box-shadow: var(--shadow-offset-sm); }
+    /* Lien "Annuler" — discret */
+    .adm-btn-cancel {
+        height: 36px;
+        padding: 0 18px;
+        display: inline-flex;
+        align-items: center;
+        background: var(--bg);
+        color: var(--ink-mute);
+        border: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        text-decoration: none;
+        cursor: pointer;
+        transition: color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .adm-btn-cancel:hover { color: var(--ink); box-shadow: var(--shadow-offset-sm); }
+
+    /* ── Bloc métadonnées (lecture seule, colonne droite) ───────────────────── */
+    .adm-meta-bloc {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+    }
+    .adm-meta-header {
+        padding: 12px 18px;
+        background: var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--accent);
+    }
+    .adm-meta-body {
+        padding: 16px 18px;
+    }
+    .adm-meta-row {
+        margin-bottom: 14px;
+    }
+    .adm-meta-row:last-child { margin-bottom: 0; }
+    .adm-meta-label {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: 3px;
+    }
+    .adm-meta-value {
+        font-size: 13px;
+        color: var(--ink);
+        font-weight: 500;
+    }
+
+    /* ── Chip de type (lecture seule dans la sidebar) ───────────────────────── */
+    .ss-chip {
+        display: inline-block;
+        padding: 2px 8px;
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        white-space: nowrap;
+    }
+    .ss-chip--rss      { background: var(--accent);   color: var(--ink); }
+    .ss-chip--html_llm { background: var(--accent-2); color: var(--ink); }
+    .ss-chip--html_css { background: var(--bg-alt);   color: var(--ink); }
+
+    /* ── Badge de statut dernier run (lecture seule dans la sidebar) ────────── */
+    .ss-status {
+        display: inline-block;
+        padding: 2px 8px;
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        border: 1px solid;
+        border-radius: 0;
+        white-space: nowrap;
+    }
+    .ss-status--never_run { background: var(--bg-alt); color: var(--ink-mute); border-color: var(--line-soft); }
+    .ss-status--success   { background: rgba(198,242,78,.2); color: #2a6e00; border-color: var(--accent); }
+    .ss-status--error     { background: rgba(255,107,44,.15); color: #c4400c; border-color: var(--accent-2); }
+
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Lien retour vers la liste des sources ────────────────────────────────── #}
+<a href="{{ path('app_admin_scraping_sources_index') }}" class="adm-back">
+    ← Sources de scraping
+</a>
+
+{# ── En-tête de la page ───────────────────────────────────────────────────── #}
+<div class="adm-edit-header">
+    <h2 class="adm-edit-title">Modifier la source</h2>
+    {# Sous-titre : affiche l'ID et l'URL courante pour s'y retrouver facilement #}
+    <p class="adm-edit-subtitle">
+        #{{ source.id }}
+        · {{ source.nom|e }}
+        · Créée le {{ source.createdAt|date('d/m/Y') }}
+    </p>
+</div>
+
+{# ── Grille : formulaire (gauche) + métadonnées (droite) ─────────────────── #}
+<div class="adm-edit-grid">
+
+    {# ──────────────────────────────────────────────────────────────────────
+       FORMULAIRE D'ÉDITION
+       Action : POST sur la même URL (méthode GET → affiche, POST → traite).
+       CSRF : token 'edit_scraping_source_{id}' — spécifique à cette source.
+    ────────────────────────────────────────────────────────────────────── #}
+    <form method="post"
+          action="{{ path('app_admin_scraping_sources_edit', {id: source.id}) }}">
+
+        {# Token CSRF caché — vérifié dans AdminScrapingSourceController::edit() #}
+        <input type="hidden" name="_token"
+               value="{{ csrf_token('edit_scraping_source_' ~ source.id) }}">
+
+        <div class="adm-form">
+            <div class="adm-form-header">Modifier la source</div>
+            <div class="adm-form-body">
+
+                {# ── Nom (obligatoire, max 255 caractères) ─────────────────── #}
+                <div class="adm-field">
+                    <label class="adm-label adm-label--required" for="nom">Nom de la source</label>
+                    <input class="adm-input"
+                           type="text"
+                           id="nom"
+                           name="nom"
+                           maxlength="255"
+                           required
+                           value="{{ source.nom|e('html_attr') }}"
+                           placeholder="Ex: CNM - Centre National de la Musique">
+                </div>
+
+                {# ── URL (obligatoire, max 500 caractères, clé de déduplication) ─── #}
+                <div class="adm-field">
+                    <label class="adm-label adm-label--required" for="url">URL</label>
+                    <input class="adm-input"
+                           type="url"
+                           id="url"
+                           name="url"
+                           maxlength="500"
+                           required
+                           value="{{ source.url|e('html_attr') }}"
+                           placeholder="https://...">
+                    <p class="adm-field-hint">
+                        Clé de déduplication — doit être unique. Modifier l'URL peut créer un doublon si l'ancienne URL est réutilisée.
+                    </p>
+                </div>
+
+                {# ── Type de scraping (RSS ou HTML_LLM seulement) ──────────── #}
+                {#
+                   HTML_CSS est exclu du formulaire — il nécessite une classe PHP dédiée.
+                   Si la source est déjà en HTML_CSS, le formulaire affichera quand même
+                   uniquement RSS et HTML_LLM. L'admin est averti dans l'astuce ci-dessous.
+                #}
+                <div class="adm-field">
+                    <label class="adm-label adm-label--required" for="type">Type de scraping</label>
+                    <select class="adm-select" id="type" name="type" required>
+                        {% for t in types %}
+                            <option value="{{ t.value }}"
+                                {{ source.type.value == t.value ? 'selected' : '' }}>
+                                {{ t.label() }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <p class="adm-field-hint">
+                        Seuls RSS et HTML → LLM sont éditables ici.
+                        Pour HTML → CSS (sélecteurs CSS), utilisez
+                        <code style="background: var(--ink); color: var(--accent); padding: 1px 4px; font-size: 10px;">app:seed-scraping-sources</code>.
+                    </p>
+                </div>
+
+                {# ── Discipline + Zone sur la même ligne ─────────────────────── #}
+                <div class="adm-fields-row">
+
+                    {# Discipline principale (optionnelle) #}
+                    <div class="adm-field" style="margin-bottom: 0;">
+                        <label class="adm-label" for="discipline">Discipline</label>
+                        <input class="adm-input"
+                               type="text"
+                               id="discipline"
+                               name="discipline"
+                               maxlength="200"
+                               value="{{ source.disciplinePrincipale|default('')|e('html_attr') }}"
+                               placeholder="Ex: Musique, Arts plastiques">
+                    </div>
+
+                    {# Zone géographique (optionnelle) #}
+                    <div class="adm-field" style="margin-bottom: 0;">
+                        <label class="adm-label" for="zone">Zone géographique</label>
+                        <input class="adm-input"
+                               type="text"
+                               id="zone"
+                               name="zone"
+                               maxlength="100"
+                               value="{{ source.paysZone|default('')|e('html_attr') }}"
+                               placeholder="Ex: France, Europe">
+                    </div>
+
+                </div>{# /adm-fields-row #}
+
+                {# ── Scraper Slug (optionnel) ─────────────────────────────────── #}
+                {#
+                   Ce champ relie la source à une classe PHP custom dans ScraperRegistry.
+                   Si vide → GenericScraper prend le relais.
+                   Si renseigné mais inconnu → avertissement affiché, pas d'erreur bloquante
+                   (permet de préparer un slug avant le déploiement de la classe).
+                #}
+                <div class="adm-field">
+                    <label class="adm-label" for="scraperSlug">Slug du scraper custom</label>
+                    <input class="adm-input"
+                           type="text"
+                           id="scraperSlug"
+                           name="scraperSlug"
+                           maxlength="100"
+                           value="{{ source.scraperSlug|default('')|e('html_attr') }}"
+                           placeholder="Laisser vide pour GenericScraper">
+                    <p class="adm-field-hint">
+                        Laisser vide pour utiliser GenericScraper (conseillé pour RSS et HTML_LLM simples).<br>
+                        Slugs connus (classes PHP déployées) :
+                        {% if known_slugs is not empty %}
+                            <code style="background: var(--bg-alt); border: 1px solid var(--line-soft); padding: 1px 4px;">{{ known_slugs|join(', ')|e }}</code>
+                        {% else %}
+                            <em>aucun slug custom enregistré</em>
+                        {% endif %}
+                    </p>
+                </div>
+
+                <hr class="adm-section-sep">
+
+                {# ── Statut actif / inactif (checkbox) ──────────────────────── #}
+                {#
+                   Une source inactive est ignorée par ScrapeOpportunitiesCommand.
+                   Elle reste visible dans la liste admin pour pouvoir être réactivée.
+                   La checkbox transmet '1' si cochée, rien si décochée.
+                   Le controller lit request->get('actif') === '1'.
+                #}
+                <div class="adm-checkbox-row">
+                    <input class="adm-checkbox"
+                           type="checkbox"
+                           id="actif"
+                           name="actif"
+                           value="1"
+                           {{ source.actif ? 'checked' : '' }}>
+                    <div>
+                        <label class="adm-checkbox-label" for="actif">Source active</label>
+                        <div class="adm-checkbox-desc">
+                            Si décoché, la source sera ignorée par le scraper (sans suppression).
+                        </div>
+                    </div>
+                </div>
+
+                {# ── Agrégateur (checkbox) ─────────────────────────────────── #}
+                {#
+                   Un agrégateur est un site qui liste d'autres organismes culturels
+                   (ex: on-the-move.org, resartis.org).
+                   Utilisé par app:discover-sources pour trouver de nouvelles sources.
+                   N'impacte pas app:scrape-opportunities.
+                #}
+                <div class="adm-checkbox-row">
+                    <input class="adm-checkbox"
+                           type="checkbox"
+                           id="estAgregateur"
+                           name="estAgregateur"
+                           value="1"
+                           {{ source.estAgregateur ? 'checked' : '' }}>
+                    <div>
+                        <label class="adm-checkbox-label" for="estAgregateur">Agrégateur</label>
+                        <div class="adm-checkbox-desc">
+                            Cocher si ce site liste d'autres organismes culturels (ex: on-the-move.org).
+                            Utilisé par app:discover-sources uniquement.
+                        </div>
+                    </div>
+                </div>
+
+            </div>{# /adm-form-body #}
+
+            {# ── Barre d'actions ──────────────────────────────────────────── #}
+            <div class="adm-form-actions">
+                <button type="submit" class="adm-btn-save">Enregistrer</button>
+                <a href="{{ path('app_admin_scraping_sources_index') }}" class="adm-btn-cancel">
+                    Annuler
+                </a>
+            </div>
+
+        </div>{# /adm-form #}
+
+    </form>
+
+    {# ──────────────────────────────────────────────────────────────────────
+       MÉTADONNÉES (lecture seule)
+       Ces informations sont calculées par le système et ne doivent pas
+       être modifiables manuellement via ce formulaire :
+       - type actuel   → visible pour référence
+       - dernier run   → calculé par ScrapeOpportunitiesCommand
+       - statut run    → géré par markRunSuccess() / markRunError()
+       - createdAt     → timestamp système (PrePersist)
+    ────────────────────────────────────────────────────────────────────── #}
+    <div>
+        <div class="adm-meta-bloc">
+            <div class="adm-meta-header">Infos système (lecture seule)</div>
+            <div class="adm-meta-body">
+
+                {# ID de la source en BDD #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">ID</div>
+                    <div class="adm-meta-value">
+                        <code style="font-family: var(--mono); font-size: 12px;">#{{ source.id }}</code>
+                    </div>
+                </div>
+
+                {# Type actuel — chip coloré (même style que la liste) #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Type actuel</div>
+                    <div class="adm-meta-value">
+                        <span class="ss-chip ss-chip--{{ source.type.value|e }}">
+                            {{ source.type.label()|e }}
+                        </span>
+                    </div>
+                </div>
+
+                {# Statut du dernier run #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Dernier run</div>
+                    <div class="adm-meta-value">
+                        <span class="ss-status ss-status--{{ source.statutDernierRun.value|e }}"
+                              {# Tooltip sur erreur pour afficher le message sans encombrer la page #}
+                              {% if source.statutDernierRun.value == 'error' and source.messageErreur %}
+                                  title="{{ source.messageErreur|e }}"
+                              {% endif %}>
+                            {{ source.statutDernierRun.label()|e }}
+                        </span>
+                        {% if source.derniereExecution %}
+                            <div style="font-family: var(--mono); font-size: 10px; color: var(--ink-mute); margin-top: 4px;">
+                                {{ source.derniereExecution|date('d/m/Y H:i') }}
+                                — {{ source.nbItemsDernierRun }} item(s)
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# Date de création #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Créée le</div>
+                    <div class="adm-meta-value">
+                        {{ source.createdAt|date('d/m/Y à H:i') }}
+                    </div>
+                </div>
+
+                {# Date de dernière modification (null avant le premier edit) #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Modifiée le</div>
+                    <div class="adm-meta-value">
+                        {{ source.updatedAt ? source.updatedAt|date('d/m/Y à H:i') : '—' }}
+                    </div>
+                </div>
+
+            </div>{# /adm-meta-body #}
+        </div>
+    </div>
+
+</div>{# /adm-edit-grid #}
+
+{% endblock %}

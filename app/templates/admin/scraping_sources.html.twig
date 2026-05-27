@@ -519,8 +519,30 @@
                             {% endif %}
                         </td>
 
-                        {# Colonne Actions : toggle actif + supprimer #}
+                        {# Colonne Actions : modifier + toggle actif + supprimer #}
                         <td style="white-space: nowrap; display: flex; gap: 6px; flex-wrap: wrap;">
+
+                            {# Bouton Modifier — lien GET vers le formulaire d'édition #}
+                            <a href="{{ path('app_admin_scraping_sources_edit', {id: source.id}) }}"
+                               style="
+                                   display: inline-flex;
+                                   align-items: center;
+                                   padding: 4px 10px;
+                                   font-family: var(--mono);
+                                   font-size: 10px;
+                                   font-weight: 700;
+                                   letter-spacing: .06em;
+                                   text-transform: uppercase;
+                                   text-decoration: none;
+                                   border: 1px solid var(--ink);
+                                   background: var(--bg);
+                                   color: var(--ink);
+                                   transition: box-shadow var(--transition-fast);
+                               "
+                               onmouseover="this.style.boxShadow='var(--shadow-offset-sm)'"
+                               onmouseout="this.style.boxShadow='none'">
+                                Modifier
+                            </a>
 
                             {# Bouton toggle actif / inactif #}
                             {#

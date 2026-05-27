@@ -23,10 +23,11 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * de l'orchestration (valider les entrées basiques, déléguer à l'EntityManager).
  *
  * Routes disponibles :
- *   GET  /admin/scraping-sources            → index()  : liste toutes les sources avec stats
- *   POST /admin/scraping-sources/new        → create() : ajoute une source (RSS ou HTML_LLM uniquement)
- *   POST /admin/scraping-sources/{id}/toggle → toggle() : bascule actif/inactif
- *   POST /admin/scraping-sources/{id}/delete → delete() : supprime une source (si jamais exécutée)
+ *   GET       /admin/scraping-sources              → index()  : liste toutes les sources avec stats
+ *   POST      /admin/scraping-sources/new          → create() : ajoute une source (RSS ou HTML_LLM uniquement)
+ *   GET|POST  /admin/scraping-sources/{id}/edit    → edit()   : modifie une source existante
+ *   POST      /admin/scraping-sources/{id}/toggle  → toggle() : bascule actif/inactif
+ *   POST      /admin/scraping-sources/{id}/delete  → delete() : supprime une source
  *
  * Sécurité :
  *   - ROLE_ADMIN requis sur toute la classe
@@ -159,6 +160,182 @@ class AdminScrapingSourceController extends AbstractController
             $nom,
             $type->label()
         ));
+
+        return $this->redirectToRoute('app_admin_scraping_sources_index');
+    }
+
+    /**
+     * Formulaire de modification d'une source de scraping existante.
+     *
+     * GET  → affiche le formulaire pré-rempli avec les valeurs actuelles de la source.
+     * POST → valide les données soumises, met à jour l'entité en BDD et redirige.
+     *
+     * Champs modifiables :
+     *   - nom               : libellé affiché dans l'admin et les logs
+     *   - url               : clé de déduplication — doit rester unique
+     *   - type              : RSS ou HTML_LLM uniquement (HTML_CSS via classe PHP dédiée)
+     *   - disciplinePrincipale : discipline artistique principale (optionnel)
+     *   - paysZone          : zone géographique (optionnel)
+     *   - estAgregateur     : indique si la source liste d'autres organismes
+     *   - scraperSlug       : slug de la classe PHP custom (optionnel)
+     *   - actif             : si false → ignorée par ScrapeOpportunitiesCommand
+     *
+     * Contraintes de validation :
+     *   - nom requis, max 255 caractères
+     *   - url requise, max 500 caractères, format URL valide
+     *   - type dans [RSS, HTML_LLM]
+     *   - URL unique sauf si c'est la même source (même id)
+     *   - scraperSlug : avertissement si inconnu dans ScraperRegistry (pas bloquant)
+     *
+     * CSRF : token nommé 'edit_scraping_source_{id}' — spécifique à cette source.
+     */
+    #[Route('/{id}/edit', name: 'app_admin_scraping_sources_edit', methods: ['GET', 'POST'])]
+    public function edit(int $id, Request $request): Response
+    {
+        // ── Chargement de la source — 404 si absente ─────────────────────────
+        $source = $this->scrapingSourceRepository->find($id);
+        if ($source === null) {
+            $this->addFlash('error', sprintf('Source #%d introuvable.', $id));
+            return $this->redirectToRoute('app_admin_scraping_sources_index');
+        }
+
+        // ── Types autorisés dans le formulaire (HTML_CSS exclu) ─────────────
+        // HTML_CSS nécessite une classe PHP dédiée, pas éditable depuis l'interface.
+        $allowedTypes = [ScrapingSourceType::RSS, ScrapingSourceType::HtmlLlm];
+
+        // ── GET : affichage du formulaire pré-rempli ─────────────────────────
+        if ($request->isMethod('GET')) {
+            return $this->render('admin/scraping_source_edit.html.twig', [
+                'source'      => $source,
+                'types'       => $allowedTypes,
+                // Slugs connus dans le registre — affichés comme aide à la saisie
+                'known_slugs' => $this->scraperRegistry->getKnownSlugs(),
+            ]);
+        }
+
+        // ── POST : traitement du formulaire ─────────────────────────────────
+
+        // Vérification CSRF — token unique par source pour éviter les replays
+        if (!$this->isCsrfTokenValid('edit_scraping_source_' . $id, $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de sécurité invalide. Rechargez la page et réessayez.');
+            return $this->redirectToRoute('app_admin_scraping_sources_index');
+        }
+
+        // ── Récupération et nettoyage des champs ─────────────────────────────
+        $nom          = trim((string) $request->request->get('nom', ''));
+        $url          = trim((string) $request->request->get('url', ''));
+        $typeStr      = trim((string) $request->request->get('type', ''));
+        $discipline   = trim((string) $request->request->get('discipline', '')) ?: null;
+        $zone         = trim((string) $request->request->get('zone', '')) ?: null;
+        $scraperSlug  = trim((string) $request->request->get('scraperSlug', '')) ?: null;
+        // Les checkboxes HTML ne transmettent leur valeur que si cochées.
+        // On compare à '1' (valeur que le template envoie pour les cases cochées).
+        $actif         = $request->request->get('actif') === '1';
+        $estAgregateur = $request->request->get('estAgregateur') === '1';
+
+        // ── Validation — nom ─────────────────────────────────────────────────
+        if (empty($nom)) {
+            $this->addFlash('error', 'Le nom est obligatoire.');
+            return $this->render('admin/scraping_source_edit.html.twig', [
+                'source'      => $source,
+                'types'       => $allowedTypes,
+                'known_slugs' => $this->scraperRegistry->getKnownSlugs(),
+            ]);
+        }
+
+        if (mb_strlen($nom) > 255) {
+            $this->addFlash('error', 'Le nom ne peut pas dépasser 255 caractères.');
+            return $this->render('admin/scraping_source_edit.html.twig', [
+                'source'      => $source,
+                'types'       => $allowedTypes,
+                'known_slugs' => $this->scraperRegistry->getKnownSlugs(),
+            ]);
+        }
+
+        // ── Validation — url ─────────────────────────────────────────────────
+        if (empty($url)) {
+            $this->addFlash('error', 'L\'URL est obligatoire.');
+            return $this->render('admin/scraping_source_edit.html.twig', [
+                'source'      => $source,
+                'types'       => $allowedTypes,
+                'known_slugs' => $this->scraperRegistry->getKnownSlugs(),
+            ]);
+        }
+
+        if (mb_strlen($url) > 500) {
+            $this->addFlash('error', 'L\'URL ne peut pas dépasser 500 caractères.');
+            return $this->render('admin/scraping_source_edit.html.twig', [
+                'source'      => $source,
+                'types'       => $allowedTypes,
+                'known_slugs' => $this->scraperRegistry->getKnownSlugs(),
+            ]);
+        }
+
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            $this->addFlash('error', 'L\'URL n\'est pas valide. Elle doit commencer par http:// ou https://.');
+            return $this->render('admin/scraping_source_edit.html.twig', [
+                'source'      => $source,
+                'types'       => $allowedTypes,
+                'known_slugs' => $this->scraperRegistry->getKnownSlugs(),
+            ]);
+        }
+
+        // ── Validation — type ─────────────────────────────────────────────────
+        // Seuls RSS et HTML_LLM sont autorisés depuis le formulaire admin.
+        // HTML_CSS est réservé aux classes PHP dédiées (app:seed-scraping-sources).
+        $allowedTypeValues = [ScrapingSourceType::RSS->value, ScrapingSourceType::HtmlLlm->value];
+        if (!in_array($typeStr, $allowedTypeValues, true)) {
+            $this->addFlash('error', 'Type invalide. Seuls RSS et HTML → LLM sont autorisés dans ce formulaire.');
+            return $this->render('admin/scraping_source_edit.html.twig', [
+                'source'      => $source,
+                'types'       => $allowedTypes,
+                'known_slugs' => $this->scraperRegistry->getKnownSlugs(),
+            ]);
+        }
+
+        $type = ScrapingSourceType::from($typeStr);
+
+        // ── Déduplication par URL — sauf si même source ───────────────────────
+        // On autorise la source à conserver sa propre URL (même id).
+        // Mais si une AUTRE source possède déjà cette URL → erreur.
+        $existingByUrl = $this->scrapingSourceRepository->findByUrl($url);
+        if ($existingByUrl !== null && $existingByUrl->getId() !== $source->getId()) {
+            $this->addFlash('error', sprintf('Une autre source avec l\'URL "%s" existe déjà (#%d).', $url, $existingByUrl->getId()));
+            return $this->render('admin/scraping_source_edit.html.twig', [
+                'source'      => $source,
+                'types'       => $allowedTypes,
+                'known_slugs' => $this->scraperRegistry->getKnownSlugs(),
+            ]);
+        }
+
+        // ── Avertissement slug inconnu (non bloquant) ─────────────────────────
+        // L'admin peut renseigner un slug dont la classe PHP est en cours de déploiement.
+        // On avertit mais on n'empêche pas la sauvegarde.
+        if ($scraperSlug !== null && !in_array($scraperSlug, $this->scraperRegistry->getKnownSlugs(), true)) {
+            $this->addFlash('warning', sprintf(
+                'Le slug "%s" n\'est pas encore enregistré dans ScraperRegistry. '
+                . 'La source sera sauvegardée mais le scraper tombera en erreur '
+                . 'jusqu\'à ce que la classe PHP correspondante soit déployée.',
+                $scraperSlug
+            ));
+        }
+
+        // ── Mise à jour de l'entité ───────────────────────────────────────────
+        // Doctrine détecte les changements automatiquement (UnitOfWork).
+        // updatedAt sera mis à jour par le callback PreUpdate de l'entité.
+        $source->setNom($nom);
+        $source->setUrl($url);
+        $source->setType($type);
+        $source->setDisciplinePrincipale($discipline);
+        $source->setPaysZone($zone);
+        $source->setScraperSlug($scraperSlug);
+        $source->setActif($actif);
+        $source->setEstAgregateur($estAgregateur);
+
+        // flush() sans persist() : l'entité est déjà trackée par Doctrine
+        $this->em->flush();
+
+        $this->addFlash('success', sprintf('Source "%s" mise à jour avec succès.', $source->getNom()));
 
         return $this->redirectToRoute('app_admin_scraping_sources_index');
     }
