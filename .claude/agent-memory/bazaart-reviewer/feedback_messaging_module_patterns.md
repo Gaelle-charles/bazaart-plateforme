@@ -18,12 +18,22 @@ Relecture du module Messagerie (Conversation, ConversationParticipant, Message, 
 - `countAllUnreadForUser()` est du dead code en V1 mais prévu pour notifications — acceptable.
 - `getOtherParticipant()` : si la conv a >2 participants, retourne le PREMIER non-courant trouvé (pas d'erreur, mais potentiel comportement inattendu en cas de données corrompues — documenté).
 
-**Anti-patterns trouvés dans ce module :**
-1. N+1 dans `MessagingController::index()` : une requête SQL par conversation pour `countUnreadForParticipant()`. Avec 50 conversations, 50 requêtes COUNT. La solution propre : une seule requête dans `MessageRepository::countAllUnreadForUser()` (déjà existante mais non utilisée).
-2. `send()` dans le controller ne redirige pas avec ancre `#last-message` : `redirectToRoute('app_messaging_show', ['id' => $id], Response::HTTP_SEE_OTHER)` sans `#last-message` dans l'URL — le scroll JS compense mais le comportement n'est pas garanti après redirect.
-3. `removeParticipant()` dans `Conversation` : le `setConversation($this)` après `removeElement()` est une erreur de copier-coller — devrait être `setConversation(null)` ou être supprimé (orphanRemoval s'en charge).
-4. `countAllUnreadForUser()` dans `MessageRepository` : la clause `'m.createdAt > cp.lastReadAt OR cp.lastReadAt IS NULL'` est une expression DQL brute dans `andWhere()` — syntaxe fragile (même famille que le CASE WHEN signalé dans ResourceAlertRepository).
-5. `findByUser()` dans `ConversationRepository` : NULLS LAST pour `lastMessageAt DESC` n'est pas dans le DQL (PostgreSQL l'implémente différemment de MySQL). Le tri DESC sans NULLS LAST place les NULL en tête sur PostgreSQL — conversations sans messages apparaissent avant les actives. Le commentaire dit "NULLS LAST" mais le code ne l'implémente pas.
+**Anti-patterns trouvés dans ce module (état au 23/05/2026) :**
+
+**CORRIGÉS entre les deux relectures (23/05 → 25/05/2026) :**
+1. N+1 dans `index()` : résolu — `countUnreadGroupedByConversation()` remplace la boucle par conversation.
+2. Redirect sans ancre `#last-message` dans `send()` : résolu — `$this->redirect(generateUrl() . '#last-message')`.
+3. `removeParticipant()` bug copier-coller setConversation($this) : résolu — le code actuel ne touche plus setConversation.
+4. `countAllUnreadForUser()` DQL brut andWhere() : résolu — utilisation de `$qb->expr()->orX()`.
+5. NULLS LAST manquant dans `findByUser()` : résolu — COALESCE('1970-01-01') remplace le tri DESC nu.
+
+**NOUVEAUX problèmes détectés en relecture du 25/05/2026 :**
+1. `path('app_messaging_new')` sans `{userId}` dans `index.html.twig` ligne 294 : la route `/messages/new/{userId}` requiert `userId` — Symfony lève `MissingMandatoryParametersException` au rendu (page /messages inutilisable). Il faut pointer vers l'annuaire artistes.
+2. `new.html.twig` utilise les anciens tokens CSS (`--color-*`, `--font-heading`, `--radius-*`, `--shadow-*`) non définis dans design-tokens.css — mise en page cassée en thème Street.
+3. `is_archived` (ConversationParticipant) et route `POST /messages/{id}/archive` prévus dans le CDC section 5.4 sont absents de l'implémentation.
+4. CDC section 5.4 prévoit `is_read` dans l'entité `Message` et `sent_at` (au lieu de `createdAt`) — l'implémentation utilise `lastReadAt` dans `ConversationParticipant` (approche différente, plus efficace, mais diverge du CDC).
+5. `countUnreadForParticipant()` dans `MessageRepository` est du dead code depuis l'introduction de `countUnreadGroupedByConversation()` — à nettoyer.
+6. Le bloc de documentation de `show.html.twig` ligne 10 mentionne `sendForm : FormView` qui n'est jamais passé par le controller — commentaire obsolète.
 
 **Why:** Ces points sont à surveiller dans tout nouveau module de la plateforme.
 **How to apply:** Vérifier systématiquement les boucles N+1 sur les compteurs, les redirections avec ancres, et les expressions DQL brutes.

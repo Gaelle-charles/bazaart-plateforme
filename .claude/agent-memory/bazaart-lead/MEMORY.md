@@ -4,3 +4,4 @@
 - [État V1 au 23 mai 2026](project_v1_status.md) — Ce qui est fait / reste à faire pour la V1, avec mapping précis des entités et routes manquantes
 - [Workflow Git](feedback_git_workflow.md) — main=stable, demo=travail, jamais de feature/* ni dev, merger uniquement sur confirmation Gaëlle
 - [Audit design Street (24 mai)](project_design_audit.md) — Statuts conformité par template, 3 critiques (home, CSRF, XSS), sidebar mobile absente
+- [⚠️ Rappel lancement — pages légales](project_legal_reminder.md) — placeholders [À COMPLÉTER] à remplir avant le 15 juin (SIRET, adresse, DPO, raison sociale)

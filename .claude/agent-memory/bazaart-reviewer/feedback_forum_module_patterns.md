@@ -33,7 +33,7 @@ Relecture complète du module Forum effectuée le 2026-05-25 (ForumCategory, For
 
 5. RACE CONDITION incrementViews() : l'implémentation via `$thread->incrementViews(); $em->flush()` génère un UPDATE SET views_count = N (valeur lue en PHP) au lieu d'un UPDATE SET views_count = views_count + 1. En cas de requêtes concurrentes, des incréments peuvent se perdre. Non critique pour la V1 à faible charge, mais commenté "pas de déduplication" — la doc est juste mais le bug concurrent n'est pas mentionné.
 
-6. AUCUN TEST : le répertoire tests/ est vide. Aucun test unitaire ni fonctionnel pour ForumService, ForumVoter ou les routes critiques. Le CDC cible 30% de couverture et 5–8 scénarios end-to-end.
+6. (CORRIGÉ 2026-05-26) : 5 tests E2E créés et passants — voir relecture tests/E2E/. La route "nouveau" avait un bug de routage corrigé avec requirements: ['threadSlug' => '(?!nouveau$).+']. La protection dans ForumService (RESERVED_SLUGS) subsiste en complément.
 
 7. FORMDATA.CONTENT non échappé dans textarea : `{{ formData.content ?? '' }}` dans new_thread.html.twig est rendu dans un `<textarea>`. L'autoescape Twig échappe les entités HTML, ce qui est correct pour un textarea. Pas de XSS mais à vérifier si Twig encode bien > en &gt; dans ce contexte (oui, autoescape par défaut).
 

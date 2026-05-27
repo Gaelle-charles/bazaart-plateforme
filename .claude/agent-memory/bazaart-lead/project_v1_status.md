@@ -62,6 +62,28 @@ metadata:
 - Design Street respecté : .cf- (public), .adc- (admin), border-radius: 0
 - Option B vidéo : iframe YouTube/Vimeo (videoBunnyId nullable, player Bunny = V2)
 
+### MODULE COMMUNAUTÉ — Lives planifiés ✅ COMPLET (25 mai 2026)
+- Entities : `Live`, `LiveAttendee` — migration Version20260525212745 + 220000
+- `LiveStatus` enum (SCHEDULED/LIVE/ENDED/CANCELLED)
+- `LiveService`, `LiveController` (index, show, attend, unattend + CSRF)
+- `AdminLiveController` (index, new, edit, cancel + validation URL)
+- `LiveVoter` (CREATE/EDIT/CANCEL/REGISTER/VIEW/MANAGE)
+- `SendLiveRemindersCommand` (--dry-run)
+- Templates : live/index, live/show, admin/live/index, admin/live/form
+- Emails : rappel 24h avant, annulation (txt + html)
+- Lives dans sidebar admin uniquement (artistes ne créent pas de lives en V1)
+
+### TRANSVERSE / RGPD ✅ COMPLET (25 mai 2026)
+- `UserChecker` : bloque les comptes anonymisés (form login + Google OAuth)
+- Rate limiting : login_throttling natif Symfony (5/15min) + register_limiter (sliding_window)
+- `trusted_proxies` configuré pour la vraie IP derrière le proxy DigitalOcean
+- Pages légales publiques : `/confidentialite`, `/cgu`, `/mentions-legales` (LegalController)
+- Bannière cookies RGPD (SameSite=Lax, Secure conditionnel HTTPS/HTTP)
+- Espace RGPD utilisateur : export JSON art.20 (incl. Formation) + anonymisation art.17
+- `User.anonymizedAt` + migration Version20260525223758
+- ⚠️ Pages légales contiennent des placeholders [À COMPLÉTER] : SIRET, adresse, DPO contact
+- ⚠️ trusted_proxies = REMOTE_ADDR (ok actuel, à changer en IP fixe si LB DigitalOcean ajouté)
+
 ### Design système (25 mai 2026)
 - `base_dashboard.html.twig` : layout sidebar artiste/structure, design Street .sd-*
 - `base_admin.html.twig` : refactorisé vers .sd-* (même sidebar Street)
@@ -72,24 +94,34 @@ metadata:
 - Auth : login/register classique + Google OAuth
 - Hub social : posts, comments, likes, articles, annuaire artistes
 - Ressourcerie basique (catalogue, soumission, admin)
-- Agent IA scraping : 7 scrapers actifs
+- Agent IA scraping : 10 scrapers actifs (3 nouveaux européens ajoutés le 26 mai)
+
+### Scraping expansion (26 mai 2026) ✅ COMPLET
+- `AppSetting` entity + `AppSettingRepository` + migration Version20260526030315 (table `app_settings`)
+- `SettingService` : get/set/upsert/upsertWithoutFlush/flush, clé API lisible depuis BDD ou env
+- `LlmExtractorService` : Mistral Small 3.2 (défaut, json_object natif) + Anthropic Haiku (fallback), switchable via `llm_provider` AppSetting
+- 3 nouveaux scrapers EU : `OnTheMoveScraper`, `ResartisScraper`, `CultureMovesEuropeScraper`
+- `AdminSettingController` : /admin/settings + /admin/settings/test-mistral + /test-anthropic
+- `SeedSettingsCommand` : 4 settings (anthropic_api_key, scraping_enabled, llm_provider, mistral_api_key)
+- Google Sheets : marqué @deprecated (GoogleSheetsService, FormatSheetsCommand, toSheetRow())
+- Documentation cron : docs/scraping-cron.md
+
+### Feature 1 — Sources pilotables depuis l'admin (26 mai 2026) ✅ COMPLET + RELU
+- `ScrapingSource` entity + `ScrapingSourceType` enum (RSS/HtmlLlm/HtmlCss) + `ScrapingRunStatus` enum (NeverRun/Success/Error)
+- Migration Version20260526150555 : table `scraping_sources` + colonne `disciplines` dans `scraped_resources`
+- `ScrapingSourceRepository` : findAllActive(), findAllOrderedByNom(), findBySlug(), findByUrl()
+- `ScraperRegistry` : annuaire slug → AbstractScraper (10 scrapers), getBySlug(), getKnownSlugs()
+- `GenericScraper` : scraper générique RSS 2.0 + Atom + HTML_LLM (sans classe PHP dédiée)
+- `ScrapeOpportunitiesCommand` : refondé — lit sources depuis BDD, plus de liste hardcodée, markRunSuccess/Error par source
+- `SeedScrapingSourcesCommand` : app:seed-scraping-sources (idempotente, 10 sources)
+- `AdminScrapingSourceController` : CRUD /admin/scraping-sources (ROLE_ADMIN, CSRF)
+- Template scraping_sources.html.twig + lien sidebar base_admin.html.twig
+- ⚠️ Clé Mistral API à saisir dans /admin/settings pour activer scrapers HTML_LLM (On The Move, EACEA)
+- Dry-run validé : 70 opportunités collectées
 
 ---
 
 ## ❌ CE QUI MANQUE (V1)
-
-### MODULE COMMUNAUTÉ — Lives planifiés (borné CDC)
-- Entity `Live` (`external_url` obligatoire, `replay_url` nullable, pas d'upload Bunny)
-- Entity `LiveAttendee`
-- Rappel email via Symfony Mailer/Messenger (pas n8n)
-- Pages : calendrier, détail, création (admin), inscription
-- `LiveVoter` existe déjà
-
-### TRANSVERSE / RGPD (~3 j/h)
-- Rate limiting `/login` + `/register` (max 5 / 15 min / IP)
-- Pages légales : `/confidentialite`, `/cgu`, `/mentions-legales`
-- Bannière consentement cookies
-- Espace RGPD utilisateur (export JSON + demande suppression)
 
 ### TESTS (~2 j/h)
 - PHPUnit 30% couverture cible
@@ -113,6 +145,5 @@ metadata:
 - admin@bazaart.fr : adresse admin en dur dans ForumService::reportThread() → TODO prod
 
 ## ALERTE PLANNING
-21 jours restants au 25 mai. Priorité : Lives (dernier module manquant), puis RGPD.
-Formation et Forum terminés et reviewés. Messagerie et Notifications semblent complètes
-mais n'ont pas encore été auditées — les passer en review avant merge.
+21 jours restants au 25 mai. TOUS les modules V1 sont terminés et commités sur `demo`.
+Reste : tests PHPUnit + infra + remplissage pages légales + review Messagerie/Notifications.
