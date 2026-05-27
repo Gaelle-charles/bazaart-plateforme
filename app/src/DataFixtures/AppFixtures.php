@@ -94,7 +94,7 @@ class AppFixtures extends Fixture
      *
      * Identifiants :
      *   Email    : admin@bazaart.fr
-     *   Password : Admin1234!
+     *   Password : Admin1234! (conforme CDC §9 : 10 chars, 1 maj, 1 chiffre)
      *   Rôle     : ROLE_ADMIN (hérite de tous les autres selon security.yaml)
      */
     private function createAdminUser(ObjectManager $manager): User
@@ -123,7 +123,7 @@ class AppFixtures extends Fixture
      *
      * Identifiants :
      *   Email    : artiste@bazaart.fr
-     *   Password : Test1234!
+     *   Password : TestPass12! (conforme CDC §9 : 10 chars, 1 maj, 1 chiffre)
      *   Rôles    : ROLE_USER (implicite) + ROLE_ARTIST
      */
     private function createArtistUser(ObjectManager $manager): User
@@ -134,7 +134,8 @@ class AppFixtures extends Fixture
             ->setRoles(['ROLE_ARTIST'])
             ->setIsVerified(true)
             ->setPassword(
-                $this->passwordHasher->hashPassword($artist, 'Test1234!')
+                // Conforme à la politique CDC §9 : min 10 chars, 1 maj, 1 chiffre
+                $this->passwordHasher->hashPassword($artist, 'TestPass12!')
             );
 
         $manager->persist($artist);
@@ -147,7 +148,7 @@ class AppFixtures extends Fixture
      *
      * Identifiants :
      *   Email    : structure@bazaart.fr
-     *   Password : Test1234!
+     *   Password : TestPass12! (conforme CDC §9 : 10 chars, 1 maj, 1 chiffre)
      *   Rôles    : ROLE_USER (implicite) + ROLE_STRUCTURE
      */
     private function createStructureUser(ObjectManager $manager): User
@@ -158,7 +159,8 @@ class AppFixtures extends Fixture
             ->setRoles(['ROLE_STRUCTURE'])
             ->setIsVerified(true)
             ->setPassword(
-                $this->passwordHasher->hashPassword($structure, 'Test1234!')
+                // Conforme à la politique CDC §9 : min 10 chars, 1 maj, 1 chiffre
+                $this->passwordHasher->hashPassword($structure, 'TestPass12!')
             );
 
         $manager->persist($structure);
