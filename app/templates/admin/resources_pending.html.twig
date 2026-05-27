@@ -368,14 +368,32 @@
 
                 </div>
 
-                {# ── Boutons d'action : Valider / Rejeter ─────────────────────── #}
+                {# ── Boutons d'action : Modifier / Valider / Rejeter ──────────────── #}
                 {#
-                  Chaque bouton est dans son propre <form method="POST"> indépendant.
+                  Chaque action POST est dans son propre <form method="POST"> indépendant.
+                  Le lien "Modifier" est un simple <a> GET (pas d'action destructive).
                   Raisons :
                    1. Les actions modifient des données → POST obligatoire
                    2. Chaque formulaire a son propre token CSRF par ressource (resource_action_{id})
+                   3. L'édition est une navigation, pas une mutation → GET suffit
                 #}
                 <div class="adm-mod-card__actions">
+
+                    {#
+                      Lien Modifier — simple GET vers le formulaire d'édition.
+                      Permet de corriger le titre/description avant de valider.
+                      Style neutre : fond sable, bordure encre — moins proéminent que Valider.
+                    #}
+                    <a href="{{ path('app_admin_resource_edit', {id: resource.id}) }}"
+                       style="display:inline-flex; align-items:center; height:38px; padding:0 18px;
+                              background:var(--bg); color:var(--ink); border:2px solid var(--ink);
+                              font-family:var(--mono); font-size:12px; font-weight:700;
+                              letter-spacing:.08em; text-transform:uppercase; text-decoration:none;
+                              transition:box-shadow var(--transition-fast);"
+                       onmouseover="this.style.boxShadow='var(--shadow-offset-sm)'"
+                       onmouseout="this.style.boxShadow='none'">
+                        ✎ Modifier
+                    </a>
 
                     {# Formulaire Valider #}
                     <form method="post" action="{{ path('app_admin_resource_publish', {id: resource.id}) }}">

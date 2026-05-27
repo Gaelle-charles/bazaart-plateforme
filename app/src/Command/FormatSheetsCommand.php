@@ -18,6 +18,11 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *
  * Lancement :
  *   docker compose exec app php bin/console app:sheets-format
+ *
+ * @deprecated Commande Google Sheets abandonnée — le scraping écrit désormais directement en BDD.
+ *   Cette commande est conservée pour compatibilité mais ne devrait plus être lancée.
+ *   À supprimer en V2 après vérification des données historiques.
+ *   Référence : tâche "Abandon Google Sheets" du 25 mai 2026.
  */
 #[AsCommand(
     name: 'app:sheets-format',

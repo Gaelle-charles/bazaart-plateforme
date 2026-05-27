@@ -1,0 +1,475 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/resource_edit.html.twig — Édition d'une Resource (Ressourcerie)
+ #
+ # Thème : Street (border-radius: 0 partout, classes .adm-*)
+ # Layout parent : base_admin.html.twig
+ #
+ # Variables disponibles (AdminController::editResource()) :
+ #   - resource : Resource — entité chargée depuis la BDD
+ #
+ # Champs éditables :
+ #   title, description, externalUrl, deadline, location
+ #
+ # Champs en lecture seule (non éditables ici) :
+ #   status (géré par Publier/Rejeter), resourceType, submittedBy,
+ #   organization, disciplines, submitterRole
+ #
+ # CSRF : token 'edit_resource_{id}' — vérifié dans AdminController::editResource()
+ #}
+
+{% block title %}Modifier la ressource — Admin BazaArt{% endblock %}
+{% block page_title %}Modifier la ressource{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+
+    /* ── Zone de contenu fond sable ─────────────────────────────────────────── */
+    .app-content {
+        background: var(--bg);
+        font-family: var(--body);
+    }
+
+    /* ── Lien retour — mono compact ─────────────────────────────────────────── */
+    .adm-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
+        text-decoration: none;
+        margin-bottom: 20px;
+        transition: color var(--transition-fast);
+    }
+    .adm-back:hover { color: var(--ink); }
+
+    /* ── En-tête de la page ─────────────────────────────────────────────────── */
+    .adm-edit-header {
+        margin-bottom: 28px;
+    }
+    .adm-edit-title {
+        font-family: var(--display);
+        font-size: 22px;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--ink);
+        margin-bottom: 6px;
+    }
+    .adm-edit-subtitle {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+
+    /* ── Grille deux colonnes : formulaire à gauche, lecture seule à droite ── */
+    .adm-edit-grid {
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        gap: 24px;
+        align-items: start;
+    }
+
+    /* ── Formulaire d'édition ────────────────────────────────────────────────── */
+    .adm-form {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+    }
+
+    /* En-tête du bloc formulaire */
+    .adm-form-header {
+        padding: 12px 18px;
+        background: var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--accent);
+    }
+
+    /* Corps du formulaire */
+    .adm-form-body {
+        padding: 22px 18px;
+    }
+
+    /* ── Champ de formulaire ─────────────────────────────────────────────────── */
+    .adm-field {
+        margin-bottom: 18px;
+    }
+    .adm-field:last-child { margin-bottom: 0; }
+
+    .adm-label {
+        display: block;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .10em;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin-bottom: 6px;
+    }
+    .adm-label--required::after {
+        content: ' *';
+        color: var(--accent-2);
+    }
+
+    /* Inputs : bords francs, fond sable clair */
+    .adm-input,
+    .adm-textarea {
+        width: 100%;
+        padding: 9px 12px;
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+        background: var(--bg-alt);
+        border: 1px solid var(--ink);
+        border-radius: 0;          /* Design Street : aucun arrondi */
+        outline: none;
+        transition: border-color var(--transition-fast), background var(--transition-fast);
+        box-sizing: border-box;
+    }
+    .adm-input:focus,
+    .adm-textarea:focus {
+        border-color: var(--accent);
+        background: #fff;
+    }
+
+    .adm-textarea {
+        min-height: 160px;
+        resize: vertical;
+        line-height: 1.6;
+    }
+
+    /* Note d'aide sous le champ */
+    .adm-field-hint {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+        margin-top: 5px;
+    }
+
+    /* ── Bloc "Métadonnées" (lecture seule) à droite ────────────────────────── */
+    .adm-meta-bloc {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+    }
+    .adm-meta-header {
+        padding: 12px 18px;
+        background: var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--accent);
+    }
+    .adm-meta-body {
+        padding: 16px 18px;
+    }
+
+    /* Ligne de métadonnée : label + valeur */
+    .adm-meta-row {
+        margin-bottom: 14px;
+    }
+    .adm-meta-row:last-child { margin-bottom: 0; }
+    .adm-meta-label {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: 3px;
+    }
+    .adm-meta-value {
+        font-size: 13px;
+        color: var(--ink);
+        font-weight: 500;
+        word-break: break-word;
+    }
+
+    /* Badges de statut */
+    .adm-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 9px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+    .adm-badge--pending   { background: var(--accent-2); color: var(--ink); }
+    .adm-badge--published { background: var(--accent);   color: var(--ink); }
+    .adm-badge--rejected  { background: var(--danger);   color: #fff; }
+
+    /* ── Barre d'actions (bas du formulaire) ────────────────────────────────── */
+    .adm-form-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 18px;
+        border-top: 1px solid var(--ink);
+        background: var(--bg-alt);
+    }
+
+    /* Bouton principal : Enregistrer */
+    .adm-btn-save {
+        height: 36px;
+        padding: 0 22px;
+        background: var(--accent);
+        color: var(--ink);
+        border: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: box-shadow var(--transition-fast);
+    }
+    .adm-btn-save:hover { box-shadow: var(--shadow-offset-sm); }
+
+    /* Lien Annuler — discret */
+    .adm-btn-cancel {
+        height: 36px;
+        padding: 0 18px;
+        display: inline-flex;
+        align-items: center;
+        background: var(--bg);
+        color: var(--ink-mute);
+        border: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        text-decoration: none;
+        cursor: pointer;
+        transition: color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .adm-btn-cancel:hover { color: var(--ink); box-shadow: var(--shadow-offset-sm); }
+
+    /* Responsive : passe en colonne unique sous 800px */
+    @media (max-width: 800px) {
+        .adm-edit-grid { grid-template-columns: 1fr; }
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Lien retour vers la liste des ressources ─────────────────────────────── #}
+<a href="{{ path('app_admin_resources_all') }}" class="adm-back">
+    ← Toutes les ressources
+</a>
+
+{# ── En-tête de la page d'édition ────────────────────────────────────────── #}
+<div class="adm-edit-header">
+    <h2 class="adm-edit-title">Modifier la ressource</h2>
+    {# Sous-titre : ID + type pour s'y retrouver facilement #}
+    <p class="adm-edit-subtitle">
+        #{{ resource.id }}
+        · {{ resource.resourceType.name }}
+        · Soumise le {{ resource.createdAt|date('d/m/Y') }}
+    </p>
+</div>
+
+{# ── Grille formulaire + métadonnées ─────────────────────────────────────── #}
+<div class="adm-edit-grid">
+
+    {# ──────────────────────────────────────────────────────────────────────
+       FORMULAIRE D'ÉDITION
+       Action : POST sur la même URL (route app_admin_resource_edit).
+       Token CSRF : 'edit_resource_{id}'.
+    ────────────────────────────────────────────────────────────────────── #}
+    <form method="post"
+          action="{{ path('app_admin_resource_edit', {id: resource.id}) }}">
+
+        {# Token CSRF caché — vérifié dans AdminController::editResource() #}
+        <input type="hidden" name="_token" value="{{ csrf_token('edit_resource_' ~ resource.id) }}">
+
+        <div class="adm-form">
+            <div class="adm-form-header">Champs éditables</div>
+            <div class="adm-form-body">
+
+                {# ── Titre (obligatoire, max 255 chars) ───────────────── #}
+                <div class="adm-field">
+                    <label class="adm-label adm-label--required" for="title">Titre</label>
+                    <input class="adm-input"
+                           type="text"
+                           id="title"
+                           name="title"
+                           maxlength="255"
+                           required
+                           value="{{ resource.title|e('html_attr') }}">
+                </div>
+
+                {# ── Description (obligatoire, textarea) ──────────────── #}
+                {#
+                  getDescription() retourne string (non nullable), donc pas de ?: ''
+                  nécessaire. Mais on sécurise quand même avec |e pour éviter tout XSS.
+                #}
+                <div class="adm-field">
+                    <label class="adm-label adm-label--required" for="description">Description</label>
+                    <textarea class="adm-textarea"
+                              id="description"
+                              name="description"
+                              required>{{ resource.description|e }}</textarea>
+                </div>
+
+                {# ── URL externe (nullable, doit être valide si renseignée) #}
+                <div class="adm-field">
+                    <label class="adm-label" for="externalUrl">URL externe</label>
+                    <input class="adm-input"
+                           type="url"
+                           id="externalUrl"
+                           name="externalUrl"
+                           maxlength="500"
+                           placeholder="https://…"
+                           value="{{ resource.externalUrl ? resource.externalUrl|e('html_attr') : '' }}">
+                    <p class="adm-field-hint">Lien vers la page de l'organisme qui propose l'opportunité.</p>
+                </div>
+
+                {# ── Date limite (nullable, format YYYY-MM-DD pour l'input HTML) ── #}
+                {#
+                  L'entité stocke un objet \DateTimeInterface.
+                  On le formate en 'Y-m-d' pour l'attribut value de <input type="date">.
+                  Si la deadline est null, on laisse le champ vide.
+                #}
+                <div class="adm-field">
+                    <label class="adm-label" for="deadline">Date limite de candidature</label>
+                    <input class="adm-input"
+                           type="date"
+                           id="deadline"
+                           name="deadline"
+                           value="{{ resource.deadline ? resource.deadline|date('Y-m-d') : '' }}">
+                    <p class="adm-field-hint">
+                        Format : YYYY-MM-DD (ex: 2026-06-30). Laisser vide si non renseignée.
+                    </p>
+                </div>
+
+                {# ── Localisation (nullable, max 150 chars) ───────────── #}
+                <div class="adm-field">
+                    <label class="adm-label" for="location">Lieu / Localisation</label>
+                    <input class="adm-input"
+                           type="text"
+                           id="location"
+                           name="location"
+                           maxlength="150"
+                           placeholder="Ex: Paris, Lyon, International, En ligne…"
+                           value="{{ resource.location ? resource.location|e('html_attr') : '' }}">
+                </div>
+
+            </div>{# /adm-form-body #}
+
+            {# ── Barre d'actions ────────────────────────────────────────── #}
+            <div class="adm-form-actions">
+                <button type="submit" class="adm-btn-save">Enregistrer</button>
+                <a href="{{ path('app_admin_resources_all') }}" class="adm-btn-cancel">
+                    Annuler
+                </a>
+            </div>
+
+        </div>{# /adm-form #}
+
+    </form>
+
+    {# ──────────────────────────────────────────────────────────────────────
+       BLOC MÉTADONNÉES (lecture seule)
+       Ces informations de soumission ne doivent pas être modifiées par l'admin :
+       - resourceType   → catégorisation de la ressource
+       - submittedBy    → traçabilité de l'auteur (audit)
+       - status         → géré par Publier/Rejeter dans la liste
+       - submitterRole  → rôle du contributeur (artiste / structure / admin)
+       - organization   → organisation liée (si soumission Structure)
+    ────────────────────────────────────────────────────────────────────── #}
+    <div>
+        <div class="adm-meta-bloc">
+            <div class="adm-meta-header">Métadonnées (lecture seule)</div>
+            <div class="adm-meta-body">
+
+                {# Type de ressource — catégorie #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Type de ressource</div>
+                    <div class="adm-meta-value">
+                        {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
+                    </div>
+                </div>
+
+                {# Soumis par — email de l'utilisateur auteur #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Soumis par</div>
+                    <div class="adm-meta-value">{{ resource.submittedBy.email }}</div>
+                </div>
+
+                {# Rôle du soumetteur — artiste / structure / admin #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Rôle soumetteur</div>
+                    <div class="adm-meta-value">{{ resource.submitterRole.value }}</div>
+                </div>
+
+                {# Organisation liée (si soumission Structure) #}
+                {% if resource.organization %}
+                    <div class="adm-meta-row">
+                        <div class="adm-meta-label">Organisation</div>
+                        <div class="adm-meta-value">{{ resource.organization.name }}</div>
+                    </div>
+                {% endif %}
+
+                {# Statut de la ressource (non éditable ici) #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Statut</div>
+                    <div class="adm-meta-value">
+                        {# On affiche un badge coloré selon le statut de l'entité #}
+                        {% if resource.isPending %}
+                            <span class="adm-badge adm-badge--pending">En attente</span>
+                        {% elseif resource.isPublished %}
+                            <span class="adm-badge adm-badge--published">Publiée</span>
+                        {% else %}
+                            <span class="adm-badge adm-badge--rejected">Rejetée</span>
+                        {% endif %}
+                        <p style="font-family:var(--mono);font-size:10px;color:var(--ink-mute);margin-top:6px;letter-spacing:.04em;">
+                            Géré via Publier / Rejeter dans la liste.
+                        </p>
+                    </div>
+                </div>
+
+                {# Date de création #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Créée le</div>
+                    <div class="adm-meta-value">{{ resource.createdAt|date('d/m/Y à H:i') }}</div>
+                </div>
+
+                {# Date de dernière modification #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Modifiée le</div>
+                    <div class="adm-meta-value">{{ resource.updatedAt|date('d/m/Y à H:i') }}</div>
+                </div>
+
+                {# Disciplines artistiques liées (ManyToMany) #}
+                {% if resource.disciplines is not empty %}
+                    <div class="adm-meta-row">
+                        <div class="adm-meta-label">Disciplines</div>
+                        <div class="adm-meta-value">
+                            {% for d in resource.disciplines %}
+                                <span style="font-size:12px;">{{ d.name }}</span>{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+            </div>{# /adm-meta-body #}
+        </div>
+    </div>
+
+</div>{# /adm-edit-grid #}
+
+{% endblock %}

@@ -1,0 +1,584 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/scraping_sources.html.twig — Gestion des sources de scraping
+ #
+ # Thème : Street (tokens CSS depuis design-tokens.css)
+ # Variables disponibles :
+ #   - sources   : ScrapingSource[] — liste complète (actives + inactives)
+ #   - types     : ScrapingSourceType[] — types autorisés dans le formulaire (RSS, HTML_LLM)
+ #   - known_slugs : string[] — slugs connus dans ScraperRegistry
+ #}
+
+{% block title %}Sources de scraping — Admin BazaArt{% endblock %}
+
+{% block page_title %}Sources de scraping{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+
+    /* ── Fond de page ──────────────────────────────────────────────────────── */
+    .app-content { background: var(--bg); font-family: var(--body); }
+
+    /* ── En-tête de page ────────────────────────────────────────────────────── */
+    .ss-header {
+        background: var(--ink);
+        color: var(--bg);
+        padding: 20px 0 18px;
+        margin: -28px -28px 28px;
+        border-bottom: 1px solid var(--ink);
+    }
+    .ss-header__inner {
+        padding: 0 28px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .ss-header__eyebrow {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .12em;
+        color: var(--accent);
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+    .ss-header__title {
+        font-family: var(--display);
+        font-size: 28px;
+        line-height: .95;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--bg);
+    }
+    .ss-header__serif {
+        font-family: var(--serif);
+        font-style: italic;
+        font-size: 20px;
+        text-transform: none;
+        display: block;
+    }
+    .ss-header__meta {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: rgba(242,239,230,.55);
+        letter-spacing: .04em;
+        text-align: right;
+    }
+
+    /* ── Tableau des sources ─────────────────────────────────────────────────── */
+    .ss-table-wrap {
+        border: 1px solid var(--ink);
+        overflow-x: auto;
+        margin-bottom: 32px;
+    }
+
+    .ss-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        background: var(--bg);
+    }
+
+    /* En-têtes du tableau */
+    .ss-table thead tr {
+        background: var(--ink);
+        color: var(--bg);
+    }
+    .ss-table thead th {
+        padding: 10px 14px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        text-align: left;
+        white-space: nowrap;
+        border-right: 1px solid rgba(242,239,230,.1);
+    }
+    .ss-table thead th:last-child { border-right: none; }
+
+    /* Lignes de données */
+    .ss-table tbody tr {
+        border-bottom: 1px solid var(--line-soft);
+        transition: background var(--transition-fast);
+    }
+    .ss-table tbody tr:last-child { border-bottom: none; }
+    .ss-table tbody tr:hover { background: var(--bg-alt); }
+
+    /* Ligne désactivée — visuellement atténuée */
+    .ss-table tbody tr.ss-row--inactive { opacity: .55; }
+
+    .ss-table tbody td {
+        padding: 10px 14px;
+        vertical-align: middle;
+        border-right: 1px solid var(--line-soft);
+    }
+    .ss-table tbody td:last-child { border-right: none; }
+
+    /* Nom de la source en gras */
+    .ss-nom {
+        font-weight: 600;
+        color: var(--ink);
+        display: block;
+        margin-bottom: 2px;
+    }
+    .ss-slug {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+
+    /* ── Chips de type ──────────────────────────────────────────────────────── */
+    .ss-chip {
+        display: inline-block;
+        padding: 2px 8px;
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        white-space: nowrap;
+    }
+    /* RSS : fond vert acide (accent) */
+    .ss-chip--rss      { background: var(--accent); color: var(--ink); }
+    /* HTML_LLM : fond orange (accent-2) */
+    .ss-chip--html_llm { background: var(--accent-2); color: var(--ink); }
+    /* HTML_CSS : fond ardoise / encre claire */
+    .ss-chip--html_css { background: var(--bg-alt); color: var(--ink); }
+
+    /* ── Badges de statut ───────────────────────────────────────────────────── */
+    .ss-status {
+        display: inline-block;
+        padding: 2px 8px;
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        border: 1px solid;
+        border-radius: 0;
+        white-space: nowrap;
+    }
+    /* Jamais lancé : gris neutre */
+    .ss-status--never_run {
+        background: var(--bg-alt);
+        color: var(--ink-mute);
+        border-color: var(--line-soft);
+    }
+    /* Succès : vert acide */
+    .ss-status--success {
+        background: rgba(198,242,78,.2);
+        color: #2a6e00;
+        border-color: var(--accent);
+    }
+    /* Erreur : orange */
+    .ss-status--error {
+        background: rgba(255,107,44,.15);
+        color: #c4400c;
+        border-color: var(--accent-2);
+        cursor: help; /* indique qu'il y a un tooltip */
+    }
+
+    /* ── Info date/items ────────────────────────────────────────────────────── */
+    .ss-run-info {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .03em;
+        white-space: nowrap;
+    }
+
+    /* ── Toggle actif/inactif ───────────────────────────────────────────────── */
+    /* Bouton pill ON/OFF — style Street */
+    .ss-toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    /* Source active → bouton "Désactiver" (fond encre, texte sable) */
+    .ss-toggle-btn--on  { background: var(--ink); color: var(--bg); }
+    /* Source inactive → bouton "Activer" (fond sable, texte encre) */
+    .ss-toggle-btn--off { background: var(--bg); color: var(--ink); }
+    .ss-toggle-btn:hover { box-shadow: var(--shadow-offset-sm); }
+
+    /* ── Bouton danger (supprimer) ──────────────────────────────────────────── */
+    .ss-del-btn {
+        padding: 4px 10px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        border: 1px solid var(--danger, #dc3545);
+        border-radius: 0;
+        background: var(--bg);
+        color: var(--danger, #dc3545);
+        transition: background var(--transition-fast);
+    }
+    .ss-del-btn:hover { background: rgba(220,53,69,.08); }
+
+    /* ── État vide ──────────────────────────────────────────────────────────── */
+    .ss-empty {
+        padding: 48px 24px;
+        text-align: center;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink-mute);
+        letter-spacing: .06em;
+        border: 1px solid var(--ink);
+    }
+
+    /* ── Formulaire d'ajout ─────────────────────────────────────────────────── */
+    .ss-add {
+        border: 1px solid var(--ink);
+        background: var(--bg-alt);
+        margin-bottom: 32px;
+    }
+    .ss-add__header {
+        background: var(--ink);
+        color: var(--bg);
+        padding: 12px 20px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+    }
+    .ss-add__body {
+        padding: 20px;
+        display: grid;
+        grid-template-columns: 2fr 2fr 1fr 1fr 1fr;
+        gap: 12px;
+        align-items: end;
+    }
+    .ss-add__group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .ss-add__label {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+    .ss-add__input, .ss-add__select {
+        padding: 9px 10px;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink);
+        background: var(--bg);
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        outline: none;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .ss-add__input:focus, .ss-add__select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(198,242,78,.2);
+    }
+    .ss-add__submit {
+        padding: 9px 18px;
+        background: var(--accent);
+        color: var(--ink);
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: box-shadow var(--transition-fast);
+    }
+    .ss-add__submit:hover { box-shadow: var(--shadow-offset-sm); }
+
+    /* Note d'avertissement sur HTML_CSS */
+    .ss-add__note {
+        grid-column: 1 / -1;
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .03em;
+        padding: 8px 12px;
+        border: 1px solid var(--line-soft);
+        background: var(--bg);
+    }
+
+    /* ── Responsive ─────────────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+        .ss-add__body { grid-template-columns: 1fr 1fr; }
+        .ss-add__submit { grid-column: 1 / -1; }
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── En-tête ─────────────────────────────────────────────────────────────── #}
+<div class="ss-header">
+    <div class="ss-header__inner">
+        <div>
+            <div class="ss-header__eyebrow">● Scraping · sources actives</div>
+            <div class="ss-header__title">
+                SOURCES<br>
+                <span class="ss-header__serif">Scraping.</span>
+            </div>
+        </div>
+        <div class="ss-header__meta">
+            {# Comptage rapide actives / total #}
+            {% set activeCount = sources|filter(s => s.actif)|length %}
+            {{ activeCount }} active(s) / {{ sources|length }} total<br>
+            <span style="font-size: 10px;">Géré via la BDD — pas de code PHP à modifier</span>
+        </div>
+    </div>
+</div>
+
+{# ── Formulaire d'ajout d'une nouvelle source ─────────────────────────────── #}
+{#
+   DÉCISION Q2 : le formulaire ne propose QUE RSS et HTML_LLM.
+   HTML_CSS est exclu car il nécessite une classe PHP dédiée (sélecteurs CSS spécifiques).
+   Pour ajouter une source HTML_CSS → utiliser app:seed-scraping-sources.
+#}
+<div class="ss-add">
+    <div class="ss-add__header">+ Ajouter une nouvelle source</div>
+    <form method="post" action="{{ path('app_admin_scraping_sources_create') }}" class="ss-add__body">
+
+        {# Token CSRF — nommé 'new_scraping_source' (vérifié dans le controller) #}
+        <input type="hidden" name="_token" value="{{ csrf_token('new_scraping_source') }}">
+
+        {# Nom #}
+        <div class="ss-add__group">
+            <label class="ss-add__label" for="nom">Nom de la source</label>
+            <input class="ss-add__input" type="text" id="nom" name="nom"
+                   placeholder="Ex: CNM - Centre National de la Musique" required>
+        </div>
+
+        {# URL #}
+        <div class="ss-add__group">
+            <label class="ss-add__label" for="url">URL</label>
+            <input class="ss-add__input" type="url" id="url" name="url"
+                   placeholder="https://..." required>
+        </div>
+
+        {# Type — RSS ou HTML_LLM uniquement #}
+        <div class="ss-add__group">
+            <label class="ss-add__label" for="type">Type</label>
+            <select class="ss-add__select" id="type" name="type" required>
+                {% for type in types %}
+                    <option value="{{ type.value }}">{{ type.label() }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {# Discipline principale #}
+        <div class="ss-add__group">
+            <label class="ss-add__label" for="discipline">Discipline</label>
+            <input class="ss-add__input" type="text" id="discipline" name="discipline"
+                   placeholder="Ex: Musique">
+        </div>
+
+        {# Zone géographique #}
+        <div class="ss-add__group">
+            <label class="ss-add__label" for="zone">Zone</label>
+            <input class="ss-add__input" type="text" id="zone" name="zone"
+                   placeholder="Ex: France">
+        </div>
+
+        {# Bouton de soumission #}
+        <button type="submit" class="ss-add__submit">+ Ajouter</button>
+
+        {# Note explicative sur la limitation HTML_CSS #}
+        <div class="ss-add__note">
+            Note : seuls les types RSS et HTML → LLM sont disponibles ici.
+            Pour ajouter une source avec sélecteurs CSS (HTML → CSS), utilisez la commande :
+            <code style="background: var(--ink); color: var(--accent); padding: 1px 5px;">docker compose exec app php bin/console app:seed-scraping-sources</code>
+        </div>
+
+    </form>
+</div>
+
+{# ── Tableau des sources ──────────────────────────────────────────────────── #}
+{% if sources is empty %}
+
+    <div class="ss-empty">
+        Aucune source configurée.<br>
+        Lancez : <code>docker compose exec app php bin/console app:seed-scraping-sources</code>
+    </div>
+
+{% else %}
+
+    <div class="ss-table-wrap">
+        <table class="ss-table">
+            <thead>
+                <tr>
+                    <th>Nom / Slug</th>
+                    <th>Type</th>
+                    <th>Discipline</th>
+                    <th>Zone</th>
+                    <th>Dernier run</th>
+                    <th>Items</th>
+                    <th>Statut</th>
+                    <th>Actif</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for source in sources %}
+                    {#
+                       .ss-row--inactive atténue visuellement les sources désactivées.
+                       Elles restent dans la liste pour que l'admin puisse les réactiver.
+                    #}
+                    <tr class="{{ not source.actif ? 'ss-row--inactive' : '' }}">
+
+                        {# Colonne Nom + Slug #}
+                        <td>
+                            <span class="ss-nom">{{ source.nom|e }}</span>
+                            {% if source.scraperSlug %}
+                                {# Le slug indique que cette source a une classe PHP dédiée #}
+                                <span class="ss-slug">slug: {{ source.scraperSlug|e }}</span>
+                            {% else %}
+                                {# Pas de slug = GenericScraper prendra le relais #}
+                                <span class="ss-slug" style="color: var(--accent-2);">générique</span>
+                            {% endif %}
+                        </td>
+
+                        {# Colonne Type (chip coloré selon le type) #}
+                        <td>
+                            <span class="ss-chip ss-chip--{{ source.type.value|e }}">
+                                {{ source.type.label()|e }}
+                            </span>
+                        </td>
+
+                        {# Colonne Discipline #}
+                        <td style="font-size: 12px; color: var(--ink-mute);">
+                            {{ source.disciplinePrincipale|default('—')|e }}
+                        </td>
+
+                        {# Colonne Zone géographique #}
+                        <td style="font-size: 12px; color: var(--ink-mute); white-space: nowrap;">
+                            {{ source.paysZone|default('—')|e }}
+                        </td>
+
+                        {# Colonne Dernier run (date) #}
+                        <td>
+                            {% if source.derniereExecution %}
+                                <span class="ss-run-info">
+                                    {{ source.derniereExecution|date('d/m/Y H:i') }}
+                                </span>
+                            {% else %}
+                                <span class="ss-run-info">—</span>
+                            {% endif %}
+                        </td>
+
+                        {# Colonne Items (nb opportunités trouvées au dernier run) #}
+                        <td style="text-align: center;">
+                            <span class="ss-run-info">{{ source.nbItemsDernierRun }}</span>
+                        </td>
+
+                        {# Colonne Statut (badge coloré avec tooltip si erreur) #}
+                        <td>
+                            <span class="ss-status ss-status--{{ source.statutDernierRun.value|e }}"
+                                  {# Si erreur, affiche le message en tooltip (title HTML) #}
+                                  {% if source.statutDernierRun.value == 'error' and source.messageErreur %}
+                                      title="{{ source.messageErreur|e }}"
+                                  {% endif %}>
+                                {{ source.statutDernierRun.label()|e }}
+                            </span>
+                        </td>
+
+                        {# Colonne Actif (indicateur visuel) #}
+                        <td style="text-align: center;">
+                            {# Point vert (active) ou croix rouge (inactive) #}
+                            {% if source.actif %}
+                                <span style="color: #2a6e00; font-weight: 700; font-size: 16px;" title="Active">●</span>
+                            {% else %}
+                                <span style="color: var(--danger, #dc3545); font-weight: 700; font-size: 16px;" title="Inactive">○</span>
+                            {% endif %}
+                        </td>
+
+                        {# Colonne Actions : toggle actif + supprimer #}
+                        <td style="white-space: nowrap; display: flex; gap: 6px; flex-wrap: wrap;">
+
+                            {# Bouton toggle actif / inactif #}
+                            {#
+                               CSRF : token nommé 'scraping_source_{id}' — vérifié dans toggle().
+                               Utilise le même nom de token que la suppression pour simplifier
+                               (chaque action a son formulaire séparé, pas de confusion).
+                            #}
+                            <form method="post"
+                                  action="{{ path('app_admin_scraping_sources_toggle', {id: source.id}) }}"
+                                  style="display: inline;">
+                                <input type="hidden" name="_token"
+                                       value="{{ csrf_token('scraping_source_' ~ source.id) }}">
+                                <button type="submit"
+                                        class="ss-toggle-btn {{ source.actif ? 'ss-toggle-btn--on' : 'ss-toggle-btn--off' }}">
+                                    {{ source.actif ? 'Désactiver' : 'Activer' }}
+                                </button>
+                            </form>
+
+                            {# Bouton supprimer — confirmation JS avant envoi #}
+                            <form method="post"
+                                  action="{{ path('app_admin_scraping_sources_delete', {id: source.id}) }}"
+                                  style="display: inline;"
+                                  onsubmit="return confirm('Supprimer la source « {{ source.nom|e('js') }} » ? Cette action est irréversible.')">
+                                <input type="hidden" name="_token"
+                                       value="{{ csrf_token('scraping_source_' ~ source.id) }}">
+                                <button type="submit" class="ss-del-btn">Supprimer</button>
+                            </form>
+
+                        </td>
+
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endif %}
+
+{# ── Note de bas de page ──────────────────────────────────────────────────── #}
+<div style="
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    padding: 16px;
+    border: 1px solid var(--line-soft);
+    background: var(--bg-alt);
+    letter-spacing: .03em;
+    line-height: 1.6;
+">
+    Pour lancer le scraping manuellement :
+    <code style="background: var(--ink); color: var(--accent); padding: 2px 6px; font-size: 11px;">
+        docker compose exec app php bin/console app:scrape-opportunities
+    </code>
+    <br>
+    Option <code style="background: var(--ink); color: var(--accent); padding: 1px 4px;">--dry-run</code>
+    pour tester sans écrire en BDD.
+    Slugs connus (classes PHP dédiées) :
+    <code style="background: var(--bg); border: 1px solid var(--line-soft); padding: 1px 5px;">{{ known_slugs|join(', ')|e }}</code>
+</div>
+
+{% endblock %}

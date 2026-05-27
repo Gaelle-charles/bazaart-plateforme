@@ -358,6 +358,19 @@
                         <td>
                             <div class="adm-actions-cell">
 
+                                {#
+                                  Modifier — lien GET vers le formulaire d'édition.
+                                  Toujours visible (quel que soit le statut) : l'admin
+                                  peut corriger une ressource même après publication.
+                                  Style neutre (fond bg-alt) distinct des actions de statut.
+                                #}
+                                <a href="{{ path('app_admin_resource_edit', {id: resource.id}) }}"
+                                   class="adm-action-btn adm-action-btn--reset"
+                                   title="Modifier cette ressource"
+                                   style="text-decoration:none; display:inline-flex; align-items:center;">
+                                    ✎ Modifier
+                                </a>
+
                                 {# Publier — visible uniquement si la ressource n'est pas déjà publiée #}
                                 {% if not resource.isPublished %}
                                     <form method="post" action="{{ path('app_admin_resource_publish', {id: resource.id}) }}">

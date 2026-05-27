@@ -59,6 +59,15 @@ class ScrapedResource
     #[ORM\Column(type: 'integer')]
     private int $relevanceScore = 0;
 
+    /**
+     * Disciplines artistiques concernées par cette opportunité.
+     * Valeur libre (ex: "Musique, Arts plastiques", "Résidences", "Toutes disciplines").
+     * Rempli par le scraper (AbstractRssScraper::getDisciplines(), GenericScraper, LlmExtractorService).
+     * Null si non renseigné par la source.
+     */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $disciplines = null;
+
     /** URLs de documents PDF séparées par des virgules */
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $documents = null;
@@ -110,13 +119,30 @@ class ScrapedResource
     public function getDocuments(): ?string { return $this->documents; }
     public function setDocuments(?string $documents): static { $this->documents = $documents; return $this; }
 
+    public function getDisciplines(): ?string { return $this->disciplines; }
+    public function setDisciplines(?string $disciplines): static { $this->disciplines = $disciplines; return $this; }
+
     public function getStatus(): ScrapedResourceStatus { return $this->status; }
     public function setStatus(ScrapedResourceStatus $status): static { $this->status = $status; return $this; }
 
     public function isPending(): bool  { return $this->status === ScrapedResourceStatus::Pending; }
     public function isVerified(): bool { return $this->status === ScrapedResourceStatus::Verified; }
+
     /** Vrai si l'opportunité a été rejetée par un admin (hors sujet ou doublon). */
     public function isRejected(): bool { return $this->status === ScrapedResourceStatus::Rejected; }
+
+    /**
+     * Vrai si l'opportunité est archivée.
+     *
+     * L'archivage est automatique (deadline passée, détectée par ScrapedResourceRepository::archiveExpired())
+     * ou manuel (futur bouton "Archiver" dans l'interface admin).
+     *
+     * Pourquoi un statut distinct de Rejected ?
+     *   Une opportunité archivée était valide — elle était bien dans le scope Bazaart.
+     *   La conserver avec un statut distinct permet à l'admin de distinguer
+     *   "hors sujet" (Rejected) de "pertinente mais expirée" (Archived) dans les stats.
+     */
+    public function isArchived(): bool { return $this->status === ScrapedResourceStatus::Archived; }
 
     public function getScrapedAt(): \DateTimeInterface { return $this->scrapedAt; }
 }

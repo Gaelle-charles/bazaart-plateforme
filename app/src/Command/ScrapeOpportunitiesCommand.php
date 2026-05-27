@@ -1,17 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Command;
 
 use App\Entity\ScrapedResource;
 use App\Repository\ScrapedResourceRepository;
-use App\Service\AfrodiasporaRelevanceScorer;
-use App\Service\Scraper\AdagpScraper;
-use App\Service\Scraper\CnapScraper;
-use App\Service\Scraper\CnmScraper;
-use App\Service\Scraper\CultureGouvScraper;
-use App\Service\Scraper\MusiquesActuellesScraper;
-use App\Service\Scraper\ProHelvetiaScraper;
-use App\Service\Scraper\SaifScraper;
+use App\Repository\ScrapingSourceRepository;
+use App\Service\GenericScraper;
+use App\Service\ScraperRegistry;
+use App\Service\SettingService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -21,44 +19,58 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * ScrapeOpportunitiesCommand — Collecte les opportunités culturelles et les stocke en BDD.
+ * ScrapeOpportunitiesCommand — Collecte les opportunités culturelles depuis les sources BDD.
  *
- * Flux :
- *   1. Scrapers collectent les opportunités sur chaque site
- *   2. Score Afrodiaspora calculé pour chaque opportunité
- *   3. Sauvegarde en BDD dans la table scraped_resources (status = 'pending')
- *   4. Déduplication par URL : une opportunité déjà présente n'est pas réinsérée
+ * Flux de traitement :
+ *   1. Lecture des sources actives depuis scraping_sources (BDD)
+ *   2. Pour chaque source :
+ *      a. Si scraperSlug renseigné → ScraperRegistry::getBySlug() → scraper PHP custom
+ *      b. Si scraperSlug null → GenericScraper (RSS ou HTML_LLM selon le type)
+ *      c. Slug inconnu → markRunError() + message visible dans l'admin
+ *   3. Sauvegarde des opportunités en BDD (scraped_resources) avec déduplication par URL
+ *   4. Archivage automatique des opportunités expirées (deadline passée)
+ *   5. Mise à jour des stats de chaque source (markRunSuccess / markRunError)
+ *
+ * Les sources sont gérées depuis /admin/scraping-sources (plus aucune liste hardcodée ici).
+ * Pour ajouter une source : utiliser le formulaire admin ou app:seed-scraping-sources.
  *
  * Lancement manuel :
  *   docker compose exec app php bin/console app:scrape-opportunities
  *
- * Option --dry-run pour tester sans écrire en BDD :
- *   docker compose exec app php bin/console app:scrape-opportunities --dry-run
+ * Options :
+ *   --dry-run : affiche sans écrire en BDD
+ *   --debug   : affiche les détails techniques de chaque fetch
+ *   --source=NomDeLaSource : lance uniquement la source dont le nom correspond
  *
- * Automatisation (cron 3x/semaine → lundi, mercredi, vendredi à 7h) :
- *   0 7 * * 1,3,5 docker compose exec -T app php bin/console app:scrape-opportunities
+ * Automatisation (cron 3x/semaine : lundi, mercredi, vendredi à 7h UTC) :
+ *   0 7 * * 1,3,5 cd /home/bazaart && docker compose exec -T app php bin/console app:scrape-opportunities --env=prod
+ *
+ * Prérequis LLM :
+ *   Configurer la clé API Mistral (recommandé) ou Anthropic dans /admin/settings.
  */
 #[AsCommand(
     name: 'app:scrape-opportunities',
-    description: 'Scrape les opportunités culturelles françaises et les stocke en base de données',
+    description: 'Scrape les opportunités culturelles depuis les sources BDD et les stocke dans scraped_resources',
 )]
 class ScrapeOpportunitiesCommand extends Command
 {
     public function __construct(
-        private readonly CnapScraper $cnapScraper,
-        private readonly CnmScraper $cnmScraper,
-        private readonly ProHelvetiaScraper $proHelvetiaScraper,
-        private readonly SaifScraper $saifScraper,
-        private readonly MusiquesActuellesScraper $musiquesActuellesScraper,
-        // AdagpScraper et CultureGouvScraper existaient déjà dans src/Service/Scraper/
-        // mais n'étaient pas branchés dans cette commande. On les active ici.
-        private readonly AdagpScraper $adagpScraper,
-        private readonly CultureGouvScraper $cultureGouvScraper,
-        private readonly AfrodiasporaRelevanceScorer $relevanceScorer,
-        // EntityManager pour sauvegarder en BDD
+        // ── Accès aux sources BDD ────────────────────────────────────────────
+        // ScrapingSourceRepository lit les sources actives depuis scraping_sources.
+        // Plus aucune liste hardcodée ici — tout est géré depuis /admin/scraping-sources.
+        private readonly ScrapingSourceRepository $scrapingSourceRepository,
+        // ── Scrapers ─────────────────────────────────────────────────────────
+        // ScraperRegistry retourne le scraper PHP custom pour un scraperSlug donné.
+        private readonly ScraperRegistry $scraperRegistry,
+        // GenericScraper gère les sources sans classe dédiée (scraperSlug = null).
+        private readonly GenericScraper $genericScraper,
+        // ── Persistence BDD ──────────────────────────────────────────────────
+        // EntityManager pour persister les nouvelles ScrapedResource.
         private readonly EntityManagerInterface $em,
-        // Repository pour vérifier les doublons avant insertion
+        // Repository pour vérifier les doublons (déduplication par URL).
         private readonly ScrapedResourceRepository $scrapedResourceRepository,
+        // SettingService pour lire 'scraping_enabled' (switch admin on/off).
+        private readonly SettingService $settingService,
     ) {
         parent::__construct();
     }
@@ -75,15 +87,35 @@ class ScrapeOpportunitiesCommand extends Command
             'debug',
             null,
             InputOption::VALUE_NONE,
-            'Affiche les détails techniques de chaque fetch (status HTTP, sélecteurs trouvés...)'
+            'Affiche les détails techniques de chaque fetch (status HTTP, taille HTML...)'
+        );
+        $this->addOption(
+            'source',
+            null,
+            InputOption::VALUE_REQUIRED,
+            'Lance uniquement la source dont le nom correspond (ex: --source="CNM - Centre National de la Musique")'
         );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io        = new SymfonyStyle($input, $output);
-        $isDryRun  = $input->getOption('dry-run');
-        $isDebug   = $input->getOption('debug');
+        $io       = new SymfonyStyle($input, $output);
+        $isDryRun = (bool) $input->getOption('dry-run');
+        $isDebug  = (bool) $input->getOption('debug');
+
+        // getOption() retourne mixed — on caste explicitement en string|null
+        // pour satisfaire PHPStan niveau 6 et éviter toute ambiguïté de type.
+        $rawFilter    = $input->getOption('source');
+        $sourceFilter = is_string($rawFilter) ? $rawFilter : null;
+
+        // ── Vérification du switch admin "scraping_enabled" ──────────────────
+        // L'admin peut couper le scraping depuis /admin/settings sans toucher au cron.
+        // Valeur par défaut '1' : si le setting n'existe pas encore, le scraping est actif.
+        if ($this->settingService->get('scraping_enabled', '1') === '0') {
+            $io->warning('Scraping désactivé via le dashboard admin (paramètre scraping_enabled = 0).');
+            $io->note('Pour forcer malgré tout, modifiez le paramètre dans /admin/settings.');
+            return Command::SUCCESS;
+        }
 
         $io->title('BazaArt — Scraping des opportunités culturelles');
 
@@ -91,56 +123,98 @@ class ScrapeOpportunitiesCommand extends Command
             $io->note('Mode DRY-RUN actif : les données ne seront PAS écrites en base de données');
         }
 
-        // ── Liste des scrapers actifs ────────────────────────────────────────
-        // Pour ajouter un site : créer son scraper et l'ajouter ici
-        $scrapers = [
-            $this->cnapScraper,                // cnap.fr             — HTML (arts plastiques)
-            $this->cnmScraper,                 // cnm.fr              — RSS  (musique)
-            $this->proHelvetiaScraper,         // prohelvetia.ch      — RSS  (multidiscipline)
-            $this->saifScraper,                // saif.fr             — HTML (image fixe)
-            $this->musiquesActuellesScraper,   // musiquesactuelles.fr — RSS  (musique FR)
-            // Scrapers nouvellement activés (étaient dans Service/Scraper/ mais non branchés)
-            $this->adagpScraper,               // adagp.fr            — droits arts visuels
-            $this->cultureGouvScraper,         // culture.gouv.fr     — ministère de la Culture
-        ];
+        // ── Chargement des sources actives depuis la BDD ─────────────────────
+        // La liste vient de la table scraping_sources (gérable depuis /admin/scraping-sources).
+        // Cela permet d'ajouter/désactiver des sources sans toucher au code PHP.
+        $sources = $this->scrapingSourceRepository->findAllActive();
+
+        if (empty($sources)) {
+            $io->warning('Aucune source active en BDD. Lancez app:seed-scraping-sources d\'abord.');
+            return Command::SUCCESS;
+        }
 
         /** @var \App\DTO\ScrapedOpportunity[] $allOpportunities */
         $allOpportunities = [];
-        $errors           = [];
 
-        // ── Boucle sur chaque scraper ────────────────────────────────────────
-        foreach ($scrapers as $scraper) {
-            $io->section('Scraping : ' . $scraper->getName());
+        // ── Boucle sur chaque source ──────────────────────────────────────────
+        foreach ($sources as $source) {
 
-            // Mode debug : inspecte le fetch AVANT de scraper
-            if ($isDebug) {
-                $info = $scraper->getDebugInfo($scraper->getTestUrl());
-                $io->definitionList(
-                    ['URL testée'    => $info['url']],
-                    ['Status HTTP'   => $info['status_code'] ?: ('ERREUR: ' . $info['error'])],
-                    ['Taille HTML'   => $info['html_length'] . ' octets'],
-                    ['h2 a'          => $info['selectors']['h2 a'] ?? 0],
-                    ['h3 a'          => $info['selectors']['h3 a'] ?? 0],
-                    ['article'       => $info['selectors']['article'] ?? 0],
-                    ['.wp-block-cnm-cnm-card' => $info['selectors']['.wp-block-cnm-cnm-card'] ?? 0],
-                    ['.news-item'    => $info['selectors']['.news-item'] ?? 0],
-                    ['a[href] total' => $info['selectors']['a[href]'] ?? 0],
-                );
+            // Filtre --source si fourni (filtre par nom exact de la source)
+            if ($sourceFilter !== null && $source->getNom() !== $sourceFilter) {
+                continue;
             }
 
+            $io->section(sprintf('Scraping : %s (%s)', $source->getNom(), $source->getType()->label()));
+
+            $sourceOpportunities = [];
+
             try {
-                $opportunities = $scraper->scrape();
-                $count         = \count($opportunities);
+                if ($source->hasCustomScraper()) {
+                    // ── Source avec classe PHP custom → ScraperRegistry ───────
+                    $scraper = $this->scraperRegistry->getBySlug((string) $source->getScraperSlug());
+
+                    if ($scraper === null) {
+                        // Slug renseigné mais classe introuvable.
+                        // DÉCISION Q1 : erreur visible en admin, pas d'exception silencieuse.
+                        $msg = sprintf(
+                            'Slug "%s" inconnu dans ScraperRegistry. Slugs connus : %s',
+                            $source->getScraperSlug(),
+                            implode(', ', $this->scraperRegistry->getKnownSlugs())
+                        );
+                        $io->error($msg);
+
+                        // On marque l'erreur en BDD (visible dans la liste admin)
+                        if (!$isDryRun) {
+                            $source->markRunError($msg);
+                            $this->em->flush();
+                        }
+                        continue;
+                    }
+
+                    // Mode debug : affiche les infos de fetch avant scraping
+                    if ($isDebug) {
+                        $info = $scraper->getDebugInfo($scraper->getTestUrl());
+                        $io->definitionList(
+                            ['URL testée'  => $info['url']],
+                            ['Status HTTP' => $info['status_code'] ?: ('ERREUR: ' . $info['error'])],
+                            ['Taille HTML' => $info['html_length'] . ' octets'],
+                        );
+                    }
+
+                    $sourceOpportunities = $scraper->scrape();
+
+                } else {
+                    // ── Source sans slug → GenericScraper ────────────────────
+                    // GenericScraper dispatche selon le type : RSS ou HTML_LLM.
+                    // HTML_CSS sans slug est impossible → retourne [].
+                    $sourceOpportunities = $this->genericScraper->scrapeSource($source);
+                }
+
+                $count = count($sourceOpportunities);
 
                 if ($count === 0) {
-                    $io->warning('Aucune opportunité trouvée (site inaccessible ou aucun appel en cours)');
+                    $io->warning('Aucune opportunité trouvée (site inaccessible ou aucun appel en cours).');
                 } else {
-                    $io->success(\sprintf('%d opportunité(s) trouvée(s)', $count));
-                    $allOpportunities = \array_merge($allOpportunities, $opportunities);
+                    $io->success(sprintf('%d opportunité(s) trouvée(s)', $count));
                 }
+
+                // Mise à jour des stats de la source dans la BDD
+                // markRunSuccess() enregistre la date, le nombre d'items, et vide le message d'erreur
+                if (!$isDryRun) {
+                    $source->markRunSuccess($count);
+                    $this->em->flush();
+                }
+
+                $allOpportunities = array_merge($allOpportunities, $sourceOpportunities);
+
             } catch (\Exception $e) {
-                $errors[] = $scraper->getName() . ' : ' . $e->getMessage();
                 $io->error('Erreur : ' . $e->getMessage());
+
+                // Enregistrement de l'erreur en BDD — visible dans la liste admin
+                if (!$isDryRun) {
+                    $source->markRunError($e->getMessage());
+                    $this->em->flush();
+                }
             }
         }
 
@@ -152,7 +226,7 @@ class ScrapeOpportunitiesCommand extends Command
             // Aperçu des 10 premières dans le terminal
             $previewRows = [];
             foreach (array_slice($allOpportunities, 0, 10) as $opp) {
-                $score       = $this->relevanceScorer->score($opp->title, $opp->description ?? '');
+                $score        = $opp->relevanceScore;
                 $previewRows[] = [
                     mb_substr($opp->title, 0, 50) . (mb_strlen($opp->title) > 50 ? '...' : ''),
                     $opp->type,
@@ -165,7 +239,7 @@ class ScrapeOpportunitiesCommand extends Command
             $io->table(['Titre', 'Type', 'Source', 'Deadline', 'Score Afro'], $previewRows);
 
             if (count($allOpportunities) > 10) {
-                $io->note(sprintf('... et %d autre(s). Voir l\'admin pour la liste complète.', count($allOpportunities) - 10));
+                $io->note(sprintf('... et %d autre(s). Voir /admin/scraped-opportunities.', count($allOpportunities) - 10));
             }
         }
 
@@ -173,20 +247,41 @@ class ScrapeOpportunitiesCommand extends Command
         if (!$isDryRun && !empty($allOpportunities)) {
             $io->section('Sauvegarde en base de données');
 
-            $inserted  = 0;
-            $skipped   = 0;
+            $inserted = 0; // Nouvelles URL, jamais vues
+            $updated  = 0; // URL déjà connues (pending ou rejected) — données rafraîchies
+            $skipped  = 0; // URL déjà vérifiées par un admin → intouchables
 
             foreach ($allOpportunities as $opp) {
-                // Déduplication : si l'URL existe déjà en BDD, on ne réinsère pas
-                if ($opp->url && $this->scrapedResourceRepository->findByUrl($opp->url) !== null) {
-                    $skipped++;
+                // ── Déduplication intelligente par URL ───────────────────────
+                // Trois cas :
+                //   1. URL inconnue                         → insertion (nouveau)
+                //   2. URL connue + status pending/rejected → mise à jour des champs
+                //   3. URL connue + status verified         → on ne touche rien
+                $existing = $opp->url ? $this->scrapedResourceRepository->findByUrl($opp->url) : null;
+
+                if ($existing !== null) {
+                    // Cas 3 : déjà validée par un admin — on préserve le travail de modération
+                    if ($existing->isVerified()) {
+                        $skipped++;
+                        continue;
+                    }
+
+                    // Cas 2 : pending ou rejected → rafraîchir les données
+                    // On ne change PAS le status : si un admin a rejeté l'opportunité,
+                    // elle reste rejetée malgré la mise à jour des champs.
+                    $existing->setTitle($opp->title);
+                    $existing->setDescription($opp->description ?: null);
+                    $existing->setType($opp->type ?: null);
+                    $existing->setDeadline($opp->deadline ?: null);
+                    $existing->setRelevanceScore($opp->relevanceScore);
+                    // NOUVEAU : mise à jour des disciplines
+                    $existing->setDisciplines($opp->disciplines ?: null);
+                    // Doctrine détecte les modifications via le Unit of Work — pas besoin de persist()
+                    $updated++;
                     continue;
                 }
 
-                // Calcule le score de pertinence Afrodiaspora
-                $score = $this->relevanceScorer->score($opp->title, $opp->description ?? '');
-
-                // Crée l'entité ScrapedResource et remplit les champs
+                // Cas 1 : nouvelle URL — insertion en BDD (status = 'pending' par défaut)
                 $scraped = new ScrapedResource();
                 $scraped->setTitle($opp->title);
                 $scraped->setDescription($opp->description ?: null);
@@ -194,25 +289,35 @@ class ScrapeOpportunitiesCommand extends Command
                 $scraped->setType($opp->type ?: null);
                 $scraped->setSourceSite($opp->source ?: null);
                 $scraped->setDeadline($opp->deadline ?: null);
-                $scraped->setRelevanceScore($score);
+                $scraped->setRelevanceScore($opp->relevanceScore);
                 $scraped->setDocuments($opp->documents ?: null);
-                // Status par défaut : 'pending' (À vérifier) — l'admin valide ensuite
+                // NOUVEAU : disciplines provenant du DTO (rempli par le scraper ou GenericScraper)
+                $scraped->setDisciplines($opp->disciplines ?: null);
+                // Status par défaut : 'pending' — l'admin valide ensuite dans /admin/scraped-opportunities
 
                 $this->em->persist($scraped);
                 $inserted++;
             }
 
-            // Envoie toutes les insertions en une seule transaction
+            // Flush : toutes les insertions et mises à jour en une seule transaction
             $this->em->flush();
 
-            $io->success(sprintf('%d opportunité(s) ajoutée(s) en BDD (%d doublon(s) ignoré(s))', $inserted, $skipped));
+            $io->success(sprintf(
+                '%d nouvelle(s) | %d mise(s) à jour | %d ignorée(s) (déjà validée par admin)',
+                $inserted,
+                $updated,
+                $skipped
+            ));
         }
 
-        // ── Rapport erreurs ───────────────────────────────────────────────────
-        if (!empty($errors)) {
-            $io->section('Erreurs rencontrées');
-            foreach ($errors as $error) {
-                $io->text('- ' . $error);
+        // ── Archivage automatique des opportunités expirées ──────────────────
+        // Tente de parser le champ deadline (texte libre) de chaque opportunité pending.
+        // Si la date est clairement passée, le statut passe à 'archived'.
+        // Non exécuté en mode --dry-run.
+        if (!$isDryRun) {
+            $archived = $this->scrapedResourceRepository->archiveExpired();
+            if ($archived > 0) {
+                $io->note(sprintf('%d opportunité(s) archivée(s) automatiquement (deadline passée).', $archived));
             }
         }
 

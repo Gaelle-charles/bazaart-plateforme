@@ -329,6 +329,22 @@
         color: var(--bg);
     }
 
+    /* Badge "Archivé" — fond ink-mute (même ton que Rejeté, neutre)
+       Distinct visuellement du rejet : police italique + icône horloge dans le Twig */
+    .adm-badge-archived {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 9px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        background: var(--ink-mute);
+        color: var(--bg);
+        opacity: .75; /* légèrement plus transparent que "Rejeté" pour différencier visuellement */
+    }
+
 </style>
 {% endblock %}
 
@@ -357,16 +373,205 @@
 
     {#
       Formulaire POST → runScraping() dans AdminController.
-      onsubmit : confirmation modale avant envoi (évite les lancements accidentels).
+      Le submit est intercepté en JS pour afficher la card de statut.
       Token CSRF 'run_scraping' vérifié côté PHP.
     #}
     <form method="post"
-          action="{{ path('app_admin_scraping_run') }}"
-          onsubmit="return confirm('Lancer le scraping maintenant ? Cela peut prendre 1-2 minutes.')">
+          id="scraping-form"
+          action="{{ path('app_admin_scraping_run') }}">
         <input type="hidden" name="_token" value="{{ csrf_token('run_scraping') }}">
-        <button type="submit" class="adm-btn-run">▶ Lancer le scraping</button>
+        <button type="submit" id="scraping-btn" class="adm-btn-run">▶ Lancer le scraping</button>
     </form>
 </div>
+
+{#
+  Card de statut du scraping — masquée par défaut, affichée par JS au clic.
+  États possibles :
+    - "Lancement…"      → dès le clic (avant que le serveur réponde)
+    - "En cours… Xs"    → pendant l'exécution, avec timer qui compte
+    - "✅ Terminé"       → sur JSON success (reload automatique dans 4s)
+    - "❌ Erreur"        → sur JSON error ou échec réseau
+#}
+<div id="scraping-card" style="
+    display: none;
+    align-items: flex-start;
+    gap: 14px;
+    margin-top: 18px;
+    padding: 18px 22px;
+    background: var(--bg);
+    border: 1.5px solid var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+">
+    {# Icône d'état (spinner, coche, croix) — mis à jour par JS #}
+    <div id="scraping-card-icon" style="font-size:22px;flex-shrink:0;margin-top:1px;">⏳</div>
+
+    <div style="flex:1;min-width:0;">
+        {# Ligne principale : état courant #}
+        <div id="scraping-card-text" style="font-weight:700;color:var(--ink);margin-bottom:4px;">
+            Lancement…
+        </div>
+
+        {# Timer et note d'aide — cachés jusqu'au début du scraping #}
+        <div id="scraping-card-sub" style="display:none;color:var(--ink-mute);font-size:11px;">
+            Temps écoulé : <span id="scraping-timer">0 s</span>
+            &nbsp;·&nbsp; La page se rafraîchira automatiquement à la fin.
+        </div>
+
+        {# Barre de progression indéterminée (animation CSS pure) #}
+        <div id="scraping-progress-wrap" style="display:none;margin-top:10px;height:3px;background:var(--ink-mute, #ccc);overflow:hidden;">
+            <div id="scraping-progress-bar" style="
+                height:100%;
+                width:30%;
+                background:var(--accent, #111);
+                animation: scraping-slide 1.4s ease-in-out infinite;
+            "></div>
+        </div>
+    </div>
+</div>
+
+{# Animation de la barre de progression (CSS keyframes) #}
+<style>
+@keyframes scraping-slide {
+    0%   { transform: translateX(-100%); }
+    50%  { transform: translateX(250%); }
+    100% { transform: translateX(250%); }
+}
+</style>
+
+<script>
+/**
+ * Gestion de la card de statut pour le lancement du scraping.
+ *
+ * Flux :
+ *   1. Clic → confirmation → afficher card "Lancement…"
+ *   2. fetch() POST vers /admin/scraping/run (header XMLHttpRequest pour JSON)
+ *   3. Timer démarre, barre de progression animée
+ *   4. Sur réponse JSON success → card verte, rechargement auto dans 4s
+ *   5. Sur erreur → card rouge avec message d'erreur
+ */
+document.addEventListener('DOMContentLoaded', function () {
+    const form   = document.getElementById('scraping-form');
+    const btn    = document.getElementById('scraping-btn');
+    const card   = document.getElementById('scraping-card');
+    const icon   = document.getElementById('scraping-card-icon');
+    const text   = document.getElementById('scraping-card-text');
+    const sub    = document.getElementById('scraping-card-sub');
+    const timer  = document.getElementById('scraping-timer');
+    const prog   = document.getElementById('scraping-progress-wrap');
+
+    if (!form) return; // Sécurité : ne rien faire si le formulaire n'existe pas
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault(); // Empêche le submit classique (redirect bloquant)
+
+        // Confirmation de sécurité (remplace le onsubmit="return confirm(...)" précédent)
+        if (!confirm('Lancer le scraping maintenant ? Cela peut prendre 1 à 2 minutes.')) {
+            return;
+        }
+
+        // ── Afficher la card en état "Lancement…" ────────────────────────────
+        btn.disabled    = true;
+        btn.textContent = '⏳ En cours…';
+        card.style.display = 'flex';
+
+        // ── Démarrer le timer ────────────────────────────────────────────────
+        // Affiche combien de secondes se sont écoulées depuis le lancement.
+        let seconds = 0;
+        const interval = setInterval(function () {
+            seconds++;
+            timer.textContent = seconds + ' s';
+        }, 1000);
+
+        // Afficher le sous-titre et la barre après 1s (pas trop tôt pour éviter le flash)
+        setTimeout(function () {
+            text.textContent = 'Scraping en cours…';
+            sub.style.display  = 'block';
+            prog.style.display = 'block';
+        }, 800);
+
+        // ── Lancer le scraping via fetch() ───────────────────────────────────
+        // On envoie le FormData (incluant le token CSRF) avec le header XMLHttpRequest
+        // pour que le controller PHP retourne du JSON au lieu d'une redirect.
+        const formData = new FormData(form);
+
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                // Ce header indique au controller que c'est une requête AJAX
+                // → il retournera du JSON au lieu de faire une redirect
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+        .then(function (response) {
+            clearInterval(interval);
+            if (!response.ok) {
+                // Erreur HTTP (500, 403...) → on essaie de lire le message JSON
+                return response.json().then(function (data) {
+                    throw new Error(data.error || 'Erreur serveur (code ' + response.status + ')');
+                }).catch(function () {
+                    throw new Error('Erreur serveur (code ' + response.status + ')');
+                });
+            }
+            return response.json();
+        })
+        .then(function (data) {
+            // ── Succès ───────────────────────────────────────────────────────
+            prog.style.display = 'none';
+            icon.textContent   = '✅';
+            icon.style.filter  = 'none';
+
+            // Message de bilan
+            let msg = 'Terminé en ' + seconds + ' s';
+            if (data.inserted > 0) {
+                msg += ' · ' + data.inserted + ' nouvelle' + (data.inserted > 1 ? 's' : '');
+            }
+            if (data.updated > 0) {
+                msg += ' · ' + data.updated + ' mise' + (data.updated > 1 ? 's' : '') + ' à jour';
+            }
+            if (data.skipped > 0) {
+                msg += ' · ' + data.skipped + ' ignorée' + (data.skipped > 1 ? 's' : '');
+            }
+            text.textContent  = msg;
+
+            // Sous-titre : rechargement auto
+            sub.style.display  = 'block';
+            timer.textContent  = seconds + ' s';
+            sub.innerHTML      = 'Rechargement de la liste dans <span id="countdown">4</span> s…';
+
+            // Compte à rebours avant rechargement
+            let countdown = 4;
+            const countdownSpan = document.getElementById('countdown');
+            const countdownInterval = setInterval(function () {
+                countdown--;
+                if (countdownSpan) countdownSpan.textContent = countdown;
+                if (countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    window.location.reload();
+                }
+            }, 1000);
+
+            btn.disabled    = false;
+            btn.textContent = '▶ Lancer le scraping';
+        })
+        .catch(function (err) {
+            // ── Erreur ───────────────────────────────────────────────────────
+            clearInterval(interval);
+            prog.style.display = 'none';
+            icon.textContent   = '❌';
+            text.textContent   = 'Erreur : ' + err.message;
+            text.style.color   = '#c0392b';
+            sub.style.display  = 'block';
+            sub.innerHTML      = 'Vérifiez les logs Symfony ou relancez manuellement.';
+
+            btn.disabled    = false;
+            btn.textContent = '▶ Lancer le scraping';
+        });
+    });
+});
+</script>
 
 {# ── Onglets À vérifier / Vérifié / Rejeté ───────────────────────────────── #}
 {# role="tablist" + aria-selected pour l'accessibilité clavier #}
@@ -396,6 +601,21 @@
         Rejeté
         <span class="adm-tab-count" style="background:var(--ink-mute);color:var(--bg);">
             {{ rejected|length }}
+        </span>
+    </button>
+    {#
+      4ème onglet : opportunités archivées (deadline passée, détectée automatiquement).
+      Pas d'action disponible — consultation uniquement.
+      La couleur du compteur suit var(--ink-mute) pour indiquer que ces items sont "dormants".
+    #}
+    <button class="adm-tab-btn"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-archived"
+            onclick="showTab('archived', this)">
+        Archivé
+        <span class="adm-tab-count" style="background:var(--ink-mute);color:var(--bg);opacity:.75;">
+            {{ archived|length }}
         </span>
     </button>
 </div>
@@ -472,13 +692,25 @@
                             <td class="adm-date">{{ opp.scrapedAt|date('d/m/Y') }}</td>
 
                             {#
-                              Colonne Action : deux boutons côte à côte.
+                              Colonne Action : trois boutons côte à côte.
+                              - Modifier → editScrapedOpportunity() : édition du titre, type, description, etc.
                               - Vérifier → verifyScrapedOpportunity() : passe à "verified" + crée une Resource publiée
                               - Rejeter  → rejectScrapedOpportunity()  : passe à "rejected" (hors sujet / doublon)
-                              Les deux utilisent un token CSRF distinct pour chaque action et chaque ID.
+                              Les deux actions POST utilisent un token CSRF distinct pour chaque action et chaque ID.
                             #}
                             <td>
                                 <div class="adm-action-group">
+                                    {#
+                                      Lien "Modifier" — simple lien GET vers le formulaire d'édition.
+                                      Pas de formulaire POST ici car c'est une navigation, pas une action.
+                                      Affichage : fond sable (neutre), cohérent avec adm-btn-reject mais sans danger.
+                                    #}
+                                    <a href="{{ path('app_admin_scraped_opportunity_edit', {id: opp.id}) }}"
+                                       class="adm-btn-reject"
+                                       style="display:inline-flex; align-items:center; text-decoration:none; background:var(--bg); color:var(--ink); border-color:var(--ink);">
+                                        ✎ Modifier
+                                    </a>
+
                                     {# Bouton principal : valider et publier l'opportunité #}
                                     <form method="post"
                                           action="{{ path('app_admin_scraped_opportunity_verify', {id: opp.id}) }}"
@@ -619,6 +851,89 @@
                             <td class="adm-date">{{ opp.scrapedAt|date('d/m/Y') }}</td>
                             {# Badge "Rejeté" — fond ink-mute (gris), texte bg (clair) #}
                             <td><span class="adm-badge-rejected">✗ Rejeté</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+</div>
+
+{# ── Panneau : ARCHIVÉ (deadline passée) ─────────────────────────────────── #}
+{#
+  Ce panneau liste les opportunités dont la deadline a été détectée comme passée.
+  L'archivage est automatique : effectué à chaque run du scraper par archiveExpired().
+  Aucune action n'est disponible ici — c'est un historique en lecture seule.
+  L'admin peut cependant constater quels types d'opportunités récurrentes reviennent :
+  utile pour anticiper et configurer des alertes avant les prochaines sessions.
+#}
+<div id="tab-archived" class="adm-tab-panel" role="tabpanel">
+
+    {% if archived is empty %}
+        <div class="adm-empty-state">
+            Aucune opportunité archivée.<br>
+            Les opportunités avec une deadline dépassée seront automatiquement archivées lors du prochain scraping.
+        </div>
+    {% else %}
+        {# Note informative : explique à l'admin d'où viennent ces entrées #}
+        <p style="font-family:var(--mono);font-size:11px;color:var(--ink-mute);margin-bottom:14px;letter-spacing:.04em;">
+            Ces opportunités ont été archivées automatiquement car leur deadline est passée.
+            Elles restent consultables pour référence. Aucune action disponible.
+        </p>
+        <div class="adm-table-wrap">
+            <table class="adm-table">
+                <thead>
+                    <tr>
+                        <th>Titre</th>
+                        <th>Type</th>
+                        <th>Source</th>
+                        <th>Deadline</th>
+                        <th>Score Afro</th>
+                        <th>Scrapé le</th>
+                        <th>Statut</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for opp in archived %}
+                        <tr>
+                            <td style="max-width:320px;">
+                                <div class="adm-opp-title">
+                                    {% if opp.url %}
+                                        <a href="{{ opp.url }}" target="_blank" rel="noopener noreferrer">{{ opp.title }}</a>
+                                    {% else %}
+                                        {{ opp.title }}
+                                    {% endif %}
+                                </div>
+                                {# Affiche la description si disponible — utile pour se souvenir du contenu #}
+                                {% if opp.description %}
+                                    <div class="adm-opp-desc">
+                                        {{ opp.description|slice(0, 100) }}{{ opp.description|length > 100 ? '…' : '' }}
+                                    </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if opp.type %}
+                                    <span class="adm-chip">{{ opp.type }}</span>
+                                {% else %}
+                                    <span style="color:var(--ink-mute);">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="adm-date">{{ opp.sourceSite ?: '—' }}</td>
+                            {# Deadline : mise en évidence visuelle pour rappeler que c'est passé #}
+                            <td class="adm-date" style="color:var(--ink-mute);text-decoration:line-through;">
+                                {{ opp.deadline ?: '—' }}
+                            </td>
+                            <td>
+                                <span class="adm-stars">
+                                    {% for i in 1..5 %}
+                                        {% if i <= opp.relevanceScore %}★{% else %}<span class="star-empty">☆</span>{% endif %}
+                                    {% endfor %}
+                                </span>
+                            </td>
+                            <td class="adm-date">{{ opp.scrapedAt|date('d/m/Y') }}</td>
+                            {# Badge "Archivé" — ton neutre (muted), légèrement transparent #}
+                            <td><span class="adm-badge-archived">⏱ Archivé</span></td>
                         </tr>
                     {% endfor %}
                 </tbody>

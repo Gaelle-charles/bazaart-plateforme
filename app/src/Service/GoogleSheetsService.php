@@ -16,6 +16,12 @@ use App\DTO\ScrapedOpportunity;
  *   GOOGLE_SHEETS_ID=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms  (l'ID du sheet)
  *
  * Pour configurer Google Sheets API → voir README ou CLAUDE.md
+ *
+ * @deprecated Service Google Sheets abandonné — le scraping écrit directement en BDD.
+ *   Le passage de Google Sheets → BDD a été fait en mai 2026 (décision de la dev).
+ *   Ce service est conservé pour ne pas perdre l'accès aux données historiques éventuelles.
+ *   À supprimer en V2 après vérification qu'aucune donnée Google Sheets n'est manquante en BDD.
+ *   Référence : tâche "Abandon Google Sheets" du 25 mai 2026.
  */
 class GoogleSheetsService
 {

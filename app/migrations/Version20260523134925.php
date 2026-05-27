@@ -14,7 +14,7 @@ final class Version20260523134925 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'Crée la table notifications (système de notifications V1) + tables messagerie (conversations, conversation_participants, messages) qui étaient en attente.';
+        return 'Crée la table notifications avec ses index (système de notifications in-app V1).';
     }
 
     public function up(Schema $schema): void

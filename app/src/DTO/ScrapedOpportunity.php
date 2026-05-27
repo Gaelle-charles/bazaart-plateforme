@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\DTO;
 
 /**
@@ -53,6 +55,10 @@ class ScrapedOpportunity
      * dans le même ordre que GoogleSheetsService::HEADERS.
      *
      * @return array<string|int> Tableau de valeurs dans l'ordre des colonnes
+     *
+     * @deprecated Le scraping écrit désormais directement en BDD (table scraped_resources).
+     *   Cette méthode est conservée pour compatibilité avec l'historique Google Sheets.
+     *   À supprimer en V2 avec GoogleSheetsService et FormatSheetsCommand.
      */
     public function toSheetRow(): array
     {

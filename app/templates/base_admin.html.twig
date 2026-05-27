@@ -523,7 +523,57 @@
                     <circle cx="11" cy="11" r="7"/>
                     <path d="m20 20-3.5-3.5"/>
                 </svg>
-                Scraping Sheets
+                Opportunités scrapées
+            </a>
+
+            {#
+                Sources de scraping — gestion des URL scrapées (BDD).
+                Actif pour toutes les routes "app_admin_scraping_sources*".
+                Permet à l'admin d'ajouter/désactiver des sources sans toucher au code PHP.
+            #}
+            <a href="{{ path('app_admin_scraping_sources_index') }}"
+               class="sd-link {{ app.request.attributes.get('_route') starts with 'app_admin_scraping_sources' ? 'sd-link--active' : '' }}">
+                {# Icône plug / connecteur — évoque une source de données #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 2v6M12 16v6M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M16 12h6M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"/>
+                </svg>
+                Sources scraping
+            </a>
+
+            {#
+                Découverte de sources — suggestions automatiques (app:discover-sources).
+                Actif pour toutes les routes "app_admin_suggested_sources_*".
+                Permet à l'admin de valider ou rejeter les organismes détectés par le LLM.
+            #}
+            <a href="{{ path('app_admin_suggested_sources_index') }}"
+               class="sd-link {{ app.request.attributes.get('_route') starts with 'app_admin_suggested_sources' ? 'sd-link--active' : '' }}">
+                {# Icône loupe + étoile — évoque la "découverte" de nouvelles sources #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="10" cy="10" r="6"/>
+                    <path d="m19 19-3.5-3.5"/>
+                    <path d="M10 7v3M10 13v.01"/>
+                </svg>
+                Découverte sources
+            </a>
+
+        </nav>
+
+        {# ── Section : Système ── #}
+        <div class="sd-section">Système</div>
+        <nav class="sd-nav" aria-label="Système">
+
+            {#
+                Paramètres applicatifs (clé API Anthropic, scraping activé, etc.)
+                Actif pour toutes les routes "app_admin_settings*".
+            #}
+            <a href="{{ path('app_admin_settings') }}"
+               class="sd-link {{ app.request.attributes.get('_route') starts with 'app_admin_settings' ? 'sd-link--active' : '' }}">
+                {# Icône engrenage — représente les paramètres système #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+                Paramètres
             </a>
 
         </nav>

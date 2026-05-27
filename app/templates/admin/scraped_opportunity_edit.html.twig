@@ -1,0 +1,499 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/scraped_opportunity_edit.html.twig — Édition d'une opportunité scrapée
+ #
+ # Thème : Street (border-radius: 0 partout, classes .adm-*)
+ # Layout parent : base_admin.html.twig
+ #
+ # Variables disponibles (AdminController::editScrapedOpportunity()) :
+ #   - scraped : ScrapedResource — entité chargée depuis la BDD
+ #
+ # Champs éditables :
+ #   title, description, type, deadline, disciplines, url
+ #
+ # Champs en lecture seule (non éditables ici) :
+ #   sourceSite, scrapedAt, status (géré par les boutons Vérifier/Rejeter)
+ #
+ # CSRF : token 'edit_scraped_{id}' — vérifié dans AdminController::editScrapedOpportunity()
+ #}
+
+{% block title %}Modifier l'opportunité — Admin BazaArt{% endblock %}
+{% block page_title %}Modifier l'opportunité scrapée{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+
+    /* ── Zone de contenu fond sable ─────────────────────────────────────────── */
+    .app-content {
+        background: var(--bg);
+        font-family: var(--body);
+    }
+
+    /* ── Lien retour — mono compact ─────────────────────────────────────────── */
+    .adm-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        color: var(--ink-mute);
+        text-decoration: none;
+        margin-bottom: 20px;
+        transition: color var(--transition-fast);
+    }
+    .adm-back:hover { color: var(--ink); }
+
+    /* ── En-tête de la page ─────────────────────────────────────────────────── */
+    .adm-edit-header {
+        margin-bottom: 28px;
+    }
+    .adm-edit-title {
+        font-family: var(--display);
+        font-size: 22px;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--ink);
+        margin-bottom: 6px;
+    }
+    .adm-edit-subtitle {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+    }
+
+    /* ── Grille deux colonnes : formulaire à gauche, lecture seule à droite ── */
+    .adm-edit-grid {
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        gap: 24px;
+        align-items: start;
+    }
+
+    /* Responsive : colonne unique sur petit écran */
+    @media (max-width: 800px) {
+        .adm-edit-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Formulaire d'édition ────────────────────────────────────────────────── */
+    .adm-form {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+    }
+
+    /* En-tête du bloc formulaire */
+    .adm-form-header {
+        padding: 12px 18px;
+        background: var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--accent);
+    }
+
+    /* Corps du formulaire */
+    .adm-form-body {
+        padding: 22px 18px;
+    }
+
+    /* ── Champ de formulaire ─────────────────────────────────────────────────── */
+    .adm-field {
+        margin-bottom: 18px;
+    }
+    .adm-field:last-child { margin-bottom: 0; }
+
+    .adm-label {
+        display: block;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .10em;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin-bottom: 6px;
+    }
+    .adm-label--required::after {
+        content: ' *';
+        color: var(--accent-2);
+    }
+
+    /* Inputs et selects : bords francs, fond sable clair */
+    .adm-input,
+    .adm-select,
+    .adm-textarea {
+        width: 100%;
+        padding: 9px 12px;
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+        background: var(--bg-alt);
+        border: 1px solid var(--ink);
+        border-radius: 0;          /* Design Street : aucun arrondi */
+        outline: none;
+        transition: border-color var(--transition-fast), background var(--transition-fast);
+        box-sizing: border-box;
+    }
+    .adm-input:focus,
+    .adm-select:focus,
+    .adm-textarea:focus {
+        border-color: var(--accent);
+        background: #fff;
+    }
+
+    .adm-textarea {
+        min-height: 120px;
+        resize: vertical;
+        line-height: 1.6;
+    }
+
+    /* Note d'aide sous le champ */
+    .adm-field-hint {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+        margin-top: 5px;
+    }
+
+    /* ── Bloc "Métadonnées" (lecture seule) à droite ────────────────────────── */
+    .adm-meta-bloc {
+        border: 1px solid var(--ink);
+        background: var(--bg);
+    }
+    .adm-meta-header {
+        padding: 12px 18px;
+        background: var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--accent);
+    }
+    .adm-meta-body {
+        padding: 16px 18px;
+    }
+
+    /* Ligne de métadonnée : label + valeur */
+    .adm-meta-row {
+        margin-bottom: 14px;
+    }
+    .adm-meta-row:last-child { margin-bottom: 0; }
+    .adm-meta-label {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: 3px;
+    }
+    .adm-meta-value {
+        font-size: 13px;
+        color: var(--ink);
+        font-weight: 500;
+    }
+
+    /* Badge de statut (lecture seule) */
+    .adm-badge-status {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 9px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+    .adm-badge-status--pending  { background: var(--accent-2); color: var(--ink); }
+    .adm-badge-status--verified { background: var(--accent);   color: var(--ink); }
+    .adm-badge-status--rejected { background: var(--ink-mute); color: var(--bg);  }
+    .adm-badge-status--archived { background: var(--ink-mute); color: var(--bg); opacity: .75; }
+
+    /* ── Barre d'actions (bas du formulaire) ────────────────────────────────── */
+    .adm-form-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 18px;
+        border-top: 1px solid var(--ink);
+        background: var(--bg-alt);
+    }
+
+    /* Bouton principal : Enregistrer */
+    .adm-btn-save {
+        height: 36px;
+        padding: 0 22px;
+        background: var(--accent);
+        color: var(--ink);
+        border: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: box-shadow var(--transition-fast);
+    }
+    .adm-btn-save:hover { box-shadow: var(--shadow-offset-sm); }
+
+    /* Lien Annuler — discret */
+    .adm-btn-cancel {
+        height: 36px;
+        padding: 0 18px;
+        display: inline-flex;
+        align-items: center;
+        background: var(--bg);
+        color: var(--ink-mute);
+        border: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        text-decoration: none;
+        cursor: pointer;
+        transition: color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .adm-btn-cancel:hover { color: var(--ink); box-shadow: var(--shadow-offset-sm); }
+
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Lien retour vers la liste des opportunités scrapées ─────────────────── #}
+<a href="{{ path('app_admin_scraped_opportunities') }}" class="adm-back">
+    ← Opportunités scrapées
+</a>
+
+{# ── En-tête de la page d'édition ────────────────────────────────────────── #}
+<div class="adm-edit-header">
+    <h2 class="adm-edit-title">Modifier l'opportunité</h2>
+    {# Sous-titre : affiche l'ID et la source pour s'y retrouver facilement #}
+    <p class="adm-edit-subtitle">
+        #{{ scraped.id }}
+        {% if scraped.sourceSite %} · Source : {{ scraped.sourceSite }}{% endif %}
+        · Scrapée le {{ scraped.scrapedAt|date('d/m/Y à H:i') }}
+    </p>
+</div>
+
+{# ── Grille formulaire + métadonnées ─────────────────────────────────────── #}
+<div class="adm-edit-grid">
+
+    {# ──────────────────────────────────────────────────────────────────────
+       FORMULAIRE D'ÉDITION
+       Action : POST sur la même URL (même route, méthode POST).
+       Token CSRF : 'edit_scraped_{id}' — spécifique à cet enregistrement.
+    ────────────────────────────────────────────────────────────────────── #}
+    <form method="post"
+          action="{{ path('app_admin_scraped_opportunity_edit', {id: scraped.id}) }}">
+
+        {# Token CSRF caché — vérifié dans AdminController::editScrapedOpportunity() #}
+        <input type="hidden" name="_token" value="{{ csrf_token('edit_scraped_' ~ scraped.id) }}">
+
+        <div class="adm-form">
+            <div class="adm-form-header">Champs éditables</div>
+            <div class="adm-form-body">
+
+                {# ── Titre (obligatoire) ───────────────────────────────── #}
+                <div class="adm-field">
+                    <label class="adm-label adm-label--required" for="title">Titre</label>
+                    <input class="adm-input"
+                           type="text"
+                           id="title"
+                           name="title"
+                           maxlength="255"
+                           required
+                           value="{{ scraped.title|e('html_attr') }}">
+                </div>
+
+                {# ── Type (select avec suggestions + saisie libre) ────── #}
+                {#
+                  On propose un <select> avec les types courants pour faciliter
+                  la saisie, mais le champ est un string libre en BDD.
+                  → On utilise <select> + option "Autre..." + valeur libre en input.
+                  Astuce : si la valeur actuelle ne correspond pas à une option,
+                  on affiche quand même le select avec la valeur actuelle.
+                #}
+                <div class="adm-field">
+                    <label class="adm-label" for="type">Type d'opportunité</label>
+                    <select class="adm-select" id="type" name="type">
+                        <option value="">— Non renseigné —</option>
+                        {% set knownTypes = [
+                            'Appel à projets',
+                            'Résidence',
+                            'Bourse / Aide',
+                            'Prix',
+                            'Financement',
+                            'Formation'
+                        ] %}
+                        {% for t in knownTypes %}
+                            <option value="{{ t }}"
+                                {{ scraped.type == t ? 'selected' : '' }}>
+                                {{ t }}
+                            </option>
+                        {% endfor %}
+                        {#
+                          Si la valeur en BDD ne correspond à aucun type connu,
+                          on l'affiche quand même comme option sélectionnée.
+                          Évite de perdre une valeur scrapée non standard.
+                        #}
+                        {% if scraped.type and scraped.type not in knownTypes %}
+                            <option value="{{ scraped.type|e('html_attr') }}" selected>
+                                {{ scraped.type }}
+                            </option>
+                        {% endif %}
+                    </select>
+                    <p class="adm-field-hint">
+                        Types courants proposés. La valeur est stockée telle quelle en base.
+                    </p>
+                </div>
+
+                {# ── Description (textarea libre, nullable) ────────────── #}
+                <div class="adm-field">
+                    <label class="adm-label" for="description">Description</label>
+                    <textarea class="adm-textarea"
+                              id="description"
+                              name="description">{{ scraped.description|e }}</textarea>
+                </div>
+
+                {# ── Deadline (texte libre, nullable) ─────────────────── #}
+                {#
+                  Le deadline est stocké comme string en BDD (free-text issu du scraping).
+                  On laisse un champ texte et non un <input type="date"> pour ne pas
+                  contraindre des valeurs comme "Clôture le 30 juin 2026".
+                #}
+                <div class="adm-field">
+                    <label class="adm-label" for="deadline">Date limite (texte libre)</label>
+                    <input class="adm-input"
+                           type="text"
+                           id="deadline"
+                           name="deadline"
+                           maxlength="150"
+                           placeholder="Ex: 30/06/2026, avant fin juillet, clôture le 15 mai…"
+                           value="{{ scraped.deadline ? scraped.deadline|e('html_attr') : '' }}">
+                    <p class="adm-field-hint">Format libre — le scraper peut retourner des formats variés.</p>
+                </div>
+
+                {# ── Disciplines (texte libre, nullable) ──────────────── #}
+                <div class="adm-field">
+                    <label class="adm-label" for="disciplines">Disciplines</label>
+                    <input class="adm-input"
+                           type="text"
+                           id="disciplines"
+                           name="disciplines"
+                           maxlength="255"
+                           placeholder="Ex: Musique, Arts plastiques, Toutes disciplines…"
+                           value="{{ scraped.disciplines ? scraped.disciplines|e('html_attr') : '' }}">
+                </div>
+
+                {# ── URL source (nullable, doit être une URL valide si renseignée) #}
+                <div class="adm-field">
+                    <label class="adm-label" for="url">URL de l'opportunité</label>
+                    <input class="adm-input"
+                           type="url"
+                           id="url"
+                           name="url"
+                           maxlength="500"
+                           placeholder="https://…"
+                           value="{{ scraped.url ? scraped.url|e('html_attr') : '' }}">
+                    <p class="adm-field-hint">
+                        Lien vers la page source de l'opportunité.
+                        Sert aussi de clé de déduplication : modifier l'URL peut entraîner
+                        des doublons si une autre ligne avec cette URL existe déjà.
+                    </p>
+                </div>
+
+            </div>{# /adm-form-body #}
+
+            {# ── Barre d'actions ────────────────────────────────────────── #}
+            <div class="adm-form-actions">
+                <button type="submit" class="adm-btn-save">Enregistrer</button>
+                <a href="{{ path('app_admin_scraped_opportunities') }}" class="adm-btn-cancel">
+                    Annuler
+                </a>
+            </div>
+
+        </div>{# /adm-form #}
+
+    </form>
+
+    {# ──────────────────────────────────────────────────────────────────────
+       BLOC MÉTADONNÉES (lecture seule)
+       Ces champs ne sont pas modifiables depuis l'interface admin :
+       - sourceSite  → provenance du scraping, ne doit pas changer
+       - scrapedAt   → timestamp système
+       - status      → géré par les boutons Vérifier/Rejeter de la liste
+       - score       → calculé par AfrodiasporaRelevanceScorer
+    ────────────────────────────────────────────────────────────────────── #}
+    <div>
+        <div class="adm-meta-bloc">
+            <div class="adm-meta-header">Métadonnées (lecture seule)</div>
+            <div class="adm-meta-body">
+
+                {# Source du scraping #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Source</div>
+                    <div class="adm-meta-value">{{ scraped.sourceSite ?: '—' }}</div>
+                </div>
+
+                {# Date de scraping #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Scrapée le</div>
+                    <div class="adm-meta-value">
+                        {{ scraped.scrapedAt|date('d/m/Y à H:i') }}
+                    </div>
+                </div>
+
+                {# Statut de l'opportunité (non éditable ici) #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Statut</div>
+                    <div class="adm-meta-value">
+                        {#
+                          On affiche un badge coloré selon le statut de l'enum.
+                          label() est la méthode définie sur ScrapedResourceStatus.
+                          Si elle n'existe pas, on affiche la valeur brute.
+                        #}
+                        {% set statusVal = scraped.status.value %}
+                        <span class="adm-badge-status adm-badge-status--{{ statusVal }}">
+                            {% if statusVal == 'pending'  %}À vérifier
+                            {% elseif statusVal == 'verified' %}Vérifié
+                            {% elseif statusVal == 'rejected' %}Rejeté
+                            {% elseif statusVal == 'archived' %}Archivé
+                            {% else %}{{ statusVal }}
+                            {% endif %}
+                        </span>
+                        <p style="font-family:var(--mono);font-size:10px;color:var(--ink-mute);margin-top:6px;letter-spacing:.04em;">
+                            Géré via Vérifier / Rejeter dans la liste.
+                        </p>
+                    </div>
+                </div>
+
+                {# Score de pertinence afro-atlantique (calculé, non éditable) #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Score Afro</div>
+                    <div class="adm-meta-value">
+                        <span style="color:var(--accent-2); font-size:14px; letter-spacing:2px;">
+                            {% for i in 1..5 %}
+                                {% if i <= scraped.relevanceScore %}★{% else %}<span style="color:var(--line-soft);">☆</span>{% endif %}
+                            {% endfor %}
+                        </span>
+                        <span style="font-family:var(--mono);font-size:10px;color:var(--ink-mute);margin-left:6px;">
+                            {{ scraped.relevanceScore }}/5
+                        </span>
+                    </div>
+                </div>
+
+            </div>{# /adm-meta-body #}
+        </div>
+    </div>
+
+</div>{# /adm-edit-grid #}
+
+{% endblock %}

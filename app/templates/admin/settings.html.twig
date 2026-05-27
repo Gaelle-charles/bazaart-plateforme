@@ -1,0 +1,623 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/settings.html.twig — Page des paramètres applicatifs
+ #
+ # Thème : Street (tokens CSS depuis design-tokens.css)
+ # Affiche et permet de modifier les AppSetting stockés en BDD.
+ #
+ # Variables disponibles :
+ #   - settings : AppSetting[] — liste de tous les paramètres
+ #}
+
+{% block title %}Paramètres — Admin BazaArt{% endblock %}
+
+{% block page_title %}Paramètres{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+
+    /* ── Zone de contenu ─────────────────────────────────────────────────── */
+    .app-content {
+        background: var(--bg);
+        font-family: var(--body);
+    }
+
+    /* ── En-tête de page ────────────────────────────────────────────────── */
+    .stg-header {
+        background: var(--ink);
+        color: var(--bg);
+        padding: 20px 0 18px;
+        margin: -28px -28px 28px;
+        border-bottom: 1px solid var(--ink);
+    }
+    .stg-header__inner {
+        padding: 0 28px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .stg-header__eyebrow {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .12em;
+        color: var(--accent);
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+    .stg-header__title {
+        font-family: var(--display);
+        font-size: 28px;
+        line-height: .95;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--bg);
+    }
+    .stg-header__serif {
+        font-family: var(--serif);
+        font-style: italic;
+        font-size: 20px;
+        text-transform: none;
+        display: block;
+    }
+
+    /* ── Grille des settings ─────────────────────────────────────────────── */
+    .stg-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        margin-bottom: 24px;
+    }
+
+    /* ── Un setting = un bloc ────────────────────────────────────────────── */
+    .stg-item {
+        padding: 22px 24px;
+        border-bottom: 1px solid var(--line-soft);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px 32px;
+        align-items: start;
+    }
+    .stg-item:last-child {
+        border-bottom: none;
+    }
+
+    /* ── Partie gauche : infos du setting ───────────────────────────────── */
+    .stg-info {}
+
+    .stg-label {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--ink);
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Badge "SECRET" pour les settings masqués */
+    .stg-badge-secret {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        padding: 2px 7px;
+        background: var(--ink);
+        color: var(--accent);
+        border: 1px solid var(--ink);
+        border-radius: 0;
+    }
+
+    .stg-key {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        margin-bottom: 8px;
+        letter-spacing: .04em;
+    }
+
+    .stg-desc {
+        font-size: 12px;
+        color: var(--ink-mute);
+        line-height: 1.5;
+    }
+
+    /* Indicateur "mis à jour le ..." */
+    .stg-updated {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        margin-top: 8px;
+        letter-spacing: .03em;
+    }
+
+    /* ── Partie droite : formulaire de modification ──────────────────────── */
+    .stg-form {}
+
+    /* Groupe champ + bouton toggle visibilité */
+    .stg-input-group {
+        display: flex;
+        border: 1px solid var(--ink);
+        background: var(--bg);
+        margin-bottom: 10px;
+    }
+
+    .stg-input {
+        flex: 1;
+        padding: 10px 12px;
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--ink);
+        background: transparent;
+        border: none;
+        outline: none;
+        min-width: 0;
+    }
+
+    /* Bouton œil pour afficher/masquer le mot de passe */
+    .stg-toggle-btn {
+        padding: 8px 12px;
+        background: var(--bg-alt);
+        border: none;
+        border-left: 1px solid var(--ink);
+        cursor: pointer;
+        color: var(--ink-mute);
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .04em;
+        transition: background var(--transition-fast), color var(--transition-fast);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .stg-toggle-btn:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    /* Bouton de sauvegarde */
+    .stg-save-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 18px;
+        background: var(--accent);
+        color: var(--ink);
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: box-shadow var(--transition-fast);
+    }
+    .stg-save-btn:hover {
+        box-shadow: var(--shadow-offset-sm);
+    }
+
+    /* Bouton de test API (uniquement pour anthropic_api_key) */
+    .stg-test-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        background: var(--bg);
+        color: var(--ink);
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        margin-top: 8px;
+        transition: background var(--transition-fast);
+    }
+    .stg-test-btn:hover {
+        background: var(--bg-alt);
+    }
+
+    /* Zone de résultat du test API */
+    .stg-test-result {
+        margin-top: 8px;
+        padding: 8px 12px;
+        font-family: var(--mono);
+        font-size: 11px;
+        border: 1px solid var(--line-soft);
+        display: none; /* affiché par JS après le test */
+    }
+    .stg-test-result--ok    { border-color: var(--accent); color: #2a6e00; background: rgba(198,242,78,.15); }
+    .stg-test-result--error { border-color: var(--danger); color: var(--danger); background: rgba(220,53,69,.06); }
+
+    /* ── État vide ───────────────────────────────────────────────────────── */
+    .stg-empty {
+        padding: 48px 24px;
+        text-align: center;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink-mute);
+        letter-spacing: .06em;
+        border: 1px solid var(--ink);
+    }
+
+    /* ── Responsive ─────────────────────────────────────────────────────── */
+    @media (max-width: 800px) {
+        .stg-item { grid-template-columns: 1fr; }
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── En-tête de page ────────────────────────────────────────────────────── #}
+<div class="stg-header">
+    <div class="stg-header__inner">
+        <div>
+            <div class="stg-header__eyebrow">● Configuration · accès admin</div>
+            <div class="stg-header__title">
+                PARAMS<br>
+                <span class="stg-header__serif">Configuration.</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Liste des paramètres ───────────────────────────────────────────────── #}
+{% if settings is empty %}
+
+    <div class="stg-empty">
+        Aucun paramètre configuré.<br>
+        Lancez : <code>docker compose exec app php bin/console app:seed-settings</code>
+    </div>
+
+{% else %}
+
+    <div class="stg-list">
+        {% for setting in settings %}
+            <div class="stg-item">
+
+                {# ── Colonne gauche : infos ────────────────────────────── #}
+                <div class="stg-info">
+
+                    <div class="stg-label">
+                        {# |e : filtre XSS obligatoire sur toutes les données BDD #}
+                        {{ setting.label|e }}
+                        {% if setting.secret %}
+                            {# Badge visuel indiquant que la valeur est masquée en prod #}
+                            <span class="stg-badge-secret">Secret</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="stg-key">{{ setting.settingKey|e }}</div>
+
+                    {% if setting.description %}
+                        <div class="stg-desc">{{ setting.description|e }}</div>
+                    {% endif %}
+
+                    {% if setting.updatedAt %}
+                        <div class="stg-updated">
+                            Modifié le {{ setting.updatedAt|date('d/m/Y à H:i') }}
+                        </div>
+                    {% else %}
+                        <div class="stg-updated">Jamais modifié</div>
+                    {% endif %}
+
+                </div>
+
+                {# ── Colonne droite : formulaire de mise à jour ────────── #}
+                <div class="stg-form">
+                    {#
+                       Formulaire POST vers /admin/settings/{key}
+                       CSRF : nommé 'update_setting_{key}' — un token par setting.
+                       IMPORTANT : ne pas changer ce nommage, le controller le vérifie exactement.
+                    #}
+                    <form method="post"
+                          action="{{ path('app_admin_settings_update', {key: setting.settingKey}) }}">
+
+                        <input type="hidden"
+                               name="_token"
+                               value="{{ csrf_token('update_setting_' ~ setting.settingKey) }}">
+
+                        <div class="stg-input-group">
+                            {#
+                               CAS SPÉCIAL : llm_provider → select déroulant plutôt qu'un input texte.
+                               Cela évite à l'admin de saisir une valeur invalide (ex: "Mistral" au lieu de "mistral").
+                               Les deux valeurs acceptées sont 'mistral' et 'anthropic'.
+                            #}
+                            {% if setting.settingKey == 'llm_provider' %}
+                                <select name="setting_value" class="stg-input" style="cursor: pointer;">
+                                    <option value="mistral"   {{ setting.settingValue == 'mistral'   ? 'selected' : '' }}>
+                                        Mistral Small 3.2 (recommandé — JSON natif)
+                                    </option>
+                                    <option value="anthropic" {{ setting.settingValue == 'anthropic' ? 'selected' : '' }}>
+                                        Anthropic Claude Haiku (fallback)
+                                    </option>
+                                </select>
+
+                            {% elseif setting.secret %}
+                                {#
+                                   Champ password pour les secrets (clés API).
+                                   La valeur réelle n'est JAMAIS transmise au HTML (sécurité).
+                                   Placeholder indique si une valeur est déjà configurée.
+                                #}
+                                <input type="password"
+                                       id="field-{{ setting.settingKey|e }}"
+                                       name="setting_value"
+                                       class="stg-input"
+                                       autocomplete="new-password"
+                                       placeholder="{{ setting.settingValue ? '●●●●●●●● (configurée — laisser vide pour ne pas changer)' : 'Saisir la valeur...' }}">
+                            {% else %}
+                                {# Champ texte normal — valeur pré-remplie #}
+                                <input type="text"
+                                       id="field-{{ setting.settingKey|e }}"
+                                       name="setting_value"
+                                       class="stg-input"
+                                       value="{{ setting.settingValue|default('')|e }}"
+                                       placeholder="Laisser vide pour effacer">
+                            {% endif %}
+
+                            {# Bouton "Afficher/Masquer" uniquement pour les secrets (pas pour le select) #}
+                            {% if setting.secret %}
+                                <button type="button"
+                                        class="stg-toggle-btn"
+                                        aria-label="Afficher ou masquer la valeur"
+                                        onclick="togglePasswordVisibility('field-{{ setting.settingKey }}', this)">
+                                    Afficher
+                                </button>
+                            {% endif %}
+                        </div>
+
+                        <button type="submit" class="stg-save-btn">
+                            {# SVG floppy disk — sauvegarde #}
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"
+                                 xmlns="http://www.w3.org/2000/svg">
+                                <rect x="1" y="1" width="10" height="10" stroke="#0d0d0d" stroke-width="1.2"/>
+                                <rect x="3.5" y="1" width="5" height="3" stroke="#0d0d0d" stroke-width="1.1"/>
+                                <rect x="2.5" y="6.5" width="7" height="3.5" stroke="#0d0d0d" stroke-width="1.1"/>
+                            </svg>
+                            Enregistrer
+                        </button>
+
+                    </form>
+
+                    {#
+                       Bouton "Tester la connexion Anthropic" — uniquement pour le setting anthropic_api_key.
+                    #}
+                    {% if setting.settingKey == 'anthropic_api_key' %}
+                        <form id="test-anthropic-form">
+                            <input type="hidden" id="test-anthropic-token"
+                                   value="{{ csrf_token('test_anthropic') }}">
+                        </form>
+
+                        {#
+                           L'URL de l'endpoint AJAX est générée par Twig (path()) et stockée
+                           dans data-url. Le JS lit this.dataset.url plutôt qu'une URL hardcodée,
+                           ce qui garantit que l'URL reste correcte si le préfixe de route change.
+                        #}
+                        <button type="button"
+                                class="stg-test-btn"
+                                id="btn-test-anthropic"
+                                data-url="{{ path('app_admin_settings_test_anthropic') }}"
+                                onclick="testAnthropicConnection(this)">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"
+                                 xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="6" cy="9" r="1" fill="#0d0d0d"/>
+                                <path d="M3.5 7a3.5 3.5 0 0 1 5 0" stroke="#0d0d0d" stroke-width="1.1" stroke-linecap="round"/>
+                                <path d="M1.5 5a6 6 0 0 1 9 0" stroke="#0d0d0d" stroke-width="1.1" stroke-linecap="round"/>
+                            </svg>
+                            Tester la connexion Anthropic
+                        </button>
+
+                        <div id="test-anthropic-result" class="stg-test-result" role="status" aria-live="polite"></div>
+                    {% endif %}
+
+                    {#
+                       Bouton "Tester connexion Mistral" — uniquement pour mistral_api_key.
+                       Appel AJAX POST vers /admin/settings/test-mistral.
+                       Affiche le résultat dans #test-mistral-result sans rechargement.
+                    #}
+                    {% if setting.settingKey == 'mistral_api_key' %}
+                        <form id="test-mistral-form">
+                            <input type="hidden" id="test-mistral-token"
+                                   value="{{ csrf_token('test_mistral') }}">
+                        </form>
+
+                        {#
+                           Même pattern que le bouton Anthropic : URL dans data-url pour éviter
+                           le hardcodage de '/admin/settings/test-mistral' en JS.
+                        #}
+                        <button type="button"
+                                class="stg-test-btn"
+                                id="btn-test-mistral"
+                                data-url="{{ path('app_admin_settings_test_mistral') }}"
+                                onclick="testMistralConnection(this)">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"
+                                 xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="6" cy="9" r="1" fill="#0d0d0d"/>
+                                <path d="M3.5 7a3.5 3.5 0 0 1 5 0" stroke="#0d0d0d" stroke-width="1.1" stroke-linecap="round"/>
+                                <path d="M1.5 5a6 6 0 0 1 9 0" stroke="#0d0d0d" stroke-width="1.1" stroke-linecap="round"/>
+                            </svg>
+                            Tester la connexion Mistral
+                        </button>
+
+                        <div id="test-mistral-result" class="stg-test-result" role="status" aria-live="polite"></div>
+                    {% endif %}
+
+                </div>
+
+            </div>
+        {% endfor %}
+    </div>
+
+{% endif %}
+
+{# ── Note d'aide en bas de page ────────────────────────────────────────── #}
+<div style="
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    padding: 16px;
+    border: 1px solid var(--line-soft);
+    background: var(--bg-alt);
+    letter-spacing: .03em;
+    line-height: 1.6;
+">
+    Pour ajouter un nouveau paramètre, lancez :
+    <code style="background: var(--ink); color: var(--accent); padding: 2px 6px; font-size: 11px;">
+        docker compose exec app php bin/console app:seed-settings
+    </code>
+    <br>
+    Les clés API et secrets ne sont jamais affichés en clair dans cette interface.
+</div>
+
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+<script>
+/**
+ * Toggle de visibilité pour les champs password (settings secrets).
+ *
+ * Bascule entre type="password" (masqué) et type="text" (visible).
+ * Met à jour le libellé du bouton en conséquence.
+ *
+ * @param {string} fieldId - ID de l'input à basculer
+ * @param {HTMLElement} btn - Bouton qui a déclenché l'événement
+ */
+function togglePasswordVisibility(fieldId, btn) {
+    const field = document.getElementById(fieldId);
+    if (!field) return;
+
+    if (field.type === 'password') {
+        // Afficher la valeur
+        field.type = 'text';
+        btn.textContent = 'Masquer';
+    } else {
+        // Masquer la valeur
+        field.type = 'password';
+        btn.textContent = 'Afficher';
+    }
+}
+
+/**
+ * Teste la connexion à l'API Anthropic via AJAX.
+ *
+ * L'URL de l'endpoint est lue depuis data-url du bouton (générée par Twig path())
+ * plutôt qu'hardcodée en JS — garantit la cohérence si le préfixe de route change.
+ *
+ * @param {HTMLElement} btnEl - Le bouton cliqué (porteur de data-url)
+ */
+async function testAnthropicConnection(btnEl) {
+    const btn        = btnEl || document.getElementById('btn-test-anthropic');
+    const resultDiv  = document.getElementById('test-anthropic-result');
+    const csrfToken  = document.getElementById('test-anthropic-token').value;
+
+    // L'URL vient du data-url du bouton — générée par Twig, jamais hardcodée
+    const url = btn.dataset.url;
+
+    if (!btn || !resultDiv || !url) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Test en cours...';
+    resultDiv.style.display = 'none';
+    resultDiv.className = 'stg-test-result';
+
+    try {
+        const formData = new FormData();
+        formData.append('_token', csrfToken);
+
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData,
+        });
+
+        const data = await response.json();
+
+        resultDiv.style.display = 'block';
+        resultDiv.textContent = data.message;
+
+        if (data.ok) {
+            resultDiv.classList.add('stg-test-result--ok');
+        } else {
+            resultDiv.classList.add('stg-test-result--error');
+        }
+
+    } catch (error) {
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'stg-test-result stg-test-result--error';
+        resultDiv.textContent = 'Erreur de connexion au serveur : ' + error.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Tester la connexion Anthropic';
+    }
+}
+
+/**
+ * Teste la connexion à l'API Mistral via AJAX.
+ *
+ * L'URL de l'endpoint est lue depuis data-url du bouton (générée par Twig path())
+ * plutôt qu'hardcodée en JS — même pattern que testAnthropicConnection().
+ *
+ * On garde les deux fonctions séparées plutôt que mutualisées pour la lisibilité
+ * et l'indépendance de chaque test (les boutons, tokens et div de résultat sont distincts).
+ *
+ * @param {HTMLElement} btnEl - Le bouton cliqué (porteur de data-url)
+ */
+async function testMistralConnection(btnEl) {
+    const btn       = btnEl || document.getElementById('btn-test-mistral');
+    const resultDiv = document.getElementById('test-mistral-result');
+    const csrfToken = document.getElementById('test-mistral-token').value;
+
+    // L'URL vient du data-url du bouton — générée par Twig, jamais hardcodée
+    const url = btn.dataset.url;
+
+    if (!btn || !resultDiv || !url) return;
+
+    // État "en cours" — désactive le bouton le temps du test
+    btn.disabled = true;
+    btn.textContent = 'Test en cours...';
+    resultDiv.style.display = 'none';
+    resultDiv.className = 'stg-test-result';
+
+    try {
+        const formData = new FormData();
+        formData.append('_token', csrfToken);
+
+        // Appel AJAX POST — URL depuis data-url (pas de chaîne hardcodée)
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData,
+        });
+
+        const data = await response.json();
+
+        // Affichage du résultat (ok = vert, error = orange)
+        resultDiv.style.display = 'block';
+        resultDiv.textContent = data.message;
+
+        if (data.ok) {
+            resultDiv.classList.add('stg-test-result--ok');
+        } else {
+            resultDiv.classList.add('stg-test-result--error');
+        }
+
+    } catch (error) {
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'stg-test-result stg-test-result--error';
+        resultDiv.textContent = 'Erreur de connexion au serveur : ' + error.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Tester la connexion Mistral';
+    }
+}
+</script>
+{% endblock %}

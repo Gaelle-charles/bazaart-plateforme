@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service\Scraper;
 
 use App\DTO\ScrapedOpportunity;
@@ -98,6 +100,8 @@ abstract class AbstractScraper
     /**
      * Retourne des informations de debug sur le dernier fetch.
      * Utile pour comprendre pourquoi un scraper ne trouve rien.
+     *
+     * @return array<string, mixed> Tableau contenant url, status_code, error, html_length, crawler_ok, selectors
      */
     public function getDebugInfo(string $url): array
     {
@@ -123,6 +127,107 @@ abstract class AbstractScraper
                 'a[href]'                       => $crawler->filter('a[href]')->count(),
             ] : [],
         ];
+    }
+
+    /**
+     * Télécharge le HTML d'une URL et le retourne sous forme de string brute.
+     *
+     * Contrairement à fetch() qui retourne un Crawler (pour le parsing CSS),
+     * cette méthode retourne le HTML brut — utile pour l'envoyer au LLM
+     * qui fera lui-même l'extraction.
+     *
+     * @param string $url L'URL à télécharger
+     * @return string HTML brut, ou chaîne vide si la requête échoue
+     */
+    protected function fetchHtml(string $url): string
+    {
+        try {
+            $response = $this->httpClient->request('GET', $url, [
+                'headers' => [
+                    'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language' => 'fr-FR,fr;q=0.9,en;q=0.8',
+                    'Cache-Control'   => 'no-cache',
+                ],
+                'timeout'       => 20,
+                'max_redirects' => 5,
+            ]);
+
+            $this->lastStatusCode = $response->getStatusCode();
+
+            if ($this->lastStatusCode !== 200) {
+                return '';
+            }
+
+            $html = $response->getContent();
+            $this->lastFetchedLength = strlen($html);
+
+            return $html;
+
+        } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
+            return '';
+        }
+    }
+
+    /**
+     * Télécharge le HTML d'une URL en désactivant la vérification SSL.
+     *
+     * Pourquoi cette méthode séparée (et non un flag dans fetchHtml) ?
+     *   Désactiver SSL globalement est dangereux (man-in-the-middle possible).
+     *   On isole ce comportement dans une méthode dédiée afin que chaque scraper
+     *   choisisse explicitement de l'utiliser, et que le risque soit visible dans le code.
+     *
+     * Cas d'usage identifié :
+     *   resartis.org — le container Docker n'a pas les CA racines nécessaires pour
+     *   valider le certificat de ce site (erreur "unable to get local issuer certificate").
+     *   En production sur le droplet DigitalOcean, les CA sont normalement à jour ;
+     *   cette option ne devrait pas poser de problème de sécurité réel en prod.
+     *   En développement Docker, c'est le seul moyen de contourner l'erreur SSL.
+     *
+     * Note : verify_peer = false ne chiffre PAS moins la connexion — il évite seulement
+     *   la vérification du certificat serveur. Le trafic reste chiffré (HTTPS).
+     *
+     * @param string $url L'URL HTTPS à télécharger sans vérification SSL
+     * @return string HTML brut, ou chaîne vide si la requête échoue
+     */
+    protected function fetchHtmlInsecure(string $url): string
+    {
+        try {
+            // withOptions() crée un nouveau client HTTP configuré sans vérif SSL.
+            // On n'écrase pas $this->httpClient — le client original reste inchangé
+            // pour toutes les autres requêtes de ce scraper (comportement sûr).
+            $insecureClient = $this->httpClient->withOptions([
+                'verify_peer' => false,   // Désactive la vérification du certificat serveur
+                'verify_host' => false,   // Désactive aussi la vérification du nom d'hôte
+            ]);
+
+            $response = $insecureClient->request('GET', $url, [
+                'headers' => [
+                    'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language' => 'fr-FR,fr;q=0.9,en;q=0.8',
+                    'Cache-Control'   => 'no-cache',
+                ],
+                'timeout'       => 20,
+                'max_redirects' => 5,
+            ]);
+
+            $this->lastStatusCode = $response->getStatusCode();
+
+            if ($this->lastStatusCode !== 200) {
+                return '';
+            }
+
+            $html = $response->getContent();
+            $this->lastFetchedLength = strlen($html);
+
+            return $html;
+
+        } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
+            return '';
+        }
     }
 
     /**

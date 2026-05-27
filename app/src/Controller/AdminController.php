@@ -21,11 +21,15 @@ use App\Service\AuthService;
 use App\Service\NotificationService;
 use App\Service\StructureService;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Process\Process;
+use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -52,10 +56,9 @@ class AdminController extends AbstractController
         private readonly NotificationService $notificationService,
         // ResourceAlertRepository : trouve les alertes correspondant à une ressource publiée
         private readonly ResourceAlertRepository $resourceAlertRepository,
-        // Chemin racine du projet Symfony, injecté via le paramètre kernel.project_dir.
-        // Nécessaire pour construire la commande bin/console dans runScraping().
-        #[Autowire('%kernel.project_dir%')]
-        private readonly string $projectDir,
+        // KernelInterface : nécessaire pour instancier l'Application Console
+        // et exécuter la commande de scraping dans le même processus PHP.
+        private readonly KernelInterface $kernel,
     ) {}
 
     /**
@@ -431,17 +434,21 @@ class AdminController extends AbstractController
     #[Route('/scraped-opportunities', name: 'scraped_opportunities')]
     public function scrapedOpportunities(): Response
     {
-        // Récupère les opportunités par statut pour alimenter les 3 onglets
+        // Récupère les opportunités par statut pour alimenter les 4 onglets
         $pending  = $this->scrapedResourceRepository->findPending();
         $verified = $this->scrapedResourceRepository->findVerified();
-        // Nouveau : opportunités rejetées (onglet "Rejeté") + date du dernier scraping
-        $rejected       = $this->scrapedResourceRepository->findRejected();
+        // Onglet "Rejeté" : opportunités jugées hors sujet par l'admin
+        $rejected = $this->scrapedResourceRepository->findRejected();
+        // Onglet "Archivé" : opportunités expirées (deadline passée, archivage automatique)
+        // ou archivées manuellement. Consultation uniquement, pas d'action disponible.
+        $archived        = $this->scrapedResourceRepository->findArchived();
         $latestScrapedAt = $this->scrapedResourceRepository->findLatestScrapedAt();
 
         return $this->render('admin/scraped_opportunities.html.twig', [
             'pending'         => $pending,
             'verified'        => $verified,
             'rejected'        => $rejected,
+            'archived'        => $archived,
             'latestScrapedAt' => $latestScrapedAt,
         ]);
     }
@@ -655,6 +662,245 @@ class AdminController extends AbstractController
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // ÉDITION DES OPPORTUNITÉS SCRAPÉES ET DES RESSOURCES
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Formulaire d'édition d'une opportunité scrapée.
+     *
+     * GET  → affiche le formulaire pré-rempli avec les valeurs actuelles.
+     * POST → valide, met à jour l'entité, puis redirige vers la liste.
+     *
+     * Champs éditables : title, description, type, deadline, disciplines, url.
+     * Champs NON éditables : status (géré par Vérifier/Rejeter), relevanceScore,
+     * sourceSite (métadonnée scraping), scrapedAt (timestamp système).
+     *
+     * Sécurité : token CSRF 'edit_scraped_{id}' généré et vérifié ici.
+     */
+    #[Route('/scraped-opportunities/{id}/edit', name: 'scraped_opportunity_edit', methods: ['GET', 'POST'])]
+    public function editScrapedOpportunity(int $id, Request $request): Response
+    {
+        // ── Chargement de l'entité (404 si inexistante) ──────────────────────
+        $scraped = $this->scrapedResourceRepository->find($id);
+        if ($scraped === null) {
+            throw $this->createNotFoundException('Opportunité scrapée introuvable.');
+        }
+
+        // ── GET → on affiche le formulaire pré-rempli ──────────────────────
+        if ($request->isMethod('GET')) {
+            return $this->render('admin/scraped_opportunity_edit.html.twig', [
+                'scraped' => $scraped,
+            ]);
+        }
+
+        // ── POST → validation du token CSRF ─────────────────────────────────
+        // Le token est propre à cet enregistrement ('edit_scraped_42' pour l'id=42)
+        // pour qu'un token valide sur une page ne soit pas rejouable sur une autre.
+        if (!$this->isCsrfTokenValid('edit_scraped_' . $id, $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+            return $this->redirectToRoute('app_admin_scraped_opportunity_edit', ['id' => $id]);
+        }
+
+        // ── Récupération et nettoyage des champs envoyés ────────────────────
+        // trim() supprime les espaces parasites souvent introduits par les navigateurs.
+        // null coalescing '' → null pour ne pas stocker des chaînes vides en BDD.
+        $title       = trim((string) $request->request->get('title', ''));
+        $description = trim((string) $request->request->get('description', ''));
+        $type        = trim((string) $request->request->get('type', ''));
+        $deadline    = trim((string) $request->request->get('deadline', ''));
+        $disciplines = trim((string) $request->request->get('disciplines', ''));
+        $url         = trim((string) $request->request->get('url', ''));
+
+        // Convertit les chaînes vides en null (on ne veut pas stocker '')
+        $description = $description !== '' ? $description : null;
+        $type        = $type !== '' ? $type : null;
+        $deadline    = $deadline !== '' ? $deadline : null;
+        $disciplines = $disciplines !== '' ? $disciplines : null;
+        $url         = $url !== '' ? $url : null;
+
+        // ── Validation côté serveur ─────────────────────────────────────────
+        // On valide manuellement sans Symfony Form Component pour rester
+        // cohérent avec le style du contrôleur existant (pas de FormType ici).
+
+        // Titre obligatoire (champ non nullable en BDD)
+        if ($title === '') {
+            $this->addFlash('error', 'Le titre est obligatoire.');
+            return $this->redirectToRoute('app_admin_scraped_opportunity_edit', ['id' => $id]);
+        }
+
+        // Longueur max 255 (contrainte Doctrine : @Column length=255)
+        if (mb_strlen($title) > 255) {
+            $this->addFlash('error', 'Le titre ne peut pas dépasser 255 caractères.');
+            return $this->redirectToRoute('app_admin_scraped_opportunity_edit', ['id' => $id]);
+        }
+
+        // Type : max 100 caractères (le select Twig filtre les valeurs connues, mais
+        // un POST forgé pourrait soumettre n'importe quelle chaîne)
+        if ($type !== null && mb_strlen($type) > 100) {
+            $this->addFlash('error', 'Le type ne peut pas dépasser 100 caractères.');
+            return $this->redirectToRoute('app_admin_scraped_opportunity_edit', ['id' => $id]);
+        }
+
+        // Deadline : max 150 caractères (free-text, mais on évite les abus)
+        if ($deadline !== null && mb_strlen($deadline) > 150) {
+            $this->addFlash('error', 'La deadline ne peut pas dépasser 150 caractères.');
+            return $this->redirectToRoute('app_admin_scraped_opportunity_edit', ['id' => $id]);
+        }
+
+        // Disciplines : max 255 caractères
+        if ($disciplines !== null && mb_strlen($disciplines) > 255) {
+            $this->addFlash('error', 'Les disciplines ne peuvent pas dépasser 255 caractères.');
+            return $this->redirectToRoute('app_admin_scraped_opportunity_edit', ['id' => $id]);
+        }
+
+        // URL : si renseignée, doit être une URL valide et ne pas dépasser 500 chars
+        // (contrainte de longueur BDD + unicité sur ce champ)
+        if ($url !== null) {
+            if (mb_strlen($url) > 500) {
+                $this->addFlash('error', 'L\'URL ne peut pas dépasser 500 caractères.');
+                return $this->redirectToRoute('app_admin_scraped_opportunity_edit', ['id' => $id]);
+            }
+            if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+                $this->addFlash('error', 'L\'URL renseignée n\'est pas valide (doit commencer par http:// ou https://).');
+                return $this->redirectToRoute('app_admin_scraped_opportunity_edit', ['id' => $id]);
+            }
+        }
+
+        // ── Mise à jour de l'entité ──────────────────────────────────────────
+        $scraped->setTitle($title);
+        $scraped->setDescription($description);
+        $scraped->setType($type);
+        $scraped->setDeadline($deadline);
+        $scraped->setDisciplines($disciplines);
+        $scraped->setUrl($url);
+
+        // Pas besoin de persist() : l'entité est déjà gérée par Doctrine (managed).
+        // flush() suffit — mais l'URL a une contrainte UNIQUE en BDD : on attrape
+        // l'exception si l'admin entre une URL déjà utilisée par une autre opportunité.
+        try {
+            $this->em->flush();
+        } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException) {
+            $this->em->clear(); // Remet Doctrine dans un état propre
+            $this->addFlash('error', 'Cette URL est déjà utilisée par une autre opportunité scrapée.');
+            return $this->redirectToRoute('app_admin_scraped_opportunity_edit', ['id' => $id]);
+        }
+
+        $this->addFlash('success', sprintf('L\'opportunité "%s" a été mise à jour.', $scraped->getTitle()));
+        return $this->redirectToRoute('app_admin_scraped_opportunities');
+    }
+
+    /**
+     * Formulaire d'édition d'une Resource (opportunité de la Ressourcerie).
+     *
+     * GET  → affiche le formulaire pré-rempli.
+     * POST → valide, met à jour, redirige vers la liste complète.
+     *
+     * Champs éditables : title, description, externalUrl, deadline, location.
+     * Champs NON éditables : status, resourceType, submittedBy, organization,
+     * disciplines, submitterRole (informations de soumission, gérées séparément).
+     *
+     * Sécurité : token CSRF 'edit_resource_{id}'.
+     */
+    #[Route('/resources/{id}/edit', name: 'resource_edit', methods: ['GET', 'POST'])]
+    public function editResource(int $id, Request $request): Response
+    {
+        // ── Chargement de l'entité (404 si inexistante) ──────────────────────
+        $resource = $this->resourceRepository->find($id);
+        if ($resource === null) {
+            throw $this->createNotFoundException('Ressource introuvable.');
+        }
+
+        // ── GET → on affiche le formulaire pré-rempli ──────────────────────
+        if ($request->isMethod('GET')) {
+            return $this->render('admin/resource_edit.html.twig', [
+                'resource' => $resource,
+            ]);
+        }
+
+        // ── POST → validation du token CSRF ─────────────────────────────────
+        if (!$this->isCsrfTokenValid('edit_resource_' . $id, $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+            return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
+        }
+
+        // ── Récupération et nettoyage des champs ────────────────────────────
+        $title       = trim((string) $request->request->get('title', ''));
+        $description = trim((string) $request->request->get('description', ''));
+        $externalUrl = trim((string) $request->request->get('externalUrl', ''));
+        $deadlineStr = trim((string) $request->request->get('deadline', ''));
+        $location    = trim((string) $request->request->get('location', ''));
+
+        // Convertit les chaînes vides en null pour les champs nullable
+        $externalUrl = $externalUrl !== '' ? $externalUrl : null;
+        $deadlineStr = $deadlineStr !== '' ? $deadlineStr : null;
+        $location    = $location !== '' ? $location : null;
+
+        // ── Validation côté serveur ─────────────────────────────────────────
+
+        // Titre : obligatoire, max 255 chars
+        if ($title === '') {
+            $this->addFlash('error', 'Le titre est obligatoire.');
+            return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
+        }
+        if (mb_strlen($title) > 255) {
+            $this->addFlash('error', 'Le titre ne peut pas dépasser 255 caractères.');
+            return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
+        }
+
+        // Description : obligatoire (non nullable en BDD sur Resource)
+        if ($description === '') {
+            $this->addFlash('error', 'La description est obligatoire.');
+            return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
+        }
+
+        // URL externe : si renseignée, longueur max 500 chars + format valide
+        if ($externalUrl !== null) {
+            if (mb_strlen($externalUrl) > 500) {
+                $this->addFlash('error', 'L\'URL externe ne peut pas dépasser 500 caractères.');
+                return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
+            }
+            if (filter_var($externalUrl, FILTER_VALIDATE_URL) === false) {
+                $this->addFlash('error', 'L\'URL externe renseignée n\'est pas valide (doit commencer par http:// ou https://).');
+                return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
+            }
+        }
+
+        // Localisation : max 150 chars
+        if ($location !== null && mb_strlen($location) > 150) {
+            $this->addFlash('error', 'La localisation ne peut pas dépasser 150 caractères.');
+            return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
+        }
+
+        // Deadline : si renseignée, doit être parseable en date stricte (format YYYY-MM-DD)
+        // Attention : createFromFormat() NE retourne PAS false pour une date invalide
+        // comme "2026-02-30" — il décale silencieusement au 2 mars. Il faut vérifier
+        // getLastErrors() pour détecter ce cas.
+        $deadlineDate = null;
+        if ($deadlineStr !== null) {
+            $parsed = \DateTime::createFromFormat('Y-m-d', $deadlineStr);
+            $errors = \DateTime::getLastErrors();
+            if ($parsed === false || ($errors !== false && $errors['warning_count'] > 0)) {
+                $this->addFlash('error', 'La date limite n\'est pas valide (format attendu : YYYY-MM-DD, ex: 2026-06-15).');
+                return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
+            }
+            $deadlineDate = $parsed;
+        }
+
+        // ── Mise à jour de l'entité ──────────────────────────────────────────
+        // PreUpdate lifecycle callback de Resource mettra à jour $updatedAt automatiquement.
+        $resource->setTitle($title);
+        $resource->setDescription($description);
+        $resource->setExternalUrl($externalUrl);
+        $resource->setDeadline($deadlineDate);
+        $resource->setLocation($location);
+
+        $this->em->flush();
+
+        $this->addFlash('success', sprintf('La ressource "%s" a été mise à jour.', $resource->getTitle()));
+        return $this->redirectToRoute('app_admin_resources_all');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // MODÉRATION DES OPPORTUNITÉS SCRAPÉES — Rejet + Scraping à la demande
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -699,50 +945,131 @@ class AdminController extends AbstractController
     }
 
     /**
-     * Lance le scraping des opportunités en arrière-plan via symfony/process.
+     * Lance le scraping des opportunités de manière BLOQUANTE via symfony/process.
      *
-     * Pourquoi en arrière-plan (Process::start()) ?
-     *   - Le scraping dure 1 à 2 minutes (5 à 7 sites, requêtes HTTP externes).
-     *   - Laisser le navigateur attendre entraînerait un timeout HTTP 504.
-     *   - start() retourne immédiatement ; la commande tourne en fond de tâche OS.
+     * Pourquoi bloquant (Process::run()) et non asynchrone ?
+     *   - L'admin veut voir le résultat immédiatement dans le flash message.
+     *   - Le scraping dure en général 20 à 60 secondes (requêtes HTTP externes).
+     *   - Un timeout de 120 secondes couvre largement les cas normaux.
+     *   - start() (non-bloquant) ne permettait pas d'afficher le bilan réel.
      *
-     * Limite connue : si le container Docker est relancé pendant l'exécution,
-     * le processus de fond est tué. Acceptable pour un usage admin ponctuel.
-     * Pour une vraie planification, utiliser un cron (cf. ScrapeOpportunitiesCommand).
+     * Compromis accepté :
+     *   - La page "se charge" pendant 20-60 s (pas de 504 car Nginx est configuré
+     *     avec fastcgi_read_timeout élevé dans le container dev).
+     *   - Pour la planification automatique, le cron reste préférable (cf. ScrapeOpportunitiesCommand).
+     */
+    /**
+     * Lance la commande de scraping directement dans le processus PHP courant.
+     *
+     * Pourquoi cette approche (Application Console inline) plutôt que Process::run() ?
+     *
+     * Process::run() crée un SOUS-PROCESSUS PHP qui hérite de l'environnement
+     * de PHP-FPM. Dans Docker, PHP-FPM n'a pas accès aux variables déclarées dans
+     * .env.local (DATABASE_URL, APP_SECRET, etc.) — elles sont chargées par le
+     * composant Dotenv uniquement lors du bootstrap de l'application.
+     * Résultat : la commande plantait au démarrage (connexion BDD impossible)
+     * et retournait exit code 1 → faux message d'erreur.
+     *
+     * La solution : instancier Application (la couche Console de Symfony) ici même
+     * et appeler run() dans le processus PHP actuel. Toutes les variables sont déjà
+     * chargées, tous les services sont déjà disponibles → pas d'ambiguïté d'env.
+     *
+     * Contrepartie : la requête HTTP reste ouverte pendant toute la durée du scraping
+     * (20-90 secondes selon le nombre de scrapers actifs). C'est acceptable pour une
+     * action admin manuelle et ponctuelle. Pour la planification automatique, le cron
+     * reste préférable (cf. docs/scraping-cron.md).
      */
     #[Route('/scraping/run', name: 'scraping_run', methods: ['POST'])]
     public function runScraping(Request $request): Response
     {
-        // Vérification CSRF — protège contre les requêtes cross-site
+        // Vérification CSRF — protège contre les requêtes forgées
         if (!$this->isCsrfTokenValid('run_scraping', $request->request->get('_token'))) {
             $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
             return $this->redirectToRoute('app_admin_scraped_opportunities');
         }
 
-        // Construction de la commande Symfony à exécuter dans le sous-processus.
-        // PHP_BINARY pointe vers l'interpréteur PHP en cours d'utilisation (fiable dans Docker).
-        // --env= transmet l'environnement courant (dev/prod) au processus enfant.
-        $process = new Process([
-            PHP_BINARY,
-            $this->projectDir . '/bin/console',
-            'app:scrape-opportunities',
-            '--env=' . $this->getParameter('kernel.environment'),
-        ]);
+        // ── Instanciation de l'application Console Symfony ───────────────────
+        // Application est le point d'entrée de la couche Console (comme bin/console).
+        // setAutoExit(false) : on veut récupérer le code de sortie nous-mêmes,
+        // pas laisser l'Application appeler exit() et couper la réponse HTTP.
+        $application = new Application($this->kernel);
+        $application->setAutoExit(false);
 
-        // Dossier de travail du processus : la racine du projet Symfony
-        $process->setWorkingDirectory($this->projectDir);
+        // ── Entrée : nom de la commande à exécuter ───────────────────────────
+        // ArrayInput remplace argv : pas de sous-processus, pas de shell.
+        $input = new ArrayInput(['command' => 'app:scrape-opportunities']);
 
-        // Pas de timeout : le scraping peut durer plusieurs minutes
-        $process->setTimeout(null);
+        // ── Sortie : tampon en mémoire pour capturer le bilan ────────────────
+        // BufferedOutput collecte tout ce que SymfonyStyle écrit (io->success, io->note…).
+        // On parsera ensuite les compteurs avec des regex.
+        $output = new BufferedOutput();
 
-        // start() lance le processus en arrière-plan et retourne immédiatement.
-        // Contrairement à run(), on n'attend PAS la fin de l'exécution.
-        $process->start();
+        // ── Exécution ─────────────────────────────────────────────────────────
+        // run() est synchrone : on attend la fin complète avant de continuer.
+        // Pas de timeout PHP ici (set_time_limit est géré par php-fpm, 300s par défaut).
+        try {
+            $exitCode = $application->run($input, $output);
+        } catch (\Throwable $e) {
+            // Erreur inattendue (ex : service non disponible) — on la logue et
+            // on affiche un message d'erreur clair plutôt que de planter silencieusement.
+            $this->addFlash('error', 'Erreur inattendue lors du scraping : ' . $e->getMessage());
+            return $this->redirectToRoute('app_admin_scraped_opportunities');
+        }
 
-        $this->addFlash(
-            'success',
-            'Scraping lancé en arrière-plan. Les résultats apparaîtront dans quelques minutes.'
-        );
+        // ── Extraction du bilan depuis la sortie texte ───────────────────────
+        // SymfonyStyle formate ses messages avec des caractères ANSI et des espaces.
+        // strip_tags() supprime les balises Twig/HTML potentielles ; le décodage
+        // ANSI n'est pas nécessaire car BufferedOutput désactive les couleurs.
+        $content  = $output->fetch();
+        $inserted = 0;
+        $updated  = 0;
+        $skipped  = 0;
+
+        if (preg_match('/(\d+) nouvelle\(s\)/', $content, $m)) {
+            $inserted = (int) $m[1];
+        }
+        if (preg_match('/(\d+) mise\(s\) à jour/', $content, $m)) {
+            $updated = (int) $m[1];
+        }
+        if (preg_match('/(\d+) ignorée\(s\)/', $content, $m)) {
+            $skipped = (int) $m[1];
+        }
+
+        // ── Réponse JSON si appel AJAX (fetch depuis la card de statut) ──────
+        // Le header 'X-Requested-With: XMLHttpRequest' est envoyé par le JS du template.
+        // On retourne du JSON pour que le JS puisse afficher le bilan sans rechargement complet.
+        // Le comportement classique (redirect + flash) est conservé en fallback non-AJAX.
+        if ($request->isXmlHttpRequest()) {
+            if ($exitCode !== 0) {
+                return new JsonResponse([
+                    'success' => false,
+                    'error'   => 'Erreur (code ' . $exitCode . '). Vérifiez les logs Symfony.',
+                ], 500);
+            }
+
+            return new JsonResponse([
+                'success'  => true,
+                'inserted' => $inserted,
+                'updated'  => $updated,
+                'skipped'  => $skipped,
+            ]);
+        }
+
+        // ── Flash message selon le résultat (appel classique sans JS) ────────
+        // exit code 0 = Command::SUCCESS → tout s'est bien passé
+        // exit code 1 = Command::FAILURE → erreur dans la commande
+        if ($exitCode !== 0) {
+            $this->addFlash('error',
+                'Le scraping a rencontré une erreur (code ' . $exitCode . '). Vérifiez les logs Symfony.'
+            );
+        } else {
+            $this->addFlash('success', sprintf(
+                'Scraping terminé : %d nouvelle(s) opportunité(s), %d mise(s) à jour, %d ignorée(s).',
+                $inserted,
+                $updated,
+                $skipped
+            ));
+        }
 
         return $this->redirectToRoute('app_admin_scraped_opportunities');
     }
