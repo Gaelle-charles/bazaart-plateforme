@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Entity\ScrapedResource;
+use App\Enum\ScrapedResourceStatus;
 use App\Repository\ScrapedResourceRepository;
 use App\Repository\ScrapingSourceRepository;
 use App\Service\GenericScraper;
@@ -247,34 +248,53 @@ class ScrapeOpportunitiesCommand extends Command
         if (!$isDryRun && !empty($allOpportunities)) {
             $io->section('Sauvegarde en base de données');
 
-            $inserted = 0; // Nouvelles URL, jamais vues
-            $updated  = 0; // URL déjà connues (pending ou rejected) — données rafraîchies
-            $skipped  = 0; // URL déjà vérifiées par un admin → intouchables
+            $inserted    = 0; // Nouvelles URL, jamais vues → status pending
+            $reactivated = 0; // URL archivées retrouvées sur le site → réactivées en pending
+            $updated     = 0; // URL déjà connues (pending ou rejected) — données rafraîchies sans changement de statut
+            $skipped     = 0; // URL déjà vérifiées par un admin → intouchables
 
             foreach ($allOpportunities as $opp) {
                 // ── Déduplication intelligente par URL ───────────────────────
-                // Trois cas :
-                //   1. URL inconnue                         → insertion (nouveau)
-                //   2. URL connue + status pending/rejected → mise à jour des champs
-                //   3. URL connue + status verified         → on ne touche rien
+                // Quatre cas selon le statut de l'enregistrement existant :
+                //   1. URL inconnue                  → insertion (pending par défaut)
+                //   2. URL connue + status archived  → réactivation en pending (le site la liste encore)
+                //   3. URL connue + status rejected  → mise à jour des champs, statut inchangé (décision admin)
+                //   4. URL connue + status pending   → mise à jour des champs, statut inchangé
+                //   5. URL connue + status verified  → skip complet (intouchable)
                 $existing = $opp->url ? $this->scrapedResourceRepository->findByUrl($opp->url) : null;
 
                 if ($existing !== null) {
-                    // Cas 3 : déjà validée par un admin — on préserve le travail de modération
+                    // Cas 5 : déjà validée par un admin — on préserve le travail de modération
                     if ($existing->isVerified()) {
                         $skipped++;
                         continue;
                     }
 
-                    // Cas 2 : pending ou rejected → rafraîchir les données
+                    // Cas 2 : archivée → réactivation en pending
+                    // L'opportunité était expirée mais le site la liste de nouveau.
+                    // On réinitialise scrapedAt à "maintenant" pour que archiveExpired()
+                    // ne la ré-archive pas immédiatement (protection 48h).
+                    if ($existing->isArchived()) {
+                        $existing->setTitle($opp->title);
+                        $existing->setDescription($opp->description ?: null);
+                        $existing->setType($opp->type ?: null);
+                        $existing->setDeadline($opp->deadline ?: null);
+                        $existing->setRelevanceScore($opp->relevanceScore);
+                        $existing->setDisciplines($opp->disciplines ?: null);
+                        $existing->setStatus(ScrapedResourceStatus::Pending); // réactivation
+                        $existing->setScrapedAt(new \DateTime());              // reset grâce 48h
+                        $reactivated++;
+                        continue;
+                    }
+
+                    // Cas 3 & 4 : pending ou rejected → rafraîchir les données
                     // On ne change PAS le status : si un admin a rejeté l'opportunité,
-                    // elle reste rejetée malgré la mise à jour des champs.
+                    // elle reste rejetée (décision intentionnelle, à respecter).
                     $existing->setTitle($opp->title);
                     $existing->setDescription($opp->description ?: null);
                     $existing->setType($opp->type ?: null);
                     $existing->setDeadline($opp->deadline ?: null);
                     $existing->setRelevanceScore($opp->relevanceScore);
-                    // NOUVEAU : mise à jour des disciplines
                     $existing->setDisciplines($opp->disciplines ?: null);
                     // Doctrine détecte les modifications via le Unit of Work — pas besoin de persist()
                     $updated++;
@@ -291,7 +311,6 @@ class ScrapeOpportunitiesCommand extends Command
                 $scraped->setDeadline($opp->deadline ?: null);
                 $scraped->setRelevanceScore($opp->relevanceScore);
                 $scraped->setDocuments($opp->documents ?: null);
-                // NOUVEAU : disciplines provenant du DTO (rempli par le scraper ou GenericScraper)
                 $scraped->setDisciplines($opp->disciplines ?: null);
                 // Status par défaut : 'pending' — l'admin valide ensuite dans /admin/scraped-opportunities
 
@@ -299,12 +318,13 @@ class ScrapeOpportunitiesCommand extends Command
                 $inserted++;
             }
 
-            // Flush : toutes les insertions et mises à jour en une seule transaction
+            // Flush : toutes les insertions/mises à jour/réactivations en une seule transaction
             $this->em->flush();
 
             $io->success(sprintf(
-                '%d nouvelle(s) | %d mise(s) à jour | %d ignorée(s) (déjà validée par admin)',
+                '%d nouvelle(s) | %d réactivée(s) (archives) | %d mise(s) à jour | %d ignorée(s) (déjà validée par admin)',
                 $inserted,
+                $reactivated,
                 $updated,
                 $skipped
             ));

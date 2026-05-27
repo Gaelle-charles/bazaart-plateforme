@@ -1020,13 +1020,19 @@ class AdminController extends AbstractController
         // SymfonyStyle formate ses messages avec des caractères ANSI et des espaces.
         // strip_tags() supprime les balises Twig/HTML potentielles ; le décodage
         // ANSI n'est pas nécessaire car BufferedOutput désactive les couleurs.
-        $content  = $output->fetch();
-        $inserted = 0;
-        $updated  = 0;
-        $skipped  = 0;
+        $content     = $output->fetch();
+        $inserted    = 0;
+        $reactivated = 0;
+        $updated     = 0;
+        $skipped     = 0;
 
+        // Extraction des compteurs depuis la sortie texte de la commande.
+        // Le format du message est : "X nouvelle(s) | Y réactivée(s) (archives) | Z mise(s) à jour | W ignorée(s)"
         if (preg_match('/(\d+) nouvelle\(s\)/', $content, $m)) {
             $inserted = (int) $m[1];
+        }
+        if (preg_match('/(\d+) réactivée\(s\)/', $content, $m)) {
+            $reactivated = (int) $m[1];
         }
         if (preg_match('/(\d+) mise\(s\) à jour/', $content, $m)) {
             $updated = (int) $m[1];
@@ -1048,10 +1054,11 @@ class AdminController extends AbstractController
             }
 
             return new JsonResponse([
-                'success'  => true,
-                'inserted' => $inserted,
-                'updated'  => $updated,
-                'skipped'  => $skipped,
+                'success'     => true,
+                'inserted'    => $inserted,
+                'reactivated' => $reactivated,
+                'updated'     => $updated,
+                'skipped'     => $skipped,
             ]);
         }
 
@@ -1064,8 +1071,9 @@ class AdminController extends AbstractController
             );
         } else {
             $this->addFlash('success', sprintf(
-                'Scraping terminé : %d nouvelle(s) opportunité(s), %d mise(s) à jour, %d ignorée(s).',
+                'Scraping terminé : %d nouvelle(s), %d réactivée(s), %d mise(s) à jour, %d ignorée(s).',
                 $inserted,
+                $reactivated,
                 $updated,
                 $skipped
             ));

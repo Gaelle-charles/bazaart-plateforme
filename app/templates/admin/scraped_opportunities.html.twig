@@ -523,17 +523,14 @@ document.addEventListener('DOMContentLoaded', function () {
             icon.textContent   = '✅';
             icon.style.filter  = 'none';
 
-            // Message de bilan
+            // Message de bilan — affiche uniquement les compteurs non nuls
+            let parts = [];
+            if (data.inserted    > 0) parts.push(data.inserted    + ' nouvelle' + (data.inserted    > 1 ? 's' : ''));
+            if (data.reactivated > 0) parts.push(data.reactivated + ' réactivée' + (data.reactivated > 1 ? 's' : '') + ' 🔄');
+            if (data.updated     > 0) parts.push(data.updated     + ' mise' + (data.updated > 1 ? 's' : '') + ' à jour');
+            if (data.skipped     > 0) parts.push(data.skipped     + ' ignorée' + (data.skipped > 1 ? 's' : ''));
             let msg = 'Terminé en ' + seconds + ' s';
-            if (data.inserted > 0) {
-                msg += ' · ' + data.inserted + ' nouvelle' + (data.inserted > 1 ? 's' : '');
-            }
-            if (data.updated > 0) {
-                msg += ' · ' + data.updated + ' mise' + (data.updated > 1 ? 's' : '') + ' à jour';
-            }
-            if (data.skipped > 0) {
-                msg += ' · ' + data.skipped + ' ignorée' + (data.skipped > 1 ? 's' : '');
-            }
+            if (parts.length > 0) msg += ' · ' + parts.join(' · ');
             text.textContent  = msg;
 
             // Sous-titre : rechargement auto

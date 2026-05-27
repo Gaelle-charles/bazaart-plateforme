@@ -145,4 +145,17 @@ class ScrapedResource
     public function isArchived(): bool { return $this->status === ScrapedResourceStatus::Archived; }
 
     public function getScrapedAt(): \DateTimeInterface { return $this->scrapedAt; }
+
+    /**
+     * Permet de rafraîchir la date de scraping lors d'une réactivation.
+     *
+     * Utilisé par ScrapeOpportunitiesCommand quand une opportunité archivée est retrouvée
+     * sur le site scrappé : on remet scrapedAt à "maintenant" pour que la protection
+     * 48h de archiveExpired() s'applique (empêche un ré-archivage immédiat).
+     */
+    public function setScrapedAt(\DateTimeInterface $scrapedAt): static
+    {
+        $this->scrapedAt = $scrapedAt;
+        return $this;
+    }
 }
