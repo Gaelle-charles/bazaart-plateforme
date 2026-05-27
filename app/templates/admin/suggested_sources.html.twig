@@ -1,0 +1,647 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/suggested_sources.html.twig — Validation des sources suggérées automatiquement
+ #
+ # Thème : Street (tokens CSS depuis design-tokens.css, même palette que scraping_sources.html.twig)
+ # Design : border-radius: 0 partout, bordures 1px solid --ink, police mono pour les labels
+ #
+ # Variables disponibles :
+ #   pending      : SuggestedSource[] — suggestions en attente de validation (statut AValider)
+ #   validated    : SuggestedSource[] — suggestions déjà validées (historique)
+ #   rejected     : SuggestedSource[] — suggestions déjà rejetées (historique)
+ #   pendingCount : int               — nombre de suggestions en attente (pour le badge)
+ #   types        : ScrapingSourceType[] — types disponibles pour la validation (RSS, HTML_LLM)
+ #
+ # Workflow admin :
+ #   1. Consulter la section "À valider" (affichée en premier)
+ #   2. Pour chaque suggestion : sélectionner le type dans le dropdown, puis Valider ou Rejeter
+ #   3. Les sections "Validées" et "Rejetées" servent d'historique (lecture seule)
+ #}
+
+{% block title %}Sources suggérées — Admin BazaArt{% endblock %}
+
+{% block page_title %}Découverte de sources{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+
+    /* ── Fond de page ──────────────────────────────────────────────────────── */
+    .app-content { background: var(--bg); font-family: var(--body); }
+
+    /* ── En-tête de page ─────────────────────────────────────────────────────
+     * Même style que scraping_sources.html.twig pour cohérence visuelle.
+     * Fond encre (--ink), texte sable (--bg).
+     */
+    .sg-header {
+        background: var(--ink);
+        color: var(--bg);
+        padding: 20px 0 18px;
+        margin: -28px -28px 28px;
+        border-bottom: 1px solid var(--ink);
+    }
+    .sg-header__inner {
+        padding: 0 28px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .sg-header__eyebrow {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: .12em;
+        color: var(--accent);
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+    .sg-header__title {
+        font-family: var(--display);
+        font-size: 28px;
+        line-height: .95;
+        text-transform: uppercase;
+        letter-spacing: -.01em;
+        color: var(--bg);
+    }
+    .sg-header__serif {
+        font-family: var(--serif);
+        font-style: italic;
+        font-size: 20px;
+        text-transform: none;
+        display: block;
+    }
+    .sg-header__meta {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: rgba(242,239,230,.55);
+        letter-spacing: .04em;
+        text-align: right;
+    }
+
+    /* ── Sections (À valider / Validées / Rejetées) ──────────────────────────
+     * Chaque section a un titre avec une bordure encre et un tableau en dessous.
+     */
+    .sg-section {
+        margin-bottom: 40px;
+    }
+    .sg-section__title {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        padding: 10px 16px;
+        border: 1px solid var(--ink);
+        background: var(--ink);
+        color: var(--bg);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 0;
+    }
+
+    /* Variante pour la section "À valider" : fond accent (vert) pour signaler l'action requise */
+    .sg-section__title--pending {
+        background: var(--accent);
+        color: var(--ink);
+        border-color: var(--ink);
+    }
+
+    /* Badge numérique dans le titre de section */
+    .sg-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        background: var(--ink);
+        color: var(--accent);
+        border: 1px solid var(--ink);
+    }
+    .sg-section__title--pending .sg-badge {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    /* ── Tableau des suggestions ──────────────────────────────────────────────
+     * Même structure que ss-table dans scraping_sources.html.twig.
+     */
+    .sg-table-wrap {
+        border: 1px solid var(--ink);
+        border-top: none; /* Le titre de section sert de bord supérieur */
+        overflow-x: auto;
+        margin-bottom: 0;
+    }
+    .sg-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        background: var(--bg);
+    }
+    .sg-table thead tr {
+        background: rgba(13,13,13,.06);
+    }
+    .sg-table thead th {
+        padding: 8px 12px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        text-align: left;
+        white-space: nowrap;
+        border-right: 1px solid var(--line-soft);
+        border-bottom: 1px solid var(--ink);
+    }
+    .sg-table thead th:last-child { border-right: none; }
+    .sg-table tbody tr {
+        border-bottom: 1px solid var(--line-soft);
+        transition: background var(--transition-fast);
+    }
+    .sg-table tbody tr:last-child { border-bottom: none; }
+    .sg-table tbody tr:hover { background: var(--bg-alt); }
+    .sg-table tbody td {
+        padding: 10px 12px;
+        vertical-align: top;
+        border-right: 1px solid var(--line-soft);
+        font-size: 12px;
+    }
+    .sg-table tbody td:last-child { border-right: none; }
+
+    /* Nom de l'organisme en gras */
+    .sg-nom {
+        font-weight: 600;
+        color: var(--ink);
+        display: block;
+        margin-bottom: 2px;
+    }
+
+    /* URL en monospace tronquée */
+    .sg-url {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        word-break: break-all;
+        display: block;
+    }
+
+    /* Source origine (page agrégateur) */
+    .sg-origine {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: rgba(13,13,13,.45);
+        display: block;
+        word-break: break-all;
+    }
+
+    /* Raison/explication du LLM — en italique */
+    .sg-raison {
+        font-style: italic;
+        font-size: 12px;
+        color: var(--ink-mute);
+        line-height: 1.4;
+    }
+
+    /* ── Formulaire d'action inline (Valider / Rejeter) ───────────────────────
+     * Les deux boutons sont dans des formulaires séparés (deux requêtes POST distinctes).
+     * Le formulaire de validation inclut un dropdown pour choisir le type de source.
+     */
+    .sg-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 160px;
+    }
+    .sg-action-form {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .sg-select {
+        padding: 5px 8px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink);
+        background: var(--bg);
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        outline: none;
+        width: 100%;
+    }
+    .sg-select:focus { border-color: var(--accent); }
+
+    /* Bouton "Valider" — fond vert acide (accent) */
+    .sg-btn-validate {
+        padding: 6px 12px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        background: var(--accent);
+        color: var(--ink);
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        transition: box-shadow var(--transition-fast);
+        width: 100%;
+        text-align: center;
+    }
+    .sg-btn-validate:hover { box-shadow: var(--shadow-offset-sm); }
+
+    /* Bouton "Rejeter" — fond blanc, texte danger */
+    .sg-btn-reject {
+        padding: 6px 12px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        background: var(--bg);
+        color: var(--danger, #dc3545);
+        border: 1px solid var(--danger, #dc3545);
+        border-radius: 0;
+        transition: background var(--transition-fast);
+        width: 100%;
+        text-align: center;
+    }
+    .sg-btn-reject:hover { background: rgba(220,53,69,.06); }
+
+    /* ── Badges de statut (historique) ────────────────────────────────────── */
+    .sg-status {
+        display: inline-block;
+        padding: 2px 8px;
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        border: 1px solid;
+        border-radius: 0;
+        white-space: nowrap;
+    }
+    .sg-status--validee {
+        background: rgba(198,242,78,.2);
+        color: #2a6e00;
+        border-color: var(--accent);
+    }
+    .sg-status--rejetee {
+        background: rgba(220,53,69,.08);
+        color: var(--danger, #dc3545);
+        border-color: var(--danger, #dc3545);
+    }
+
+    /* ── État vide ───────────────────────────────────────────────────────────── */
+    .sg-empty {
+        padding: 24px 16px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+        border: 1px solid var(--line-soft);
+        border-top: none;
+        background: var(--bg-alt);
+    }
+
+    /* ── Note CLI en bas de page ──────────────────────────────────────────── */
+    .sg-cli-note {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        padding: 16px;
+        border: 1px solid var(--line-soft);
+        background: var(--bg-alt);
+        letter-spacing: .03em;
+        line-height: 1.6;
+    }
+
+    /* ── Responsive ────────────────────────────────────────────────────────── */
+    @media (max-width: 1024px) {
+        .sg-table { min-width: 800px; }
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── En-tête de page ──────────────────────────────────────────────────────── #}
+<div class="sg-header">
+    <div class="sg-header__inner">
+        <div>
+            <div class="sg-header__eyebrow">● Scraping · découverte automatique</div>
+            <div class="sg-header__title">
+                SOURCES<br>
+                <span class="sg-header__serif">Suggérées.</span>
+            </div>
+        </div>
+        <div class="sg-header__meta">
+            {# Badge total et en attente #}
+            {% set totalCount = pending|length + validated|length + rejected|length %}
+            {{ pendingCount }} en attente / {{ totalCount }} total<br>
+            <span style="font-size: 10px; display: block; margin-top: 4px;">
+                Générées par <code>app:discover-sources</code>
+            </span>
+        </div>
+    </div>
+</div>
+
+{# ── Message global si aucune suggestion ─────────────────────────────────── #}
+{% if pending is empty and validated is empty and rejected is empty %}
+
+    <div class="sg-empty" style="border: 1px solid var(--ink); padding: 48px 24px; text-align: center;">
+        Aucune suggestion disponible.<br>
+        Lancez la commande de découverte pour commencer :
+        <br><br>
+        <code style="background: var(--ink); color: var(--accent); padding: 4px 10px; font-size: 12px;">
+            docker compose exec app php bin/console app:discover-sources
+        </code>
+        <br><br>
+        <span style="font-size: 11px; color: var(--ink-mute);">
+            Astuce : utilisez <code>--dry-run</code> pour prévisualiser sans créer de suggestions.
+        </span>
+    </div>
+
+{% else %}
+
+    {# ══════════════════════════════════════════════════════════════════════════
+     # SECTION 1 : À VALIDER (action requise — affichée en premier)
+     # ══════════════════════════════════════════════════════════════════════════ #}
+    <div class="sg-section">
+
+        <div class="sg-section__title sg-section__title--pending">
+            Sources à valider
+            {% if pendingCount > 0 %}
+                <span class="sg-badge">{{ pendingCount }}</span>
+            {% endif %}
+        </div>
+
+        {% if pending is empty %}
+
+            <div class="sg-empty">
+                Aucune source en attente de validation.
+                Tout est traité ou lancez <code>app:discover-sources</code> pour en découvrir de nouvelles.
+            </div>
+
+        {% else %}
+
+            <div class="sg-table-wrap">
+                <table class="sg-table">
+                    <thead>
+                        <tr>
+                            <th>Organisme / URL</th>
+                            <th>Zone</th>
+                            <th>Discipline</th>
+                            <th>Source agrégateur</th>
+                            <th>Raison LLM</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for suggestion in pending %}
+                            <tr>
+
+                                {# Organisme + URL #}
+                                <td style="min-width: 200px;">
+                                    <span class="sg-nom">{{ suggestion.nomOrganisme|e }}</span>
+                                    {% if suggestion.url %}
+                                        <a href="{{ suggestion.url|e }}" target="_blank" rel="noopener"
+                                           class="sg-url">
+                                            {{ suggestion.url|slice(0, 60)|e }}
+                                        </a>
+                                    {% else %}
+                                        <span class="sg-url" style="color: var(--danger, #dc3545);">
+                                            Pas d'URL — validation impossible
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                {# Zone géographique #}
+                                <td style="white-space: nowrap; color: var(--ink-mute);">
+                                    {{ suggestion.paysZone|default('—')|e }}
+                                </td>
+
+                                {# Discipline #}
+                                <td style="color: var(--ink-mute);">
+                                    {{ suggestion.disciplinePressentie|default('—')|e }}
+                                </td>
+
+                                {# Page source (agrégateur d'origine) #}
+                                <td style="min-width: 160px;">
+                                    <span class="sg-origine">
+                                        {{ suggestion.sourceOrigine|slice(0, 50)|e }}
+                                    </span>
+                                </td>
+
+                                {# Explication du LLM #}
+                                <td style="min-width: 200px; max-width: 280px;">
+                                    {% if suggestion.raisonSuggestion %}
+                                        <span class="sg-raison">{{ suggestion.raisonSuggestion|e }}</span>
+                                    {% else %}
+                                        <span style="color: var(--ink-mute); font-size: 11px;">—</span>
+                                    {% endif %}
+                                </td>
+
+                                {# Date de découverte #}
+                                <td style="white-space: nowrap;">
+                                    <span style="font-family: var(--mono); font-size: 10px; color: var(--ink-mute);">
+                                        {{ suggestion.dateDecouverte|date('d/m/Y') }}
+                                    </span>
+                                </td>
+
+                                {# Actions : Valider + Rejeter #}
+                                <td>
+                                    <div class="sg-actions">
+
+                                        {#
+                                          Formulaire "Valider" :
+                                            - Dropdown pour choisir le type (RSS ou HTML_LLM)
+                                            - Token CSRF nommé 'suggested_source_{id}'
+                                            - Action POST → AdminSuggestedSourceController::validate()
+                                        #}
+                                        {% if suggestion.url %}
+                                            <form method="post"
+                                                  action="{{ path('app_admin_suggested_sources_validate', {id: suggestion.id}) }}"
+                                                  class="sg-action-form">
+                                                <input type="hidden" name="_token"
+                                                       value="{{ csrf_token('suggested_source_' ~ suggestion.id) }}">
+
+                                                {# Dropdown de type — pré-sélectionné sur le type pressenti si disponible #}
+                                                <select name="type_pressenti" class="sg-select"
+                                                        title="Type de scraping pour cette source">
+                                                    {% for type in types %}
+                                                        <option value="{{ type.value|e }}"
+                                                            {% if suggestion.typePressenti == type.value %}selected{% endif %}>
+                                                            {{ type.label()|e }}
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+
+                                                <button type="submit" class="sg-btn-validate">
+                                                    Valider
+                                                </button>
+                                            </form>
+                                        {% endif %}
+
+                                        {#
+                                          Formulaire "Rejeter" :
+                                            - Confirmation JS avant envoi (action irréversible)
+                                            - Même token CSRF que Valider (nommé 'suggested_source_{id}')
+                                            - Action POST → AdminSuggestedSourceController::reject()
+                                        #}
+                                        <form method="post"
+                                              action="{{ path('app_admin_suggested_sources_reject', {id: suggestion.id}) }}"
+                                              onsubmit="return confirm('Rejeter « {{ suggestion.nomOrganisme|e('js') }} » ? Cette source ne sera plus re-suggérée.')">
+                                            <input type="hidden" name="_token"
+                                                   value="{{ csrf_token('suggested_source_' ~ suggestion.id) }}">
+                                            <button type="submit" class="sg-btn-reject">
+                                                Rejeter
+                                            </button>
+                                        </form>
+
+                                    </div>
+                                </td>
+
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        {% endif %}
+    </div>
+
+    {# ══════════════════════════════════════════════════════════════════════════
+     # SECTION 2 : VALIDÉES (historique — lecture seule)
+     # ══════════════════════════════════════════════════════════════════════════ #}
+    <div class="sg-section">
+
+        <div class="sg-section__title">
+            Validées
+            <span class="sg-badge">{{ validated|length }}</span>
+        </div>
+
+        {% if validated is empty %}
+            <div class="sg-empty">Aucune source validée pour l'instant.</div>
+        {% else %}
+            <div class="sg-table-wrap">
+                <table class="sg-table">
+                    <thead>
+                        <tr>
+                            <th>Organisme / URL</th>
+                            <th>Zone</th>
+                            <th>Discipline</th>
+                            <th>Source agrégateur</th>
+                            <th>Date</th>
+                            <th>Statut</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for suggestion in validated %}
+                            <tr>
+                                <td>
+                                    <span class="sg-nom">{{ suggestion.nomOrganisme|e }}</span>
+                                    {% if suggestion.url %}
+                                        <a href="{{ suggestion.url|e }}" target="_blank" rel="noopener"
+                                           class="sg-url">{{ suggestion.url|slice(0, 60)|e }}</a>
+                                    {% endif %}
+                                </td>
+                                <td style="color: var(--ink-mute);">{{ suggestion.paysZone|default('—')|e }}</td>
+                                <td style="color: var(--ink-mute);">{{ suggestion.disciplinePressentie|default('—')|e }}</td>
+                                <td><span class="sg-origine">{{ suggestion.sourceOrigine|slice(0, 50)|e }}</span></td>
+                                <td style="white-space: nowrap;">
+                                    <span style="font-family: var(--mono); font-size: 10px; color: var(--ink-mute);">
+                                        {{ suggestion.dateDecouverte|date('d/m/Y') }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="sg-status sg-status--validee">Validée</span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+
+    </div>
+
+    {# ══════════════════════════════════════════════════════════════════════════
+     # SECTION 3 : REJETÉES (historique — lecture seule)
+     # ══════════════════════════════════════════════════════════════════════════ #}
+    <div class="sg-section">
+
+        <div class="sg-section__title">
+            Rejetées
+            <span class="sg-badge">{{ rejected|length }}</span>
+        </div>
+
+        {% if rejected is empty %}
+            <div class="sg-empty">Aucune source rejetée pour l'instant.</div>
+        {% else %}
+            <div class="sg-table-wrap">
+                <table class="sg-table">
+                    <thead>
+                        <tr>
+                            <th>Organisme / URL</th>
+                            <th>Zone</th>
+                            <th>Discipline</th>
+                            <th>Source agrégateur</th>
+                            <th>Date</th>
+                            <th>Statut</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for suggestion in rejected %}
+                            <tr style="opacity: .6;">
+                                <td>
+                                    <span class="sg-nom">{{ suggestion.nomOrganisme|e }}</span>
+                                    {% if suggestion.url %}
+                                        <span class="sg-url">{{ suggestion.url|slice(0, 60)|e }}</span>
+                                    {% endif %}
+                                </td>
+                                <td style="color: var(--ink-mute);">{{ suggestion.paysZone|default('—')|e }}</td>
+                                <td style="color: var(--ink-mute);">{{ suggestion.disciplinePressentie|default('—')|e }}</td>
+                                <td><span class="sg-origine">{{ suggestion.sourceOrigine|slice(0, 50)|e }}</span></td>
+                                <td style="white-space: nowrap;">
+                                    <span style="font-family: var(--mono); font-size: 10px; color: var(--ink-mute);">
+                                        {{ suggestion.dateDecouverte|date('d/m/Y') }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="sg-status sg-status--rejetee">Rejetée</span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+
+    </div>
+
+{% endif %}
+
+{# ── Note CLI en bas de page ──────────────────────────────────────────────── #}
+<div class="sg-cli-note">
+    Lancer la découverte de sources :
+    <code style="background: var(--ink); color: var(--accent); padding: 2px 6px; font-size: 11px;">
+        docker compose exec app php bin/console app:discover-sources
+    </code>
+    <br>
+    Option <code style="background: var(--ink); color: var(--accent); padding: 1px 4px;">--dry-run</code>
+    pour simuler sans créer de suggestions.
+    Option <code style="background: var(--ink); color: var(--accent); padding: 1px 4px;">--source=on-the-move</code>
+    pour analyser un seul agrégateur.
+    <br>
+    <span style="color: rgba(13,13,13,.4);">
+        Les sources suggérées rejetées ne seront plus re-suggérées (déduplication par URL).
+        Les sources validées sont automatiquement activées dans /admin/scraping-sources.
+    </span>
+</div>
+
+{% endblock %}
