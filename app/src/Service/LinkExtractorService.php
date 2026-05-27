@@ -99,7 +99,8 @@ class LinkExtractorService
         $crawler = new Crawler($html);
 
         // ── Étape 2 : extraire tous les liens <a href> ───────────────────────
-        $afterExtract = $this->extractLinks($crawler);
+        // On passe l'URL de l'agrégateur pour résoudre les liens relatifs en absolus.
+        $afterExtract = $this->extractLinks($crawler, $aggregatorUrl);
 
         // ── Étape 3 : supprimer les domaines de bruit ────────────────────────
         $afterNoise = $this->filterNoiseDomains($afterExtract);
@@ -193,50 +194,36 @@ class LinkExtractorService
     /**
      * Extrait tous les liens <a href> de la page via DomCrawler.
      *
-     * Règles d'exclusion (un lien est ignoré si...) :
-     *   - href manquant, vide, ou espace seul
-     *   - href commence par '#'     → ancre interne à la page
-     *   - href commence par 'mailto:' → lien email
-     *   - href commence par 'tel:'   → lien téléphone
-     *   - href commence par 'javascript:' → lien JS
-     *   - href ne commence pas par 'http' → chemin relatif (ex: "/about") ignoré
-     *     car on ne peut pas extraire un domaine fiable sans connaître la base URL
+     * Les liens relatifs sont résolus en URLs absolues via resolveUrl() avant tout filtrage.
+     * Sans cette résolution, les sites comme on-the-move.org (qui n'utilisent que des
+     * chemins relatifs comme "/news/goethe-institut") retourneraient 0 candidat.
      *
-     * On NE normalise PAS les URLs ici — les étapes suivantes ont besoin de l'URL brute.
-     * Seul le texte ancre est nettoyé (trim + normalisation des espaces consécutifs).
+     * Règles d'exclusion (un lien est ignoré si resolveUrl() retourne null) :
+     *   - href vide
+     *   - href commence par '#'          → ancre interne
+     *   - href commence par 'mailto:'    → lien email
+     *   - href commence par 'tel:'       → lien téléphone
+     *   - href commence par 'javascript:'→ lien JS
      *
-     * @param Crawler $crawler Instance DomCrawler pointant sur le HTML de la page
-     * @return array<int, array{text: string, url: string}> Liste des liens valides
+     * Seul le texte ancre est nettoyé (trim + collapsing des espaces consécutifs).
+     *
+     * @param Crawler $crawler      Instance DomCrawler pointant sur le HTML de la page
+     * @param string  $baseUrl      URL de la page agrégateur (nécessaire pour résoudre les relatifs)
+     * @return array<int, array{text: string, url: string}> Liste des liens valides (URLs absolues)
      */
-    private function extractLinks(Crawler $crawler): array
+    private function extractLinks(Crawler $crawler, string $baseUrl): array
     {
         $links = [];
 
         // DomCrawler::filter() retourne un nouveau Crawler sur les nœuds <a>
         // each() itère sur chaque nœud et collecte les résultats dans un tableau
-        $crawler->filter('a[href]')->each(function (Crawler $node) use (&$links): void {
+        $crawler->filter('a[href]')->each(function (Crawler $node) use (&$links, $baseUrl): void {
             $href = trim($node->attr('href') ?? '');
 
-            // Ignorer les liens vides, les ancres, les schemes non-HTTP
-            if (empty($href)) {
-                return;
-            }
-            if (str_starts_with($href, '#')) {
-                return; // Ancre interne à la page
-            }
-            if (str_starts_with($href, 'mailto:')) {
-                return; // Lien email
-            }
-            if (str_starts_with($href, 'tel:')) {
-                return; // Lien téléphone
-            }
-            if (str_starts_with($href, 'javascript:')) {
-                return; // Lien JavaScript
-            }
-            if (!str_starts_with($href, 'http')) {
-                // Chemin relatif (ex: "/about", "../contact") — on ne peut pas
-                // résoudre la base URL sans la passer en paramètre, et les liens
-                // relatifs sont presque toujours des liens internes au site agrégateur.
+            // Résoudre le lien (relatif ou absolu) en URL absolue.
+            // resolveUrl() retourne null pour les hrefs à ignorer (ancres, mailto, etc.)
+            $absoluteUrl = $this->resolveUrl($href, $baseUrl);
+            if ($absoluteUrl === null) {
                 return;
             }
 
@@ -246,11 +233,91 @@ class LinkExtractorService
 
             $links[] = [
                 'text' => $text,
-                'url'  => $href,
+                'url'  => $absoluteUrl, // On stocke l'URL absolue résolue, pas le href brut
             ];
         });
 
         return $links;
+    }
+
+    /**
+     * Résout un href brut en URL absolue à partir de l'URL de base de la page.
+     *
+     * Retourne null pour les hrefs à ignorer silencieusement — ils ne seront
+     * pas ajoutés à la liste des candidats.
+     *
+     * Cas gérés dans l'ordre :
+     *   - Vide, ancre "#…", "mailto:", "tel:", "javascript:" → null (ignorer)
+     *   - Absolu "https://…" ou "http://…"                  → retourné tel quel
+     *   - Relatif protocole "//example.com/path"             → "https://example.com/path"
+     *   - Relatif racine "/path/to/page"                     → scheme + host + href
+     *   - Relatif chemin "page" ou "../page"                 → résolu par rapport
+     *                                                          au répertoire courant
+     *
+     * Si $baseUrl n'est pas une URL parseable (pas de host), retourne null pour
+     * les cas relatifs — on ne peut pas construire une URL absolue sans base.
+     *
+     * @param string $href    Valeur brute de l'attribut href (peut être relative ou absolue)
+     * @param string $baseUrl URL de la page agrégateur (utilisée uniquement pour les relatifs)
+     * @return string|null    URL absolue résolue, ou null si ce href doit être ignoré
+     */
+    private function resolveUrl(string $href, string $baseUrl): ?string
+    {
+        // ── Cas à ignorer immédiatement ───────────────────────────────────────
+        if ($href === '') {
+            return null; // href vide
+        }
+        if (str_starts_with($href, '#')) {
+            return null; // Ancre interne à la page
+        }
+        if (str_starts_with($href, 'mailto:')) {
+            return null; // Lien email
+        }
+        if (str_starts_with($href, 'tel:')) {
+            return null; // Lien téléphone
+        }
+        if (str_starts_with($href, 'javascript:')) {
+            return null; // Pseudo-protocole JS
+        }
+
+        // ── Déjà absolu : on retourne tel quel ───────────────────────────────
+        if (str_starts_with($href, 'http://') || str_starts_with($href, 'https://')) {
+            return $href;
+        }
+
+        // ── Relatif protocole : //example.com/path ───────────────────────────
+        // On force https:// car on ne sait pas si http est encore supporté.
+        if (str_starts_with($href, '//')) {
+            return 'https:' . $href;
+        }
+
+        // ── Tous les cas relatifs nécessitent d'analyser $baseUrl ─────────────
+        // Si $baseUrl est malformée (pas de host), on ne peut pas construire
+        // une URL absolue — on abandonne.
+        $parts = parse_url($baseUrl);
+        if (!is_array($parts) || !isset($parts['host'])) {
+            return null;
+        }
+
+        $scheme = $parts['scheme'] ?? 'https';
+        $host   = $parts['host'];
+        // Port non-standard : :8080, :443, etc.
+        $port   = isset($parts['port']) ? ':' . $parts['port'] : '';
+
+        // ── Relatif racine : /path/to/page ────────────────────────────────────
+        // Exemple : href="/news/goethe-institut" + base="https://on-the-move.org/events"
+        //        → "https://on-the-move.org/news/goethe-institut"
+        if (str_starts_with($href, '/')) {
+            return $scheme . '://' . $host . $port . $href;
+        }
+
+        // ── Relatif chemin : "page", "./page", "../page" ──────────────────────
+        // On remonte au répertoire parent du path courant, puis on y colle le href.
+        // Exemple : href="grants/index.html" + base="https://example.org/resources/"
+        //        → "https://example.org/resources/grants/index.html"
+        // Note : dirname('/') == '/', donc rtrim est nécessaire pour éviter "//href"
+        $basePath = isset($parts['path']) ? dirname($parts['path']) : '';
+        return $scheme . '://' . $host . $port . rtrim($basePath, '/') . '/' . ltrim($href, '/');
     }
 
     /**
