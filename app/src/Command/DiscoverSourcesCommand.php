@@ -337,10 +337,6 @@ class DiscoverSourcesCommand extends Command
                 $newSuggestions++;
             }
 
-            // Si plafond atteint, la boucle break 2 nous a sortis — on check ici
-            if ($ceilingReached) {
-                break;
-            }
         }
 
         // ── Étape 5 : Flush (si pas en dry-run) ──────────────────────────────

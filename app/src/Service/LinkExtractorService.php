@@ -319,10 +319,12 @@ class LinkExtractorService
 
             // Comparaison stricte du host (minuscules)
             // Couvre aussi les cas "www.on-the-move.org" vs "on-the-move.org"
-            // en normalisant www. sur les deux côtés
-            $linkHostNorm = str_starts_with(strtolower($linkHost), 'www.')
-                ? substr(strtolower($linkHost), 4)
-                : strtolower($linkHost);
+            // en normalisant www. sur les deux côtés.
+            // On passe en minuscules UNE seule fois pour éviter le triple appel strtolower().
+            $lowerLinkHost = strtolower($linkHost);
+            $linkHostNorm  = str_starts_with($lowerLinkHost, 'www.')
+                ? substr($lowerLinkHost, 4)
+                : $lowerLinkHost;
             $aggregatorHostNorm = str_starts_with($aggregatorHost, 'www.')
                 ? substr($aggregatorHost, 4)
                 : $aggregatorHost;

@@ -413,7 +413,7 @@ PROMPT;
 
             $sources[] = [
                 'nom'       => $nom,
-                'url'       => $url !== '' ? $url : null,
+                'url'       => $url, // null si URL vide/invalide (assigné au bloc if ci-dessus)
                 'pays_zone' => trim((string) ($item['pays_zone'] ?? '')) ?: null,
                 'discipline'=> trim((string) ($item['discipline'] ?? '')) ?: null,
                 'raison'    => trim((string) ($item['raison'] ?? '')) ?: null,
