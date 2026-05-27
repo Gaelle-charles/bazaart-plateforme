@@ -459,10 +459,15 @@ class DiscoverSourcesCommand extends Command
                 'headers' => [
                     // On se présente comme un navigateur pour éviter les blocages
                     'User-Agent'      => self::USER_AGENT,
-                    // On accepte le HTML compressé pour économiser la bande passante
-                    'Accept-Encoding' => 'gzip, deflate, br',
                     // On accepte le français en priorité (sites majoritairement francophones)
                     'Accept-Language' => 'fr-FR,fr;q=0.9,en;q=0.8',
+                    // NOTE : on NE pose PAS Accept-Encoding manuellement.
+                    // Quand ce header est posé à la main, Symfony HTTP Client bypass
+                    // sa décompression automatique → getContent() retourne les octets
+                    // compressés bruts (gzip ~24 % de la taille réelle), ce qui provoque
+                    // une troncature apparente (ex : 23 853 chars au lieu de 99 000).
+                    // Sans ce header, Symfony négocie la compression lui-même ET
+                    // décompresse automatiquement avant de retourner le contenu.
                 ],
                 // Timeout : 30 secondes (les pages agrégateurs peuvent être lentes)
                 'timeout' => self::HTTP_TIMEOUT,
@@ -481,8 +486,17 @@ class DiscoverSourcesCommand extends Command
                 return null;
             }
 
-            // getContent() retourne le HTML décompressé (gzip/br géré automatiquement)
+            // getContent() retourne le HTML décompressé (Symfony gère la décompression
+            // automatiquement tant qu'on ne pose pas Accept-Encoding à la main).
             $html = $response->getContent();
+
+            // Log debug : taille réelle reçue — visible avec -vvv pour diagnostiquer
+            // les troncatures (ex : 23 853 chars au lieu de 99 000 = gzip non décompressé)
+            $this->logger->debug('[DiscoverSources] HTML reçu.', [
+                'url'             => $url,
+                'octets_getContent' => strlen($html),
+                'chars_mb'          => mb_strlen($html),
+            ]);
 
             if (empty(trim($html))) {
                 $message = sprintf('HTML vide pour %s — agrégateur ignoré.', $url);

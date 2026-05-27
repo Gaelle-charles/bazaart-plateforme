@@ -99,32 +99,46 @@ class LinkExtractorService
         $crawler = new Crawler($html);
 
         // ── Étape 2 : extraire tous les liens <a href> ───────────────────────
-        $candidates = $this->extractLinks($crawler);
+        $afterExtract = $this->extractLinks($crawler);
 
         // ── Étape 3 : supprimer les domaines de bruit ────────────────────────
-        $candidates = $this->filterNoiseDomains($candidates);
+        $afterNoise = $this->filterNoiseDomains($afterExtract);
 
         // ── Étape 4 : supprimer les liens internes ───────────────────────────
-        $candidates = $this->filterInternalLinks($candidates, $aggregatorUrl);
+        $afterInternal = $this->filterInternalLinks($afterNoise, $aggregatorUrl);
 
         // ── Étape 5 : dédupliquer par domaine ────────────────────────────────
-        $candidates = $this->deduplicateByDomain($candidates);
+        $afterDedup = $this->deduplicateByDomain($afterInternal);
 
         // ── Étape 6 : supprimer les domaines déjà connus en BDD ─────────────
-        $candidates = $this->filterKnownDomains($candidates, $knownDomains);
+        $afterKnown = $this->filterKnownDomains($afterDedup, $knownDomains);
+
+        // ── Log debug : comptes après chaque étape (visible avec -vvv) ───────
+        // Format : "extractLinks: 170 → noise: X → internal: Y → dedup: Z → known: W → cap: V"
+        // Si une étape filtre TOUT, c'est ici qu'on le voit.
+        $capFinal = min(count($afterKnown), self::MAX_CANDIDATES_PER_AGGREGATOR);
+        $this->logger->debug(sprintf(
+            '[LinkExtractor] extractLinks: %d → noise: %d → internal: %d → dedup: %d → known: %d → cap: %d',
+            count($afterExtract),
+            count($afterNoise),
+            count($afterInternal),
+            count($afterDedup),
+            count($afterKnown),
+            $capFinal
+        ), ['url' => $aggregatorUrl]);
 
         // ── Étape 7 : appliquer le plafond ───────────────────────────────────
         // On log l'info AVANT de tronquer pour que les statistiques soient exactes.
-        if (count($candidates) > self::MAX_CANDIDATES_PER_AGGREGATOR) {
+        if (count($afterKnown) > self::MAX_CANDIDATES_PER_AGGREGATOR) {
             $this->logger->info('[LinkExtractor] Plafond appliqué.', [
-                'avant'  => count($candidates),
+                'avant'  => count($afterKnown),
                 'retenu' => self::MAX_CANDIDATES_PER_AGGREGATOR,
                 'url'    => $aggregatorUrl,
             ]);
-            $candidates = array_slice($candidates, 0, self::MAX_CANDIDATES_PER_AGGREGATOR);
+            return array_slice($afterKnown, 0, self::MAX_CANDIDATES_PER_AGGREGATOR);
         }
 
-        return $candidates;
+        return $afterKnown;
     }
 
     /**
