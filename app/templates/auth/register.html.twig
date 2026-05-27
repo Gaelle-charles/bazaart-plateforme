@@ -633,24 +633,37 @@
                         placeholder="••••••••••"
                         autocomplete="new-password"
                         required
-                        minlength="8"
+                        minlength="10"
                         aria-describedby="auth-password-hint">
-                    {# Règles de complexité — id référencé par aria-describedby pour l'accessibilité.
-                       ⚠️ Le contrôleur actuel valide 8 caractères min (RegisterDTO::isPasswordStrong).
-                       Le CDC V3 section 9 prévoit 10 car + 1 maj + 1 chiffre.
-                       À aligner quand symfony-backend mettra à jour RegisterDTO. #}
+                    {# Règles de complexité conformes au CDC §9 :
+                       10 caractères minimum, 1 majuscule, 1 chiffre.
+                       Le contrôleur valide ces règles via RegisterDTO::isPasswordStrong(). #}
                     <span class="auth-input-hint" id="auth-password-hint">
-                        8 caractères minimum
+                        10 caractères minimum, 1 majuscule, 1 chiffre
                     </span>
+                </div>
+
+                {# ── Confirmation du mot de passe ────────────────────────────
+                 # Vérification côté serveur que les deux saisies correspondent.
+                 # Le contrôleur valide la correspondance via RegisterDTO::doPasswordsMatch().
+                 # ────────────────────────────────────────────────────────────── #}
+                <div class="auth-field">
+                    <label class="auth-label" for="auth-confirm-password">Confirmer le mot de passe</label>
+                    <input
+                        class="auth-input"
+                        type="password"
+                        id="auth-confirm-password"
+                        name="confirm_password"
+                        placeholder="••••••••••"
+                        autocomplete="new-password"
+                        required
+                        minlength="10">
                 </div>
 
                 {# ── Token CSRF ────────────────────────────────────────────────
                  # Protège contre les attaques Cross-Site Request Forgery.
-                 # ⚠️ Signalement symfony-backend : AuthController::register()
-                 #    ne valide pas encore ce token (RegisterDTO::fromArray ne le lit pas).
-                 #    Le token est inclus ici — il sera ignoré jusqu'à ce que
-                 #    le contrôleur appelle isCsrfTokenValid('registration', ...).
-                 #    Priorité à corriger avant le 15 juin (sécurité formulaire public).
+                 # AuthController::register() valide ce token via isCsrfTokenValid()
+                 # avec l'intention 'registration' avant tout traitement du formulaire.
                  # ────────────────────────────────────────────────────────────── #}
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('registration') }}">
 

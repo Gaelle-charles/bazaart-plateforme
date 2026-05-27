@@ -124,7 +124,10 @@ class ForumController extends AbstractController
      *
      * Route : GET /forum/{categorySlug}/{threadSlug}
      */
-    #[Route('/{categorySlug}/{threadSlug}', name: 'thread', methods: ['GET'])]
+    // Note : la contrainte 'requirements' exclut le mot réservé "nouveau" pour éviter
+    // que cette route capte GET /forum/{cat}/nouveau avant la route new_thread.
+    // Sans cette contrainte, "nouveau" serait interprété comme un threadSlug → 404.
+    #[Route('/{categorySlug}/{threadSlug}', name: 'thread', methods: ['GET'], requirements: ['threadSlug' => '(?!nouveau$).+'])]
     public function thread(string $categorySlug, string $threadSlug): Response
     {
         // ── Récupération des entités ──────────────────────────────────────────

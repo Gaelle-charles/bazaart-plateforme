@@ -98,11 +98,16 @@ class AuthController extends AbstractController
             $dto = RegisterDTO::fromArray($request->request->all());
 
             if ($dto === null) {
-                $error = 'Les champs email et password sont obligatoires.';
+                // Le fromArray() retourne null si email, password OU confirm_password sont absents
+                $error = 'Les champs email, mot de passe et confirmation sont obligatoires.';
             } elseif (!$dto->isEmailValid()) {
                 $error = 'Adresse email invalide.';
             } elseif (!$dto->isPasswordStrong()) {
-                $error = 'Le mot de passe doit contenir au moins 8 caractères.';
+                // Message conforme à la politique CDC §9 : 10 chars, 1 majuscule, 1 chiffre
+                $error = 'Le mot de passe doit contenir au moins 10 caractères, une lettre majuscule et un chiffre.';
+            } elseif (!$dto->doPasswordsMatch()) {
+                // Vérification que les deux saisies du mot de passe sont identiques
+                $error = 'Les mots de passe ne correspondent pas.';
             } else {
                 $user = $this->authService->register($dto);
 

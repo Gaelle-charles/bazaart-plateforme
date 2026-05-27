@@ -65,3 +65,23 @@ when@test:
         test: true
         session:
             storage_factory_id: session.storage.factory.mock_file
+
+        # ── Rate limiting assoupli en test ────────────────────────────────────
+        #
+        # En test, on veut pouvoir envoyer autant de requêtes POST /register que
+        # nécessaire sans être bloqué par le rate limiter Redis.
+        #
+        # On redéfinit register_limiter avec une limite très haute (1000 tentatives)
+        # pour qu'il ne bloque jamais en test, tout en gardant la logique de rate
+        # limiting active (on ne le désactive pas complètement pour ne pas
+        # supprimer le code path de vérification du rate limiter).
+        #
+        # Le CSRF est intentionnellement GARDÉ ACTIVÉ en test :
+        #   - csrf_token() dans Twig doit rester fonctionnel pour rendre les templates
+        #   - On extrait le token du HTML lors du GET et on le renvoie dans le POST
+        #   - C'est la pratique standard recommandée par Symfony
+        rate_limiter:
+            register_limiter:
+                policy: 'sliding_window'
+                limit: 1000        # Pratiquement illimité en test
+                interval: '15 minutes'
