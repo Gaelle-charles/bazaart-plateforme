@@ -335,7 +335,17 @@ class ScrapeOpportunitiesCommand extends Command
         // Si la date est clairement passée, le statut passe à 'archived'.
         // Non exécuté en mode --dry-run.
         if (!$isDryRun) {
-            $archived = $this->scrapedResourceRepository->archiveExpired();
+            // Feature flag archive_use_legacy : permet de rebrancher l'ancienne méthode
+            // string-parsing en cas de comportement inattendu de la nouvelle version DQL.
+            // Activer depuis /admin/settings (archive_use_legacy = 1).
+            // La nouvelle archiveExpired() DQL requiert que deadlineDate soit rempli
+            // (via app:backfill-deadline-date après migration).
+            if ((bool) $this->settingService->get('archive_use_legacy', '0')) {
+                $archived = $this->scrapedResourceRepository->archiveExpiredLegacy();
+            } else {
+                $archived = $this->scrapedResourceRepository->archiveExpired();
+            }
+
             if ($archived > 0) {
                 $io->note(sprintf('%d opportunité(s) archivée(s) automatiquement (deadline passée).', $archived));
             }

@@ -127,27 +127,80 @@ class ScrapedResourceRepository extends ServiceEntityRepository
     }
 
     /**
-     * Archive toutes les opportunités en attente (pending) dont la deadline est passée.
+     * Archive toutes les opportunités pending dont la deadline structurée est passée.
      *
-     * Stratégie pragmatique : on tente de parser le champ texte libre `deadline`.
-     * Si le parsing réussit et que la date est antérieure à aujourd'hui → on archive.
-     * Si le parsing échoue (format non reconnu, valeur vide, tiret...) → on ne touche pas.
+     * VERSION DQL — plus performante que archiveExpiredLegacy() :
+     *   - Une seule requête UPDATE en base (pas de chargement en mémoire)
+     *   - Atomique : toutes les archives en une transaction
+     *   - Requiert que deadlineDate soit rempli (par le listener prePersist/preUpdate
+     *     ou par la commande app:backfill-deadline-date)
      *
-     * Formats de deadline tentés dans l'ordre :
-     *   1. ISO 8601 court :     "2026-05-31"
-     *   2. Français court :     "31/05/2026"
-     *   3. Français long :      "31 mai 2026"
+     * CONDITIONS D'ARCHIVAGE :
+     *   - status = pending (jamais rejected ni verified — décisions admin à respecter)
+     *   - deadlineDate IS NOT NULL (le champ structuré doit être renseigné)
+     *   - deadlineDate < aujourd'hui minuit (deadline clairement passée)
+     *   - scrapedAt < now - 48h (grâce de 48h — protège les items fraîchement insérés ;
+     *     certains scrapers stockent une "date de publication" dans deadline, pas la vraie
+     *     deadline de candidature — sans cette protection, ces items seraient archivés
+     *     immédiatement avant que l'admin les voie)
      *
-     * Pourquoi seulement les "pending" (pas les rejected) ?
-     *   Les rejected ont déjà fait l'objet d'une décision admin (rejet manuel).
-     *   On ne veut pas écraser cette décision avec un archivage automatique.
-     *   Les verified ont déjà généré une Resource publiée → intouchables aussi.
+     * FEATURE FLAG :
+     *   Pour revenir à l'ancien comportement string-parsing en cas de régression,
+     *   activer le setting archive_use_legacy = 1 dans /admin/settings.
+     *   Le branchement est dans ScrapeOpportunitiesCommand.
      *
-     * Appelée à chaque run de ScrapeOpportunitiesCommand, après la sauvegarde BDD.
+     * PRÉ-REQUIS DÉPLOIEMENT :
+     *   Lancer app:backfill-deadline-date après la migration pour que deadlineDate
+     *   soit rempli sur les enregistrements existants. Sans ça, cette méthode
+     *   ne trouvera rien à archiver (deadlineDate IS NOT NULL sera toujours faux).
      *
-     * @return int Nombre d'opportunités effectivement archivées (flush si > 0)
+     * @return int Nombre d'opportunités archivées par cette requête
      */
     public function archiveExpired(): int
+    {
+        // Référence temporelle : minuit aujourd'hui
+        // Une deadline "aujourd'hui" n'est pas encore expirée (dernier jour pour candidater)
+        $today = new \DateTimeImmutable('today');
+
+        // Grâce 48h : on ne touche jamais un item créé il y a moins de 48 heures
+        $graceLimit = new \DateTimeImmutable('-48 hours');
+
+        // Requête DQL UPDATE directe — plus efficace que charger tous les pending en mémoire.
+        // executeStatement() retourne le nombre de lignes affectées (équivalent PDO rowCount).
+        $count = (int) $this->getEntityManager()
+            ->createQuery(
+                'UPDATE App\Entity\ScrapedResource s
+                 SET s.status = :archived
+                 WHERE s.status = :pending
+                   AND s.deadlineDate IS NOT NULL
+                   AND s.deadlineDate < :today
+                   AND s.scrapedAt < :graceLimit'
+            )
+            ->setParameter('archived', \App\Enum\ScrapedResourceStatus::Archived)
+            ->setParameter('pending',  \App\Enum\ScrapedResourceStatus::Pending)
+            ->setParameter('today',    $today)
+            ->setParameter('graceLimit', $graceLimit)
+            ->executeStatement();
+
+        return $count;
+    }
+
+    /**
+     * @deprecated Utiliser archiveExpired() (DQL) à la place.
+     *             Conservée comme porte de sortie en cas de régression.
+     *             Activable depuis /admin/settings (setting archive_use_legacy = 1).
+     *             Suppression prévue après validation en production.
+     *
+     * Archive toutes les opportunités en attente (pending) dont la deadline est passée.
+     *
+     * Stratégie : parse le champ texte libre `deadline` en mémoire PHP.
+     * Formats tentés : ISO 8601 (YYYY-MM-DD), français court (JJ/MM/AAAA),
+     * français long ("31 mai 2026"). Si parsing échoue → non archivé.
+     * Grâce 48h sur scrapedAt : protège les items fraîchement insérés.
+     *
+     * @return int Nombre d'opportunités archivées (flush si > 0)
+     */
+    public function archiveExpiredLegacy(): int
     {
         // On charge uniquement les pending (les rejected et verified sont ignorés)
         $pending = $this->findPending();
