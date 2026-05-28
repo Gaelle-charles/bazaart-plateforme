@@ -13,6 +13,16 @@ Plateforme bazaart.fr pour artistes de la diaspora afro-atlantique.
 
 **Code Symfony dans:** `/Users/belamour/bazaart/app/`
 
+**Chantier 2A — ScrapedResource deadlineDate + EventListener (27 mai 2026) :**
+- Nouveau champ `deadlineDate` (datetime_immutable nullable) sur `ScrapedResource` — logique métier uniquement, géré par le listener
+- `DeadlineParserService` — parse 3 formats (ISO 8601, français court JJ/MM/AAAA, français long "31 mai 2026"), jamais d'exception
+- `ScrapedResourceListener` — EventListener #[AsEntityListener] prePersist+preUpdate : html_entity_decode sur title/description + parsing deadlineDate
+- `ScrapedResourceRepository::archiveExpired()` — nouvelle version DQL (UPDATE direct, 1 requête), ancienne renommée `archiveExpiredLegacy()` @deprecated
+- Feature flag `archive_use_legacy` dans /admin/settings pour rollback sans redéploiement
+- `BackfillDeadlineDateCommand` (`app:backfill-deadline-date`) — one-shot idempotent --dry-run, 27/27 deadlines parsées sans erreur
+- Migrations : `Version20260528000131` (ajout colonne) + `Version20260528000226` (nettoyage commentaire SQL)
+- `LlmExtractorService::normalizeType()` — 5 nouveaux types (Mentorat, Tutorat, Accompagnement, Formation, Appel à candidatures) + ordre spécifique→générique dans le map
+
 **CnmScraper — API REST WP (26 mai 2026, fin de journée) :**
 - La page /appels-a-projets/ du CNM utilise WordPress Interactivity API (WP 6.5+) : contenu rendu côté client JS, DomCrawler ne peut pas lire les cartes depuis le HTML statique.
 - Solution : utiliser l'API REST WordPress directement : `https://cnm.fr/wp-json/wp/v2/posts?categories=42` (ID 42 = catégorie "appels-a-projets", vérifié le 26 mai 2026).

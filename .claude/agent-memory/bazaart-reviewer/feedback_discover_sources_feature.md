@@ -48,12 +48,35 @@ Fichiers : SuggestedSourceStatus enum, SuggestedSource entité, SuggestedSourceR
 - Dropdown type_pressenti dans le formulaire de validation — présent et fonctionnel.
 - Lien sidebar dans base_admin.html.twig — présent et actif sur les routes correctes.
 
+**Refactoring LinkExtractorService (mai 2026) — résultats relecture :**
+
+8. **COSMÉTIQUE — Code mort lignes 341-343 dans DiscoverSourcesCommand** — Le bloc `if ($ceilingReached) { break; }` (après la boucle interne `foreach ($candidates)`) n'est jamais atteint car `break 2` sort déjà des deux boucles imbriquées. Le commentaire est contradictoire ("la boucle break 2 nous a sortis — on check ici"). Inoffensif mais trompeur pour la lecture.
+
+9. **COSMÉTIQUE — Redondance URL dans mapItemsToSources** — Après `if (empty($url) || !filter_var()) { $url = null; }`, la condition `$url !== ''` dans `$sources['url'] => $url !== '' ? $url : null` est toujours vraie (jamais une chaîne vide ne peut atteindre cette ligne). Code lisible mais redondant.
+
+10. **COSMÉTIQUE — strtolower() triple sur $linkHost dans filterInternalLinks** — `$linkHostNorm = str_starts_with(strtolower($linkHost), 'www.') ? substr(strtolower($linkHost), 4) : strtolower($linkHost)` appelle strtolower() 3 fois. Une variable intermédiaire `$lowerHost = strtolower($linkHost)` améliorerait la lisibilité.
+
+**Points correctement implémentés dans le refactoring :**
+
+- `declare(strict_types=1)` présent dans les 3 fichiers.
+- `array_filter()` toujours suivi de `array_values()` dans LinkExtractorService — réindexation correcte.
+- `array_values()` après `array_filter()` dans buildKnownDomains (--source option) — correct.
+- Guard `empty($linkCandidates)` → skip sans appel LLM — comportement liste vide correct.
+- Guard `empty($candidates)` LLM → skip aussi — double protection correcte.
+- `$sourceSlug = $input->getOption('source')` avec `@var string|null` — PHPStan satisfait.
+- Prompt respecte les 2 ajustements PO : "Tu es un expert en ressources culturelles pour artistes" en ouverture + "diaspora africaine ou caribéenne [...] un atout [...] jamais un critère d'exclusion" dans le corps.
+- Normalisation cohérente buildKnownDomains (host sans www.) ↔ filterKnownDomains (host sans www.) — pas d'asymétrie.
+- N+1 BDD dans la boucle des candidats est structurellement limité : filterKnownDomains élimine la majorité des doublons en PHP avant d'atteindre les requêtes BDD secondaires.
+- Trailing slash bug (findByUrl/existsByUrl comparaison exacte) reste présent en vérification secondaire mais son impact est négligeable — filtrage par host préalable couvre la quasi-totalité des cas.
+- `preg_replace('/\s+/', ' ', ...) ?? ''` — nullsafe correct.
+
 **Patterns à surveiller dans les prochaines features :**
 
+- `break 2` dans les boucles imbriquées → vérifier qu'il n'y a pas de code mort après la boucle interne qui répète la logique d'arrêt.
 - Index manquants sur colonnes filtrées fréquemment (url, statut) — signaler systématiquement.
-- HTML brut vs texte nettoyé dans les appels LLM — analyser l'impact sur la qualité.
-- Trailing slash dans les URLs — normaliser avant comparaison.
+- Trailing slash dans les URLs — normaliser avant comparaison (bug récurrent documenté).
+- Vérifications de déduplication en boucle (N+1) → préférer un build initial en mémoire comme `buildKnownDomains()`.
 
-**Why:** La feature est globalement très propre. Les points majeurs sont des compromis pragmatiques documentés (logique controller) ou des oublis d'optimisation (index BDD) qui n'ont pas d'impact fonctionnel immédiat mais peuvent devenir des goulots d'étranglement à l'échelle.
+**Why:** La feature est très propre. Les seuls points sont cosmétiques (code mort, redondance, strtolower triple). Le pipeline de filtrage est logiquement correct et bien commenté.
 
-**How to apply:** Pour toute nouvelle table avec des colonnes de filtrage fréquent (statut, url, user_id), toujours ajouter les index dans la migration. Pour les appels LLM avec du HTML, documenter clairement le choix HTML brut vs texte nettoyé et ses justifications.
+**How to apply:** Pour toute nouvelle table avec des colonnes de filtrage fréquent (statut, url, user_id), toujours ajouter les index dans la migration. Pour les commandes avec boucles imbriquées + `break N`, vérifier l'absence de code mort après la boucle interne. Pour les appels LLM avec du HTML, documenter clairement le choix HTML brut vs texte nettoyé.
