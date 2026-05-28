@@ -337,7 +337,12 @@ class LinkExtractorService
      */
     private function filterNoiseDomains(array $links): array
     {
-        $filtered = array_filter($links, function (array $link): bool {
+        // Tableau de debug : on collecte les rejets pour les logguer ensuite (max 30)
+        $rejections = [];
+
+        $filtered = array_filter($links, function (array $link) use (&$rejections): bool {
+            // parse_url extrait UNIQUEMENT le host (ex: "twitter.com", "on-the-move.org")
+            // Le match se fait donc sur le domaine seul, PAS sur l'URL entière (chemin, query…)
             $host = parse_url($link['url'], PHP_URL_HOST);
 
             // Si le host n'est pas parseable, on garde le lien (cas rare d'URL bizarre)
@@ -350,12 +355,29 @@ class LinkExtractorService
             // Exclure si le host CONTIENT un des fragments de bruit
             foreach (self::NOISE_DOMAINS as $noiseDomain) {
                 if (str_contains($host, $noiseDomain)) {
+                    // On collecte le rejet pour le log debug (limité à 30 entrées)
+                    if (count($rejections) < 30) {
+                        $rejections[] = ['url' => $link['url'], 'motif' => $noiseDomain];
+                    }
                     return false; // Lien de bruit → à exclure
                 }
             }
 
             return true; // Pas de fragment de bruit → à conserver
         });
+
+        // Log debug des rejets — visible avec -vvv uniquement
+        foreach ($rejections as $rejection) {
+            $this->logger->debug(sprintf(
+                '[LinkExtractor] noise rejet: %s (motif: %s)',
+                $rejection['url'],
+                $rejection['motif']
+            ));
+        }
+        if (count($rejections) === 30) {
+            // Prévenir si on a plafonné les logs (il peut y en avoir plus)
+            $this->logger->debug('[LinkExtractor] noise rejet: … (log plafonné à 30 entrées)');
+        }
 
         // array_filter préserve les clés d'origine — on réindexe pour un tableau propre
         return array_values($filtered);
