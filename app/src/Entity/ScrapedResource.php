@@ -55,6 +55,22 @@ class ScrapedResource
     #[ORM\Column(type: 'string', length: 150, nullable: true)]
     private ?string $deadline = null;
 
+    /**
+     * Date de clôture parsée depuis le champ `deadline` (string lisible).
+     *
+     * DUALITÉ INTENTIONNELLE — ces deux champs coexistent avec des rôles distincts :
+     *   - deadline (string)        : affichage humain, format variable selon la source
+     *                                ex: "31 mai 2026", "31/05/2026", "2026-05-31"
+     *   - deadlineDate (datetime)  : logique métier uniquement — archivage automatique
+     *                                et tri par date. Parsé depuis deadline à la sauvegarde
+     *                                par ScrapedResourceListener (prePersist/preUpdate).
+     *
+     * Null si deadline est vide, non parseable, ou non renseignée.
+     * Ne PAS modifier ce champ directement — il est géré par le listener.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $deadlineDate = null;
+
     /** Score de pertinence Afrodiaspora calculé par AfrodiasporaRelevanceScorer (0 à 5) */
     #[ORM\Column(type: 'integer')]
     private int $relevanceScore = 0;
@@ -112,6 +128,9 @@ class ScrapedResource
 
     public function getDeadline(): ?string { return $this->deadline; }
     public function setDeadline(?string $deadline): static { $this->deadline = $deadline; return $this; }
+
+    public function getDeadlineDate(): ?\DateTimeImmutable { return $this->deadlineDate; }
+    public function setDeadlineDate(?\DateTimeImmutable $deadlineDate): static { $this->deadlineDate = $deadlineDate; return $this; }
 
     public function getRelevanceScore(): int { return $this->relevanceScore; }
     public function setRelevanceScore(int $score): static { $this->relevanceScore = $score; return $this; }
