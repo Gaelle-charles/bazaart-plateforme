@@ -257,8 +257,9 @@ class ScrapedResourceRepository extends ServiceEntityRepository
             }
 
             // ── Tentative 2 : format français court (JJ/MM/AAAA) ─────────────
-            // Exemple : "31/05/2026" ou "1/5/2026"
-            if ($deadlineDate === null && preg_match('/^\d{1,2}\/\d{2}\/\d{4}$/', $deadline)) {
+            // Exemple : "31/05/2026" ou "1/5/2026" (jour ET mois peuvent être sans zéro)
+            // Aligné sur DeadlineParserService::parse() — même pattern pour cohérence.
+            if ($deadlineDate === null && preg_match('/^\d{1,2}\/\d{1,2}\/\d{4}$/', $deadline)) {
                 $parsed = \DateTimeImmutable::createFromFormat('d/m/Y', $deadline);
                 if ($parsed !== false) {
                     $deadlineDate = $parsed;

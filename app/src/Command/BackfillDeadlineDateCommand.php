@@ -156,11 +156,15 @@ HELP
                 $notParseable++;
             }
 
-            // Flush par lots : évite de charger beaucoup d'entités en mémoire puis de tout flusher
-            // en une seule transaction (risque de timeout sur des tables volumineuses).
+            // Flush par lots : évite une transaction unique trop longue sur les grandes tables.
+            // NOTE : em->clear() volontairement ABSENT ici.
+            //   em->clear() détacherait toutes les entités déjà chargées dans $candidates,
+            //   rendant silencieusement les objets du lot suivant "détachés" (non managed) —
+            //   le flush final ne persisterait alors que les 50 premiers items.
+            //   La table scraped_resources ne dépassera pas quelques milliers de lignes :
+            //   la consommation mémoire reste acceptable sans clear().
             if (!$isDryRun && ($i + 1) % $batchSize === 0) {
                 $this->em->flush();
-                $this->em->clear(); // Libère la mémoire de l'IdentityMap Doctrine
                 $io->write('.'); // Indicateur de progression discret
             }
         }
