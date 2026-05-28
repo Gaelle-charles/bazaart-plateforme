@@ -300,6 +300,31 @@ class ScrapedResourceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Retourne les ScrapedResource candidates au backfill de deadlineDate.
+     *
+     * Critères :
+     *   - deadlineDate IS NULL          → pas encore rempli
+     *   - deadline IS NOT NULL AND != ''→ deadline string disponible pour parsing
+     *
+     * Utilisé UNIQUEMENT par BackfillDeadlineDateCommand (commande one-shot).
+     * Ne PAS utiliser ailleurs — pour les usages courants, voir findPending() etc.
+     *
+     * @return ScrapedResource[]
+     */
+    public function findForDeadlineBackfill(): array
+    {
+        return $this->createQueryBuilder('s')
+            ->where('s.deadlineDate IS NULL')
+            ->andWhere('s.deadline IS NOT NULL')
+            ->andWhere("s.deadline != ''")
+            ->andWhere("s.deadline != '-'")
+            ->andWhere("s.deadline != '—'")
+            ->orderBy('s.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Retourne la date du scraping le plus récent, ou null si la table est vide.
      *
      * Utilisé dans le dashboard admin pour afficher "Dernier scraping : XX/XX/XXXX".
