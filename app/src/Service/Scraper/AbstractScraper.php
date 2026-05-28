@@ -63,13 +63,17 @@ abstract class AbstractScraper
     {
         try {
             $response = $this->httpClient->request('GET', $url, [
-                // On se fait passer pour un navigateur pour éviter les blocages
+                // On se fait passer pour un navigateur pour éviter les blocages.
+                // NOTE : Accept-Encoding est intentionnellement ABSENT.
+                // Quand ce header est posé manuellement, Symfony HTTP Client bypasse
+                // sa décompression automatique → getContent() retourne des octets gzip bruts
+                // (~25% de la taille réelle), ce qui casse DomCrawler et LLM downstream.
+                // Sans ce header, Symfony négocie et décompresse automatiquement.
                 'headers' => [
-                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Language' => 'fr-FR,fr;q=0.9,en;q=0.8',
-                    'Accept-Encoding' => 'gzip, deflate, br',
-                    'Cache-Control' => 'no-cache',
+                    'Cache-Control'   => 'no-cache',
                 ],
                 // Timeout de 20 secondes
                 'timeout' => 20,

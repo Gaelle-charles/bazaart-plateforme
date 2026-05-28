@@ -253,8 +253,27 @@ class ScrapeOpportunitiesCommand extends Command
             $updated     = 0; // URL déjà connues (pending ou rejected) — données rafraîchies sans changement de statut
             $skipped     = 0; // URL déjà vérifiées par un admin → intouchables
 
+            // Guard en mémoire pour les doublons INTRA-LOT.
+            // findByUrl() interroge la BDD — mais si le LLM retourne deux fois la même URL
+            // dans le même lot (66 items d'un coup), le second passage ne trouve rien en BDD
+            // (pas encore flushé) et tente un second INSERT → violation de contrainte UNIQUE.
+            // Ce set PHP déduplique AVANT la vérification BDD.
+            /** @var array<string, true> $seenUrls */
+            $seenUrls = [];
+
             foreach ($allOpportunities as $opp) {
-                // ── Déduplication intelligente par URL ───────────────────────
+                // ── Déduplication intra-lot ───────────────────────────────────
+                // Si la même URL apparaît deux fois dans ce lot (doublon LLM),
+                // on skip silencieusement les occurrences suivantes.
+                if ($opp->url !== null && $opp->url !== '') {
+                    if (isset($seenUrls[$opp->url])) {
+                        $skipped++;
+                        continue;
+                    }
+                    $seenUrls[$opp->url] = true;
+                }
+
+                // ── Déduplication intelligente par URL (BDD) ─────────────────
                 // Quatre cas selon le statut de l'enregistrement existant :
                 //   1. URL inconnue                  → insertion (pending par défaut)
                 //   2. URL connue + status archived  → réactivation en pending (le site la liste encore)
