@@ -652,7 +652,7 @@ Tu es un extracteur d'opportunités artistiques et culturelles. Analyse le conte
 
 Pour chaque opportunité, retourne un objet JSON avec exactement ces champs :
 - titre (string) : titre de l'opportunité
-- type (string) : "Résidence" | "Bourse" | "Appel à projets" | "Prix" | "Financement" | "Concours" | "Autre"
+- type (string) : "Résidence" | "Bourse" | "Appel à projets" | "Appel à candidatures" | "Prix" | "Financement" | "Concours" | "Mentorat" | "Tutorat" | "Accompagnement" | "Formation" | "Autre"
 - organisme (string) : nom de l'organisme qui propose l'opportunité
 - pays (string) : pays de l'organisme (ex: "France", "Belgique", "Suisse", "Europe")
 - disciplines (string) : disciplines concernées séparées par des virgules (ex: "Arts plastiques, Musique")
@@ -791,7 +791,7 @@ Tu es un extracteur d'opportunités artistiques et culturelles. Analyse le conte
 
 Retourne un objet JSON avec une clé "opportunites" contenant un tableau. Chaque élément a exactement ces champs :
 - titre (string) : titre de l'opportunité
-- type (string) : "Résidence" | "Bourse" | "Appel à projets" | "Prix" | "Financement" | "Concours" | "Autre"
+- type (string) : "Résidence" | "Bourse" | "Appel à projets" | "Appel à candidatures" | "Prix" | "Financement" | "Concours" | "Mentorat" | "Tutorat" | "Accompagnement" | "Formation" | "Autre"
 - organisme (string) : organisme proposant l'opportunité
 - pays (string) : pays de l'organisme (ex: "France", "Belgique", "Europe")
 - disciplines (string) : disciplines concernées, séparées par des virgules
@@ -1042,34 +1042,61 @@ PROMPT;
      */
     private function normalizeType(string $rawType): string
     {
-        // Liste des types valides et leurs variantes
+        // Mapping des variantes possibles (retours LLM imprévisibles) vers les types canoniques.
+        // Les patterns sont en minuscules — on compare toujours avec mb_strtolower($rawType).
+        // ORDRE IMPORTANT : les patterns plus spécifiques doivent précéder les plus génériques.
+        // Ex: "appel à candidatures" avant "appel" pour éviter que "candidatures" soit absorbé par "appel".
         $typeMap = [
-            'résidence'       => 'Résidence',
-            'residence'       => 'Résidence',
-            'bourse'          => 'Bourse',
-            'aide'            => 'Bourse',
-            'grant'           => 'Bourse',
-            'appel'           => 'Appel à projets',
-            'appel à projets' => 'Appel à projets',
-            'call'            => 'Appel à projets',
-            'prix'            => 'Prix',
-            'award'           => 'Prix',
-            'financement'     => 'Financement',
-            'concours'        => 'Concours',
-            'competition'     => 'Concours',
+            // Résidence
+            'résidence'              => 'Résidence',
+            'residence'              => 'Résidence',
+            // Bourse / aide financière
+            'bourse'                 => 'Bourse',
+            'aide'                   => 'Bourse',
+            'grant'                  => 'Bourse',
+            // Appel à candidatures (nouveau — plus spécifique qu'appel à projets)
+            'appel à candidatures'   => 'Appel à candidatures',
+            'candidature'            => 'Appel à candidatures',
+            // Appel à projets
+            'appel à projets'        => 'Appel à projets',
+            'appel'                  => 'Appel à projets',
+            'call'                   => 'Appel à projets',
+            // Prix / récompense
+            'prix'                   => 'Prix',
+            'award'                  => 'Prix',
+            // Financement
+            'financement'            => 'Financement',
+            // Concours
+            'concours'               => 'Concours',
+            'competition'            => 'Concours',
+            // Mentorat / tutorat / accompagnement (nouveaux)
+            'mentorat'               => 'Mentorat',
+            'mentor'                 => 'Mentorat',
+            'tutorat'                => 'Tutorat',
+            'tuteur'                 => 'Tutorat',
+            'accompagnement'         => 'Accompagnement',
+            'coaching'               => 'Accompagnement',
+            // Formation (nouveau)
+            'formation'              => 'Formation',
+            'workshop'               => 'Formation',
+            'atelier'                => 'Formation',
         ];
 
         $lower = mb_strtolower(trim($rawType));
 
-        // Cherche une correspondance dans la map
+        // Cherche une correspondance dans la map (premier match gagne)
         foreach ($typeMap as $pattern => $normalized) {
             if (str_contains($lower, $pattern)) {
                 return $normalized;
             }
         }
 
-        // Retourne le type tel quel s'il est déjà dans le format attendu
-        $validTypes = ['Résidence', 'Bourse', 'Appel à projets', 'Prix', 'Financement', 'Concours'];
+        // Le type est peut-être déjà dans le format canonique — retour tel quel
+        $validTypes = [
+            'Résidence', 'Bourse', 'Appel à projets', 'Appel à candidatures',
+            'Prix', 'Financement', 'Concours', 'Mentorat', 'Tutorat',
+            'Accompagnement', 'Formation',
+        ];
         if (in_array($rawType, $validTypes, true)) {
             return $rawType;
         }
