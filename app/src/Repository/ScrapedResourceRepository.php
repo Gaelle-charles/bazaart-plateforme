@@ -166,7 +166,9 @@ class ScrapedResourceRepository extends ServiceEntityRepository
         $graceLimit = new \DateTimeImmutable('-48 hours');
 
         // Requête DQL UPDATE directe — plus efficace que charger tous les pending en mémoire.
-        // executeStatement() retourne le nombre de lignes affectées (équivalent PDO rowCount).
+        // execute() est la méthode correcte sur Doctrine\ORM\Query (objet DQL).
+        // executeStatement() appartient à DBAL (connexion bas niveau) — pas à ORM\Query.
+        // execute() retourne un int : le nombre de lignes affectées par l'UPDATE.
         $count = (int) $this->getEntityManager()
             ->createQuery(
                 'UPDATE App\Entity\ScrapedResource s
@@ -180,7 +182,7 @@ class ScrapedResourceRepository extends ServiceEntityRepository
             ->setParameter('pending',  \App\Enum\ScrapedResourceStatus::Pending)
             ->setParameter('today',    $today)
             ->setParameter('graceLimit', $graceLimit)
-            ->executeStatement();
+            ->execute();
 
         return $count;
     }

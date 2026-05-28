@@ -15,6 +15,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 /**
  * SeedSettingsCommand — Initialise les paramètres applicatifs en base de données.
  *
+ * ⚠️ Périmètre : cette commande gère UNIQUEMENT les settings de configuration externe
+ * (clés API, flags métier activables par l'admin depuis l'interface).
+ * Les "feature flags techniques" internes (ex. 'archive_use_legacy') sont initialisés
+ * par migration Doctrine et ne doivent PAS être ajoutés ici — leur valeur par défaut
+ * est portée par la migration, pas par cette commande.
+ *
  * Cette commande crée les enregistrements app_settings s'ils n'existent pas encore.
  * Elle est idempotente : on peut la relancer sans risque de réécraser les valeurs déjà saisies.
  *
