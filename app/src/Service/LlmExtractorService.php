@@ -607,24 +607,48 @@ PROMPT;
      */
     private function cleanHtml(string $html): string
     {
-        // Supprimer les blocs de navigation/structure inutiles pour le LLM.
-        // L'ordre n'a pas d'importance — on supprime tout en une boucle.
-        foreach (['script', 'style', 'nav', 'header', 'footer', 'aside'] as $tag) {
+        // ── Étape 1 : supprimer toujours scripts et styles ────────────────────
+        // Ces blocs ne contiennent jamais d'opportunités et polluent le contexte LLM.
+        foreach (['script', 'style'] as $tag) {
             $html = preg_replace('/<' . $tag . '\b[^>]*>.*?<\/' . $tag . '>/is', '', $html) ?? $html;
         }
 
-        // Supprimer toutes les balises HTML restantes
-        $text = strip_tags($html);
+        // ── Étape 2 : extraction sémantique via <main> ────────────────────────
+        // HTML5 définit <main> comme le contenu principal de la page, à l'exclusion
+        // de la navigation, du header et du footer.
+        //
+        // On privilégie <main> quand il existe (ex: CIPAC, Réseau DDA) car :
+        //   - Il exclut naturellement les menus nav/header/footer/aside
+        //   - Il préserve les blocs contenu qui SONT dans un <nav> (cas réels :
+        //     CIPAC wrape ses appels dans un <nav> — mauvaise sémantique, mais fréquent)
+        //
+        // Si <main> est absent, on tombe en mode dégradé : suppression explicite des
+        // blocs structurels (nav/header/footer/aside) puis strip_tags sur tout le reste.
+        if (preg_match('/<main\b[^>]*>(.*?)<\/main>/is', $html, $matches)) {
+            // <main> trouvé : on extrait son contenu brut (encore du HTML)
+            // Les sous-blocs nav/header/footer à l'INTÉRIEUR de main sont conservés
+            // (cas très rare, et probablement du contenu utile s'ils y sont).
+            $html = $matches[1];
+        } else {
+            // Pas de <main> : stratégie de repli — supprimer les blocs structurels
+            // qui contiennent typiquement de la navigation et non du contenu.
+            // ATTENTION : certains sites (ex: CIPAC) encapsulent leur contenu dans
+            // un <nav>, ce qui ferait tout supprimer. C'est pourquoi <main> est
+            // essayé en priorité.
+            foreach (['nav', 'header', 'footer', 'aside'] as $tag) {
+                $html = preg_replace('/<' . $tag . '\b[^>]*>.*?<\/' . $tag . '>/is', '', $html) ?? $html;
+            }
+        }
 
-        // Décoder les entités HTML (&amp; → &, &eacute; → é, etc.)
+        // ── Étape 3 : strip_tags + décodage + normalisation ───────────────────
+        $text = strip_tags($html);
         $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
-        // Normaliser les espaces : remplacer tous les whitespace consécutifs par un seul espace
-        // \s+ matche espaces, tabulations, retours à la ligne
+        // Normaliser les espaces (espaces, tabs, retours à la ligne → espace unique)
         $text = preg_replace('/\s+/', ' ', $text) ?? $text;
         $text = trim($text);
 
-        // Tronquer à la limite pour éviter de dépasser les coûts LLM
+        // ── Étape 4 : tronquer pour maîtriser les coûts LLM ──────────────────
         if (mb_strlen($text) > self::MAX_TEXT_LENGTH) {
             $text = mb_substr($text, 0, self::MAX_TEXT_LENGTH);
         }
