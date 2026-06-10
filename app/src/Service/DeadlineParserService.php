@@ -117,32 +117,43 @@ class DeadlineParserService
     /**
      * Scanne un texte libre (titre + description) pour y extraire une date limite.
      *
-     * HEURISTIQUE (conservative, commentée) :
+     * RÈGLE FONDAMENTALE — MOTS-CUES OBLIGATOIRES :
+     *   Une date n'est retenue comme deadline QUE si elle est précédée d'un mot-cue
+     *   de DEADLINE_CUES dans la même clause de phrase.
+     *
+     *   POURQUOI PAS DE FALLBACK ?
+     *   L'ancienne version (avant ce commit) comportait une étape 3 « fallback » qui
+     *   retenait la première date trouvée dans le texte si aucun cue n'était détecté.
+     *   Ce comportement produisait des FAUX POSITIFS graves :
+     *     - Exemple réel : "Aide à la création - Mai 2026" → deadline_date = 2026-05-13
+     *       (date tirée du titre de l'annonce, sans rapport avec une vraie date limite).
+     *     - Conséquence : la ressource devenait archivable automatiquement dès le lendemain,
+     *       et disparaissait de la file de modération sans qu'aucun admin l'ait validée.
+     *
+     *   COMPORTEMENT CORRECT :
+     *     - Date avec cue → deadline_date renseignée → archivage auto possible.
+     *     - Date SANS cue (= date d'événement, de publication, de mention...) → null
+     *       → deadline_date restera null → la ressource n'est pas archivable auto
+     *       → elle attend tranquillement la modération humaine.
+     *
+     * ALGORITHME (deux étapes) :
      *
      *   Étape 1 — Extraction de tous les tokens date du texte.
-     *     On cherche les 3 formats supportés via preg_match_all :
+     *     On cherche les 3 formats supportés via preg_match_all avec PREG_OFFSET_CAPTURE
+     *     (position de chaque token dans le texte, indispensable pour l'étape 2) :
      *       - ISO 8601 court  : "2026-05-31"
      *       - Français court  : "31/05/2026" ou "1/5/2026"
      *       - Français long   : "31 mai 2026" ou "15 décembre 2026"
      *
-     *   Étape 2 — Priorité aux tokens précédés d'un cue de deadline.
+     *   Étape 2 — Retenir UNIQUEMENT les tokens précédés d'un cue de deadline.
      *     Pour chaque token date trouvé, on regarde si un mot-clé de DEADLINE_CUES
      *     apparaît AVANT lui dans le même "segment" de phrase (≤ 80 caractères
      *     en arrière, sans point/point-virgule intermédiaire).
-     *     Si oui → token retenu en priorité et retourné immédiatement.
-     *
-     *   Étape 3 — Fallback : premier token date trouvé.
-     *     ⚠️ HEURISTIQUE IMPARFAITE : sur un texte d'actualité (ex: flux RSS
-     *     de blog culturel), la première date peut être la date de l'événement
-     *     décrit, pas la deadline de candidature. Ce fallback est intentionnellement
-     *     conservé car il vaut mieux une deadline potentiellement incorrecte
-     *     (visible dans l'UI admin pour correction) que de passer à côté d'une
-     *     vraie deadline. La règle métier reste : NULL si on ne trouve rien,
-     *     mais on tente honnêtement avant de capituler.
-     *     À réévaluer si trop de faux-positifs remontent de la modération.
+     *     Si oui → token retenu et retourné immédiatement.
+     *     Si aucun token n'est associé à un cue → retour null (pas de fallback).
      *
      * @param string $text Texte libre combinant titre et description de l'opportunité
-     * @return \DateTimeImmutable|null Date limite détectée, ou null si rien de parseable
+     * @return \DateTimeImmutable|null Date limite détectée (cue requis), ou null si aucune
      */
     public function extractFromText(string $text): ?\DateTimeImmutable
     {
@@ -178,14 +189,19 @@ class DeadlineParserService
             $tokens[] = ['token' => $token, 'offset' => $offset];
         }
 
-        // ── Étape 2 : chercher un token précédé d'un cue de deadline ─────────
+        // ── Étape 2 : retenir UNIQUEMENT les tokens précédés d'un cue ────────
         // Pour chaque token, on extrait le contexte gauche (jusqu'à 80 caractères
         // en arrière dans la même "phrase", i.e. sans point/;/? intermédiaire).
-        // Si un cue de DEADLINE_CUES est présent dans ce contexte → priorité.
-        $textLower = mb_strtolower($text);
+        // Si un cue de DEADLINE_CUES est présent dans ce contexte → date retenue.
+        // Si AUCUN token n'est précédé d'un cue → on retourne null.
+        //
+        // Rappel : PAS DE FALLBACK. Une date sans cue n'est pas une deadline.
+        // Les articles de blog, annonces et actualités contiennent régulièrement
+        // des dates de mention, d'événement ou de publication qui ne sont PAS des
+        // dates limites. Sans cue, les retenir provoque des archivages prématurés.
         foreach ($tokens as $tokenData) {
-            $offset    = $tokenData['offset'];
-            $token     = $tokenData['token'];
+            $offset = $tokenData['offset'];
+            $token  = $tokenData['token'];
 
             // Fenêtre de contexte gauche : 80 caractères avant le token
             // On s'arrête à un signe de ponctuation forte (., ;, ?, !) pour rester
@@ -202,8 +218,8 @@ class DeadlineParserService
             // Chercher si un cue de deadline est présent dans ce contexte gauche
             foreach (self::DEADLINE_CUES as $cue) {
                 if (str_contains($leftContext, $cue)) {
-                    // Cue trouvé → ce token est probablement une vraie deadline
-                    // On tente de le parser et on retourne immédiatement si valide
+                    // Cue trouvé → ce token est probablement une vraie deadline.
+                    // On tente de le parser et on retourne immédiatement si valide.
                     $parsed = $this->parseDateToken($token);
                     if ($parsed !== null) {
                         return $parsed;
@@ -214,18 +230,11 @@ class DeadlineParserService
             }
         }
 
-        // ── Étape 3 : fallback — retenir la PREMIÈRE date parseable ──────────
-        // ⚠️ Heuristique imparfaite (voir docblock) : sans cue, on prend la première
-        // date du texte. Cela peut être une date d'événement, pas une deadline.
-        // Acceptable pour V1 car l'admin valide de toute façon chaque opportunité.
-        foreach ($tokens as $tokenData) {
-            $parsed = $this->parseDateToken($tokenData['token']);
-            if ($parsed !== null) {
-                return $parsed;
-            }
-        }
-
-        // Aucun token n'a pu être parsé (ex: mois non reconnu, date invalide)
+        // ── Aucun token associé à un cue → null ──────────────────────────────
+        // PAS DE FALLBACK — c'est intentionnel et documenté dans le docblock.
+        // Si ce retour null vous surprend, relisez l'explication en haut de la méthode :
+        // un faux deadline_date cause un archivage prématuré qui masque la ressource
+        // à la modération — comportement strictement interdit par la cheffe de projet.
         return null;
     }
 
