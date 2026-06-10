@@ -13,9 +13,11 @@
  #
  # Champs modifiables :
  #   nom, url, type, discipline, zone, scraperSlug, actif, estAgregateur
+ #   feedUrl (WS1), autoPublish (WS1 — préparatoire, sans effet V1)
  #
  # Champs en lecture seule (bloc métadonnées) :
  #   statutDernierRun, derniereExecution, nbItemsDernierRun, createdAt
+ #   lastSuccessfulFetch (WS1), consecutiveFailures (WS1)
  #
  # CSRF : token 'edit_scraping_source_{id}' — vérifié dans AdminScrapingSourceController::edit()
  #}
@@ -386,6 +388,30 @@
                     </p>
                 </div>
 
+                {# ── URL du flux RSS/Atom (WS1 — optionnelle) ─────────────── #}
+                {#
+                   Ce champ est distinct de l'URL principale (page humaine de référence).
+                   Exemples :
+                     - URL principale : https://www.cnm.fr/actualites/appels-a-projets
+                     - Feed URL       : https://www.cnm.fr/rss/appels-a-projets.xml
+                   Laisser vide si l'URL du flux n'est pas encore connue.
+                   Sera utilisé par FeedReaderService (WS3) quand type = RSS.
+                #}
+                <div class="adm-field">
+                    <label class="adm-label" for="feedUrl">URL du flux RSS/Atom</label>
+                    <input class="adm-input"
+                           type="url"
+                           id="feedUrl"
+                           name="feedUrl"
+                           maxlength="500"
+                           value="{{ source.feedUrl|default('')|e('html_attr') }}"
+                           placeholder="https://exemple.org/rss.xml">
+                    <p class="adm-field-hint">
+                        Optionnel. URL du flux RSS ou Atom, distincte de l'URL de la page ci-dessus.<br>
+                        Renseignée manuellement ou suggérée par <code style="background: var(--bg-alt); border: 1px solid var(--line-soft); padding: 1px 4px; font-size: 10px;">app:detect-feeds</code> (à venir).
+                    </p>
+                </div>
+
                 {# ── Type de scraping (RSS ou HTML_LLM seulement) ──────────── #}
                 {#
                    HTML_CSS est exclu du formulaire — il nécessite une classe PHP dédiée.
@@ -512,6 +538,46 @@
                     </div>
                 </div>
 
+                {# ── Publication automatique — WS1, PRÉPARATOIRE (checkbox) ── #}
+                {#
+                   ATTENTION : ce champ est préparatoire et N'A AUCUN EFFET EN V1.
+                   En V1, toute ressource collectée part en file de modération (statut pending),
+                   quelle que soit la valeur de cette case.
+                   Ce champ est créé pour un usage futur (sources de confiance validées par l'équipe).
+                   L'admin peut le cocher mais il sera ignoré jusqu'à ce que WS3 l'exploite.
+                #}
+                <div class="adm-checkbox-row">
+                    <input class="adm-checkbox"
+                           type="checkbox"
+                           id="autoPublish"
+                           name="autoPublish"
+                           value="1"
+                           {{ source.autoPublish ? 'checked' : '' }}>
+                    <div>
+                        <label class="adm-checkbox-label" for="autoPublish">
+                            Publication automatique
+                            {# Badge "sans effet V1" pour que l'admin comprenne l'état #}
+                            <span style="
+                                display: inline-block;
+                                margin-left: 6px;
+                                padding: 1px 6px;
+                                font-family: var(--mono);
+                                font-size: 9px;
+                                font-weight: 700;
+                                letter-spacing: .06em;
+                                text-transform: uppercase;
+                                border: 1px solid var(--accent-2);
+                                color: var(--accent-2);
+                                vertical-align: middle;
+                            ">préparatoire</span>
+                        </label>
+                        <div class="adm-checkbox-desc">
+                            Si coché, les ressources de cette source pourraient être publiées directement (sans modération) dans une version future.<br>
+                            <strong>Sans effet en V1</strong> — toute ressource collectée part en file de modération, quelle que soit cette valeur.
+                        </div>
+                    </div>
+                </div>
+
             </div>{# /adm-form-body #}
 
             {# ── Barre d'actions ──────────────────────────────────────────── #}
@@ -591,6 +657,70 @@
                     <div class="adm-meta-label">Modifiée le</div>
                     <div class="adm-meta-value">
                         {{ source.updatedAt ? source.updatedAt|date('d/m/Y à H:i') : '—' }}
+                    </div>
+                </div>
+
+                {# ── Champs WS1 : santé du pipeline (lecture seule) ─────────── #}
+                {#
+                   Ces deux champs sont gérés par l'orchestrateur du pipeline (WS3).
+                   Ils sont affichés ici à titre informatif — l'admin ne peut pas
+                   les modifier directement depuis ce formulaire.
+                #}
+
+                {# Dernier fetch réussi — distinct de derniereExecution (qui log aussi les erreurs) #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Dernier fetch réussi</div>
+                    <div class="adm-meta-value" style="font-size: 12px;">
+                        {% if source.lastSuccessfulFetch %}
+                            {{ source.lastSuccessfulFetch|date('d/m/Y H:i') }}
+                        {% else %}
+                            {# Null = jamais réussi ou donnée non encore disponible #}
+                            <span style="color: var(--ink-mute);">—</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# Compteur d'échecs consécutifs — géré par WS3, affiché pour monitoring #}
+                <div class="adm-meta-row">
+                    <div class="adm-meta-label">Échecs consécutifs</div>
+                    <div class="adm-meta-value">
+                        {#
+                           Seuil d'alerte : 5 échecs → désactivation automatique (WS3).
+                           On colore le badge selon le niveau de risque :
+                             0-2  : vert acide (normal)
+                             3-4  : orange d'avertissement
+                             ≥5   : rouge (seuil critique atteint)
+                        #}
+                        {% set failures = source.consecutiveFailures %}
+                        <span style="
+                            display: inline-block;
+                            padding: 2px 8px;
+                            font-family: var(--mono);
+                            font-size: 10px;
+                            font-weight: 700;
+                            letter-spacing: .06em;
+                            border: 1px solid;
+                            border-radius: 0;
+                            {% if failures >= 5 %}
+                                background: rgba(220,53,69,.15);
+                                color: #a71d2a;
+                                border-color: var(--danger, #dc3545);
+                            {% elseif failures >= 3 %}
+                                background: rgba(255,107,44,.15);
+                                color: #c4400c;
+                                border-color: var(--accent-2);
+                            {% else %}
+                                background: rgba(198,242,78,.15);
+                                color: #2a6e00;
+                                border-color: var(--accent);
+                            {% endif %}
+                        ">
+                            {{ failures }}
+                            {% if failures >= 5 %} — seuil critique{% endif %}
+                        </span>
+                        <div style="font-family: var(--mono); font-size: 9px; color: var(--ink-mute); margin-top: 3px;">
+                            Désactivation auto à 5 (géré par WS3)
+                        </div>
                     </div>
                 </div>
 

@@ -228,10 +228,18 @@ class AdminScrapingSourceController extends AbstractController
         $discipline   = trim((string) $request->request->get('discipline', '')) ?: null;
         $zone         = trim((string) $request->request->get('zone', '')) ?: null;
         $scraperSlug  = trim((string) $request->request->get('scraperSlug', '')) ?: null;
+
+        // Nouveau champ WS1 : URL du flux RSS/Atom (optionnelle)
+        // On valide le format URL si une valeur est fournie.
+        $feedUrl = trim((string) $request->request->get('feedUrl', '')) ?: null;
+
         // Les checkboxes HTML ne transmettent leur valeur que si cochées.
         // On compare à '1' (valeur que le template envoie pour les cases cochées).
         $actif         = $request->request->get('actif') === '1';
         $estAgregateur = $request->request->get('estAgregateur') === '1';
+
+        // Nouveau champ WS1 : publication automatique (préparatoire, sans effet V1)
+        $autoPublish = $request->request->get('autoPublish') === '1';
 
         // ── Validation — nom ─────────────────────────────────────────────────
         if (empty($nom)) {
@@ -278,6 +286,29 @@ class AdminScrapingSourceController extends AbstractController
                 'types'       => $allowedTypes,
                 'known_slugs' => $this->scraperRegistry->getKnownSlugs(),
             ]);
+        }
+
+        // ── Validation — feedUrl (optionnel) ──────────────────────────────────
+        // Si l'admin renseigne une URL de flux, on vérifie son format.
+        // Ce champ n'est pas obligatoire (nullable), mais s'il est fourni
+        // il doit être une URL valide (https://... ou http://).
+        if ($feedUrl !== null) {
+            if (mb_strlen($feedUrl) > 500) {
+                $this->addFlash('error', 'L\'URL du flux ne peut pas dépasser 500 caractères.');
+                return $this->render('admin/scraping_source_edit.html.twig', [
+                    'source'      => $source,
+                    'types'       => $allowedTypes,
+                    'known_slugs' => $this->scraperRegistry->getKnownSlugs(),
+                ]);
+            }
+            if (!filter_var($feedUrl, FILTER_VALIDATE_URL)) {
+                $this->addFlash('error', 'L\'URL du flux RSS/Atom n\'est pas valide. Elle doit commencer par http:// ou https://.');
+                return $this->render('admin/scraping_source_edit.html.twig', [
+                    'source'      => $source,
+                    'types'       => $allowedTypes,
+                    'known_slugs' => $this->scraperRegistry->getKnownSlugs(),
+                ]);
+            }
         }
 
         // ── Validation — type ─────────────────────────────────────────────────
@@ -331,6 +362,12 @@ class AdminScrapingSourceController extends AbstractController
         $source->setScraperSlug($scraperSlug);
         $source->setActif($actif);
         $source->setEstAgregateur($estAgregateur);
+
+        // Nouveaux champs WS1 — éditables par l'admin
+        $source->setFeedUrl($feedUrl);
+        $source->setAutoPublish($autoPublish);
+        // Note : lastSuccessfulFetch et consecutiveFailures sont en LECTURE SEULE
+        // depuis l'interface admin — ils sont gérés par l'orchestrateur du pipeline (WS3).
 
         // flush() sans persist() : l'entité est déjà trackée par Doctrine
         $this->em->flush();

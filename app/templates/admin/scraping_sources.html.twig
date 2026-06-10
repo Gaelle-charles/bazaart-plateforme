@@ -438,9 +438,10 @@
                     <th>Type</th>
                     <th>Discipline</th>
                     <th>Zone</th>
+                    <th>Flux RSS</th>
                     <th>Dernier run</th>
                     <th>Items</th>
-                    <th>Statut</th>
+                    <th>Statut / Échecs</th>
                     <th>Actif</th>
                     <th>Actions</th>
                 </tr>
@@ -482,12 +483,50 @@
                             {{ source.paysZone|default('—')|e }}
                         </td>
 
-                        {# Colonne Dernier run (date) #}
+                        {# Colonne Flux RSS — WS1 #}
+                        {#
+                           Affiche une puce verte si un flux est connu, tiret sinon.
+                           Le lien permet à l'admin de vérifier rapidement le flux.
+                           Lecture seule ici — éditable via le bouton Modifier.
+                        #}
+                        <td style="text-align: center;">
+                            {% if source.feedUrl %}
+                                {# Flux connu : lien cliquable vers le flux #}
+                                <a href="{{ source.feedUrl|e('html_attr') }}"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   title="{{ source.feedUrl|e }}"
+                                   style="
+                                       display: inline-block;
+                                       padding: 2px 7px;
+                                       font-family: var(--mono);
+                                       font-size: 9px;
+                                       font-weight: 700;
+                                       letter-spacing: .06em;
+                                       text-transform: uppercase;
+                                       text-decoration: none;
+                                       background: rgba(198,242,78,.2);
+                                       color: #2a6e00;
+                                       border: 1px solid var(--accent);
+                                   ">RSS ↗</a>
+                            {% else %}
+                                {# Aucun flux connu #}
+                                <span class="ss-run-info">—</span>
+                            {% endif %}
+                        </td>
+
+                        {# Colonne Dernier run (date) — affiche aussi le dernier fetch réussi (WS1) #}
                         <td>
                             {% if source.derniereExecution %}
                                 <span class="ss-run-info">
                                     {{ source.derniereExecution|date('d/m/Y H:i') }}
                                 </span>
+                                {# Dernier fetch réussi (distinct du dernier run qui peut être une erreur) #}
+                                {% if source.lastSuccessfulFetch %}
+                                    <div style="font-family: var(--mono); font-size: 9px; color: #2a6e00; margin-top: 2px;">
+                                        ✓ {{ source.lastSuccessfulFetch|date('d/m H:i') }}
+                                    </div>
+                                {% endif %}
                             {% else %}
                                 <span class="ss-run-info">—</span>
                             {% endif %}
@@ -498,8 +537,9 @@
                             <span class="ss-run-info">{{ source.nbItemsDernierRun }}</span>
                         </td>
 
-                        {# Colonne Statut (badge coloré avec tooltip si erreur) #}
+                        {# Colonne Statut / Échecs (WS1) — badge statut + compteur d'échecs consécutifs #}
                         <td>
+                            {# Badge de statut du dernier run — inchangé #}
                             <span class="ss-status ss-status--{{ source.statutDernierRun.value|e }}"
                                   {# Si erreur, affiche le message en tooltip (title HTML) #}
                                   {% if source.statutDernierRun.value == 'error' and source.messageErreur %}
@@ -507,6 +547,29 @@
                                   {% endif %}>
                                 {{ source.statutDernierRun.label()|e }}
                             </span>
+                            {# Compteur d'échecs consécutifs — coloré selon niveau de risque (WS1) #}
+                            {% set failures = source.consecutiveFailures %}
+                            {% if failures > 0 %}
+                                <div style="margin-top: 3px;">
+                                    <span style="
+                                        font-family: var(--mono);
+                                        font-size: 9px;
+                                        font-weight: 700;
+                                        letter-spacing: .05em;
+                                        {# Rouge si seuil critique (≥5), orange si proche (3-4), sinon neutre #}
+                                        {% if failures >= 5 %}
+                                            color: #a71d2a;
+                                        {% elseif failures >= 3 %}
+                                            color: #c4400c;
+                                        {% else %}
+                                            color: var(--ink-mute);
+                                        {% endif %}
+                                    ">
+                                        {{ failures }}✕ échec{{ failures > 1 ? 's' : '' }}
+                                        {% if failures >= 5 %} ⚠{% endif %}
+                                    </span>
+                                </div>
+                            {% endif %}
                         </td>
 
                         {# Colonne Actif (indicateur visuel) #}

@@ -157,6 +157,70 @@ class ScrapingSource
     #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTimeInterface $updatedAt = null;
 
+    // ── Nouveaux champs WS1 (pipeline multi-méthodes) ───────────────────────
+
+    /**
+     * URL du flux RSS/Atom de la source. Distincte de `url` qui reste la page humaine
+     * de référence (ex: page d'accueil du site).
+     *
+     * Ce champ est renseigné :
+     *   - manuellement par l'admin depuis le formulaire d'édition,
+     *   - ou automatiquement par la future commande app:detect-feeds (WS2).
+     *
+     * Null tant qu'aucun flux n'est connu pour cette source.
+     * Uniquement pertinent quand type = ScrapingSourceType::RSS,
+     * mais on ne pose pas de contrainte SQL car une source peut changer de type.
+     *
+     * Longueur 500 : cohérente avec `url` (certains flux ont des URLs longues
+     * avec des tokens de tracking).
+     */
+    #[ORM\Column(type: 'string', length: 500, nullable: true)]
+    private ?string $feedUrl = null;
+
+    /**
+     * Date/heure du dernier fetch RÉUSSI de cette source.
+     *
+     * Différent de `derniereExecution` qui enregistre TOUS les runs (succès + erreur).
+     * Ce champ ne progresse que lors des runs sans erreur, ce qui permet à
+     * l'orchestrateur (WS3) de savoir depuis combien de temps la source n'a pas
+     * fourni de données exploitables.
+     *
+     * Mis à jour par l'orchestrateur du pipeline (WS3) — ne pas toucher ici.
+     * Null si la source n'a jamais été fetchée avec succès.
+     */
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $lastSuccessfulFetch = null;
+
+    /**
+     * Compteur d'échecs consécutifs depuis le dernier succès.
+     *
+     * Comportement attendu (géré côté service, pas ici) :
+     *   - Incrémenté de 1 à chaque run en erreur.
+     *   - Remis à 0 dès qu'un run réussit.
+     *   - Quand il atteint 5 : l'orchestrateur (WS3) désactivera automatiquement
+     *     la source (actif = false) et notifiera l'admin.
+     *
+     * Défaut : 0 (une nouvelle source n'a encore jamais échoué).
+     * Colonne avec `default: 0` pour éviter un NOT NULL sans valeur par défaut.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $consecutiveFailures = 0;
+
+    /**
+     * Indique si les ressources collectées depuis cette source peuvent être publiées
+     * automatiquement sans passer par la file de modération.
+     *
+     * ⚠️ CHAMP PRÉPARATOIRE — NON EXPLOITÉ EN V1.
+     * En V1, toute ressource collectée part systématiquement en file de modération
+     * (statut `pending`), quelle que soit la valeur de ce champ.
+     * Ce champ existe pour préparer une future option de confiance par source ;
+     * ne pas l'utiliser dans aucune logique de V1.
+     *
+     * Défaut : false (publication manuelle = comportement prudent par défaut).
+     */
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $autoPublish = false;
+
     // ── Lifecycle Callbacks ──────────────────────────────────────────────────
 
     /**
@@ -374,5 +438,113 @@ class ScrapingSource
     public function getUpdatedAt(): ?\DateTimeInterface
     {
         return $this->updatedAt;
+    }
+
+    // ── Getters / Setters — champs WS1 ──────────────────────────────────────
+
+    /**
+     * Retourne l'URL du flux RSS/Atom de cette source.
+     * Null si aucun flux n'est encore connu.
+     */
+    public function getFeedUrl(): ?string
+    {
+        return $this->feedUrl;
+    }
+
+    /**
+     * Définit l'URL du flux RSS/Atom.
+     * Passer null pour effacer le flux connu (ex: si le flux a été supprimé).
+     */
+    public function setFeedUrl(?string $feedUrl): static
+    {
+        $this->feedUrl = $feedUrl;
+        return $this;
+    }
+
+    /**
+     * Retourne la date du dernier fetch réussi.
+     * Null si la source n'a jamais fourni de données exploitables.
+     */
+    public function getLastSuccessfulFetch(): ?\DateTimeInterface
+    {
+        return $this->lastSuccessfulFetch;
+    }
+
+    /**
+     * Définit la date du dernier fetch réussi.
+     * Appelé par l'orchestrateur du pipeline (WS3) — pas depuis le contrôleur admin.
+     */
+    public function setLastSuccessfulFetch(?\DateTimeInterface $lastSuccessfulFetch): static
+    {
+        $this->lastSuccessfulFetch = $lastSuccessfulFetch;
+        return $this;
+    }
+
+    /**
+     * Retourne le nombre d'échecs consécutifs depuis le dernier succès.
+     */
+    public function getConsecutiveFailures(): int
+    {
+        return $this->consecutiveFailures;
+    }
+
+    /**
+     * Définit le compteur d'échecs consécutifs.
+     * Préférer incrementConsecutiveFailures() et resetConsecutiveFailures()
+     * pour les manipulations courantes.
+     */
+    public function setConsecutiveFailures(int $consecutiveFailures): static
+    {
+        $this->consecutiveFailures = $consecutiveFailures;
+        return $this;
+    }
+
+    /**
+     * Incrémente le compteur d'échecs consécutifs de 1.
+     *
+     * À appeler depuis l'orchestrateur du pipeline (WS3) lors d'un run en erreur.
+     * L'orchestrateur doit ensuite vérifier si le seuil (5 par défaut) est atteint
+     * pour désactiver automatiquement la source.
+     *
+     * Note : ce mécanisme sera câblé dans WS3 — ne pas appeler cette méthode
+     * en dehors du service d'orchestration.
+     */
+    public function incrementConsecutiveFailures(): static
+    {
+        $this->consecutiveFailures++;
+        return $this;
+    }
+
+    /**
+     * Remet le compteur d'échecs à zéro.
+     *
+     * À appeler depuis l'orchestrateur (WS3) après un run réussi.
+     * Un succès = la chaîne d'échecs est brisée, on repart de zéro.
+     */
+    public function resetConsecutiveFailures(): static
+    {
+        $this->consecutiveFailures = 0;
+        return $this;
+    }
+
+    /**
+     * Indique si la publication automatique est activée pour cette source.
+     *
+     * ⚠️ Toujours false en V1 (champ préparatoire — sans effet).
+     */
+    public function isAutoPublish(): bool
+    {
+        return $this->autoPublish;
+    }
+
+    /**
+     * Active ou désactive la publication automatique pour cette source.
+     *
+     * ⚠️ N'a aucun effet en V1 — champ préparatoire uniquement.
+     */
+    public function setAutoPublish(bool $autoPublish): static
+    {
+        $this->autoPublish = $autoPublish;
+        return $this;
     }
 }
