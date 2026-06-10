@@ -80,7 +80,8 @@ class ScrapedResourcePersister
             // ── Déduplication intra-lot ───────────────────────────────────────
             // Si la même URL apparaît deux fois dans ce batch, on ignore les
             // occurrences après la première.
-            if ($opp->url !== null && $opp->url !== '') {
+            // Note : $opp->url est string (non nullable) — pas besoin du !== null.
+            if ($opp->url !== '') {
                 if (isset($seenUrls[$opp->url])) {
                     $skipped++;
                     continue;

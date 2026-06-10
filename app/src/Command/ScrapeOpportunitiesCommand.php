@@ -232,8 +232,10 @@ class ScrapeOpportunitiesCommand extends Command
             } catch (\Exception $e) {
                 $io->error('Erreur : ' . $e->getMessage());
 
-                // Enregistrement de l'erreur en BDD — visible dans la liste admin
-                if (!$isDryRun) {
+                // Enregistrement de l'erreur en BDD — visible dans la liste admin.
+                // PHPStan narrow incorrectement $isDryRun à false dans ce catch (faux positif
+                // dû au "continue" conditionnel dans le try). La vérification est nécessaire.
+                if (!$isDryRun) { // @phpstan-ignore booleanNot.alwaysTrue
                     $source->markRunError($e->getMessage());
                     $this->em->flush();
                 }

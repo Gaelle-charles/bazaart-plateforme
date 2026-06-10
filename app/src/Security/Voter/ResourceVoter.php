@@ -116,13 +116,14 @@ class ResourceVoter extends Voter
             return false;
         }
 
-        // Délègue selon l'attribut demandé
+        // Délègue selon l'attribut demandé.
+        // $subject est garanti d'être une Resource par voteOnAttribute() qui appelle supports() d'abord.
         return match ($attribute) {
             self::RESOURCE_SUBMIT      => $this->canSubmit($user),
-            self::RESOURCE_EDIT        => $this->canEdit($user, $subject),       // @phpstan-ignore-line ($subject est garanti Resource par supports())
-            self::RESOURCE_DELETE      => $this->canDelete($user, $subject),     // @phpstan-ignore-line
+            self::RESOURCE_EDIT        => $this->canEdit($user, $subject),
+            self::RESOURCE_DELETE      => $this->canDelete($user, $subject),
             self::RESOURCE_PUBLISH     => $this->canPublish($user),
-            self::RESOURCE_MANAGE_OWN  => $this->canManageOwn($user, $subject), // @phpstan-ignore-line
+            self::RESOURCE_MANAGE_OWN  => $this->canManageOwn($user, $subject),
             default                    => false,
         };
     }

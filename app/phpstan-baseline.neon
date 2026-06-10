@@ -1,0 +1,397 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Offset ''nom'' on array\{nom\: string, url\: null, pays_zone\: string\|null, discipline\: string\|null, raison\: string\|null\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/DiscoverSourcesCommand.php
+
+		-
+			message: '#^Right side of && is always true\.$#'
+			identifier: booleanAnd.rightAlwaysTrue
+			count: 1
+			path: src/Command/DiscoverSourcesCommand.php
+
+		-
+			message: '#^Offset ''daily''\|''immediate''\|''weekly'' on array\{immediate\: 1, daily\: 2, weekly\: 3\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: src/Command/SendResourceAlertsCommand.php
+
+		-
+			message: '#^Call to protected method getEntityManager\(\) of class Doctrine\\ORM\\EntityRepository\<App\\Entity\\Live\>\.$#'
+			identifier: method.protected
+			count: 1
+			path: src/Controller/AdminLiveController.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between non\-empty\-string and '''' will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: src/Controller/AdminSettingController.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 2
+			path: src/Controller/ResourceController.php
+
+		-
+			message: '#^Method App\\DTO\\RegisterDTO\:\:fromArray\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/DTO/RegisterDTO.php
+
+		-
+			message: '#^Method App\\Entity\\ArtistProfile\:\:getSocialLinks\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Entity/ArtistProfile.php
+
+		-
+			message: '#^Method App\\Entity\\ArtistProfile\:\:setSocialLinks\(\) has parameter \$socialLinks with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Entity/ArtistProfile.php
+
+		-
+			message: '#^Property App\\Entity\\ArtistProfile\:\:\$socialLinks type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Entity/ArtistProfile.php
+
+		-
+			message: '#^Property App\\Entity\\Conversation\:\:\$createdAt type mapping mismatch\: property can contain DateTimeInterface\|null but database expects DateTimeInterface\.$#'
+			identifier: doctrine.columnType
+			count: 1
+			path: src/Entity/Conversation.php
+
+		-
+			message: '#^Property App\\Entity\\Conversation\:\:\$messages type mapping mismatch\: property can contain Doctrine\\Common\\Collections\\Collection but database expects Doctrine\\Common\\Collections\\Collection&iterable\<App\\Entity\\Message\>\.$#'
+			identifier: doctrine.associationType
+			count: 1
+			path: src/Entity/Conversation.php
+
+		-
+			message: '#^Property App\\Entity\\Conversation\:\:\$messages with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/Conversation.php
+
+		-
+			message: '#^Property App\\Entity\\Conversation\:\:\$participants type mapping mismatch\: property can contain Doctrine\\Common\\Collections\\Collection but database expects Doctrine\\Common\\Collections\\Collection&iterable\<App\\Entity\\ConversationParticipant\>\.$#'
+			identifier: doctrine.associationType
+			count: 1
+			path: src/Entity/Conversation.php
+
+		-
+			message: '#^Property App\\Entity\\Conversation\:\:\$participants with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/Conversation.php
+
+		-
+			message: '#^Property App\\Entity\\ConversationParticipant\:\:\$joinedAt type mapping mismatch\: property can contain DateTimeInterface\|null but database expects DateTimeInterface\.$#'
+			identifier: doctrine.columnType
+			count: 1
+			path: src/Entity/ConversationParticipant.php
+
+		-
+			message: '#^Method App\\Entity\\Discipline\:\:getResources\(\) return type with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/Discipline.php
+
+		-
+			message: '#^Property App\\Entity\\Discipline\:\:\$resources type mapping mismatch\: property can contain Doctrine\\Common\\Collections\\Collection but database expects Doctrine\\Common\\Collections\\Collection&iterable\<App\\Entity\\Resource\>\.$#'
+			identifier: doctrine.associationType
+			count: 1
+			path: src/Entity/Discipline.php
+
+		-
+			message: '#^Property App\\Entity\\Discipline\:\:\$resources with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/Discipline.php
+
+		-
+			message: '#^Property App\\Entity\\ForumCategory\:\:\$threads type mapping mismatch\: property can contain Doctrine\\Common\\Collections\\Collection but database expects Doctrine\\Common\\Collections\\Collection&iterable\<App\\Entity\\ForumThread\>\.$#'
+			identifier: doctrine.associationType
+			count: 1
+			path: src/Entity/ForumCategory.php
+
+		-
+			message: '#^Property App\\Entity\\ForumCategory\:\:\$threads with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/ForumCategory.php
+
+		-
+			message: '#^Property App\\Entity\\ForumThread\:\:\$replies type mapping mismatch\: property can contain Doctrine\\Common\\Collections\\Collection but database expects Doctrine\\Common\\Collections\\Collection&iterable\<App\\Entity\\ForumReply\>\.$#'
+			identifier: doctrine.associationType
+			count: 1
+			path: src/Entity/ForumThread.php
+
+		-
+			message: '#^Property App\\Entity\\ForumThread\:\:\$replies with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/ForumThread.php
+
+		-
+			message: '#^Attribute class Symfony\\Component\\Validator\\Constraints\\Length does not exist\.$#'
+			identifier: attribute.notFound
+			count: 4
+			path: src/Entity/Live.php
+
+		-
+			message: '#^Attribute class Symfony\\Component\\Validator\\Constraints\\NotBlank does not exist\.$#'
+			identifier: attribute.notFound
+			count: 2
+			path: src/Entity/Live.php
+
+		-
+			message: '#^Attribute class Symfony\\Component\\Validator\\Constraints\\NotNull does not exist\.$#'
+			identifier: attribute.notFound
+			count: 1
+			path: src/Entity/Live.php
+
+		-
+			message: '#^Attribute class Symfony\\Component\\Validator\\Constraints\\Url does not exist\.$#'
+			identifier: attribute.notFound
+			count: 3
+			path: src/Entity/Live.php
+
+		-
+			message: '#^Property App\\Entity\\Message\:\:\$createdAt type mapping mismatch\: property can contain DateTimeInterface\|null but database expects DateTimeInterface\.$#'
+			identifier: doctrine.columnType
+			count: 1
+			path: src/Entity/Message.php
+
+		-
+			message: '#^Property App\\Entity\\Notification\:\:\$createdAt type mapping mismatch\: property can contain DateTimeInterface\|null but database expects DateTimeInterface\.$#'
+			identifier: doctrine.columnType
+			count: 1
+			path: src/Entity/Notification.php
+
+		-
+			message: '#^Method App\\Entity\\Post\:\:getComments\(\) return type with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/Post.php
+
+		-
+			message: '#^Method App\\Entity\\Post\:\:getLikes\(\) return type with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/Post.php
+
+		-
+			message: '#^Property App\\Entity\\Post\:\:\$comments type mapping mismatch\: property can contain Doctrine\\Common\\Collections\\Collection but database expects Doctrine\\Common\\Collections\\Collection&iterable\<App\\Entity\\Comment\>\.$#'
+			identifier: doctrine.associationType
+			count: 1
+			path: src/Entity/Post.php
+
+		-
+			message: '#^Property App\\Entity\\Post\:\:\$comments with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/Post.php
+
+		-
+			message: '#^Property App\\Entity\\Post\:\:\$likes type mapping mismatch\: property can contain Doctrine\\Common\\Collections\\Collection but database expects Doctrine\\Common\\Collections\\Collection&iterable\<App\\Entity\\PostLike\>\.$#'
+			identifier: doctrine.associationType
+			count: 1
+			path: src/Entity/Post.php
+
+		-
+			message: '#^Property App\\Entity\\Post\:\:\$likes with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/Post.php
+
+		-
+			message: '#^Method App\\Entity\\Resource\:\:getDisciplines\(\) return type with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/Resource.php
+
+		-
+			message: '#^Property App\\Entity\\Resource\:\:\$disciplines type mapping mismatch\: property can contain Doctrine\\Common\\Collections\\Collection but database expects Doctrine\\Common\\Collections\\Collection&iterable\<App\\Entity\\Discipline\>\.$#'
+			identifier: doctrine.associationType
+			count: 1
+			path: src/Entity/Resource.php
+
+		-
+			message: '#^Property App\\Entity\\Resource\:\:\$disciplines with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/Resource.php
+
+		-
+			message: '#^Property App\\Entity\\ResourceAlert\:\:\$filterDisciplines type mapping mismatch\: property can contain Doctrine\\Common\\Collections\\Collection but database expects Doctrine\\Common\\Collections\\Collection&iterable\<App\\Entity\\Discipline\>\.$#'
+			identifier: doctrine.associationType
+			count: 1
+			path: src/Entity/ResourceAlert.php
+
+		-
+			message: '#^Property App\\Entity\\ResourceAlert\:\:\$filterDisciplines with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/ResourceAlert.php
+
+		-
+			message: '#^Property App\\Entity\\ResourceAlert\:\:\$filterResourceTypes type mapping mismatch\: property can contain Doctrine\\Common\\Collections\\Collection but database expects Doctrine\\Common\\Collections\\Collection&iterable\<App\\Entity\\ResourceType\>\.$#'
+			identifier: doctrine.associationType
+			count: 1
+			path: src/Entity/ResourceAlert.php
+
+		-
+			message: '#^Property App\\Entity\\ResourceAlert\:\:\$filterResourceTypes with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/ResourceAlert.php
+
+		-
+			message: '#^Method App\\Entity\\ResourceType\:\:getResources\(\) return type with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/ResourceType.php
+
+		-
+			message: '#^Property App\\Entity\\ResourceType\:\:\$resources type mapping mismatch\: property can contain Doctrine\\Common\\Collections\\Collection but database expects Doctrine\\Common\\Collections\\Collection&iterable\<App\\Entity\\Resource\>\.$#'
+			identifier: doctrine.associationType
+			count: 1
+			path: src/Entity/ResourceType.php
+
+		-
+			message: '#^Property App\\Entity\\ResourceType\:\:\$resources with generic interface Doctrine\\Common\\Collections\\Collection does not specify its types\: TKey, T$#'
+			identifier: missingType.generics
+			count: 1
+			path: src/Entity/ResourceType.php
+
+		-
+			message: '#^Method App\\Entity\\User\:\:setRoles\(\) has parameter \$roles with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Entity/User.php
+
+		-
+			message: '#^Property App\\Entity\\User\:\:\$roles type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Entity/User.php
+
+		-
+			message: '#^Method App\\Repository\\OrganizationProfileRepository\:\:findVerified\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Repository/OrganizationProfileRepository.php
+
+		-
+			message: '#^Call to an undefined method Symfony\\Component\\HttpFoundation\\Session\\SessionInterface\:\:getFlashBag\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Security/GoogleAuthenticator.php
+
+		-
+			message: '#^Method App\\Service\\ArticleService\:\:saveArticle\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Service/ArticleService.php
+
+		-
+			message: '#^Method App\\Service\\ArtistProfileService\:\:buildSocialLinks\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Service/ArtistProfileService.php
+
+		-
+			message: '#^Method App\\Service\\ArtistProfileService\:\:buildSocialLinks\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Service/ArtistProfileService.php
+
+		-
+			message: '#^Method App\\Service\\ArtistProfileService\:\:saveProfile\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Service/ArtistProfileService.php
+
+		-
+			message: '#^Method Doctrine\\Persistence\\ObjectManager\:\:clear\(\) invoked with 1 parameter, 0 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: src/Service/NotificationService.php
+
+		-
+			message: '#^Method App\\Service\\OrganizationProfileService\:\:saveProfile\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Service/OrganizationProfileService.php
+
+		-
+			message: '#^Property App\\Service\\PostService\:\:\$commentRepository is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Service/PostService.php
+
+		-
+			message: '#^Property App\\Service\\PostService\:\:\$postRepository is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Service/PostService.php
+
+		-
+			message: '#^Method App\\Service\\ResourceService\:\:createResource\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Service/ResourceService.php
+
+		-
+			message: '#^Property App\\Service\\ResourceService\:\:\$resourceRepository is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Service/ResourceService.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type App\\Entity\\Conversation\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Service/RgpdService.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type App\\Entity\\ForumThread\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Service/RgpdService.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type App\\Entity\\Live\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: src/Service/RgpdService.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type DateTimeInterface\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 5
+			path: src/Service/RgpdService.php
+
+		-
+			message: '#^Using nullsafe property access on non\-nullable type App\\Enum\\NotificationType\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Service/RgpdService.php
+
+		-
+			message: '#^Using nullsafe property access on non\-nullable type App\\Enum\\ResourceStatus\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Service/RgpdService.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<int, array\<string, mixed\>\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/Scraper/CnmScraper.php

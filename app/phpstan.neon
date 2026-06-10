@@ -1,0 +1,61 @@
+##
+# phpstan.neon — Configuration PHPStan pour Bazaart
+#
+# NIVEAU : 6 (minimum imposé par CLAUDE.md pour tous les nouveaux modules)
+# PÉRIMÈTRE : src/ uniquement (pas les tests — les tests E2E auraient trop de bruit Kernel)
+#
+# EXTENSIONS ACTIVES (via phpstan/extension-installer) :
+#   - phpstan/phpstan-doctrine : typage des repositories, Entity Manager, Query Builder
+#     Permet à PHPStan de comprendre les génériques Doctrine (ex: EntityRepository<User>)
+#     et les méthodes magiques find()/findOneBy()/findBy() des repositories.
+#
+# BASELINE (phpstan-baseline.neon) :
+#   Gèle 79 erreurs préexistantes dans le code HORS PÉRIMÈTRE du chantier RSS.
+#   Ces erreurs NE SONT PAS ignorées définitivement — elles devront être corrigées
+#   module par module (entités sans génériques Collection, services avec arrays non typés,
+#   etc.). La baseline permet de ne pas bloquer CI/CD sur la dette préexistante tout
+#   en garantissant que tout NOUVEAU code est clean niveau 6.
+#
+#   Pour voir la liste des erreurs baselinées :
+#     cat phpstan-baseline.neon
+#
+#   Pour supprimer une erreur de la baseline (après correction) :
+#     Corrigez l'erreur dans le code, puis relancez --generate-baseline.
+##
+
+includes:
+    # Inclusion de la baseline — sans ce fichier, PHPStan échouera sur les 79 erreurs
+    # préexistantes. Ce fichier est généré automatiquement par --generate-baseline.
+    - phpstan-baseline.neon
+
+parameters:
+    # Niveau 6 = vérification des types génériques (array<string, int>),
+    # des types de retour mixtes non gérés, des arguments passés à des fonctions
+    # avec des types incompatibles, et des accès à des propriétés possiblement null.
+    level: 6
+
+    # Périmètre d'analyse : uniquement le code de l'application
+    paths:
+        - src
+
+    # Exclusions : dossiers générés automatiquement ou hors contrôle
+    excludePaths:
+        - src/DataFixtures  # Fixtures si présentes — moins critiques
+        - var               # Cache et logs — ne pas analyser
+
+    # Configuration de l'extension phpstan-doctrine
+    # objectManagerLoader pointe vers un script qui retourne l'EntityManager
+    # du kernel Symfony en mode test. Cela permet à PHPStan de comprendre les
+    # relations Doctrine (associations, types de colonnes, repositories typés).
+    doctrine:
+        objectManagerLoader: tests/bootstrap_phpstan.php
+
+    # Tolérance pour les constructeurs d'entités Doctrine (souvent sans arguments)
+    # Les entités ont des propriétés non initialisées en PHP pur — Doctrine les remplit
+    # à l'hydratation. Sans ce réglage, PHPStan signalerait des "uninitialized property"
+    # sur chaque entité, ce qui serait du bruit non actionnable.
+    checkUninitializedProperties: false
+
+    # Pas de règles d'ignoreErrors globales — les cas à ignorer sont traités soit
+    # via la baseline (erreurs préexistantes hors périmètre) soit via des annotations
+    # @phpstan-ignore inline sur les lignes concernées.

@@ -175,7 +175,10 @@ class DeadlineParserService
         $monthNames = implode('|', array_keys(self::MONTHS_FR));
         $pattern    = '/(\d{4}-\d{2}-\d{2}|\d{1,2}\s+(?:' . $monthNames . ')\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{4})/ui';
 
-        /** @var array<int, array<int, array{0: string, 1: int}>> $matches */
+        // $matches est typé implicitement par preg_match_all avec PREG_OFFSET_CAPTURE :
+        // chaque entrée $matches[n] est un tableau de [string, int] (token + offset).
+        // On déclare $matches avant l'appel pour que PHPStan sache qu'il existe après.
+        $matches = [];
         if (!preg_match_all($pattern, $text, $matches, PREG_OFFSET_CAPTURE)) {
             // Aucune date trouvée dans le texte → null (pas de deadline détectable)
             return null;

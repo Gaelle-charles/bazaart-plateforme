@@ -284,7 +284,9 @@ class FeedReaderService
     ): ?ScrapedOpportunity {
         // ── Extraction du titre ──────────────────────────────────────────────
         // getTitle() fonctionne pour RSS 2.0 et Atom.
-        $title = trim((string) ($item->getTitle() ?? ''));
+        // EntryInterface::getTitle() retourne mixed (interface PHP 7 sans types déclarés).
+        // Le cast (string) gère null → '' et tout scalaire → string, donc ?? '' est superflu.
+        $title = trim((string) $item->getTitle());
         if ($title === '') {
             return null;
         }
@@ -292,7 +294,8 @@ class FeedReaderService
         // ── Extraction du lien ───────────────────────────────────────────────
         // getLink() fonctionne pour les deux formats (laminas-feed abstrait
         // la différence RSS <link> vs Atom <link href="...">).
-        $link = trim((string) ($item->getLink() ?? ''));
+        // EntryInterface::getLink() retourne mixed — même logique que getTitle() ci-dessus.
+        $link = trim((string) $item->getLink());
         if ($link === '') {
             return null;
         }
@@ -301,7 +304,9 @@ class FeedReaderService
         // getDescription() retourne le champ <description> (RSS) ou <summary> (Atom).
         // getContent() retourne <content:encoded> (RSS) ou <content> (Atom) — plus riche.
         // On préfère getContent() si disponible, fallback sur getDescription().
-        $rawDescription = (string) ($item->getContent() ?? $item->getDescription() ?? '');
+        // Les deux méthodes retournent mixed — on caste en string (null → '').
+        // L'opérateur ?: (null coalesce sur mixed) permet le fallback content → description.
+        $rawDescription = (string) ($item->getContent() ?: $item->getDescription());
 
         // ── NETTOYAGE OBLIGATOIRE ─────────────────────────────────────────────
         // La description RSS peut contenir du HTML arbitraire (parfois un article entier).
