@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-État mis à jour le 2026-05-25. Deadline V1 : 2026-06-15 (21 jours restants).
+État mis à jour le 2026-05-25. Deadline V1 : **2026-06-23** (décalée du 15 au 23 juin, confirmé le 2026-06-10).
 
 **Why:** Planning CDC V3 — deadline Mansa immuable. Utiliser ce tableau pour prioriser, éviter les doublons, alerter sur les glissements.
 **How to apply:** Toujours vérifier ici avant de planifier une nouvelle tâche.
@@ -132,7 +132,7 @@ metadata:
 - `DEFAULT_URI=https://bazaart.fr` dans `.env.local` prod
 - Staging (staging.bazaart.fr)
 - Upgrade droplet 4 GB (semaine du 9 juin)
-- `composer require --dev phpstan/phpstan phpstan/extension-installer` (PHPStan non installé en container)
+- ✅ PHPStan niveau 6 installé (10 juin 2026) : phpstan/phpstan ^2.2 + extension-installer + phpstan-doctrine en require-dev, `app/phpstan.neon` (level 6, paths src). Lancer avec `--memory-limit=512M` (php.ini container à 128M, trop bas). Baseline `app/phpstan-baseline.neon` = 79 erreurs préexistantes hors périmètre gelées (dette à traiter module par module). Code neuf doit rester à 0 erreur hors baseline.
 - `docker compose exec app php bin/console doctrine:migrations:migrate --no-interaction` (Formation + Forum)
 - `docker compose exec app php bin/console app:forum:seed-categories` (5 catégories + threads)
 

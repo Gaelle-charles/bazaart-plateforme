@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-À faire AVANT le lancement du 2026-06-15 : remplir les placeholders dans les pages légales.
+À faire AVANT le lancement du 2026-06-23 : remplir les placeholders dans les pages légales. (Lancement décalé du 15 au 23 juin, confirmé le 2026-06-10.)
 
 **Why:** Les pages `/confidentialite`, `/cgu` et `/mentions-legales` contiennent des marqueurs `[À COMPLÉTER — ...]` qui doivent être remplacés par les vraies informations de l'association avant la mise en ligne. Obligation légale (RGPD art. 13-14, LCEN art. 6-III).
 

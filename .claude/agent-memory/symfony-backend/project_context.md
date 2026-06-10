@@ -100,4 +100,34 @@ Plateforme bazaart.fr pour artistes de la diaspora afro-atlantique.
 **Voters créés le 22 mai 2026 :**
 - `ResourceVoter`, `ForumVoter`, `StructureVoter`, `LiveVoter` dans `src/Security/Voter/`
 
+**Chantier scraping WS3 — Orchestrateur RSS app:read-feeds (10 juin 2026) :**
+- `FeedReadResult` (readonly DTO) — distingue échec fetch (success=false) de succès vide (success=true, items=[]). Méthodes factory ok()/failure().
+- `FeedReaderService::readWithResult()` — nouvelle méthode rétro-compatible. read() délègue à readWithResult(). fetchFeedContentWithError() retourne aussi le message d'erreur.
+- `ReadFeedsCommand` (app:read-feeds) — --dry-run + --source. Switch scraping_enabled respecté. Filtre PHP getType()===RSS. Suivi de santé : setLastSuccessfulFetch, resetConsecutiveFailures, incrementConsecutiveFailures, auto-désactivation à 5 échecs (niveau WARNING). Tableau récapitulatif SymfonyStyle. Log structuré par source + résumé global.
+- `ScrapeOpportunitiesCommand` — skip type===RSS en tête de boucle (commentaire FR expliquant la raison). Import ScrapingSourceType ajouté.
+- `docs/scraping-cron.md` — refondu : deux pipelines (RSS 6h, LLM 3x/sem), entrée cron RSS ajoutée, note migration Symfony Scheduler post-lancement.
+- Validation : lint:container OK, doctrine:schema:validate OK (pas de migration = aucun changement de schéma en WS3). PHPStan non installé.
+- dry-run app:read-feeds : 3 sources RSS, 24 items trouvés en 6478ms. app:scrape-opportunities : sources RSS absentes = exclusion OK.
+
+**Chantier scraping WS2 — Pipeline RSS natif (10 juin 2026) :**
+- `laminas/laminas-feed` (v2.26.1) installé — parse RSS 2.0 + Atom 1.0 + RSS 1.0 de façon unifiée
+- `HtmlSanitizerService` — strip_tags total + html_entity_decode + collapse espaces + mb_substr 2000 chars. Aucune dépendance externe. Sécurité XSS + contrôle coût LLM.
+- `PersistResult` (readonly DTO) — porte les compteurs inserted/reactivated/updated/skipped
+- `ScrapedResourcePersister::persistBatch()` — factorise les 5 cas de dédup qui étaient inline dans ScrapeOpportunitiesCommand. Guard intra-lot + findByUrl() + flush() unique.
+- `FeedReaderService::read()` — télécharge via HttpClient (15s, User-Agent BazaartBot), parse via laminas FeedReader::importString(), filtre mots-clés, détecte type, sanitize description via HtmlSanitizerService. Retourne ScrapedOpportunity[]. Pas de LLM, pas de persistance.
+- `ScrapeOpportunitiesCommand` refactorisé — délègue la persistance à ScrapedResourcePersister (comportement identique). EntityManager conservé pour markRunSuccess/Error sur ScrapingSource + archiveExpired.
+- `GenericScraper::scrapeRss()` marquée @deprecated — conservée, WS3 la contournera.
+- PHPStan non installé dans le container (pas dans composer.json) — à signaler dans les rapports.
+
+**Chantier RSS QA (10 juin 2026 — commits 2f2dfad + 600bc57) :**
+- `DeadlineParserService::extractFromText()` — fallback supprimé : désormais UNIQUEMENT par mots-cues. Sans cue → null. Recette validée sur artcena.fr (11 items, deadline_date = NULL partout).
+- `tests/Unit/Service/DeadlineParserServiceTest.php` — 5 tests unitaires (avec cue, sans cue, vide, ISO+cue, événement sans cue). Tous passants.
+- PHPStan niveau 6 installé : phpstan/phpstan ^2.2, phpstan/extension-installer ^1.4, phpstan/phpstan-doctrine ^2.0
+- `app/phpstan.neon` — config niveau 6, périmètre src/, extension Doctrine, baseline incluse
+- `app/phpstan-baseline.neon` — gèle 79 erreurs préexistantes hors périmètre RSS
+- `app/tests/bootstrap_phpstan.php` — loader ObjectManager pour phpstan-doctrine
+- Erreurs corrigées périmètre RSS : 6 erreurs → 0 (DeadlineParserService, FeedReaderService, ScrapedResourcePersister, ScrapeOpportunitiesCommand)
+- ResourceVoter : 3 annotations @phpstan-ignore-line obsolètes supprimées
+- Sortie PHPStan finale : 0 erreur (79 baselinées). lint:container OK, schema:validate OK.
+
 **How to apply:** Consulter `docs/cahier-des-charges-v3.md` avant toute tâche d'architecture. Priorité au fonctionnel V1.
