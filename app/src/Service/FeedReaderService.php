@@ -10,6 +10,7 @@ use Laminas\Feed\Reader\Reader as FeedReader;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
+
 /**
  * FeedReaderService — Lecture native des flux RSS 2.0 et Atom via laminas-feed.
  *
@@ -87,16 +88,40 @@ class FeedReaderService
     /**
      * Lit le flux RSS/Atom d'une source et retourne les opportunités pertinentes.
      *
+     * ⚠️ MÉTHODE CONSERVÉE POUR RÉTRO-COMPATIBILITÉ — délègue désormais à readWithResult().
+     * Les nouveaux appelants (ex: ReadFeedsCommand WS3) doivent utiliser readWithResult()
+     * pour distinguer l'échec de fetch (HTTP/XML) du succès avec 0 item.
+     *
      * Si le téléchargement échoue, si le XML est invalide, ou si aucun item
      * ne passe le filtre de mots-clés → retourne [] sans lever d'exception.
-     * Ce comportement "soft failure" est cohérent avec GenericScraper::scrapeRss()
-     * et garantit qu'une source défaillante ne bloque pas les autres sources.
      *
      * @param ScrapingSource $source La source à lire (type RSS attendu)
      *
      * @return ScrapedOpportunity[] Liste d'opportunités filtrées et nettoyées
      */
     public function read(ScrapingSource $source): array
+    {
+        // Délégation à readWithResult() pour éviter la duplication de logique.
+        // On ignore le champ success ici — comportement identique à l'ancienne implémentation.
+        return $this->readWithResult($source)->items;
+    }
+
+    /**
+     * Lit le flux RSS/Atom et retourne un FeedReadResult distinguant échec et succès vide.
+     *
+     * C'est la méthode RECOMMANDÉE pour les nouveaux appelants.
+     * Elle retourne un objet qui distingue explicitement :
+     *   - success = false : le flux n'a pas pu être chargé/parsé (HTTP non-200, XML invalide)
+     *   - success = true + items = [] : flux valide mais aucun item ne matche les mots-clés
+     *
+     * Cette distinction permet à ReadFeedsCommand de mettre à jour correctement
+     * le compteur consecutiveFailures des sources sans faux-positifs sur les flux vides.
+     *
+     * @param ScrapingSource $source La source à lire (type RSS attendu)
+     *
+     * @return FeedReadResult Résultat avec indicateur de succès/échec + items
+     */
+    public function readWithResult(ScrapingSource $source): FeedReadResult
     {
         // ── Choix de l'URL à télécharger ────────────────────────────────────
         // Priorité au champ feedUrl (URL RSS dédiée, ajoutée en WS1).
@@ -107,11 +132,16 @@ class FeedReaderService
         $feedUrl = $source->getFeedUrl() ?? $source->getUrl();
 
         // ── Téléchargement du flux ───────────────────────────────────────────
-        $xml = $this->fetchFeedContent($feedUrl, $source->getNom());
-        if ($xml === null) {
-            // fetchFeedContent() a déjà loggé l'avertissement
-            return [];
+        // fetchFeedContent() retourne null en cas d'erreur HTTP ou réseau.
+        // Dans ce cas, on retourne FeedReadResult::failure() pour que l'orchestrateur
+        // sache que c'est un vrai échec (pas juste un flux vide).
+        $fetchResult = $this->fetchFeedContentWithError($feedUrl, $source->getNom());
+        if ($fetchResult['xml'] === null) {
+            // Échec de fetch : HTTP non-200 ou exception réseau
+            return FeedReadResult::failure($fetchResult['error'] ?? 'Erreur de téléchargement inconnue');
         }
+
+        $xml = $fetchResult['xml'];
 
         // ── Parsing via laminas-feed ─────────────────────────────────────────
         try {
@@ -125,13 +155,14 @@ class FeedReaderService
             // link tag vs link attribute href...).
             $feed = FeedReader::importString($xml);
         } catch (\Exception $e) {
-            // XML invalide ou format non reconnu par laminas-feed
+            // XML invalide ou format non reconnu par laminas-feed → échec réel
+            $errorMsg = sprintf('Erreur parsing XML (laminas-feed) : %s', $e->getMessage());
             $this->logger->warning('[FeedReaderService] Erreur parsing laminas-feed', [
                 'source' => $source->getNom(),
                 'url'    => $feedUrl,
                 'error'  => $e->getMessage(),
             ]);
-            return [];
+            return FeedReadResult::failure($errorMsg);
         }
 
         // ── Extraction du nom de la source (champ source du DTO) ─────────────
@@ -141,6 +172,9 @@ class FeedReaderService
         $sourceName = parse_url($source->getUrl(), PHP_URL_HOST) ?: $source->getNom();
 
         // ── Parcours des items du flux ────────────────────────────────────────
+        // À ce stade, le fetch ET le parsing ont réussi.
+        // Si aucun item ne passe les filtres, on retourne FeedReadResult::ok([])
+        // (success = true) — la source fonctionne, elle est juste vide.
         $opportunities = [];
 
         foreach ($feed as $item) {
@@ -160,18 +194,48 @@ class FeedReaderService
             }
         }
 
-        return $opportunities;
+        // Succès : que le flux soit vide ou non, le service a fonctionné.
+        return FeedReadResult::ok($opportunities);
     }
 
     /**
      * Télécharge le contenu brut du flux RSS depuis son URL.
      *
-     * @param string $url       URL du flux RSS/Atom à télécharger
+     * ⚠️ MÉTHODE INTERNE — utilisée par la version rétro-compatible read().
+     * readWithResult() utilise désormais fetchFeedContentWithError() qui retourne
+     * aussi le message d'erreur.
+     *
+     * @param string $url        URL du flux RSS/Atom à télécharger
      * @param string $sourceName Nom de la source (pour les logs uniquement)
      *
      * @return string|null Contenu XML brut du flux, ou null en cas d'erreur
      */
     private function fetchFeedContent(string $url, string $sourceName): ?string
+    {
+        return $this->fetchFeedContentWithError($url, $sourceName)['xml'];
+    }
+
+    /**
+     * Télécharge le contenu brut du flux RSS et retourne aussi le message d'erreur.
+     *
+     * Retourne un tableau associatif :
+     *   ['xml' => string, 'error' => null]       en cas de succès
+     *   ['xml' => null,   'error' => string]      en cas d'erreur
+     *
+     * Ce tableau permet à readWithResult() de propager le message d'erreur
+     * jusqu'au FeedReadResult::failure() sans modifier la signature de fetchFeedContent().
+     *
+     * ── POURQUOI un tableau et pas un objet ? ──────────────────────────────
+     * Cette méthode est privée et sert uniquement à réduire la duplication entre
+     * fetchFeedContent() (rétro-compat) et readWithResult() (nouveau).
+     * Un objet dédié serait sur-engineering pour un usage aussi localisé.
+     *
+     * @param string $url        URL du flux RSS/Atom à télécharger
+     * @param string $sourceName Nom de la source (pour les logs uniquement)
+     *
+     * @return array{xml: string|null, error: string|null}
+     */
+    private function fetchFeedContentWithError(string $url, string $sourceName): array
     {
         try {
             $response = $this->httpClient->request('GET', $url, [
@@ -187,25 +251,27 @@ class FeedReaderService
             ]);
 
             if ($response->getStatusCode() !== 200) {
+                $errorMsg = sprintf('HTTP %d (attendu : 200)', $response->getStatusCode());
                 $this->logger->warning('[FeedReaderService] HTTP non-200', [
                     'source' => $sourceName,
                     'url'    => $url,
                     'status' => $response->getStatusCode(),
                 ]);
-                // Retour [] cohérent avec GenericScraper — pas d'exception fatale.
+                // Retour null cohérent avec GenericScraper — pas d'exception fatale.
                 // L'orchestrateur (WS3) gérera le compteur consecutiveFailures.
-                return null;
+                return ['xml' => null, 'error' => $errorMsg];
             }
 
-            return $response->getContent();
+            return ['xml' => $response->getContent(), 'error' => null];
 
         } catch (\Exception $e) {
+            $errorMsg = sprintf('Erreur HTTP : %s', $e->getMessage());
             $this->logger->warning('[FeedReaderService] Erreur HTTP', [
                 'source' => $sourceName,
                 'url'    => $url,
                 'error'  => $e->getMessage(),
             ]);
-            return null;
+            return ['xml' => null, 'error' => $errorMsg];
         }
     }
 

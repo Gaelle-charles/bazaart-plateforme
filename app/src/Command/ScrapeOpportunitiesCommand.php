@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Command;
 
+use App\Enum\ScrapingSourceType;
 use App\Repository\ScrapedResourceRepository;
 use App\Repository\ScrapingSourceRepository;
 use App\Service\GenericScraper;
@@ -143,6 +144,22 @@ class ScrapeOpportunitiesCommand extends Command
 
         // ── Boucle sur chaque source ──────────────────────────────────────────
         foreach ($sources as $source) {
+
+            // ── Exclusion des sources RSS ─────────────────────────────────────
+            // Depuis WS3 (chantier scraping), les flux RSS sont traités par une commande
+            // dédiée : app:read-feeds (ReadFeedsCommand) via FeedReaderService/laminas-feed.
+            //
+            // Cette séparation est intentionnelle :
+            //   - Les sources RSS ont leur propre suivi de santé (consecutiveFailures,
+            //     lastSuccessfulFetch, auto-désactivation à 5 échecs).
+            //   - La cadence est différente : RSS toutes les 6h, scrape LLM 3x/semaine.
+            //
+            // Si on laissait passer les sources RSS ici, elles seraient traitées par
+            // GenericScraper::scrapeRss() (SimpleXML, deprecated) ET par FeedReaderService
+            // (laminas-feed) → double-traitement = doublons en BDD.
+            if ($source->getType() === ScrapingSourceType::RSS) {
+                continue;
+            }
 
             // Filtre --source si fourni (filtre par nom exact de la source)
             if ($sourceFilter !== null && $source->getNom() !== $sourceFilter) {

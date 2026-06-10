@@ -1,15 +1,46 @@
 # Configuration du cron pour le scraping automatique
 
+## Vue d'ensemble : deux pipelines, deux cadences
+
+Depuis le chantier WS3 (juin 2026), le scraping est divisé en **deux commandes distinctes**
+avec des cadences adaptées à leur coût et leur nature :
+
+| Commande | Sources traitées | Cadence | Coût | Fichier de log |
+|---|---|---|---|---|
+| `app:read-feeds` | Flux RSS uniquement | **Toutes les 6h** | Léger (HTTP + XML) | `bazaart-feeds.log` |
+| `app:scrape-opportunities` | HTML+LLM et HTML+CSS | **3x/semaine** (lun/mer/ven 7h) | Coûteux (clé API LLM) | `bazaart-scraping.log` |
+
+### Pourquoi deux cadences ?
+
+- **RSS (léger, fréquent)** : lire un flux RSS se résume à un téléchargement HTTP + parsing XML.
+  Pas de clé API, pas de LLM, exécution < 5s par source. On peut se permettre une fréquence
+  élevée (6h) pour rester réactif aux nouvelles opportunités publiées.
+
+- **Scrape HTML+LLM (coûteux, espacé)** : chaque source envoie un HTML volumineux à un LLM
+  (Anthropic/Mistral) via API payante. Le coût en tokens et en latence impose une cadence raisonnable
+  (3x/semaine). Certaines sources ont aussi des pages qui changent lentement.
+
+### Note sur la migration future
+
+> **Hors scope actuel (V1)** : l'orchestration est assurée par cron car Supervisor n'est pas
+> opérationnel sur la droplet au moment du développement V1. Une migration vers
+> **Symfony Scheduler + worker Messenger** est prévue post-lancement pour bénéficier
+> d'un suivi des jobs, de retries automatiques et d'une interface de monitoring.
+
+---
+
 ## Objectif
 
-Lancer automatiquement `app:scrape-opportunities` trois fois par semaine (lundi, mercredi, vendredi à 7h00 UTC) sur le serveur DigitalOcean de production.
+Lancer automatiquement les deux commandes de scraping selon leurs cadences respectives
+sur le serveur DigitalOcean de production.
 
 ---
 
 ## Prérequis
 
 1. **Clé API Anthropic configurée** dans l'admin : `/admin/settings` → champ `anthropic_api_key`
-   Sans cette clé, les scrapers européens (On The Move, Resartis, Culture Moves Europe) retourneront [] silencieusement.
+   Sans cette clé, les scrapers HTML+LLM (On The Move, Resartis, Culture Moves Europe) retourneront [] silencieusement.
+   Les flux RSS (`app:read-feeds`) ne nécessitent **pas** de clé API.
 
 2. **Containers Docker lancés** au moment du cron :
    ```bash
@@ -29,14 +60,27 @@ ssh root@206.189.3.112
 sudo crontab -e
 ```
 
-Ajouter la ligne suivante :
+Ajouter les deux lignes suivantes :
 
 ```cron
-# Scraping automatique 3x/semaine (lun/mer/ven à 7h00 UTC)
+# ── Flux RSS : toutes les 6h (léger, pas de LLM) ─────────────────────────────────
+0 */6 * * * cd /home/bazaart && docker compose exec -T app php bin/console app:read-feeds --env=prod 2>&1 >> /var/log/bazaart-feeds.log
+
+# ── Scraping HTML+LLM : 3x/semaine lun/mer/ven à 7h00 UTC (coûteux, clé API) ─────
 0 7 * * 1,3,5 cd /home/bazaart && docker compose exec -T app php bin/console app:scrape-opportunities --env=prod 2>&1 >> /var/log/bazaart-scraping.log
 ```
 
-**Explication de chaque partie :**
+### Explication de l'expression cron RSS (`0 */6 * * *`)
+
+| Partie | Valeur | Signification |
+|--------|--------|---------------|
+| `0` | Minute | À la minute 0 |
+| `*/6` | Heure | Toutes les 6 heures : 0h, 6h, 12h, 18h UTC |
+| `* * *` | Jour/mois/jour-semaine | Tous les jours, tous les mois |
+
+Exemples d'exécution : 0h00, 6h00, 12h00, 18h00 UTC = 2h/8h/14h/20h heure de Paris (été, CEST UTC+2).
+
+### Explication de l'expression cron scrape (`0 7 * * 1,3,5`)
 
 | Partie | Valeur | Signification |
 |--------|--------|---------------|
@@ -45,10 +89,11 @@ Ajouter la ligne suivante :
 | `&&` | Opérateur conditionnel | N'exécute la suite que si le `cd` réussit |
 | `docker compose exec -T` | Commande Docker | `-T` est **obligatoire en cron** (expliqué ci-dessous) |
 | `app` | Nom du container | Doit correspondre au nom dans `docker-compose.yml` |
-| `php bin/console app:scrape-opportunities` | Commande Symfony | La commande principale de scraping |
 | `--env=prod` | Environnement Symfony | Force l'utilisation de la config production |
 | `2>&1` | Redirection stderr | Redirige les erreurs dans le même flux que stdout |
-| `>> /var/log/bazaart-scraping.log` | Redirection sortie | Ajoute les logs à la suite du fichier (pas d'écrasement) |
+| `>> /var/log/bazaart-*.log` | Redirection sortie | Ajoute les logs à la suite du fichier (pas d'écrasement) |
+
+---
 
 ---
 
@@ -67,15 +112,19 @@ Avec `-T` (disable pseudo-TTY allocation), Docker n'essaie pas d'allouer un TTY 
 
 ---
 
+---
+
 ## Gestion des logs
 
-Le fichier `/var/log/bazaart-scraping.log` grossit à chaque exécution. Pour éviter qu'il prenne trop de place :
+Les fichiers `/var/log/bazaart-feeds.log` et `/var/log/bazaart-scraping.log` grossissent à chaque exécution.
+Pour éviter qu'ils prennent trop de place :
 
 ### Option 1 : logrotate (recommandée pour la production)
 
 Créer le fichier `/etc/logrotate.d/bazaart-scraping` :
 
 ```
+/var/log/bazaart-feeds.log
 /var/log/bazaart-scraping.log {
     daily
     rotate 30
@@ -90,15 +139,21 @@ Créer le fichier `/etc/logrotate.d/bazaart-scraping` :
 
 ```bash
 # Sur le serveur, supprimer les logs de plus de 30 jours
+find /var/log/ -name "bazaart-feeds.log" -mtime +30 -delete
 find /var/log/ -name "bazaart-scraping.log" -mtime +30 -delete
 ```
 
 ### Option 3 : limiter la taille dans le cron (approche simple)
 
 ```cron
-# Limite à 10MB : si le fichier dépasse, on le tronque avant d'écrire
+# Limite à 10MB pour les feeds RSS
+0 */6 * * * cd /home/bazaart && docker compose exec -T app php bin/console app:read-feeds --env=prod 2>&1 | tail -c 10485760 > /var/log/bazaart-feeds.log
+
+# Limite à 10MB pour le scrape LLM
 0 7 * * 1,3,5 cd /home/bazaart && docker compose exec -T app php bin/console app:scrape-opportunities --env=prod 2>&1 | tail -c 10485760 > /var/log/bazaart-scraping.log
 ```
+
+---
 
 ---
 
@@ -110,10 +165,12 @@ Après avoir configuré le cron, vérifier :
 # Voir la crontab configurée
 sudo crontab -l
 
-# Tester manuellement la commande (hors cron)
+# Tester manuellement les deux commandes (hors cron, mode dry-run)
+cd /home/bazaart && docker compose exec -T app php bin/console app:read-feeds --env=prod --dry-run
 cd /home/bazaart && docker compose exec -T app php bin/console app:scrape-opportunities --env=prod --dry-run
 
-# Vérifier les logs après le premier cron automatique
+# Vérifier les logs après les premiers crons automatiques
+tail -f /var/log/bazaart-feeds.log
 tail -f /var/log/bazaart-scraping.log
 ```
 
@@ -129,12 +186,26 @@ Pour lancer à 9h00 heure de Paris été/hiver de façon invariante, remplacer `
 
 ---
 
-## Lancer un seul scraper en cron (debug)
+---
 
-Si un scraper pose problème, le lancer seul avec l'option `--source` :
+## Lancer un seul pipeline en debug (option --source)
+
+Les deux commandes acceptent l'option `--source="Nom exact"` pour cibler une seule source.
 
 ```bash
-docker compose exec -T app php bin/console app:scrape-opportunities --env=prod --source=on-the-move.org
+# Déboguer un seul flux RSS
+docker compose exec app php bin/console app:read-feeds --source="CNM - Centre National de la Musique" --dry-run
+
+# Déboguer un seul scraper HTML+LLM
+docker compose exec app php bin/console app:scrape-opportunities --source="on-the-move.org" --dry-run
 ```
 
-Sources disponibles : `cnap.fr`, `cnm.fr`, `prohelvetia.ch`, `saif.fr`, `musiquesactuelles.fr`, `adagp.fr`, `culture.gouv.fr`, `on-the-move.org`, `resartis.org`, `culturemoveseurope.eu`
+### Sources RSS connues
+Ces sources sont désormais traitées par `app:read-feeds` (plus par `app:scrape-opportunities`) :
+- `cnm.fr`, `cnap.fr`, et toute source avec `type = RSS` dans la BDD
+  (visible depuis `/admin/scraping-sources` → colonne "Type")
+
+### Sources HTML+LLM / HTML+CSS
+Ces sources restent traitées par `app:scrape-opportunities` :
+- `on-the-move.org`, `resartis.org`, `culturemoveseurope.eu`, `prohelvetia.ch`, `saif.fr`,
+  `musiquesactuelles.fr`, `adagp.fr`, `culture.gouv.fr`, `cnap.fr` (si type HtmlCss)
