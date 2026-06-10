@@ -44,6 +44,17 @@ class ScrapedOpportunity
         // Score de pertinence Afrodiaspora de 0 à 5, calculé par AfrodiasporaRelevanceScorer
         // 0 = aucun lien avec l'Afrodiaspora, 5 = très fortement lié
         public readonly int $relevanceScore = 0,
+
+        // Date de publication originale de l'annonce sur la source (flux RSS pubDate / Atom published).
+        //
+        // RÈGLE MÉTIER FONDAMENTALE :
+        //   Cette date NE DOIT JAMAIS être placée dans le champ `deadline`.
+        //   Elle est ici dans publishedAt — champ dédié — et sera mappée vers
+        //   ScrapedResource::publishedAt par ScrapedResourcePersister.
+        //
+        // Null pour les opportunités issues de scrapers CSS ou LLM
+        // (pas de date de publication structurée disponible dans ce cas).
+        public readonly ?\DateTimeImmutable $publishedAt = null,
     ) {
     }
 

@@ -9,6 +9,9 @@ use App\Entity\ScrapingSource;
 use Laminas\Feed\Reader\Reader as FeedReader;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+// DeadlineParserService : utilisé pour extraire la deadline depuis le texte libre
+// (titre + description), en remplacement de l'ancien mapping pubDate → deadline.
+use App\Service\DeadlineParserService;
 
 
 /**
@@ -82,6 +85,10 @@ class FeedReaderService
         private readonly HtmlSanitizerService $htmlSanitizer,
         // Logger PSR-3 — logs des erreurs sans lever d'exception fatale
         private readonly LoggerInterface $logger,
+        // Service de parsing des deadlines — pour extraire une vraie deadline
+        // depuis le texte libre (titre + description) de chaque item RSS.
+        // JAMAIS la pubDate ne doit aller dans deadline — c'est ce service qui décide.
+        private readonly DeadlineParserService $deadlineParser,
     ) {
     }
 
@@ -326,27 +333,43 @@ class FeedReaderService
         // Réutilise $textLower déjà calculé — pas de second mb_strtolower().
         $type = $this->detectType($textLower);
 
-        // ── Extraction et formatage de la date de publication ────────────────
-        // On utilise la date de modification si disponible (plus fraîche),
-        // sinon la date de création (pubDate RSS / published Atom).
-        // laminas-feed retourne des objets \DateTime|null — on formate en d/m/Y.
+        // ── Extraction de la date de publication (pubDate) ───────────────────
+        // On récupère la date de modification (plus fraîche) ou de création du flux.
+        // laminas-feed retourne un objet \DateTime|null.
         //
-        // IMPORTANT : on ne cherche PAS la "vraie" deadline ici.
-        // La deadline d'un flux RSS est ambiguë (souvent la date de publication,
-        // pas la date limite de candidature). Le champ deadline du DTO est ici
-        // utilisé pour transmettre une date de référence au ScrapedResourceListener,
-        // qui la stockera dans deadlineDate. L'admin voit ensuite la date dans l'UI.
-        $pubDate       = $item->getDateModified() ?? $item->getDateCreated();
-        $formattedDate = '';
-        if ($pubDate !== null) {
+        // RÈGLE MÉTIER FONDAMENTALE :
+        //   La pubDate va dans le champ `publishedAt` du DTO — JAMAIS dans `deadline`.
+        //   `deadline_date` en BDD ne doit contenir QUE de vraies dates limites de
+        //   candidature, extraites du texte par DeadlineParserService::extractFromText().
+        //   Mettre la pubDate dans deadline fausserait l'archivage automatique
+        //   (les opportunités seraient archivées le lendemain de leur publication,
+        //   avant même que les artistes puissent postuler).
+        $rawPubDate  = $item->getDateModified() ?? $item->getDateCreated();
+        // Conversion \DateTime → \DateTimeImmutable (le DTO et l'entité utilisent Immutable)
+        $publishedAt = null;
+        if ($rawPubDate !== null) {
             try {
-                // format() sur un \DateTime|\DateTimeImmutable
-                $formattedDate = $pubDate->format('d/m/Y');
+                // \DateTimeImmutable::createFromMutable() est la conversion "officielle"
+                // PHP — préférable à new \DateTimeImmutable($rawPubDate->format('c'))
+                // qui repasse par le parsing de chaîne et peut décaler le fuseau horaire.
+                $publishedAt = \DateTimeImmutable::createFromMutable($rawPubDate);
             } catch (\Exception) {
-                // Format inattendu → on laisse vide (le listener gérera null)
-                $formattedDate = '';
+                // Cas improbable (objet DateTime invalide), on laisse null
+                $publishedAt = null;
             }
         }
+
+        // ── Extraction de la deadline depuis le texte libre ──────────────────
+        // DeadlineParserService::extractFromText() scanne le titre + description
+        // à la recherche d'une date précédée d'un indice de deadline (clôture,
+        // date limite, avant le, jusqu'au…). Si rien n'est trouvé → null.
+        //
+        // Le résultat est un \DateTimeImmutable|null. On le formate en d/m/Y pour
+        // le champ `deadline` (string) du DTO — le ScrapedResourceListener le
+        // reparsera ensuite en deadlineDate lors de la persistance.
+        // Si null → on passe '' → le listener produira deadlineDate = null.
+        $deadlineDate = $this->deadlineParser->extractFromText($title . ' ' . $description);
+        $deadlineStr  = $deadlineDate !== null ? $deadlineDate->format('d/m/Y') : '';
 
         return new ScrapedOpportunity(
             title:       $title,
@@ -354,10 +377,11 @@ class FeedReaderService
             url:         $link,
             source:      $sourceName,
             description: $description,
-            deadline:    $formattedDate,
+            deadline:    $deadlineStr,  // '' si pas de deadline détectée → deadlineDate = null
             // disciplines : valeur de la ScrapingSource (renseignée par l'admin au seed)
             // Fallback 'Toutes disciplines' si non renseigné — cohérent avec GenericScraper
-            disciplines: $source->getDisciplinePrincipale() ?? 'Toutes disciplines',
+            disciplines:  $source->getDisciplinePrincipale() ?? 'Toutes disciplines',
+            publishedAt:  $publishedAt,  // pubDate du flux — JAMAIS dans deadline
         );
     }
 

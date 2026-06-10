@@ -118,6 +118,15 @@ class ScrapedResourcePersister
                     $existing->setDisciplines($opp->disciplines ?: null);
                     $existing->setStatus(ScrapedResourceStatus::Pending); // réactivation
                     $existing->setScrapedAt(new \DateTime());              // reset grâce 48h
+
+                    // Mise à jour de publishedAt uniquement si le nouveau scraping
+                    // fournit une date (on ne pilonne pas une valeur existante par null).
+                    // Raison : si le flux RSS ne fournit plus de pubDate, on conserve
+                    // l'ancienne — mieux vaut une date potentiellement périmée que null.
+                    if ($opp->publishedAt !== null) {
+                        $existing->setPublishedAt($opp->publishedAt);
+                    }
+
                     $reactivated++;
                     continue;
                 }
@@ -134,6 +143,13 @@ class ScrapedResourcePersister
                 $existing->setDeadline($opp->deadline ?: null);
                 $existing->setRelevanceScore($opp->relevanceScore);
                 $existing->setDisciplines($opp->disciplines ?: null);
+
+                // Même logique que le cas 2 : on met à jour publishedAt seulement
+                // si le flux fournit une valeur — jamais on n'écrase par null.
+                if ($opp->publishedAt !== null) {
+                    $existing->setPublishedAt($opp->publishedAt);
+                }
+
                 $updated++;
                 continue;
             }
@@ -150,6 +166,13 @@ class ScrapedResourcePersister
             $scraped->setRelevanceScore($opp->relevanceScore);
             $scraped->setDocuments($opp->documents ?: null);
             $scraped->setDisciplines($opp->disciplines ?: null);
+
+            // publishedAt : date de publication sur la source (flux RSS/Atom).
+            // Null pour les scrapers CSS/LLM (pas de notion de pubDate dans ce cas).
+            // JAMAIS la date limite — celle-ci est dans $opp->deadline (texte) qui sera
+            // parsée en deadlineDate par ScrapedResourceListener.
+            $scraped->setPublishedAt($opp->publishedAt);
+
             // Status = pending par défaut (valeur initiale définie dans ScrapedResource)
 
             // persist() ajoute l'entité dans l'Unit of Work de Doctrine.

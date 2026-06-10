@@ -95,6 +95,28 @@ class ScrapedResource
     #[ORM\Column(type: 'string', length: 20, enumType: ScrapedResourceStatus::class)]
     private ScrapedResourceStatus $status = ScrapedResourceStatus::Pending;
 
+    /**
+     * Date de publication d'origine de la ressource.
+     *
+     * SÉMANTIQUE : date à laquelle l'annonce a été publiée sur la source
+     * (flux RSS <pubDate>, Atom <published> ou <updated>).
+     *
+     * DISTINCTION AVEC LES AUTRES CHAMPS TEMPORELS :
+     *   - publishedAt  : date de publication de l'annonce SUR LA SOURCE
+     *                    (ex : "cet appel à projets a été publié le 01/06/2026")
+     *   - deadlineDate : date LIMITE de candidature, extraite du contenu textuel
+     *                    (ex : "les dossiers doivent être déposés avant le 30/09/2026")
+     *   - scrapedAt    : date à laquelle le BOT a collecté l'opportunité
+     *
+     * Null pour les opportunités issues de scrapers CSS ou LLM qui n'ont pas de
+     * notion de date de publication structurée (pas de flux RSS à parser).
+     *
+     * Type datetime_immutable (comme deadlineDate) — cohérent avec le reste des
+     * champs temporels de l'entité ; le DTO fournit un \DateTimeImmutable.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $publishedAt = null;
+
     /** Date à laquelle le scraper a collecté cette opportunité */
     #[ORM\Column(type: 'datetime')]
     private \DateTimeInterface $scrapedAt;
@@ -162,6 +184,22 @@ class ScrapedResource
      *   "hors sujet" (Rejected) de "pertinente mais expirée" (Archived) dans les stats.
      */
     public function isArchived(): bool { return $this->status === ScrapedResourceStatus::Archived; }
+
+    /**
+     * Retourne la date de publication originale de l'annonce (source externe).
+     * Null pour les opportunités CSS/LLM qui n'ont pas de date de publication structurée.
+     */
+    public function getPublishedAt(): ?\DateTimeImmutable { return $this->publishedAt; }
+
+    /**
+     * Définit la date de publication originale (issue du flux RSS/Atom).
+     * Ne pas confondre avec scrapedAt (quand le bot a collecté) ou deadlineDate (limite).
+     */
+    public function setPublishedAt(?\DateTimeImmutable $publishedAt): static
+    {
+        $this->publishedAt = $publishedAt;
+        return $this;
+    }
 
     public function getScrapedAt(): \DateTimeInterface { return $this->scrapedAt; }
 
