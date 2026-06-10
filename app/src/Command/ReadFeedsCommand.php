@@ -196,140 +196,196 @@ class ReadFeedsCommand extends Command
             // Mesure de la durée de traitement de cette source
             $sourceStartTime = microtime(true);
 
-            // ── Lecture du flux via FeedReaderService ─────────────────────────
-            // On utilise readWithResult() (pas read()) pour distinguer :
-            //   - FeedReadResult::success = false → echec HTTP/XML → incrementConsecutiveFailures
-            //   - FeedReadResult::success = true + items = [] → flux vide → resetConsecutiveFailures
+            // ── Filet de sécurité global par source ───────────────────────────
+            // Ce try/catch est un filet de DERNIER RECOURS pour les exceptions
+            // inattendues (BDD coupée, contrainte UNIQUE non anticipée, bug interne…).
+            // Il N'EST PAS destiné à remplacer la gestion fine success/failure déjà
+            // assurée par FeedReadResult (qui gère les erreurs "normales" : HTTP non-200,
+            // timeout, XML invalide). Sans ce filet, une exception sur une source
+            // stopperait brutalement le run entier et priverait les sources suivantes
+            // de tout traitement.
             //
-            // Cette distinction est critique : un flux RSS peut légitimement être vide
-            // (pas de nouveaux appels depuis le dernier run). Sans la distinction,
-            // un flux vide déclencherait faussement l'auto-désactivation.
-            $feedResult = $this->feedReaderService->readWithResult($source);
+            // En cas d'exception capturée ici :
+            //   - log WARNING (visible dans Sentry/grep) avec le message d'erreur
+            //   - ligne "ERREUR INTERNE" dans le tableau récapitulatif
+            //   - continue vers la source suivante
+            try {
+                // ── Lecture du flux via FeedReaderService ─────────────────────
+                // On utilise readWithResult() (pas read()) pour distinguer :
+                //   - FeedReadResult::success = false → echec HTTP/XML → incrementConsecutiveFailures
+                //   - FeedReadResult::success = true + items = [] → flux vide → resetConsecutiveFailures
+                //
+                // Cette distinction est critique : un flux RSS peut légitimement être vide
+                // (pas de nouveaux appels depuis le dernier run). Sans la distinction,
+                // un flux vide déclencherait faussement l'auto-désactivation.
+                $feedResult = $this->feedReaderService->readWithResult($source);
 
-            // Durée de traitement de cette source, arrondie au ms
-            $durationMs = (int) round((microtime(true) - $sourceStartTime) * 1000);
+                // Durée de traitement de cette source, arrondie au ms
+                $durationMs = (int) round((microtime(true) - $sourceStartTime) * 1000);
 
-            if (!$feedResult->success) {
-                // ── CAS ÉCHEC : HTTP non-200, timeout, XML invalide ───────────
-                $errorMessage = $feedResult->errorMessage ?? 'Erreur inconnue';
-                $io->error(sprintf('Erreur : %s', $errorMessage));
+                if (!$feedResult->success) {
+                    // ── CAS ÉCHEC : HTTP non-200, timeout, XML invalide ───────
+                    $errorMessage = $feedResult->errorMessage ?? 'Erreur inconnue';
+                    $io->error(sprintf('Erreur : %s', $errorMessage));
+
+                    if (!$isDryRun) {
+                        // Incrémente le compteur d'échecs consécutifs
+                        $source->incrementConsecutiveFailures();
+                        // Marque aussi dans le champ standard (badge dans l'admin)
+                        $source->markRunError($errorMessage);
+
+                        // ── Auto-désactivation à 5 échecs consécutifs ─────────
+                        // Après AUTO_DISABLE_THRESHOLD erreurs d'affilée, la source est
+                        // automatiquement désactivée pour éviter des appels réseau inutiles
+                        // vers un flux mort. L'admin est notifié par un log WARNING (pas
+                        // CRITICAL — c'est un comportement normal du cycle de vie d'un flux).
+                        //
+                        // NIVEAU WARNING (pas error/critical) : c'est une décision de
+                        // gestion de ressources, pas une panne système. L'admin peut
+                        // réactiver la source depuis /admin/scraping-sources.
+                        if ($source->getConsecutiveFailures() >= self::AUTO_DISABLE_THRESHOLD) {
+                            $source->setActif(false);
+                            $this->logger->warning(
+                                sprintf('[read-feeds] Source désactivée après 5 échecs consécutifs : %s', $source->getNom()),
+                                [
+                                    'source'              => $source->getNom(),
+                                    'consecutiveFailures' => $source->getConsecutiveFailures(),
+                                    'lastError'           => $errorMessage,
+                                ]
+                            );
+                            $io->warning(sprintf(
+                                'Source désactivée automatiquement après %d échecs consécutifs. '
+                                . 'Réactivez-la depuis /admin/scraping-sources après correction.',
+                                self::AUTO_DISABLE_THRESHOLD
+                            ));
+                        }
+
+                        $this->em->flush();
+                    }
+
+                    // Correction réserve 2 : niveau WARNING (pas info).
+                    // Un flux mort doit être détectable par le monitoring dès le 1er
+                    // échec, pas seulement à la désactivation au 5e. Le niveau info
+                    // serait filtré par la plupart des alertes de monitoring.
+                    // À distinguer du log de désactivation (déjà en warning, correct).
+                    $this->logger->warning('[read-feeds] Échec source RSS', [
+                        'source'     => $source->getNom(),
+                        'success'    => false,
+                        'error'      => $errorMessage,
+                        'durationMs' => $durationMs,
+                    ]);
+
+                    // Ligne du tableau récapitulatif
+                    $summaryRows[] = [
+                        $source->getNom(),
+                        '0',
+                        '0',
+                        sprintf('%d ms', $durationMs),
+                        '<error>ECHEC</error>',
+                    ];
+
+                    continue;
+                }
+
+                // ── CAS SUCCÈS : flux lu et parsé sans erreur ─────────────────
+                $items     = $feedResult->items;
+                $itemCount = count($items);
+                $totalItemsFound += $itemCount;
+
+                if ($itemCount === 0) {
+                    $io->text('<comment>Flux valide, aucune opportunité ne correspond aux mots-clés.</comment>');
+                } else {
+                    $io->success(sprintf('%d opportunité(s) trouvée(s)', $itemCount));
+                }
+
+                // Compteurs de persistance (0 si dry-run)
+                $inserted = 0;
 
                 if (!$isDryRun) {
-                    // Incrémente le compteur d'échecs consécutifs
-                    $source->incrementConsecutiveFailures();
-                    // Marque aussi dans le champ standard (badge dans l'admin)
-                    $source->markRunError($errorMessage);
+                    // ── Persistance via ScrapedResourcePersister ──────────────
+                    // Le persister gère les 5 cas de déduplication (guard intra-lot,
+                    // findByUrl, INSERT/réactivation/update/skip) et fait un flush unique.
+                    // TOUTES les ressources partent en status = pending (file de modération).
+                    // N'utilise PAS autoPublish — champ préparatoire V2.
+                    if (!empty($items)) {
+                        $persistResult = $this->persister->persistBatch($items);
+                        $inserted      = $persistResult->inserted;
+                        $totalInserted += $inserted;
 
-                    // ── Auto-désactivation à 5 échecs consécutifs ─────────────
-                    // Après AUTO_DISABLE_THRESHOLD erreurs d'affilée, la source est
-                    // automatiquement désactivée pour éviter des appels réseau inutiles
-                    // vers un flux mort. L'admin est notifié par un log WARNING (pas
-                    // CRITICAL — c'est un comportement normal du cycle de vie d'un flux).
-                    //
-                    // NIVEAU WARNING (pas error/critical) : c'est une décision de
-                    // gestion de ressources, pas une panne système. L'admin peut
-                    // réactiver la source depuis /admin/scraping-sources.
-                    if ($source->getConsecutiveFailures() >= self::AUTO_DISABLE_THRESHOLD) {
-                        $source->setActif(false);
-                        $this->logger->warning(
-                            sprintf('[read-feeds] Source désactivée après 5 échecs consécutifs : %s', $source->getNom()),
-                            [
-                                'source'              => $source->getNom(),
-                                'consecutiveFailures' => $source->getConsecutiveFailures(),
-                                'lastError'           => $errorMessage,
-                            ]
-                        );
-                        $io->warning(sprintf(
-                            'Source désactivée automatiquement après %d échecs consécutifs. '
-                            . 'Réactivez-la depuis /admin/scraping-sources après correction.',
-                            self::AUTO_DISABLE_THRESHOLD
+                        $io->text(sprintf(
+                            'Persistance : %d nouvelle(s) | %d réactivée(s) | %d mise(s) à jour | %d ignorée(s)',
+                            $persistResult->inserted,
+                            $persistResult->reactivated,
+                            $persistResult->updated,
+                            $persistResult->skipped,
                         ));
                     }
 
+                    // ── Mise à jour de la santé de la source ──────────────────
+                    // Un fetch réussi (même avec 0 item) remet les compteurs d'échec à zéro.
+                    // La source "vit" — elle n'a pas de problème réseau ou de XML invalide.
+                    $source->setLastSuccessfulFetch(new \DateTime());
+                    $source->resetConsecutiveFailures();
+                    // markRunSuccess() met à jour derniereExecution, nbItemsDernierRun, statutDernierRun
+                    $source->markRunSuccess($itemCount);
+
+                    // Second flush — DISTINCT du flush interne à persistBatch().
+                    // persistBatch() flushe UNIQUEMENT les entités ScrapedResource (nouvelles/mises à jour).
+                    // Ce flush-ci porte EXCLUSIVEMENT sur l'entité ScrapingSource (champs de santé :
+                    // lastSuccessfulFetch, consecutiveFailures, derniereExecution…).
+                    // Ne pas supprimer ce flush en croyant qu'il est redondant avec persistBatch() !
                     $this->em->flush();
                 }
 
-                // Log structuré pour les outils de monitoring (Sentry, grep logs)
-                $this->logger->info('[read-feeds] Échec source RSS', [
+                // Log structuré par source (info — pas de warning sur un succès)
+                $this->logger->info('[read-feeds] Source RSS traitée', [
                     'source'     => $source->getNom(),
-                    'success'    => false,
-                    'error'      => $errorMessage,
+                    'success'    => true,
+                    'itemsFound' => $itemCount,
+                    'inserted'   => $inserted,
                     'durationMs' => $durationMs,
                 ]);
 
                 // Ligne du tableau récapitulatif
                 $summaryRows[] = [
                     $source->getNom(),
+                    (string) $itemCount,
+                    (string) $inserted,
+                    sprintf('%d ms', $durationMs),
+                    '<info>OK</info>',
+                ];
+
+            } catch (\Exception $e) {
+                // ── Filet de sécurité : exception inattendue ──────────────────
+                // On arrive ici uniquement pour des erreurs non anticipées par FeedReadResult
+                // (ex: BDD coupée pendant le flush, contrainte UNIQUE non gérée, bug PHP…).
+                // On log en WARNING (pas ERROR/CRITICAL) car le run continue sur les autres sources.
+                $durationMs = (int) round((microtime(true) - $sourceStartTime) * 1000);
+
+                $this->logger->warning('[read-feeds] Erreur inattendue sur la source', [
+                    'source'     => $source->getNom(),
+                    'error'      => $e->getMessage(),
+                    'durationMs' => $durationMs,
+                ]);
+
+                $io->error(sprintf(
+                    'Erreur inattendue sur "%s" : %s — source ignorée, traitement des sources suivantes.',
+                    $source->getNom(),
+                    $e->getMessage()
+                ));
+
+                // Ligne du tableau récapitulatif signalant l'erreur interne
+                $summaryRows[] = [
+                    $source->getNom(),
                     '0',
                     '0',
                     sprintf('%d ms', $durationMs),
-                    '<error>ECHEC</error>',
+                    '<error>ERREUR INTERNE</error>',
                 ];
 
+                // On continue vers la source suivante — le run ne doit pas s'arrêter
                 continue;
             }
-
-            // ── CAS SUCCÈS : flux lu et parsé sans erreur ─────────────────────
-            $items     = $feedResult->items;
-            $itemCount = count($items);
-            $totalItemsFound += $itemCount;
-
-            if ($itemCount === 0) {
-                $io->text('<comment>Flux valide, aucune opportunité ne correspond aux mots-clés.</comment>');
-            } else {
-                $io->success(sprintf('%d opportunité(s) trouvée(s)', $itemCount));
-            }
-
-            // Compteurs de persistance (0 si dry-run)
-            $inserted = 0;
-
-            if (!$isDryRun) {
-                // ── Persistance via ScrapedResourcePersister ──────────────────
-                // Le persister gère les 5 cas de déduplication (guard intra-lot,
-                // findByUrl, INSERT/réactivation/update/skip) et fait un flush unique.
-                // TOUTES les ressources partent en status = pending (file de modération).
-                // N'utilise PAS autoPublish — champ préparatoire V2.
-                if (!empty($items)) {
-                    $persistResult = $this->persister->persistBatch($items);
-                    $inserted      = $persistResult->inserted;
-                    $totalInserted += $inserted;
-
-                    $io->text(sprintf(
-                        'Persistance : %d nouvelle(s) | %d réactivée(s) | %d mise(s) à jour | %d ignorée(s)',
-                        $persistResult->inserted,
-                        $persistResult->reactivated,
-                        $persistResult->updated,
-                        $persistResult->skipped,
-                    ));
-                }
-
-                // ── Mise à jour de la santé de la source ──────────────────────
-                // Un fetch réussi (même avec 0 item) remet les compteurs d'échec à zéro.
-                // La source "vit" — elle n'a pas de problème réseau ou de XML invalide.
-                $source->setLastSuccessfulFetch(new \DateTime());
-                $source->resetConsecutiveFailures();
-                // markRunSuccess() met à jour derniereExecution, nbItemsDernierRun, statutDernierRun
-                $source->markRunSuccess($itemCount);
-                $this->em->flush();
-            }
-
-            // Log structuré par source (info — pas de warning sur un succès)
-            $this->logger->info('[read-feeds] Source RSS traitée', [
-                'source'     => $source->getNom(),
-                'success'    => true,
-                'itemsFound' => $itemCount,
-                'inserted'   => $inserted,
-                'durationMs' => $durationMs,
-            ]);
-
-            // Ligne du tableau récapitulatif
-            $summaryRows[] = [
-                $source->getNom(),
-                (string) $itemCount,
-                (string) $inserted,
-                sprintf('%d ms', $durationMs),
-                '<info>OK</info>',
-            ];
         }
 
         // ── Tableau récapitulatif du run ──────────────────────────────────────

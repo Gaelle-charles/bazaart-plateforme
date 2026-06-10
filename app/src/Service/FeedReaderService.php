@@ -132,9 +132,9 @@ class FeedReaderService
         $feedUrl = $source->getFeedUrl() ?? $source->getUrl();
 
         // ── Téléchargement du flux ───────────────────────────────────────────
-        // fetchFeedContent() retourne null en cas d'erreur HTTP ou réseau.
-        // Dans ce cas, on retourne FeedReadResult::failure() pour que l'orchestrateur
-        // sache que c'est un vrai échec (pas juste un flux vide).
+        // fetchFeedContentWithError() retourne ['xml' => null, 'error' => '...'] en cas
+        // d'erreur HTTP ou réseau. Dans ce cas, on retourne FeedReadResult::failure()
+        // pour que l'orchestrateur sache que c'est un vrai échec (pas juste un flux vide).
         $fetchResult = $this->fetchFeedContentWithError($feedUrl, $source->getNom());
         if ($fetchResult['xml'] === null) {
             // Échec de fetch : HTTP non-200 ou exception réseau
@@ -199,23 +199,6 @@ class FeedReaderService
     }
 
     /**
-     * Télécharge le contenu brut du flux RSS depuis son URL.
-     *
-     * ⚠️ MÉTHODE INTERNE — utilisée par la version rétro-compatible read().
-     * readWithResult() utilise désormais fetchFeedContentWithError() qui retourne
-     * aussi le message d'erreur.
-     *
-     * @param string $url        URL du flux RSS/Atom à télécharger
-     * @param string $sourceName Nom de la source (pour les logs uniquement)
-     *
-     * @return string|null Contenu XML brut du flux, ou null en cas d'erreur
-     */
-    private function fetchFeedContent(string $url, string $sourceName): ?string
-    {
-        return $this->fetchFeedContentWithError($url, $sourceName)['xml'];
-    }
-
-    /**
      * Télécharge le contenu brut du flux RSS et retourne aussi le message d'erreur.
      *
      * Retourne un tableau associatif :
@@ -223,11 +206,10 @@ class FeedReaderService
      *   ['xml' => null,   'error' => string]      en cas d'erreur
      *
      * Ce tableau permet à readWithResult() de propager le message d'erreur
-     * jusqu'au FeedReadResult::failure() sans modifier la signature de fetchFeedContent().
+     * jusqu'au FeedReadResult::failure().
      *
      * ── POURQUOI un tableau et pas un objet ? ──────────────────────────────
-     * Cette méthode est privée et sert uniquement à réduire la duplication entre
-     * fetchFeedContent() (rétro-compat) et readWithResult() (nouveau).
+     * Cette méthode est privée et n'est appelée que par readWithResult().
      * Un objet dédié serait sur-engineering pour un usage aussi localisé.
      *
      * @param string $url        URL du flux RSS/Atom à télécharger

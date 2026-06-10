@@ -34,13 +34,18 @@ use App\DTO\ScrapedOpportunity;
 final readonly class FeedReadResult
 {
     /**
-     * @param bool                $success    true = fetch + parse réussis (même si items = [])
-     *                                        false = erreur (HTTP non-200, timeout, XML invalide)
-     * @param ScrapedOpportunity[] $items     Opportunités filtrées et nettoyées ([] si aucune ou si échec)
-     * @param string|null         $errorMessage Message d'erreur si success = false, null sinon
+     * @param bool                     $success      true = fetch + parse réussis (même si items = [])
+     *                                               false = erreur (HTTP non-200, timeout, XML invalide)
+     * @param list<ScrapedOpportunity> $items        Opportunités filtrées et nettoyées ([] si aucune ou si échec).
+     *                                               L'annotation `list<ScrapedOpportunity>` (tableau indexé séquentiellement)
+     *                                               permet à PHPStan niveau 6 de connaître le type des éléments et
+     *                                               d'attraper toute incohérence dans les appelants (ex: passage d'un
+     *                                               tableau d'entités Doctrine à la place de DTOs).
+     * @param string|null              $errorMessage Message d'erreur si success = false, null sinon
      */
     public function __construct(
         public bool $success,
+        /** @var list<ScrapedOpportunity> Tableau séquentiel de DTOs opportunité — jamais d'autre type d'objet */
         public array $items,
         public ?string $errorMessage = null,
     ) {
