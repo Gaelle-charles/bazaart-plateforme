@@ -101,6 +101,10 @@ class GenericScraper
      *   - les flux JSON Feed (format application/feed+json)
      *   - le rendu JavaScript côté client (Algolia, React SPA, etc.)
      *
+     * @deprecated Remplacé par FeedReaderService (laminas-feed) — conservé pour
+     *   compat/fallback. Le routage WS3 n'appellera plus cette méthode pour les sources RSS.
+     *   Suppression prévue en WS3 quand le nouvel orchestrateur sera validé en production.
+     *
      * @return ScrapedOpportunity[]
      */
     private function scrapeRss(ScrapingSource $source): array

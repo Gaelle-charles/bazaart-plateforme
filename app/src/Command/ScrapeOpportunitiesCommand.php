@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Command;
 
-use App\Entity\ScrapedResource;
-use App\Enum\ScrapedResourceStatus;
 use App\Repository\ScrapedResourceRepository;
 use App\Repository\ScrapingSourceRepository;
 use App\Service\GenericScraper;
+use App\Service\ScrapedResourcePersister;
 use App\Service\ScraperRegistry;
 use App\Service\SettingService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -66,9 +65,14 @@ class ScrapeOpportunitiesCommand extends Command
         // GenericScraper gère les sources sans classe dédiée (scraperSlug = null).
         private readonly GenericScraper $genericScraper,
         // ── Persistence BDD ──────────────────────────────────────────────────
-        // EntityManager pour persister les nouvelles ScrapedResource.
+        // EntityManager est conservé pour les opérations sur ScrapingSource (markRunSuccess/Error + flush).
+        // La persistance des opportunités est déléguée à ScrapedResourcePersister.
         private readonly EntityManagerInterface $em,
-        // Repository pour vérifier les doublons (déduplication par URL).
+        // ScrapedResourcePersister — factorise la déduplication et la persistance des opportunités.
+        // Remplace la boucle inline qui était dans execute() (lignes ~248-350 de l'ancienne version).
+        private readonly ScrapedResourcePersister $persister,
+        // Repository conservé pour archiveExpired() / archiveExpiredLegacy() (archivage automatique).
+        // La déduplication (findByUrl) est désormais gérée par ScrapedResourcePersister.
         private readonly ScrapedResourceRepository $scrapedResourceRepository,
         // SettingService pour lire 'scraping_enabled' (switch admin on/off).
         private readonly SettingService $settingService,
@@ -245,107 +249,26 @@ class ScrapeOpportunitiesCommand extends Command
         }
 
         // ── Sauvegarde en base de données ────────────────────────────────────
+        // La logique de déduplication (5 cas) et de persistance est déléguée à
+        // ScrapedResourcePersister::persistBatch(). Le comportement est strictement
+        // identique à l'ancienne boucle inline — seul l'emplacement du code change.
+        //
+        // Pourquoi déléguer ici et pas inline ?
+        //   FeedReaderService (WS2) produit des ScrapedOpportunity[] exactement comme
+        //   ce pipeline. Un seul point de vérité évite de dupliquer 80 lignes de logique
+        //   délicate (guard intra-lot, 5 cas de dédup, flush unique).
         if (!$isDryRun && !empty($allOpportunities)) {
             $io->section('Sauvegarde en base de données');
 
-            $inserted    = 0; // Nouvelles URL, jamais vues → status pending
-            $reactivated = 0; // URL archivées retrouvées sur le site → réactivées en pending
-            $updated     = 0; // URL déjà connues (pending ou rejected) — données rafraîchies sans changement de statut
-            $skipped     = 0; // URL déjà vérifiées par un admin → intouchables
-
-            // Guard en mémoire pour les doublons INTRA-LOT.
-            // findByUrl() interroge la BDD — mais si le LLM retourne deux fois la même URL
-            // dans le même lot (66 items d'un coup), le second passage ne trouve rien en BDD
-            // (pas encore flushé) et tente un second INSERT → violation de contrainte UNIQUE.
-            // Ce set PHP déduplique AVANT la vérification BDD.
-            /** @var array<string, true> $seenUrls */
-            $seenUrls = [];
-
-            foreach ($allOpportunities as $opp) {
-                // ── Déduplication intra-lot ───────────────────────────────────
-                // Si la même URL apparaît deux fois dans ce lot (doublon LLM),
-                // on skip silencieusement les occurrences suivantes.
-                if ($opp->url !== null && $opp->url !== '') {
-                    if (isset($seenUrls[$opp->url])) {
-                        $skipped++;
-                        continue;
-                    }
-                    $seenUrls[$opp->url] = true;
-                }
-
-                // ── Déduplication intelligente par URL (BDD) ─────────────────
-                // Quatre cas selon le statut de l'enregistrement existant :
-                //   1. URL inconnue                  → insertion (pending par défaut)
-                //   2. URL connue + status archived  → réactivation en pending (le site la liste encore)
-                //   3. URL connue + status rejected  → mise à jour des champs, statut inchangé (décision admin)
-                //   4. URL connue + status pending   → mise à jour des champs, statut inchangé
-                //   5. URL connue + status verified  → skip complet (intouchable)
-                $existing = $opp->url ? $this->scrapedResourceRepository->findByUrl($opp->url) : null;
-
-                if ($existing !== null) {
-                    // Cas 5 : déjà validée par un admin — on préserve le travail de modération
-                    if ($existing->isVerified()) {
-                        $skipped++;
-                        continue;
-                    }
-
-                    // Cas 2 : archivée → réactivation en pending
-                    // L'opportunité était expirée mais le site la liste de nouveau.
-                    // On réinitialise scrapedAt à "maintenant" pour que archiveExpired()
-                    // ne la ré-archive pas immédiatement (protection 48h).
-                    if ($existing->isArchived()) {
-                        $existing->setTitle($opp->title);
-                        $existing->setDescription($opp->description ?: null);
-                        $existing->setType($opp->type ?: null);
-                        $existing->setDeadline($opp->deadline ?: null);
-                        $existing->setRelevanceScore($opp->relevanceScore);
-                        $existing->setDisciplines($opp->disciplines ?: null);
-                        $existing->setStatus(ScrapedResourceStatus::Pending); // réactivation
-                        $existing->setScrapedAt(new \DateTime());              // reset grâce 48h
-                        $reactivated++;
-                        continue;
-                    }
-
-                    // Cas 3 & 4 : pending ou rejected → rafraîchir les données
-                    // On ne change PAS le status : si un admin a rejeté l'opportunité,
-                    // elle reste rejetée (décision intentionnelle, à respecter).
-                    $existing->setTitle($opp->title);
-                    $existing->setDescription($opp->description ?: null);
-                    $existing->setType($opp->type ?: null);
-                    $existing->setDeadline($opp->deadline ?: null);
-                    $existing->setRelevanceScore($opp->relevanceScore);
-                    $existing->setDisciplines($opp->disciplines ?: null);
-                    // Doctrine détecte les modifications via le Unit of Work — pas besoin de persist()
-                    $updated++;
-                    continue;
-                }
-
-                // Cas 1 : nouvelle URL — insertion en BDD (status = 'pending' par défaut)
-                $scraped = new ScrapedResource();
-                $scraped->setTitle($opp->title);
-                $scraped->setDescription($opp->description ?: null);
-                $scraped->setUrl($opp->url ?: null);
-                $scraped->setType($opp->type ?: null);
-                $scraped->setSourceSite($opp->source ?: null);
-                $scraped->setDeadline($opp->deadline ?: null);
-                $scraped->setRelevanceScore($opp->relevanceScore);
-                $scraped->setDocuments($opp->documents ?: null);
-                $scraped->setDisciplines($opp->disciplines ?: null);
-                // Status par défaut : 'pending' — l'admin valide ensuite dans /admin/scraped-opportunities
-
-                $this->em->persist($scraped);
-                $inserted++;
-            }
-
-            // Flush : toutes les insertions/mises à jour/réactivations en une seule transaction
-            $this->em->flush();
+            // persistBatch() gère : guard intra-lot, findByUrl(), les 5 cas, flush()
+            $result = $this->persister->persistBatch($allOpportunities);
 
             $io->success(sprintf(
                 '%d nouvelle(s) | %d réactivée(s) (archives) | %d mise(s) à jour | %d ignorée(s) (déjà validée par admin)',
-                $inserted,
-                $reactivated,
-                $updated,
-                $skipped
+                $result->inserted,
+                $result->reactivated,
+                $result->updated,
+                $result->skipped,
             ));
         }
 

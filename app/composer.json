@@ -12,6 +12,7 @@
         "doctrine/orm": "^3.6",
         "google/apiclient": "^2.19",
         "knpuniversity/oauth2-client-bundle": "^2.20",
+        "laminas/laminas-feed": "^2.26",
         "league/oauth2-google": "^4.2",
         "lexik/jwt-authentication-bundle": "^3.2",
         "symfony/asset": "7.4.*",
