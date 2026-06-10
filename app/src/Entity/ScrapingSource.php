@@ -258,42 +258,97 @@ class ScrapingSource
     }
 
     /**
+     * Seuil d'échecs consécutifs déclenchant l'auto-désactivation de la source.
+     *
+     * Quand consecutiveFailures atteint cette valeur, hasReachedFailureThreshold()
+     * retourne true. C'est la commande (Command) qui décide alors de désactiver la source
+     * et de logger le warning — l'entité expose uniquement l'état, elle ne prend pas
+     * de décision de désactivation (elle ne connaît pas le logger ni le contexte métier).
+     *
+     * Valeur centralisée ici pour éviter la divergence entre les pipelines RSS et scrape.
+     * Auparavant chaque commande avait sa propre constante AUTO_DISABLE_THRESHOLD = 5.
+     */
+    public const AUTO_DISABLE_THRESHOLD = 5;
+
+    /**
      * Enregistre un run réussi sur cette source.
      *
-     * Met à jour :
-     *   - derniereExecution : maintenant (DateTime)
-     *   - nbItemsDernierRun : nombre d'opportunités trouvées
-     *   - statutDernierRun  : Success
-     *   - messageErreur     : effacé (null — plus d'erreur)
+     * Met à jour TOUS les champs de santé + les champs de stats :
+     *   - derniereExecution      : maintenant (DateTime)
+     *   - nbItemsDernierRun      : nombre d'opportunités trouvées
+     *   - statutDernierRun       : Success
+     *   - messageErreur          : effacé (null — plus d'erreur)
+     *   - lastSuccessfulFetch    : maintenant (DateTime) — le dernier fetch réussi
+     *   - consecutiveFailures    : remis à 0 — la chaîne d'échecs est brisée
+     *
+     * Pourquoi centraliser lastSuccessfulFetch et consecutiveFailures ici ?
+     * Avant cette version, les deux commandes (ReadFeedsCommand, ScrapeOpportunitiesCommand)
+     * appelaient setLastSuccessfulFetch() / resetConsecutiveFailures() SÉPARÉMENT, ce qui
+     * créait un risque de divergence si une commande oubliait l'un des appels.
+     * En regroupant tout dans markRunSuccess(), on garantit la cohérence.
      *
      * @param int $nbItems Nombre d'opportunités trouvées lors de ce run
      */
     public function markRunSuccess(int $nbItems): void
     {
-        $this->derniereExecution  = new \DateTime();
-        $this->nbItemsDernierRun  = $nbItems;
-        $this->statutDernierRun   = ScrapingRunStatus::Success;
-        $this->messageErreur      = null;
+        // Champs stats standard (existants)
+        $this->derniereExecution = new \DateTime();
+        $this->nbItemsDernierRun = $nbItems;
+        $this->statutDernierRun  = ScrapingRunStatus::Success;
+        $this->messageErreur     = null;
+
+        // Champs de santé — mis à jour uniquement lors d'un succès
+        // Un succès réinitialise la chaîne d'échecs : on repart à zéro.
+        $this->lastSuccessfulFetch  = new \DateTime();
+        $this->consecutiveFailures  = 0;
     }
 
     /**
      * Enregistre un run en erreur sur cette source.
      *
-     * Met à jour :
-     *   - derniereExecution : maintenant (DateTime)
-     *   - statutDernierRun  : Error
-     *   - messageErreur     : message d'erreur visible dans l'admin
+     * Met à jour les champs stats ET incrémente le compteur de santé :
+     *   - derniereExecution   : maintenant (DateTime)
+     *   - statutDernierRun    : Error
+     *   - messageErreur       : message d'erreur visible dans l'admin
+     *   - consecutiveFailures : incrémenté de 1 (santé dégradée)
      *
-     * Note : nbItemsDernierRun n'est PAS remis à 0 — on garde le chiffre
-     * du dernier run réussi pour référence.
+     * Note : nbItemsDernierRun n'est PAS remis à 0 — on conserve le chiffre
+     * du dernier run réussi pour référence dans l'interface admin.
+     *
+     * Note : la décision de désactiver la source (actif = false) n'est PAS prise ici.
+     * L'entité expose l'état via hasReachedFailureThreshold() — c'est la commande
+     * qui décide de désactiver et de logger le warning avec le bon contexte.
      *
      * @param string $message Message d'erreur (ex: "Slug 'xyz' inconnu", "HTTP 503")
      */
     public function markRunError(string $message): void
     {
+        // Champs stats standard (existants)
         $this->derniereExecution = new \DateTime();
         $this->statutDernierRun  = ScrapingRunStatus::Error;
         $this->messageErreur     = $message;
+
+        // Santé : chaque échec consécutif dégrade le compteur d'un cran.
+        // La commande vérifiera ensuite hasReachedFailureThreshold() pour
+        // décider de désactiver la source.
+        $this->consecutiveFailures++;
+    }
+
+    /**
+     * Indique si la source a atteint le seuil d'échecs consécutifs.
+     *
+     * Retourne true quand consecutiveFailures >= AUTO_DISABLE_THRESHOLD (5).
+     * Dans ce cas, la commande appelante DOIT :
+     *   1. Appeler $source->setActif(false) pour désactiver la source
+     *   2. Logger un warning avec le nom de la source
+     *
+     * Cette méthode ne modifie PAS l'état de la source — elle lit seulement.
+     * La responsabilité de la désactivation reste côté commande (séparation
+     * des responsabilités : l'entité ne connaît pas le logger).
+     */
+    public function hasReachedFailureThreshold(): bool
+    {
+        return $this->consecutiveFailures >= self::AUTO_DISABLE_THRESHOLD;
     }
 
     // ── Getters / Setters ───────────────────────────────────────────────────

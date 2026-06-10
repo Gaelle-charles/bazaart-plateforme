@@ -12,6 +12,7 @@ use App\Service\ScrapedResourcePersister;
 use App\Service\ScraperRegistry;
 use App\Service\SettingService;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -77,6 +78,10 @@ class ScrapeOpportunitiesCommand extends Command
         private readonly ScrapedResourceRepository $scrapedResourceRepository,
         // SettingService pour lire 'scraping_enabled' (switch admin on/off).
         private readonly SettingService $settingService,
+        // Logger PSR-3 pour les avertissements d'auto-désactivation des sources.
+        // Le même pattern que ReadFeedsCommand : warning (pas critical) car c'est un
+        // comportement normal du cycle de vie d'une source (URL morte, quota épuisé…).
+        private readonly LoggerInterface $logger,
     ) {
         parent::__construct();
     }
@@ -185,9 +190,38 @@ class ScrapeOpportunitiesCommand extends Command
                         );
                         $io->error($msg);
 
-                        // On marque l'erreur en BDD (visible dans la liste admin)
+                        // On marque l'erreur en BDD (visible dans la liste admin).
+                        // markRunError() incrémente aussi consecutiveFailures (factorisation santé).
                         if (!$isDryRun) {
                             $source->markRunError($msg);
+
+                            // ── Auto-désactivation à 5 échecs consécutifs ────────
+                            // Si la source a atteint le seuil (5 échecs d'affilée), on la
+                            // désactive automatiquement pour ne pas polluer les logs et ne
+                            // pas relancer en boucle un slug qui n'existe pas.
+                            // NIVEAU WARNING (pas error/critical) : comportement normal du
+                            // cycle de vie — l'admin peut corriger le slug et réactiver.
+                            if ($source->hasReachedFailureThreshold()) {
+                                $source->setActif(false);
+                                $this->logger->warning(
+                                    sprintf(
+                                        '[scrape] Source désactivée après %d échecs consécutifs : %s',
+                                        $source->getConsecutiveFailures(),
+                                        $source->getNom()
+                                    ),
+                                    [
+                                        'source'              => $source->getNom(),
+                                        'consecutiveFailures' => $source->getConsecutiveFailures(),
+                                        'lastError'           => $msg,
+                                    ]
+                                );
+                                $io->warning(sprintf(
+                                    'Source désactivée automatiquement après %d échecs consécutifs. '
+                                    . 'Réactivez-la depuis /admin/scraping-sources après correction.',
+                                    $source->getConsecutiveFailures()
+                                ));
+                            }
+
                             $this->em->flush();
                         }
                         continue;
@@ -233,10 +267,37 @@ class ScrapeOpportunitiesCommand extends Command
                 $io->error('Erreur : ' . $e->getMessage());
 
                 // Enregistrement de l'erreur en BDD — visible dans la liste admin.
+                // markRunError() incrémente aussi consecutiveFailures (factorisation santé).
                 // PHPStan narrow incorrectement $isDryRun à false dans ce catch (faux positif
                 // dû au "continue" conditionnel dans le try). La vérification est nécessaire.
                 if (!$isDryRun) { // @phpstan-ignore booleanNot.alwaysTrue
                     $source->markRunError($e->getMessage());
+
+                    // ── Auto-désactivation à 5 échecs consécutifs ────────────────
+                    // Même logique que le chemin "slug inconnu" ci-dessus.
+                    // Après 5 exceptions consécutives (ex: timeout réseau répété, bug
+                    // dans le scraper custom), la source est mise hors service automatiquement.
+                    if ($source->hasReachedFailureThreshold()) {
+                        $source->setActif(false);
+                        $this->logger->warning(
+                            sprintf(
+                                '[scrape] Source désactivée après %d échecs consécutifs : %s',
+                                $source->getConsecutiveFailures(),
+                                $source->getNom()
+                            ),
+                            [
+                                'source'              => $source->getNom(),
+                                'consecutiveFailures' => $source->getConsecutiveFailures(),
+                                'lastError'           => $e->getMessage(),
+                            ]
+                        );
+                        $io->warning(sprintf(
+                            'Source désactivée automatiquement après %d échecs consécutifs. '
+                            . 'Réactivez-la depuis /admin/scraping-sources après correction.',
+                            $source->getConsecutiveFailures()
+                        ));
+                    }
+
                     $this->em->flush();
                 }
             }

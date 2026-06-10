@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Command;
 
+use App\Entity\ScrapingSource;
 use App\Enum\ScrapingSourceType;
 use App\Repository\ScrapingSourceRepository;
 use App\Service\FeedReadResult;
@@ -61,15 +62,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 class ReadFeedsCommand extends Command
 {
-    /**
-     * Seuil d'échecs consécutifs avant désactivation automatique de la source.
-     *
-     * Après AUTO_DISABLE_THRESHOLD échecs d'affilée, la source est désactivée
-     * (actif = false) pour ne pas polluer les logs et ne pas consommer inutilement
-     * des ressources réseau. L'admin peut la réactiver depuis /admin/scraping-sources
-     * après avoir corrigé l'URL du flux.
-     */
-    private const AUTO_DISABLE_THRESHOLD = 5;
+    // La constante AUTO_DISABLE_THRESHOLD est désormais portée par l'entité ScrapingSource.
+    // On l'utilise via ScrapingSource::AUTO_DISABLE_THRESHOLD pour éviter la divergence
+    // entre les deux pipelines (RSS et scrape HTML). Plus de constante locale ici.
 
     public function __construct(
         // Repository pour charger les sources actives depuis la BDD
@@ -229,24 +224,27 @@ class ReadFeedsCommand extends Command
                     $io->error(sprintf('Erreur : %s', $errorMessage));
 
                     if (!$isDryRun) {
-                        // Incrémente le compteur d'échecs consécutifs
-                        $source->incrementConsecutiveFailures();
-                        // Marque aussi dans le champ standard (badge dans l'admin)
+                        // markRunError() enregistre l'erreur (badge admin) ET incrémente
+                        // consecutiveFailures — plus besoin d'appeler incrementConsecutiveFailures()
+                        // séparément. La logique de santé est centralisée dans l'entité.
                         $source->markRunError($errorMessage);
 
                         // ── Auto-désactivation à 5 échecs consécutifs ─────────
-                        // Après AUTO_DISABLE_THRESHOLD erreurs d'affilée, la source est
-                        // automatiquement désactivée pour éviter des appels réseau inutiles
-                        // vers un flux mort. L'admin est notifié par un log WARNING (pas
-                        // CRITICAL — c'est un comportement normal du cycle de vie d'un flux).
+                        // hasReachedFailureThreshold() retourne true quand consecutiveFailures
+                        // >= ScrapingSource::AUTO_DISABLE_THRESHOLD (5).
+                        // La constante est désormais sur l'entité pour éviter la divergence
+                        // entre les deux pipelines (RSS ici, scrape dans ScrapeOpportunitiesCommand).
                         //
-                        // NIVEAU WARNING (pas error/critical) : c'est une décision de
-                        // gestion de ressources, pas une panne système. L'admin peut
-                        // réactiver la source depuis /admin/scraping-sources.
-                        if ($source->getConsecutiveFailures() >= self::AUTO_DISABLE_THRESHOLD) {
+                        // NIVEAU WARNING (pas error/critical) : c'est un comportement normal
+                        // du cycle de vie — l'admin peut réactiver depuis /admin/scraping-sources.
+                        if ($source->hasReachedFailureThreshold()) {
                             $source->setActif(false);
                             $this->logger->warning(
-                                sprintf('[read-feeds] Source désactivée après 5 échecs consécutifs : %s', $source->getNom()),
+                                sprintf(
+                                    '[read-feeds] Source désactivée après %d échecs consécutifs : %s',
+                                    $source->getConsecutiveFailures(),
+                                    $source->getNom()
+                                ),
                                 [
                                     'source'              => $source->getNom(),
                                     'consecutiveFailures' => $source->getConsecutiveFailures(),
@@ -256,7 +254,7 @@ class ReadFeedsCommand extends Command
                             $io->warning(sprintf(
                                 'Source désactivée automatiquement après %d échecs consécutifs. '
                                 . 'Réactivez-la depuis /admin/scraping-sources après correction.',
-                                self::AUTO_DISABLE_THRESHOLD
+                                ScrapingSource::AUTO_DISABLE_THRESHOLD
                             ));
                         }
 
@@ -322,11 +320,11 @@ class ReadFeedsCommand extends Command
                     }
 
                     // ── Mise à jour de la santé de la source ──────────────────
-                    // Un fetch réussi (même avec 0 item) remet les compteurs d'échec à zéro.
-                    // La source "vit" — elle n'a pas de problème réseau ou de XML invalide.
-                    $source->setLastSuccessfulFetch(new \DateTime());
-                    $source->resetConsecutiveFailures();
-                    // markRunSuccess() met à jour derniereExecution, nbItemsDernierRun, statutDernierRun
+                    // markRunSuccess() gère TOUT en un seul appel depuis la factorisation :
+                    //   - derniereExecution, nbItemsDernierRun, statutDernierRun, messageErreur = null
+                    //   - lastSuccessfulFetch = now  (plus besoin de setLastSuccessfulFetch())
+                    //   - consecutiveFailures = 0    (plus besoin de resetConsecutiveFailures())
+                    // Un seul point de vérité dans l'entité — pas de risque d'oubli.
                     $source->markRunSuccess($itemCount);
 
                     // Second flush — DISTINCT du flush interne à persistBatch().
