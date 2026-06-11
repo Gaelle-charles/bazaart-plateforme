@@ -60,6 +60,22 @@ framework:
             limit: 5
             interval: '15 minutes'
 
+        # ── Rate limiter pour /mot-de-passe-oublie ────────────────────────────
+        #
+        # Même politique que register_limiter : sliding window 5/15min/IP.
+        # Protège contre :
+        #   1. Le spam d'emails de reset (qui pourraient saturer la boîte d'un utilisateur)
+        #   2. L'énumération d'emails (même si le service ne révèle rien, limiter les appels est prudent)
+        #   3. Les attaques par force brute sur le système de token (le token est très fort, mais quand même)
+        #
+        # Nommage : "password_reset_limiter" dans la config → $passwordResetLimiter en PHP
+        # (convention de conversion snake_case → camelCase de Symfony pour l'autowiring
+        # des RateLimiterFactory — voir ForgotPasswordController::__construct()).
+        password_reset_limiter:
+            policy: 'sliding_window'
+            limit: 5
+            interval: '15 minutes'
+
 when@test:
     framework:
         test: true
@@ -82,6 +98,14 @@ when@test:
         #   - C'est la pratique standard recommandée par Symfony
         rate_limiter:
             register_limiter:
+                policy: 'sliding_window'
+                limit: 1000        # Pratiquement illimité en test
+                interval: '15 minutes'
+
+            # En test, le password_reset_limiter ne doit pas bloquer les requêtes
+            # (même logique que register_limiter : on garde le code path actif
+            # mais avec une limite très haute pour ne jamais bloquer les tests).
+            password_reset_limiter:
                 policy: 'sliding_window'
                 limit: 1000        # Pratiquement illimité en test
                 interval: '15 minutes'

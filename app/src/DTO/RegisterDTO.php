@@ -4,8 +4,18 @@ declare(strict_types=1);
 
 namespace App\DTO;
 
+/**
+ * RegisterDTO — Données d'inscription d'un nouvel utilisateur.
+ *
+ * Utilise PasswordStrengthTrait pour la validation de la politique de mot de passe
+ * (factorisation commune avec ResetPasswordDTO — évite la duplication de code).
+ */
 class RegisterDTO
 {
+    // Importe la méthode isPasswordStrong() depuis le trait partagé.
+    // Le trait lit $this->password, qui est défini comme propriété de ce DTO.
+    use PasswordStrengthTrait;
+
     /**
      * @param string $email           Adresse email de l'utilisateur
      * @param string $password        Mot de passe en clair (sera haché côté service)
@@ -43,25 +53,7 @@ class RegisterDTO
         return filter_var($this->email, FILTER_VALIDATE_EMAIL) !== false;
     }
 
-    /**
-     * Vérifie que le mot de passe respecte la politique définie dans le CDC §9 :
-     *   - au moins 10 caractères
-     *   - au moins 1 lettre majuscule (A-Z)
-     *   - au moins 1 chiffre (0-9)
-     *
-     * La règle est intentionnellement simple pour V1 — pas de caractère spécial
-     * obligatoire afin de ne pas bloquer les utilisateurs moins à l'aise.
-     */
-    public function isPasswordStrong(): bool
-    {
-        // Politique définie dans le CDC §9 :
-        // - minimum 10 caractères
-        // - au moins 1 lettre majuscule
-        // - au moins 1 chiffre
-        return strlen($this->password) >= 10
-            && preg_match('/[A-Z]/', $this->password) === 1
-            && preg_match('/[0-9]/', $this->password) === 1;
-    }
+    // isPasswordStrong() est fournie par PasswordStrengthTrait (voir import ci-dessus).
 
     /**
      * Vérifie que le mot de passe et sa confirmation sont identiques.

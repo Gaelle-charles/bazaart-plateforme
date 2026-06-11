@@ -82,6 +82,12 @@ security:
         - { path: ^/register, roles: PUBLIC_ACCESS }
         # Les routes Google OAuth doivent être publiques (l'utilisateur n'est pas encore connecté)
         - { path: ^/connect/google, roles: PUBLIC_ACCESS }
+        # ── Réinitialisation du mot de passe — PUBLIQUES ──────────────────────
+        # Ces routes doivent être accessibles sans être connecté (c'est l'objet même
+        # du parcours "mot de passe oublié" : l'utilisateur ne peut PAS se connecter).
+        # Placées AVANT la règle catch-all ^/ pour ne pas être interceptées.
+        - { path: ^/mot-de-passe-oublie, roles: PUBLIC_ACCESS }
+        - { path: ^/reinitialiser-mot-de-passe, roles: PUBLIC_ACCESS }
         # Page d'accueil et formulaire de contact — accessibles sans être connecté
         - { path: ^/$, roles: PUBLIC_ACCESS }
         - { path: ^/contact, roles: PUBLIC_ACCESS }

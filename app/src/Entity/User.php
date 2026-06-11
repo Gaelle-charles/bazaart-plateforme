@@ -11,6 +11,10 @@ use Symfony\Component\Security\Core\User\UserInterface;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: 'users')]
+// Index sur le hash du token de réinitialisation : la recherche par token
+// (findByResetTokenHash) s'exécute à chaque clic sur un lien de reset. Déclaré ici
+// pour que doctrine:schema:validate reste cohérent avec la migration qui le crée.
+#[ORM\Index(name: 'idx_users_reset_token_hash', columns: ['reset_token_hash'])]
 #[ORM\HasLifecycleCallbacks]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
@@ -55,6 +59,45 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
      */
     #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTimeInterface $anonymizedAt = null;
+
+    /**
+     * Hash SHA-256 du token de réinitialisation de mot de passe.
+     *
+     * SÉCURITÉ : on ne stocke JAMAIS le token en clair en BDD.
+     * Le token en clair est envoyé par email, son hash SHA-256 est stocké ici.
+     * Ainsi, même si la BDD est compromise, les tokens ne peuvent pas être utilisés
+     * directement (il faudrait connaître la valeur originale pour la retrouver).
+     *
+     * Cycle de vie :
+     *   - null   : pas de demande de réinitialisation en cours
+     *   - string : hash actif jusqu'à resetTokenExpiresAt
+     *
+     * Taille : SHA-256 produit 64 caractères hexadécimaux (bin2hex sur 32 bytes → 64 chars,
+     * puis hash('sha256', ...) → 64 chars hexa). VARCHAR(64) est donc suffisant.
+     *
+     * Index sur cette colonne pour que la recherche par token soit rapide
+     * (cf. UserRepository::findByResetTokenHash()).
+     */
+    #[ORM\Column(type: 'string', length: 64, nullable: true)]
+    private ?string $resetTokenHash = null;
+    // Note : l'index idx_users_reset_token_hash est créé dans la migration
+    // Version20260611000000 via CREATE INDEX — Doctrine ne supporte pas #[ORM\Index]
+    // sur les propriétés (uniquement via #[ORM\Table(indexes: [...])] sur la classe).
+    // L'index est donc géré manuellement dans la migration pour éviter toute confusion.
+
+    /**
+     * Date d'expiration du token de réinitialisation de mot de passe.
+     *
+     * Durée de validité : 1 heure après la demande (définie dans PasswordResetService).
+     *
+     * Null → pas de token actif (jamais demandé ou déjà utilisé/expiré).
+     * Non null → le token est valide jusqu'à cette date.
+     *
+     * Convention : on utilise DateTimeInterface (pas DateTimeImmutable) pour
+     * cohérence avec les autres champs datetime de cette entité (createdAt, anonymizedAt).
+     */
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $resetTokenExpiresAt = null;
 
     /**
      * Relation inverse vers ArtistProfile.
@@ -204,6 +247,48 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
             $organizationProfile->setUser($this);
         }
         $this->organizationProfile = $organizationProfile;
+        return $this;
+    }
+
+    // ─── Getters / Setters — Réinitialisation de mot de passe ───────────────
+
+    /**
+     * Retourne le hash SHA-256 du token de réinitialisation, ou null si absent.
+     * Appelé par UserRepository::findByResetTokenHash() pour retrouver l'utilisateur.
+     */
+    public function getResetTokenHash(): ?string
+    {
+        return $this->resetTokenHash;
+    }
+
+    /**
+     * Enregistre le hash du token de réinitialisation.
+     *
+     * @param string|null $resetTokenHash Hash SHA-256 (64 chars) ou null pour invalider
+     */
+    public function setResetTokenHash(?string $resetTokenHash): static
+    {
+        $this->resetTokenHash = $resetTokenHash;
+        return $this;
+    }
+
+    /**
+     * Retourne la date d'expiration du token de réinitialisation, ou null.
+     * PasswordResetService::validateToken() vérifie que cette date n'est pas dépassée.
+     */
+    public function getResetTokenExpiresAt(): ?\DateTimeInterface
+    {
+        return $this->resetTokenExpiresAt;
+    }
+
+    /**
+     * Enregistre la date d'expiration du token.
+     *
+     * @param \DateTimeInterface|null $resetTokenExpiresAt Expiration (1h après la demande) ou null
+     */
+    public function setResetTokenExpiresAt(?\DateTimeInterface $resetTokenExpiresAt): static
+    {
+        $this->resetTokenExpiresAt = $resetTokenExpiresAt;
         return $this;
     }
 }

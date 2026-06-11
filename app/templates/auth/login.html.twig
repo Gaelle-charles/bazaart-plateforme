@@ -541,13 +541,11 @@
                         <label class="auth-label" for="auth-password">
                             Mot de passe
                         </label>
-                        {# Lien "Mot de passe oublié ?" — route à créer si inexistante #}
-                        {# Si la route app_forgot_password n'existe pas encore,
-                           commenter ce lien pour éviter une erreur Twig. #}
-                        {# <a href="{{ path('app_forgot_password') }}" class="auth-forgot">
+                        {# Lien "Mot de passe oublié ?" — route app_forgot_password
+                           définie dans ForgotPasswordController, PUBLIC_ACCESS dans security.yaml. #}
+                        <a href="{{ path('app_forgot_password') }}" class="auth-forgot">
                             Mot de passe oublié ?
-                        </a> #}
-                        <a href="#" class="auth-forgot">Mot de passe oublié ?</a>
+                        </a>
                     </div>
                     <input
                         class="auth-input"
