@@ -1,54 +1,26 @@
-# docker-compose.prod.yml — Configuration PRODUCTION
-# Utilisation : docker compose -f docker-compose.prod.yml up -d
+# docker-compose.prod.yml — Configuration PRODUCTION (app.bazaart.fr)
 #
-# Différences avec le dev :
-# - Nginx écoute sur les ports 80 et 443 (pas 8080)
-# - SSL via les certs Certbot existants
-# - Pas de Mailpit (emails désactivés en prod)
-# - Pas d'Adminer (sécurité)
-# - Variables d'environnement dans .env.local (non versionné)
+# ⚠️  Ce fichier NE lance PAS de Nginx.
+#     Le Nginx de bazaart2 (bazaart_nginx) est le seul reverse proxy du serveur.
+#     Il gère bazaart.fr ET app.bazaart.fr depuis le réseau bazaart2_bazaart_network.
+#
+# Architecture :
+#   Internet → bazaart_nginx → bazaart_platform_app (ce container, port 9000)
+#                            → bazaart_platform_postgres
+#                            → bazaart_platform_redis
+#
+# Utilisation :
+#   docker compose -f docker-compose.prod.yml up -d
 
 services:
 
-  # ── Nginx : reverse proxy HTTPS ──────────────────────────────────────────
-  nginx:
-    image: nginx:stable-alpine
-    container_name: bazaart_nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      # Config Nginx de production (HTTP→HTTPS + SSL + PHP-FPM)
-      - ./docker/nginx/prod.conf:/etc/nginx/conf.d/default.conf:ro
-      # Fichiers publics Symfony (CSS, JS, images uploadées...)
-      - ./app/public:/var/www/html/public:ro
-      # Certificats SSL Let's Encrypt
-      - ./certbot/conf:/etc/letsencrypt:ro
-      # Webroot pour le renouvellement Certbot
-      - ./certbot/www:/var/www/certbot:ro
-    depends_on:
-      - app
-    networks:
-      - bazaart_network
-
-  # ── Certbot : renouvellement SSL automatique ──────────────────────────────
-  certbot:
-    image: certbot/certbot
-    container_name: bazaart_certbot
-    restart: unless-stopped
-    volumes:
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
-    # Vérifie le certificat toutes les 12h et le renouvelle si besoin
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done'"
-
-  # ── PHP-FPM : application Symfony ────────────────────────────────────────
+  # ── PHP-FPM : application Symfony ─────────────────────────────────────────
   app:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
-    container_name: bazaart_app
+    # Nom unique pour ne pas entrer en conflit avec bazaart_app (bazaart2)
+    container_name: bazaart_platform_app
     restart: unless-stopped
     volumes:
       - ./app:/var/www/html
@@ -57,43 +29,52 @@ services:
     environment:
       APP_ENV: prod
       APP_SECRET: ${APP_SECRET}
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?serverVersion=16&charset=utf8
-      REDIS_URL: redis://redis:6379
-      # En prod, on désactive Mailpit — configure un vrai service email ici
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@bazaart_platform_postgres:5432/${POSTGRES_DB}?serverVersion=16&charset=utf8
+      REDIS_URL: redis://bazaart_platform_redis:6379
       MAILER_DSN: ${MAILER_DSN:-null://null}
     depends_on:
       - postgres
       - redis
     networks:
-      - bazaart_network
+      # Réseau interne pour communiquer avec postgres et redis
+      - platform_internal
+      # Réseau du Nginx existant (bazaart_nginx) — nécessaire pour qu'il atteigne ce container
+      - bazaart2_bazaart_network
 
-  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    container_name: bazaart_postgres
+    # Nom unique pour ne pas écraser bazaart_postgres (bazaart2)
+    container_name: bazaart_platform_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      # Les données persistent même si le container est recréé
-      - postgres_data:/var/lib/postgresql/data
+      # Volume séparé = données indépendantes de bazaart2
+      - platform_postgres_data:/var/lib/postgresql/data
     networks:
-      - bazaart_network
+      - platform_internal
 
-  # ── Redis : cache session ─────────────────────────────────────────────────
+  # ── Redis ──────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: bazaart_redis
+    # Nom unique pour ne pas écraser bazaart_redis (bazaart2)
+    container_name: bazaart_platform_redis
     restart: unless-stopped
     networks:
-      - bazaart_network
+      - platform_internal
 
 volumes:
-  postgres_data:
-  uploads_data:
+  platform_postgres_data:   # Données PostgreSQL isolées de bazaart2
+  uploads_data:             # Fichiers uploadés (avatars, logos, etc.)
 
 networks:
-  bazaart_network:
+  # Réseau interne entre app, postgres et redis
+  platform_internal:
     driver: bridge
+
+  # Réseau EXISTANT du Nginx de bazaart2 — on s'y branche sans le recréer
+  bazaart2_bazaart_network:
+    external: true
