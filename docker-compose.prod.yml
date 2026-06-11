@@ -15,11 +15,15 @@
 services:
 
   # ── PHP-FPM : application Symfony ─────────────────────────────────────────
-  app:
+  # ⚠️  Nommé "platform_app" (PAS "app") pour éviter la collision d'alias DNS
+  #     sur bazaart2_bazaart_network avec le service "app" de bazaart2.
+  #     Si ce service s'appelait "app", fastcgi_pass app:9000 de bazaart.fr ferait
+  #     du round-robin entre la vitrine et la plateforme → clignotement.
+  #     Le container_name reste bazaart_platform_app (utilisé par app.bazaart.fr.conf).
+  platform_app:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
-    # Nom unique pour ne pas entrer en conflit avec bazaart_app (bazaart2)
     container_name: bazaart_platform_app
     restart: unless-stopped
     volumes:
@@ -35,6 +39,8 @@ services:
     depends_on:
       - postgres
       - redis
+    # Le service s'appelle platform_app → alias DNS "platform_app" sur bazaart2_bazaart_network.
+    # Plus d'alias "app" → plus de collision avec bazaart_app de bazaart2.
     networks:
       # Réseau interne pour communiquer avec postgres et redis
       - platform_internal
