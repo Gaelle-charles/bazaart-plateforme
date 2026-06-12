@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}BazaArt{% endblock %}</title>
 
+    {# Favicon Bazaart (PNG 512x512 — affiché dans l'onglet du navigateur et les favoris).
+       Placé dans public/images/ (asset statique servi par Nginx), pas dans uploads/
+       qui est un volume Docker runtime en production. #}
+    <link rel="icon" type="image/png" href="{{ asset('images/favicon.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('images/favicon.png') }}">
+
     {# ── Polices self-hostées — thème Editorial Cream (vitrine publique) ───── #}
     {#
         POURQUOI rel="preload" ?
