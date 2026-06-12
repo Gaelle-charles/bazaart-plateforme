@@ -82,6 +82,18 @@ Stratégie de la semaine : **mix corrections rapides + démarrage V1 Ressourceri
 - **Pas de Stripe Connect** : seulement Stripe simple admin-only en V2.
 - **Bunny Stream** ajouté comme solution vidéo formations.
 - **PHPStan niveau 6** obligatoire sur tous nouveaux modules.
+- **Scraping (Ressourcerie) : 100 % PHP/Symfony, PAS n8n.** Le pipeline de collecte
+  des opportunités (commandes `app:read-feeds`, `app:scrape-opportunities`,
+  `app:discover-sources`) tourne en PHP pur, déclenché par **cron** (cf.
+  `docs/scraping-cron.md`) ou par le bouton admin. n8n **n'intervient pas** dans le
+  scraping en V1 — son usage (webhook de déclenchement, alertes email) est repoussé
+  en V2 (cf. `docs/scraping.md` §12). Détail du module : `docs/scraping.md`.
+- **LLM du scraping : Mistral en principal, Claude en secours.** L'extraction de
+  champs depuis le HTML et la découverte de sources utilisent `mistral-small-latest`
+  (provider par défaut) avec **fallback** `claude-haiku-4-5`. Les clés API ne sont
+  **pas** dans `.env` : elles vivent en base (table `app_settings`, éditables via
+  `/admin/settings`). NB : la ligne « IA (V2) / claude-opus-4-7 » du tableau ci-dessus
+  concerne le Studio IA de la V2, pas le scraping V1.
 
 ---
 
