@@ -9,7 +9,6 @@ use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
-use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -278,9 +277,12 @@ class PasswordResetService
                 ['user_id' => $user->getId()]
             );
 
-        } catch (TransportExceptionInterface $e) {
-            // On logue l'erreur mais on ne bloque pas — l'utilisateur verra le
-            // message neutre côté contrôleur. Il pourra réessayer.
+        } catch (\Throwable $e) {
+            // On attrape TOUTE erreur (pas seulement les erreurs SMTP) : un échec
+            // de rendu du template email, par exemple, ne doit jamais provoquer une
+            // 500 visible par l'utilisateur ni révéler que l'email existe.
+            // L'utilisateur verra le message neutre côté contrôleur ; l'erreur réelle
+            // est tracée ici pour le diagnostic.
             $this->logger->error(
                 sprintf('Échec envoi email de réinitialisation à %s : %s', $user->getEmail(), $e->getMessage()),
                 [
