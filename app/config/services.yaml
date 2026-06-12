@@ -28,6 +28,10 @@ services:
         #   "Cannot autowire service AuthController: argument $registerLimiter..."
         bind:
             Symfony\Component\RateLimiter\RateLimiterFactory $registerLimiter: '@limiter.register_limiter'
+            # Reset de mot de passe — même mécanisme que register_limiter ci-dessus.
+            # L'autowiring par nom de variable n'est PAS automatique : ce binding explicite
+            # est obligatoire pour injecter $passwordResetLimiter dans ForgotPasswordController.
+            Symfony\Component\RateLimiter\RateLimiterFactory $passwordResetLimiter: '@limiter.password_reset_limiter'
 
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name

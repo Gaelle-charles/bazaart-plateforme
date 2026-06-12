@@ -68,9 +68,10 @@ framework:
         #   2. L'énumération d'emails (même si le service ne révèle rien, limiter les appels est prudent)
         #   3. Les attaques par force brute sur le système de token (le token est très fort, mais quand même)
         #
-        # Nommage : "password_reset_limiter" dans la config → $passwordResetLimiter en PHP
-        # (convention de conversion snake_case → camelCase de Symfony pour l'autowiring
-        # des RateLimiterFactory — voir ForgotPasswordController::__construct()).
+        # Nommage : ce limiter crée le service "limiter.password_reset_limiter".
+        # ⚠️ L'autowiring par nom de variable n'est PAS automatique ici : le service
+        # est lié à $passwordResetLimiter via un binding explicite dans services.yaml
+        # (même mécanisme que register_limiter). Voir ForgotPasswordController::__construct().
         password_reset_limiter:
             policy: 'sliding_window'
             limit: 5
