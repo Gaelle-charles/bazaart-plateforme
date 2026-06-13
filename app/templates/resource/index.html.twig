@@ -9,12 +9,15 @@
  # Design : bords francs (radius 0), grille editoriale, barre de filtres façon tableau de bord
  #
  # Variables Twig disponibles :
- #   resources       — tableau/collection de Resource (paginées ou non)
- #   types           — tableau de ResourceType pour le select
- #   disciplines     — tableau de Discipline pour le select
- #   currentSearch   — string (filtre texte actif)
- #   currentTypeId   — int|null (filtre type actif)
+ #   resources           — tableau de Resource (uniquement la page courante, 12 max)
+ #   types               — tableau de ResourceType pour le select
+ #   disciplines         — tableau de Discipline pour le select
+ #   currentSearch       — string (filtre texte actif)
+ #   currentTypeId       — int|null (filtre type actif)
  #   currentDisciplineId — int|null (filtre discipline actif)
+ #   currentPage         — int (page courante, 1-based)
+ #   totalPages          — int (nombre total de pages)
+ #   total               — int (nombre total de résultats tous filtres confondus)
  #}
 
 {% block title %}Ressources — Bazaart{% endblock %}
@@ -543,9 +546,13 @@
         <div>
             <div class="opp-eyebrow">
                 Opportunités
-                {# Nombre de résultats affiché dans l'eyebrow quand la liste n'est pas vide #}
-                {% if resources is not empty %}
-                    · {{ resources|length }} active{{ resources|length > 1 ? 's' : '' }}
+                {#
+                    On affiche le nombre TOTAL de résultats (variable `total` fournie par le controller),
+                    pas juste le nombre sur la page courante.
+                    Exemple avec pagination : "24 actives" même si on n'en affiche que 12.
+                #}
+                {% if total is defined and total > 0 %}
+                    · {{ total }} active{{ total > 1 ? 's' : '' }}
                 {% endif %}
             </div>
             <h1 class="opp-title">Ce qui est<br>ouvert.</h1>
@@ -572,6 +579,16 @@
    Pas de token CSRF nécessaire ici (lecture seule).
 #}
 <form method="get" action="{{ path('app_resource_index') }}" class="filter-bar" role="search">
+
+    {#
+        Champ caché qui force le retour à la page 1 à chaque soumission du formulaire.
+        Sans ce champ, si l'utilisateur est sur la page 5 et change un filtre, le
+        paramètre "page=5" resterait dans l'URL soumise (via le comportement GET
+        qui conserve les champs du formulaire). Le résultat serait souvent vide
+        car la page 5 n'existe peut-être pas pour les nouveaux critères.
+        En forçant page=1, on repart toujours du début de la liste filtrée.
+    #}
+    <input type="hidden" name="page" value="1">
 
     {# Champ recherche textuelle — flex 2x pour prendre plus de place #}
     <div class="filter-group filter-group--search">
@@ -670,11 +687,17 @@
 
 {% else %}
 
-    {# Compteur de résultats sous les filtres (mono uppercase = logique éditorial) #}
+    {#
+        Compteur de résultats sous les filtres (mono uppercase = logique éditorial).
+        On affiche le total global (pas juste les 12 de la page courante)
+        + l'indication de pagination si on n'est pas sur la page 1.
+    #}
     <p class="results-count">
-        → {{ resources|length }} résultat{{ resources|length > 1 ? 's' : '' }}
-        {# Indication des filtres actifs dans le compteur #}
+        → {{ total }} résultat{{ total > 1 ? 's' : '' }}
+        {# Indication des filtres textuels actifs #}
         {% if currentSearch %} · "{{ currentSearch }}"{% endif %}
+        {# Indication de la page courante si on est en pagination (plus d'une page) #}
+        {% if totalPages > 1 %} · page {{ currentPage }}/{{ totalPages }}{% endif %}
     </p>
 
     {# ── Grille de cartes ── #}
@@ -750,7 +773,142 @@
         {% endfor %}
     </div>
 
-    {# TODO : Pagination à implémenter après installation de knp-components/knp-paginator-bundle #}
+    {#
+        ── Bloc de pagination ──────────────────────────────────────────────────────
+        Affiché uniquement quand il y a plus d'une page (totalPages > 1).
+        Chaque lien PRÉSERVE les filtres actifs (type, discipline, q) pour que
+        naviguer entre les pages ne réinitialise pas la recherche.
+
+        Architecture des URL générées (exemple avec filtres) :
+          /resources?type=2&discipline=4&q=musique&page=3
+
+        Si un filtre est null ou vide, on ne l'inclut pas dans le path() pour éviter
+        les paramètres vides (?type=&discipline=) qui polluent l'URL.
+
+        Fenêtre de pages affichées :
+          On affiche au maximum 5 numéros de page autour de la page courante.
+          Cela évite d'afficher 50 boutons si le catalogue est très grand.
+          Algorithme : fenêtre de 2 avant + 2 après = 5 pages au total, bornée entre 1 et totalPages.
+
+        Styles : on réutilise les classes .pagination-wrap / .pagination / .page-item / .page-link
+        déjà définies dans le bloc <style> ci-dessus — aucune nouvelle règle CSS nécessaire.
+    #}
+    {% if totalPages > 1 %}
+
+        {#
+            Calcul de la fenêtre de pagination (pages visibles autour de la courante).
+            max() et min() sont des filtres Twig natifs — pas de dépendance supplémentaire.
+            windowStart = première page de la fenêtre (au moins 1)
+            windowEnd   = dernière page de la fenêtre (au plus totalPages)
+        #}
+        {% set windowStart = max(1, currentPage - 2) %}
+        {% set windowEnd   = min(totalPages, currentPage + 2) %}
+
+        {#
+            Construction du tableau de paramètres de base (filtres actifs).
+            On inclut un paramètre seulement s'il a une valeur non-vide,
+            pour garder des URLs propres : /resources?page=2 et non /resources?type=&discipline=&q=&page=2
+        #}
+        {% set baseParams = {} %}
+        {% if currentTypeId %}
+            {% set baseParams = baseParams|merge({ type: currentTypeId }) %}
+        {% endif %}
+        {% if currentDisciplineId %}
+            {% set baseParams = baseParams|merge({ discipline: currentDisciplineId }) %}
+        {% endif %}
+        {% if currentSearch %}
+            {% set baseParams = baseParams|merge({ q: currentSearch }) %}
+        {% endif %}
+
+        <nav class="pagination-wrap" aria-label="Navigation entre les pages de ressources">
+            <ul class="pagination">
+
+                {# ── Lien "Précédent" ────────────────────────────────────────── #}
+                {# Désactivé sur la page 1 (attribut aria-disabled + classe CSS disabled) #}
+                <li class="page-item {% if currentPage <= 1 %}disabled{% endif %}">
+                    {% if currentPage > 1 %}
+                        {# On fusionne les filtres de base avec la page précédente #}
+                        <a class="page-link"
+                           href="{{ path('app_resource_index', baseParams|merge({ page: currentPage - 1 })) }}"
+                           aria-label="Page précédente">
+                            ← Préc.
+                        </a>
+                    {% else %}
+                        {# Span non-cliquable sur la page 1 (pas de lien vers page 0) #}
+                        <span class="page-link" aria-hidden="true">← Préc.</span>
+                    {% endif %}
+                </li>
+
+                {# ── Points de suspension au début si la fenêtre ne commence pas à 1 ── #}
+                {# Exemple : si on est sur la page 8, la fenêtre commence à 6 → on affiche 1 … 6 7 8 9 10 #}
+                {% if windowStart > 1 %}
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="{{ path('app_resource_index', baseParams|merge({ page: 1 })) }}"
+                           aria-label="Page 1">
+                            1
+                        </a>
+                    </li>
+                    {% if windowStart > 2 %}
+                        {# "…" non-cliquable pour indiquer qu'il y a des pages cachées #}
+                        <li class="page-item disabled" aria-hidden="true">
+                            <span class="page-link">…</span>
+                        </li>
+                    {% endif %}
+                {% endif %}
+
+                {# ── Numéros de page dans la fenêtre ────────────────────────── #}
+                {% for p in windowStart..windowEnd %}
+                    <li class="page-item {% if p == currentPage %}active{% endif %}">
+                        {% if p == currentPage %}
+                            {# Page courante : non-cliquable, mise en valeur visuellement #}
+                            {# aria-current="page" = information d'accessibilité pour les lecteurs d'écran #}
+                            <span class="page-link" aria-current="page">{{ p }}</span>
+                        {% else %}
+                            <a class="page-link"
+                               href="{{ path('app_resource_index', baseParams|merge({ page: p })) }}"
+                               aria-label="Page {{ p }}">
+                                {{ p }}
+                            </a>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+
+                {# ── Points de suspension à la fin si la fenêtre ne finit pas à totalPages ── #}
+                {% if windowEnd < totalPages %}
+                    {% if windowEnd < totalPages - 1 %}
+                        <li class="page-item disabled" aria-hidden="true">
+                            <span class="page-link">…</span>
+                        </li>
+                    {% endif %}
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="{{ path('app_resource_index', baseParams|merge({ page: totalPages })) }}"
+                           aria-label="Page {{ totalPages }}">
+                            {{ totalPages }}
+                        </a>
+                    </li>
+                {% endif %}
+
+                {# ── Lien "Suivant" ──────────────────────────────────────────── #}
+                {# Désactivé sur la dernière page #}
+                <li class="page-item {% if currentPage >= totalPages %}disabled{% endif %}">
+                    {% if currentPage < totalPages %}
+                        <a class="page-link"
+                           href="{{ path('app_resource_index', baseParams|merge({ page: currentPage + 1 })) }}"
+                           aria-label="Page suivante">
+                            Suiv. →
+                        </a>
+                    {% else %}
+                        <span class="page-link" aria-hidden="true">Suiv. →</span>
+                    {% endif %}
+                </li>
+
+            </ul>
+        </nav>
+
+    {% endif %}
+    {# ── Fin bloc pagination ─────────────────────────────────────────────────── #}
 
 {% endif %}
 

@@ -40,31 +40,75 @@ class ResourceController extends AbstractController
     ) {}
 
     /**
-     * Page principale : liste de toutes les ressources publiées.
+     * Page principale : liste de toutes les ressources publiées, avec pagination.
      * Accessible à tous les utilisateurs connectés.
      * Supporte les filtres par type, discipline et recherche textuelle.
+     *
+     * URL exemple : /resources?type=2&discipline=4&q=musique&page=3
+     *
+     * Logique de pagination :
+     *   1. On lit ?page= depuis la query string (défaut : 1)
+     *   2. On compte le total via countPublished() (requête COUNT, pas de chargement d'entités)
+     *   3. On calcule totalPages et on borne la page courante entre 1 et totalPages
+     *   4. On charge UNIQUEMENT la page courante via findPublished(..., $page, 12)
+     *   5. On passe currentPage + totalPages au template pour générer les liens de pagination
      */
     #[IsGranted('ROLE_USER')]
     #[Route('', name: 'index')]
     public function index(Request $request): Response
     {
-        // Récupération des filtres depuis l'URL (?type=1&discipline=2&q=musique)
+        // ── Récupération des filtres depuis l'URL (?type=1&discipline=2&q=musique) ──
         $typeId       = $request->query->get('type') ? (int) $request->query->get('type') : null;
         $disciplineId = $request->query->get('discipline') ? (int) $request->query->get('discipline') : null;
         $search       = $request->query->get('q');
 
-        $resources   = $this->resourceRepository->findPublished($typeId, $disciplineId, $search);
+        // ── Nombre de ressources par page (constante métier) ──────────────────────
+        // 12 = 4 lignes × 3 colonnes sur desktop, joliment divisible pour mobile (6 × 2 ou 12 × 1)
+        $limit = 12;
+
+        // ── Lecture de la page courante depuis l'URL (?page=N) ───────────────────
+        // max(1, ...) borne à 1 minimum pour éviter un OFFSET négatif si quelqu'un
+        // saisit manuellement ?page=0 ou ?page=-5 dans la barre d'adresse.
+        $page = max(1, (int) ($request->query->get('page') ?? 1));
+
+        // ── Comptage du total de ressources correspondant aux filtres ─────────────
+        // On compte AVANT de charger la page pour calculer totalPages.
+        // countPublished() fait un SELECT COUNT — pas de chargement d'entités en mémoire.
+        $total = $this->resourceRepository->countPublished($typeId, $disciplineId, $search);
+
+        // ── Calcul du nombre total de pages ───────────────────────────────────────
+        // ceil() arrondit au supérieur : 13 résultats / 12 par page = ceil(1.08) = 2 pages.
+        // max(1, ...) garantit au moins 1 page même si le catalogue est vide (total = 0),
+        // ce qui évite d'afficher "page 1 sur 0" dans l'interface.
+        $totalPages = max(1, (int) ceil($total / $limit));
+
+        // ── Sécurité : borne la page courante entre 1 et totalPages ──────────────
+        // Si l'utilisateur arrive sur ?page=99 alors qu'il n'y a que 3 pages,
+        // on le redirige silencieusement vers la dernière page.
+        // Note : on corrige ici plutôt que de lancer une 404 pour ne pas pénaliser
+        // les anciens liens bookmarkés dont le contenu a diminué.
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
+
+        // ── Chargement de la page courante uniquement ─────────────────────────────
+        // findPublished() avec $page != null applique LIMIT + OFFSET → charge 12 entités max.
+        $resources   = $this->resourceRepository->findPublished($typeId, $disciplineId, $search, $page, $limit);
         $types       = $this->typeRepository->findAllOrdered();
         $disciplines = $this->disciplineRepository->findAllOrdered();
 
         return $this->render('resource/index.html.twig', [
-            'resources'          => $resources,
-            'types'              => $types,
-            'disciplines'        => $disciplines,
-            // On repasse les filtres actifs au template pour pré-sélectionner les <select>
-            'currentTypeId'      => $typeId,
+            'resources'           => $resources,
+            'types'               => $types,
+            'disciplines'         => $disciplines,
+            // ── Filtres actifs (renvoyés au template pour pré-sélectionner les champs) ──
+            'currentTypeId'       => $typeId,
             'currentDisciplineId' => $disciplineId,
-            'currentSearch'      => $search ?? '',
+            'currentSearch'       => $search ?? '',
+            // ── Données de pagination ──────────────────────────────────────────────
+            'currentPage'         => $page,        // Page actuellement affichée (1-based)
+            'totalPages'          => $totalPages,  // Nombre total de pages calculé
+            'total'               => $total,        // Nombre total de résultats (pour l'eyebrow)
         ]);
     }
 
