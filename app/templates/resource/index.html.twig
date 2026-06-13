@@ -558,17 +558,24 @@
             <h1 class="opp-title">Ce qui est<br>ouvert.</h1>
         </div>
 
-        {# Bouton soumettre : visible à droite du titre #}
-        <a href="{{ path('app_resource_submit') }}"
-           class="btn-submit-resource"
-           title="Proposer une ressource à la communauté">
-            {# Signe plus dessiné manuellement en SVG pour cohérence avec les icônes du prototype #}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <path d="M12 5v14M5 12h14"/>
-            </svg>
-            Soumettre une ressource
-        </a>
+        {#
+            Bouton soumettre : visible UNIQUEMENT pour les structures (et admins).
+            Décision produit V1 : seules les structures proposent des opportunités.
+            Les artistes voient le catalogue et les favoris mais pas ce bouton.
+            is_granted('ROLE_STRUCTURE') couvre aussi ROLE_ADMIN (hiérarchie security.yaml).
+        #}
+        {% if is_granted('ROLE_STRUCTURE') %}
+            <a href="{{ path('app_resource_submit') }}"
+               class="btn-submit-resource"
+               title="Proposer une ressource à la communauté">
+                {# Signe plus dessiné manuellement en SVG pour cohérence avec les icônes du prototype #}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14"/>
+                </svg>
+                Soumettre une ressource
+            </a>
+        {% endif %}
     </div>
 </div>
 
@@ -675,13 +682,26 @@
             </a>
         {% else %}
             <div class="empty-state__title">Pas encore de ressources</div>
-            <p class="empty-state__text">
-                Le catalogue est vide pour l'instant.<br>
-                Soyez le premier à partager une opportunité avec la communauté.
-            </p>
-            <a href="{{ path('app_resource_submit') }}" class="empty-state__cta">
-                Soumettre une ressource
-            </a>
+            {#
+                État vide du catalogue :
+                - Les structures voient un CTA pour soumettre la première ressource.
+                - Les artistes voient un message d'attente sans bouton (ils ne soumettent pas).
+                Décision produit V1 : seules les structures soumettent des opportunités.
+            #}
+            {% if is_granted('ROLE_STRUCTURE') %}
+                <p class="empty-state__text">
+                    Le catalogue est vide pour l'instant.<br>
+                    Soyez la première structure à partager une opportunité avec la communauté.
+                </p>
+                <a href="{{ path('app_resource_submit') }}" class="empty-state__cta">
+                    Soumettre une ressource
+                </a>
+            {% else %}
+                <p class="empty-state__text">
+                    Le catalogue est vide pour l'instant.<br>
+                    Les opportunités proposées par les structures partenaires apparaîtront ici.
+                </p>
+            {% endif %}
         {% endif %}
     </div>
 

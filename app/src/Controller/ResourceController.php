@@ -147,9 +147,16 @@ class ResourceController extends AbstractController
 
     /**
      * Formulaire de soumission d'une nouvelle ressource.
-     * Accessible à tous les utilisateurs connectés en V1 (artistes sans org compris).
+     *
+     * Décision produit V1 : seules les STRUCTURES (et les admins par héritage de rôles)
+     * peuvent soumettre des ressources / opportunités.
+     * Les artistes et membres standard consultent, mettent en favori et candidatent
+     * via le lien externe de la structure — mais ne soumettent plus.
+     *
+     * Changement : ROLE_USER → ROLE_STRUCTURE
+     * ROLE_ADMIN hérite de tous les rôles (security.yaml) et passe donc naturellement.
      */
-    #[IsGranted('ROLE_USER')]
+    #[IsGranted('ROLE_STRUCTURE')]
     #[Route('/submit', name: 'submit', methods: ['GET', 'POST'])]
     public function submit(Request $request): Response
     {
@@ -212,12 +219,18 @@ class ResourceController extends AbstractController
      * Page "Mes ressources" : liste des ressources soumises par l'utilisateur connecté.
      * Affiche le statut de chaque soumission (en attente, publiée, rejetée).
      *
+     * Décision produit V1 : seules les STRUCTURES (et admins) soumettent des ressources,
+     * donc cette page de suivi n'a de sens que pour elles.
+     * Les artistes n'ont plus accès à cette page (ils voient "Mes favoris" à la place).
+     *
+     * Changement : ROLE_USER → ROLE_STRUCTURE
+     *
      * Supporte le filtre par statut via le paramètre query ?status=
      * Valeurs autorisées : draft, pending, published, rejected, archived
      * (correspondant aux cases de l'enum ResourceStatus).
      * Toute valeur invalide est silencieusement ignorée → on affiche toutes les ressources.
      */
-    #[IsGranted('ROLE_USER')]
+    #[IsGranted('ROLE_STRUCTURE')]
     #[Route('/my', name: 'my')]
     public function my(Request $request): Response
     {

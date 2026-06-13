@@ -374,8 +374,9 @@
     {#
         Bouton "Écrire un article +" visible uniquement pour les admins.
         is_granted('ROLE_ADMIN') utilise la hiérarchie de rôles de security.yaml.
-        Note : dans ArticleController, le formulaire de création est accessible
-        à tous les ROLE_USER (route 'app_article_new') — ce bouton est un raccourci.
+        Décision produit V1 : la publication est admin-only.
+        La route 'app_article_new' est elle-même protégée par #[IsGranted('ROLE_ADMIN')]
+        dans ArticleController — ce bouton est donc cohérent avec le contrôleur.
     #}
     {% if is_granted('ROLE_ADMIN') %}
         <a href="{{ path('app_article_new') }}" class="art-btn-new">

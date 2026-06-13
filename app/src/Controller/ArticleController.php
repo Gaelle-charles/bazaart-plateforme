@@ -75,7 +75,14 @@ class ArticleController extends AbstractController
 
     /**
      * Formulaire de création d'un nouvel article.
+     *
+     * Décision produit V1 : la publication d'articles est réservée aux admins.
+     * Les artistes et utilisateurs standard peuvent LIRE (index, show) mais
+     * ne peuvent pas CRÉER, MODIFIER ni SUPPRIMER d'articles.
+     * #[IsGranted('ROLE_ADMIN')] au niveau méthode complète la restriction de classe
+     * (qui laisse ROLE_USER accéder à index et show).
      */
+    #[IsGranted('ROLE_ADMIN')]
     #[Route('/new', name: 'new', methods: ['GET', 'POST'])]
     public function new(Request $request): Response
     {
@@ -122,8 +129,14 @@ class ArticleController extends AbstractController
 
     /**
      * Formulaire de modification d'un article existant.
-     * Accessible uniquement à l'auteur ou un admin.
+     *
+     * Décision produit V1 : seuls les admins peuvent modifier des articles.
+     * L'autorisation est intégralement portée par #[IsGranted('ROLE_ADMIN')] ci-dessus :
+     * Symfony lève une AccessDeniedException avant même d'entrer dans la méthode.
+     * L'ancienne garde interne « auteur OU admin » a été retirée car elle était
+     * inatteignable (dead code) et aurait pu créer une confusion pour les futurs devs.
      */
+    #[IsGranted('ROLE_ADMIN')]
     #[Route('/{id}/edit', name: 'edit', requirements: ['id' => '\d+'], methods: ['GET', 'POST'])]
     public function edit(int $id, Request $request): Response
     {
@@ -134,11 +147,6 @@ class ArticleController extends AbstractController
 
         /** @var User $user */
         $user = $this->getUser();
-
-        // Seul l'auteur ou un admin peut modifier
-        if ($article->getAuthor() !== $user && !$this->isGranted('ROLE_ADMIN')) {
-            throw $this->createAccessDeniedException('Vous ne pouvez pas modifier cet article.');
-        }
 
         if ($request->isMethod('POST')) {
             // Protection CSRF — même logique que new() : on vérifie le token avant
@@ -180,7 +188,13 @@ class ArticleController extends AbstractController
 
     /**
      * Supprime un article.
+     *
+     * Décision produit V1 : seuls les admins peuvent supprimer des articles.
+     * La redirection après suppression pointe vers app_article_my (liste des
+     * articles de l'admin), ce qui reste cohérent puisque les admins sont les
+     * seuls à avoir des articles.
      */
+    #[IsGranted('ROLE_ADMIN')]
     #[Route('/{id}/delete', name: 'delete', requirements: ['id' => '\d+'], methods: ['POST'])]
     public function delete(int $id, Request $request): Response
     {
@@ -208,7 +222,13 @@ class ArticleController extends AbstractController
 
     /**
      * Mes articles — liste des articles de l'utilisateur connecté (brouillons inclus).
+     *
+     * Décision produit V1 : cette page n'a de sens que pour les admins, puisque
+     * seuls eux peuvent créer des articles. On la restreint donc à ROLE_ADMIN.
+     * Un artiste ou membre standard qui tenterait d'accéder à /articles/my
+     * recevra une 403 Access Denied.
      */
+    #[IsGranted('ROLE_ADMIN')]
     #[Route('/my', name: 'my')]
     public function my(): Response
     {

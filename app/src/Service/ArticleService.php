@@ -10,10 +10,17 @@ use App\Enum\ArticleStatus;
 use App\Repository\ArticleRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
 /**
  * Logique métier pour les articles.
  * Gère la création, la mise à jour, la génération de slug et l'upload de couverture.
+ *
+ * Décision produit V1 : la publication, modification et suppression d'articles
+ * est réservée exclusivement aux ROLE_ADMIN.
+ * L'AuthorizationCheckerInterface est injectée pour utiliser la hiérarchie de rôles
+ * Symfony (contrairement à getRoles() qui ne voit que les rôles stockés en base,
+ * sans tenir compte de la hiérarchie définie dans security.yaml).
  */
 class ArticleService
 {
@@ -23,6 +30,9 @@ class ArticleService
         private readonly EntityManagerInterface $em,
         private readonly ArticleRepository $articleRepository,
         private readonly string $projectDir,
+        // Injectée pour les vérifications d'autorisation respectant la hiérarchie de rôles Symfony.
+        // Préféré à $user->getRoles() + in_array() qui ignore la hiérarchie (security.yaml).
+        private readonly AuthorizationCheckerInterface $authorizationChecker,
     ) {}
 
     /**
@@ -97,14 +107,25 @@ class ArticleService
     }
 
     /**
-     * Supprime un article (uniquement si l'utilisateur en est l'auteur ou est admin).
+     * Supprime un article.
+     *
+     * Décision produit V1 : seuls les ROLE_ADMIN peuvent supprimer des articles.
+     * La clause « auteur » a été retirée car :
+     *   - elle constituait une bombe à retardement si un futur appelant contournait
+     *     le contrôleur (un artiste auteur d'un vieil article aurait pu supprimer) ;
+     *   - in_array('ROLE_ADMIN', $user->getRoles()) ignorait la hiérarchie Symfony.
+     *
+     * On utilise AuthorizationCheckerInterface::isGranted() pour respecter la
+     * hiérarchie de rôles définie dans security.yaml (ROLE_ADMIN hérite de tout).
+     *
+     * Le paramètre $user est conservé dans la signature pour ne pas casser l'appelant
+     * existant (ArticleController::delete) — il n'est plus utilisé en interne.
+     * Un refactor de la signature pourra être fait en V2 si le contrôleur est mis à jour.
      */
     public function deleteArticle(Article $article, User $user): bool
     {
-        $isAuthor = $article->getAuthor() === $user;
-        $isAdmin  = in_array('ROLE_ADMIN', $user->getRoles(), true);
-
-        if (!$isAuthor && !$isAdmin) {
+        // Seul un admin peut supprimer un article — vérification via la hiérarchie Symfony.
+        if (!$this->authorizationChecker->isGranted('ROLE_ADMIN')) {
             return false;
         }
 

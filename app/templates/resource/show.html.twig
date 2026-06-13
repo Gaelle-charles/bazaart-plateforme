@@ -817,25 +817,30 @@
             </div>
         {% endif %}
 
-        {# ── Bloc "Soumettre une ressource similaire" ── #}
         {#
-           Bloc accent lime : CTA secondaire qui encourage la contribution.
-           Fond lime + texte encre = bouton "dark" du design system (inversé).
+            Bloc "Contribuer" — visible uniquement pour les structures et admins.
+            Décision produit V1 : seules les structures soumettent des ressources.
+            Les artistes voient les ressources et candidatent via le lien externe
+            (bouton "Candidater / En savoir plus" dans la colonne principale),
+            mais ne voient pas ce CTA de soumission.
+            is_granted('ROLE_STRUCTURE') couvre aussi ROLE_ADMIN (hiérarchie security.yaml).
         #}
-        <div class="side-block side-block--accent">
-            <div class="side-block__eyebrow">Contribuer</div>
-            <p style="font-family:var(--body); font-size:13px; color:var(--ink); line-height:1.5; margin:0;">
-                Tu connais une opportunité similaire ?<br>
-                Partage-la avec la communauté Bazaart.
-            </p>
-            <a href="{{ path('app_resource_submit') }}" class="btn-side-cta">
-                Soumettre une ressource
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                    <path d="M5 12h14M13 5l7 7-7 7"/>
-                </svg>
-            </a>
-        </div>
+        {% if is_granted('ROLE_STRUCTURE') %}
+            <div class="side-block side-block--accent">
+                <div class="side-block__eyebrow">Contribuer</div>
+                <p style="font-family:var(--body); font-size:13px; color:var(--ink); line-height:1.5; margin:0;">
+                    Vous connaissez une opportunité similaire ?<br>
+                    Partagez-la avec la communauté Bazaart.
+                </p>
+                <a href="{{ path('app_resource_submit') }}" class="btn-side-cta">
+                    Soumettre une ressource
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M5 12h14M13 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+        {% endif %}
 
     </aside>
 

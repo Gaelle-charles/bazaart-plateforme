@@ -43,9 +43,9 @@
  #   app_dashboard           → DashboardController (route exacte)
  #   app_artist_profile_show → ArtistProfileController#show (route "show" sur préfixe "app_artist_profile_")
  #   app_artist_profile_edit → ArtistProfileController#edit
- #   app_resource_my         → ResourceController#my
- #   app_resource_index      → ResourceController#index
- #   app_resource_submit     → ResourceController#submit
+ #   app_resource_index      → ResourceController#index (accessible à tous les ROLE_USER)
+ #   app_resource_my         → ResourceController#my   (ROLE_STRUCTURE uniquement — ne pas exposer aux artistes)
+ #   app_resource_submit     → ResourceController#submit (ROLE_STRUCTURE uniquement — ne pas exposer aux artistes)
  #   app_messaging_index     → MessagingController#index
  #   app_forum_index         → ForumController#index
  #   app_article_index       → ArticleController#index
@@ -1126,12 +1126,19 @@
 
         {% else %}
 
-            {# État vide : aucune ressource disponible #}
+            {#
+                État vide : aucune ressource disponible.
+                Décision produit V1 : seules les structures soumettent des ressources.
+                - Structures et admins : on affiche le CTA "Soumettre une ressource".
+                - Artistes et membres : message d'attente sans bouton de soumission.
+            #}
             <div class="db-empty">
                 <div class="db-empty__text">Aucune ressource disponible</div>
-                <a href="{{ path('app_resource_submit') }}" class="db-empty__link">
-                    Soumettre une ressource →
-                </a>
+                {% if is_granted('ROLE_STRUCTURE') %}
+                    <a href="{{ path('app_resource_submit') }}" class="db-empty__link">
+                        Soumettre une ressource →
+                    </a>
+                {% endif %}
             </div>
 
         {% endif %}

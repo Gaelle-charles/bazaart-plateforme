@@ -485,13 +485,19 @@
             </div>
 
             {#
-             # Actions admin/auteur : Modifier + Supprimer
-             # On teste app.user en premier (guard) : si personne n'est connecté,
-             # app.user est null et la comparaison `null == article.author` lèverait
-             # une erreur (appel de méthodes sur null côté Doctrine).
-             # is_granted() est sûr même sans utilisateur connecté (retourne false).
+             # Actions de gestion : Modifier + Supprimer
+             #
+             # Décision produit V1 : la publication des articles est réservée aux ADMINS.
+             # On remplace l'ancienne condition (auteur OU admin) par une condition
+             # strictement admin-only : is_granted('ROLE_ADMIN').
+             #
+             # Avant : {% if app.user and (app.user == article.author or is_granted('ROLE_ADMIN')) %}
+             # Après : {% if is_granted('ROLE_ADMIN') %}
+             #
+             # is_granted() est sûr même sans utilisateur connecté (retourne false sans
+             # lever d'exception), donc on n'a plus besoin de garder le "app.user" en garde.
             #}
-            {% if app.user and (app.user == article.author or is_granted('ROLE_ADMIN')) %}
+            {% if is_granted('ROLE_ADMIN') %}
                 <div class="art-actions">
 
                     <a href="{{ path('app_article_edit', {id: article.id}) }}"
