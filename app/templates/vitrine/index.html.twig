@@ -126,7 +126,11 @@
     gap:             8px;
     padding:         var(--btn-padding);       /* 11px 16px */
     border-radius:   var(--btn-radius);        /* 0 dans Street */
-    font-family:     var(--body);
+    /* Modif B : on utilise JetBrains Mono (--mono) pour les boutons.
+       Cohérent avec le style "affiche imprimée" Street — la Mono apporte
+       une texture technique et résolue qui contraste bien avec le corps
+       de texte Space Grotesk (--body). */
+    font-family:     var(--mono);
     font-size:       var(--btn-font-size);     /* 12px */
     font-weight:     var(--btn-font-weight);   /* 700 */
     letter-spacing:  var(--btn-letter-spacing); /* .06em */
@@ -683,7 +687,11 @@
     margin:      0;
 }
 
-/* Côté droit : liste de 4 features dans un encadré */
+/* Côté droit : liste de features dans un encadré.
+   Modif C : on passe de 4 à 2 features (retrait Forum + Lives et Blog & ressources).
+   La disposition flex colonne est conservée — chaque feature occupe 50% de la hauteur
+   de l'encadré. Avec seulement 2 items, les cartes sont plus aérées et le CTA
+   "Opportunités" / "Dashboard artiste" ressort mieux visuellement. */
 .lp-saas__features {
     border:  1px solid var(--bg);
     display: flex;
@@ -1432,6 +1440,73 @@
         line-height:    .92; /* légèrement aéré pour la lisibilité à petite taille */
     }
 }
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   MODIFICATION D — SECTION VIDÉO
+   Section intercalée entre SAAS PITCH et OPPORTUNITÉS.
+   Sobre et cohérent avec le reste de la vitrine :
+     - fond --bg (sable) comme les sections neutres
+     - bordure --ink (1px) encadrant la vidéo = style "affiche imprimée"
+     - titre de section via les classes existantes lp-section-header*
+
+   La balise <video> est utilisée avec :
+     - controls  : lecteur natif du navigateur (play/pause/volume)
+     - playsinline : évite le mode plein-écran automatique sur iOS
+     - preload="metadata" : le navigateur charge uniquement la durée et
+       les métadonnées, pas la vidéo entière (économie de bande passante)
+     - PAS d'autoplay : l'utilisateur choisit de lire (accessibilité WCAG 2.1)
+────────────────────────────────────────────────────────────────────── */
+
+/* Conteneur de section : hérite du padding-bottom standard des autres sections */
+.lp-video {
+    padding-bottom: 48px;
+    border-bottom:  1px solid var(--ink);
+}
+
+/* Enveloppe de la vidéo — bordure "affiche", largeur contrainte */
+.lp-video__wrapper {
+    /* max-width : on limite à 960px pour que la vidéo reste confortable
+       et ne s'étire pas excessivement sur les très grands écrans.
+       La section .lp-container plafonne déjà à 1440px, mais 960px
+       suffit pour une vidéo de présentation — rendu plus élégant. */
+    max-width:    960px;
+    margin-inline: auto;
+    border:       1px solid var(--ink);
+    /* overflow:hidden pour que la bordure couvre bien les coins
+       si le navigateur ajoute des styles natifs à la <video> */
+    overflow:     hidden;
+}
+
+/* La vidéo occupe toute la largeur de son conteneur, hauteur proportionnelle.
+   display:block retire le petit espace blanc que les navigateurs ajoutent
+   sous les éléments inline (comportement hérité des images en HTML). */
+.lp-video__player {
+    display: block;
+    width:   100%;
+    height:  auto;
+}
+
+/* Texte de repli (affiché uniquement si le navigateur ne supporte pas <video>).
+   Style mono discret, cohérent avec les messages d'état dans la vitrine. */
+.lp-video__fallback {
+    display:        block;
+    padding:        32px 24px;
+    font-family:    var(--mono);
+    font-size:      13px;
+    letter-spacing: .06em;
+    color:          var(--ink-mute);
+    text-align:     center;
+}
+
+/* Responsive : sur mobile ≤480px, on retire le max-width pour que
+   la vidéo profite de toute la largeur disponible (padding déjà réduit
+   par .lp-container @480px → 16px de chaque côté). */
+@media (max-width: 480px) {
+    .lp-video__wrapper {
+        max-width: none;
+    }
+}
 </style>
 {% endblock %}
 
@@ -1579,124 +1654,6 @@
 
 
         {# ════════════════════════════════════════════════════════════════
-           4. SECTION HUBS — Les 3 pôles de l'association
-           Grille 3 colonnes avec bordures partagées (style grille d'affiche).
-           Données statiques — fidèles au prototype LandingManifesto.
-        ════════════════════════════════════════════════════════════════ #}
-        <section class="lp-hubs lp-container" aria-labelledby="lp-hubs-title">
-
-            {# Section header avec index, titre, sous-titre #}
-            <div class="lp-section-header">
-                <div class="lp-section-header__left">
-                    <span class="lp-section-header__index" aria-hidden="true">01</span>
-                    <h2 class="lp-section-header__title" id="lp-hubs-title">
-                        Les trois hubs de l'asso
-                    </h2>
-                    <span class="lp-section-header__sub">événement · ingénierie · transmission</span>
-                </div>
-            </div>
-
-            {# Grille des 3 hubs #}
-            <div class="lp-hubs__grid">
-
-                {# ── Hub 01 : EVENT ── #}
-                <article class="lp-hub lp-hub--bordered" aria-labelledby="lp-hub-event-title">
-                    <div class="lp-hub__header">
-                        <span class="lp-hub__no">HUB 01</span>
-                        {# Chip lime — couleur prototypée pour EVENT #}
-                        <span class="lp-chip lp-chip--lime">Programmation</span>
-                    </div>
-                    <h3 class="lp-hub__name" id="lp-hub-event-title">EVENT</h3>
-                    <p class="lp-hub__desc">
-                        On produit. Soirées de restitution, vernissages alternatifs,
-                        plateaux mixtes — on met les artistes BazaArt sur scène,
-                        en vrai, devant des gens.
-                    </p>
-                    {# Micro-liste de stats en bas de colonne #}
-                    <div class="lp-hub__stats">
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>18 événements / an</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>3 villes</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>9 000 spectateurs cumulés</span>
-                        </div>
-                    </div>
-                </article>
-
-                {# ── Hub 02 : INGÉNIERIE CULTURELLE ── #}
-                <article class="lp-hub lp-hub--bordered" aria-labelledby="lp-hub-ing-title">
-                    <div class="lp-hub__header">
-                        <span class="lp-hub__no">HUB 02</span>
-                        {# Chip neutre sable — couleur --bg-alt pour ce hub #}
-                        <span class="lp-chip lp-chip--sand">Accompagnement</span>
-                    </div>
-                    {#
-                        "INGÉNIERIE\nCULTURELLE" — le retour à la ligne est
-                        rendu par white-space:pre-line sur .lp-hub__name.
-                        On utilise un <br> HTML ici pour plus de clarté.
-                    #}
-                    <h3 class="lp-hub__name" id="lp-hub-ing-title">INGÉNIERIE<br>CULTURELLE</h3>
-                    <p class="lp-hub__desc">
-                        On structure. Conseil aux artistes et aux structures sur
-                        le montage de projets, les financements croisés, et la
-                        conduite d'une production de A à Z.
-                    </p>
-                    <div class="lp-hub__stats">
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>120 projets accompagnés</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>78% taux de réussite</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>Réseau de 40 financeurs</span>
-                        </div>
-                    </div>
-                </article>
-
-                {# ── Hub 03 : FORMATION ── #}
-                <article class="lp-hub" aria-labelledby="lp-hub-form-title">
-                    <div class="lp-hub__header">
-                        <span class="lp-hub__no">HUB 03</span>
-                        {# Chip orange — accent-2 pour FORMATION #}
-                        <span class="lp-chip lp-chip--orange">Transmission</span>
-                    </div>
-                    <h3 class="lp-hub__name" id="lp-hub-form-title">FORMATION</h3>
-                    <p class="lp-hub__desc">
-                        On forme. Cycles courts (fiscalité, droit, communication, IA)
-                        animés par des pairs et des experts. Gratuit pour les adhérents,
-                        abordable pour les autres.
-                    </p>
-                    <div class="lp-hub__stats">
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>12 cycles / an</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>280 artistes formés</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>Note moyenne 4,7 / 5</span>
-                        </div>
-                    </div>
-                </article>
-
-            </div>{# /.lp-hubs__grid #}
-        </section>
-
-
-        {# ════════════════════════════════════════════════════════════════
            5. SECTION SAAS PITCH
            Fond --ink (quasi-noir). Grille 2 colonnes : pitch (60%)
            + liste de 4 features dans un encadré (40%).
@@ -1747,23 +1704,8 @@
                             <span class="lp-saas__feature-arrow" aria-hidden="true">→</span>
                         </a>
 
-                        {# Feature 2 : Forum + Lives #}
-                        {#
-                            BACK : remplacer href="#" par path('app_forum_index')
-                            quand le module Communauté sera livré.
-                        #}
-                        <a href="#section-community" class="lp-saas__feature">
-                            <div class="lp-saas__feature-icon" aria-hidden="true">F</div>
-                            <div class="lp-saas__feature-body">
-                                <div class="lp-saas__feature-title">Forum + Lives</div>
-                                <p class="lp-saas__feature-desc">
-                                    Pose une question, lance un live, monte un collectif.
-                                </p>
-                            </div>
-                            <span class="lp-saas__feature-arrow" aria-hidden="true">→</span>
-                        </a>
-
-                        {# Feature 3 : Dashboard artiste #}
+                        {# Feature 2 : Dashboard artiste
+                           (Modif C : Feature 2 "Forum + Lives" retirée — devient 2e position) #}
                         <a href="{{ path('app_register') }}" class="lp-saas__feature">
                             <div class="lp-saas__feature-icon" aria-hidden="true">D</div>
                             <div class="lp-saas__feature-body">
@@ -1775,26 +1717,76 @@
                             <span class="lp-saas__feature-arrow" aria-hidden="true">→</span>
                         </a>
 
-                        {# Feature 4 : Blog & ressources #}
-                        {#
-                            BACK : créer route app_blog_index → /blog
-                            pour les articles longs. En V1, ancre vers les ressources.
-                        #}
-                        <a href="{{ path('app_resource_index') }}" class="lp-saas__feature">
-                            <div class="lp-saas__feature-icon" aria-hidden="true">B</div>
-                            <div class="lp-saas__feature-body">
-                                <div class="lp-saas__feature-title">Blog & ressources</div>
-                                <p class="lp-saas__feature-desc">
-                                    Articles longs, cartographies, modèles de dossier.
-                                </p>
-                            </div>
-                            <span class="lp-saas__feature-arrow" aria-hidden="true">→</span>
-                        </a>
-
+                    {# Modif C : Feature 4 "Blog & ressources" retirée.
+                       Il reste donc 2 features : Opportunités + Dashboard artiste. #}
                     </div>{# /.lp-saas__features #}
                 </div>{# /.lp-saas__grid #}
             </div>{# /.lp-container #}
         </section>
+
+
+        {# ════════════════════════════════════════════════════════════════
+           MODIFICATION D — SECTION VIDÉO DE PRÉSENTATION
+           Intercalée entre SAAS PITCH et OPPORTUNITÉS.
+           Vidéo MP4 locale servie via Symfony Asset (public/uploads/video/).
+           Aucun autoplay sonore : juste `controls` pour respecter les
+           recommandations WCAG 2.1 (pas de lecture automatique imposée).
+        ════════════════════════════════════════════════════════════════ #}
+        <section class="lp-video lp-container" aria-labelledby="lp-video-title">
+
+            {# En-tête de section — réutilise les classes existantes lp-section-header* #}
+            <div class="lp-section-header">
+                <div class="lp-section-header__left">
+                    {# Numéro de section — renumérotation séquentielle après réorganisation :
+                       Vidéo=01, Opportunités=02, Communauté=03, Hubs=04 (déplacée en fin). #}
+                    <span class="lp-section-header__index" aria-hidden="true">01</span>
+                    <h2 class="lp-section-header__title" id="lp-video-title">
+                        Bazaart en images
+                    </h2>
+                    <span class="lp-section-header__sub">qui nous sommes</span>
+                </div>
+            </div>
+
+            {# Enveloppe de la vidéo — bordure encre style "affiche imprimée" #}
+            <div class="lp-video__wrapper">
+                {#
+                    <video> : attributs choisis avec soin :
+                      - controls      : affiche les contrôles natifs (play, pause, volume, durée)
+                      - playsinline   : sur iOS, la vidéo joue dans la page sans passer
+                                        en plein écran automatiquement
+                      - preload="metadata" : le navigateur charge uniquement la durée et
+                                        la miniature, pas les données vidéo — économie réseau
+                    PAS d'autoplay   : conforme WCAG 2.1 (Criterion 1.4.2 Audio Control)
+
+                    Chemin via Twig asset() :
+                      asset('uploads/video/video-artiste-bazaart.mp4')
+                      → résolu vers /uploads/video/video-artiste-bazaart.mp4
+                      → fichier attendu dans public/uploads/video/
+                #}
+                <video
+                    class="lp-video__player"
+                    controls
+                    playsinline
+                    preload="metadata"
+                    aria-label="Vidéo de présentation de l'association Bazaart et des artistes de la diaspora afro-atlantique"
+                >
+                    <source src="{{ asset('uploads/video/video-artiste-bazaart.mp4') }}" type="video/mp4">
+                    {#
+                        Texte de repli : affiché uniquement si le navigateur
+                        ne supporte pas la balise <video> (navigateurs très anciens).
+                        Les navigateurs modernes (Chrome, Firefox, Safari, Edge)
+                        supportent tous <video> — ce texte est une sécurité de dernier recours.
+                    #}
+                    <span class="lp-video__fallback">
+                        Votre navigateur ne supporte pas la lecture vidéo.
+                        <a href="{{ asset('uploads/video/video-artiste-bazaart.mp4') }}" download="video-artiste-bazaart.mp4" style="color:var(--ink);text-decoration:underline;">
+                            Télécharger la vidéo
+                        </a>
+                    </span>
+                </video>
+            </div>
+
+        </section>{# /.lp-video #}
 
 
         {# ════════════════════════════════════════════════════════════════
@@ -2229,6 +2221,130 @@
 
                 </div>{# /.lp-cta__grid #}
             </div>{# /.lp-container #}
+        </section>
+
+
+        {# ════════════════════════════════════════════════════════════════
+           MODIFICATION A — SECTION HUBS déplacée ici (dernière section de contenu)
+           Originellement positionnée juste après le marquee hero (section 4).
+           Placée APRÈS le CTA inscription pour deux raisons :
+             1. Narrative : on présente la plateforme (SAAS, opps, communauté,
+                CTA) avant de présenter l'association physique (les hubs).
+                Le visiteur comprend d'abord ce qu'il peut faire, puis d'où ça vient.
+             2. Conversion : le CTA inscription est plus efficace après les
+                sections "plateforme" — les hubs arrivent ensuite pour ancrer
+                la légitimité de l'association.
+        ════════════════════════════════════════════════════════════════ #}
+        <section class="lp-hubs lp-container" aria-labelledby="lp-hubs-title">
+
+            {# Section header avec index, titre, sous-titre #}
+            <div class="lp-section-header">
+                <div class="lp-section-header__left">
+                    <span class="lp-section-header__index" aria-hidden="true">04</span>
+                    <h2 class="lp-section-header__title" id="lp-hubs-title">
+                        Les trois hubs de l'asso
+                    </h2>
+                    <span class="lp-section-header__sub">événement · ingénierie · transmission</span>
+                </div>
+            </div>
+
+            {# Grille des 3 hubs #}
+            <div class="lp-hubs__grid">
+
+                {# ── Hub 01 : EVENT ── #}
+                <article class="lp-hub lp-hub--bordered" aria-labelledby="lp-hub-event-title">
+                    <div class="lp-hub__header">
+                        <span class="lp-hub__no">HUB 01</span>
+                        {# Chip lime — couleur prototypée pour EVENT #}
+                        <span class="lp-chip lp-chip--lime">Programmation</span>
+                    </div>
+                    <h3 class="lp-hub__name" id="lp-hub-event-title">EVENT</h3>
+                    <p class="lp-hub__desc">
+                        On produit. Soirées de restitution, vernissages alternatifs,
+                        plateaux mixtes — on met les artistes BazaArt sur scène,
+                        en vrai, devant des gens.
+                    </p>
+                    {# Micro-liste de stats en bas de colonne #}
+                    <div class="lp-hub__stats">
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>18 événements / an</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>3 villes</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>9 000 spectateurs cumulés</span>
+                        </div>
+                    </div>
+                </article>
+
+                {# ── Hub 02 : INGÉNIERIE CULTURELLE ── #}
+                <article class="lp-hub lp-hub--bordered" aria-labelledby="lp-hub-ing-title">
+                    <div class="lp-hub__header">
+                        <span class="lp-hub__no">HUB 02</span>
+                        {# Chip neutre sable — couleur --bg-alt pour ce hub #}
+                        <span class="lp-chip lp-chip--sand">Accompagnement</span>
+                    </div>
+                    {#
+                        "INGÉNIERIE\nCULTURELLE" — le retour à la ligne est
+                        rendu par white-space:pre-line sur .lp-hub__name.
+                        On utilise un <br> HTML ici pour plus de clarté.
+                    #}
+                    <h3 class="lp-hub__name" id="lp-hub-ing-title">INGÉNIERIE<br>CULTURELLE</h3>
+                    <p class="lp-hub__desc">
+                        On structure. Conseil aux artistes et aux structures sur
+                        le montage de projets, les financements croisés, et la
+                        conduite d'une production de A à Z.
+                    </p>
+                    <div class="lp-hub__stats">
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>120 projets accompagnés</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>78% taux de réussite</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>Réseau de 40 financeurs</span>
+                        </div>
+                    </div>
+                </article>
+
+                {# ── Hub 03 : FORMATION ── #}
+                <article class="lp-hub" aria-labelledby="lp-hub-form-title">
+                    <div class="lp-hub__header">
+                        <span class="lp-hub__no">HUB 03</span>
+                        {# Chip orange — accent-2 pour FORMATION #}
+                        <span class="lp-chip lp-chip--orange">Transmission</span>
+                    </div>
+                    <h3 class="lp-hub__name" id="lp-hub-form-title">FORMATION</h3>
+                    <p class="lp-hub__desc">
+                        On forme. Cycles courts (fiscalité, droit, communication, IA)
+                        animés par des pairs et des experts. Gratuit pour les adhérents,
+                        abordable pour les autres.
+                    </p>
+                    <div class="lp-hub__stats">
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>12 cycles / an</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>280 artistes formés</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>Note moyenne 4,7 / 5</span>
+                        </div>
+                    </div>
+                </article>
+
+            </div>{# /.lp-hubs__grid #}
         </section>
 
     </main>
