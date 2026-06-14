@@ -763,6 +763,16 @@
     padding-bottom: 0; /* la grille a sa propre border-bottom */
 }
 
+/* État vide : affiché uniquement si aucune opportunité publiée (début de vie du site).
+   Style sobre, cohérent avec le ton éditorial de la vitrine. */
+.lp-opps__empty {
+    padding:     48px 24px;
+    border:      1px solid var(--ink);
+    text-align:  center;
+    font-size:   16px;
+    color:       var(--ink-mute);
+}
+
 /* Grille des 3 cartes opportunité */
 .lp-opps__grid {
     display:               grid;
@@ -1763,9 +1773,9 @@
 
 
         {# ════════════════════════════════════════════════════════════════
-           6. SECTION OPPORTUNITÉS — Aperçu statique du flux
-           3 cartes fictives présentant le type de contenu disponible.
-           Le vrai contenu viendra de la BDD via le contrôleur (V1 avancé).
+           6. SECTION OPPORTUNITÉS — Flux dynamique depuis la BDD
+           Les cartes affichent les N dernières opportunités publiées.
+           Variable injectée par HomeController : {{ opportunities }} (Resource[]).
         ════════════════════════════════════════════════════════════════ #}
         <section class="lp-opps lp-container" aria-labelledby="lp-opps-title">
 
@@ -1777,7 +1787,7 @@
                     </h2>
                     <span class="lp-section-header__sub">extrait du flux</span>
                 </div>
-                {# Bouton "Tout voir" à droite du header #}
+                {# Bouton "Tout voir" à droite du header — pointe vers la liste complète #}
                 <div class="lp-section-header__action">
                     <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--outline" style="font-size:11px;padding:7px 11px;">
                         Tout voir
@@ -1788,104 +1798,150 @@
                 </div>
             </div>
 
+            {# ── Cas : aucune opportunité publiée en BDD ─────────────────────────────
+               On affiche un message neutre plutôt que de casser la grille.
+               Ce cas ne devrait être que transitoire (base vide en tout début de vie).
+            ── #}
+            {% if opportunities is empty %}
+                <p class="lp-opps__empty">
+                    Bientôt de nouvelles opportunités — revenez vite&nbsp;!
+                </p>
+            {% else %}
+
             <div class="lp-opps__grid">
 
-                {# ── Carte 1 : Résidence ── #}
-                <article class="lp-opp-card lp-opp-card--bordered" aria-labelledby="lp-opp-1-title">
+                {# ── Boucle sur les opportunités retournées par HomeController ─────────
+                   opportunities = Resource[] (au plus 3 entrées, triées par date DESC).
+
+                   Convention CSS "bordure partagée" :
+                     Toutes les cartes SAUF la dernière ont la classe `lp-opp-card--bordered`
+                     qui dessine une bordure droite servant de séparateur visuel entre les
+                     colonnes de la grille. La dernière carte n'a pas de bordure à droite.
+                     → loop.last == true  → PAS de modificateur `--bordered`
+                     → loop.last == false → on ajoute `lp-opp-card--bordered`
+                ── #}
+                {% for resource in opportunities %}
+
+                {# ⚠️ Réinitialisation à CHAQUE itération. En Twig, une variable définie
+                   avec {% set %} dans une itération PERSISTE dans les suivantes (pas de
+                   scope par tour de boucle). Sans ce reset, une carte sans deadline
+                   hériterait du daysLeft de la carte précédente. On force null d'abord. #}
+                {% set daysLeft = null %}
+
+                {# ── Calcul du compte à rebours J-X ─────────────────────────────────
+                   On calcule le nombre de jours entre aujourd'hui et la deadline.
+
+                   Étapes :
+                     1. "now"|date("U") retourne le timestamp UNIX de maintenant (secondes).
+                     2. resource.deadline|date("U") retourne le timestamp de la deadline.
+                     3. La différence divisée par 86400 (= 60×60×24) donne des jours.
+                     4. On utilise max(0, ...) pour ne jamais afficher J-(-X).
+
+                   ATTENTION aux types Twig :
+                     - "now"|date("U") retourne une string en Twig, pas un int.
+                     - On doit faire resource.deadline|date("U") - "now"|date("U")
+                       mais Twig convertit les strings numériques en arithmétique.
+                     - La division par 86400 retourne un flottant, donc on floor()
+                       pour obtenir un entier complet (ex: 1.8 jour → 1 jour).
+
+                   Pourquoi Twig et pas PHP ?
+                     Le nombre de jours restants est une donnée de PRÉSENTATION pure
+                     (elle change à chaque chargement de page selon l'heure du visiteur).
+                     Le garder en Twig évite de polluer le contrôleur/service avec
+                     de la logique d'affichage, et c'est suffisamment simple ici.
+                ── #}
+                {% if resource.deadline %}
+                    {# Timestamp de la deadline (en secondes depuis epoch) #}
+                    {% set deadlineTs = resource.deadline|date("U") %}
+                    {# Timestamp actuel #}
+                    {% set nowTs = "now"|date("U") %}
+                    {# Différence en jours, toujours >= 0 (on n'affiche pas de jours négatifs) #}
+                    {% set daysLeft = (deadlineTs - nowTs) / 86400 %}
+                    {% set daysLeft = daysLeft > 0 ? daysLeft|round(0, 'floor') : 0 %}
+                {% endif %}
+
+                <article
+                    class="lp-opp-card{{ not loop.last ? ' lp-opp-card--bordered' : '' }}"
+                    aria-labelledby="lp-opp-{{ resource.id }}-title"
+                >
                     <div class="lp-opp-card__header">
-                        <span class="lp-chip lp-chip--sand">Résidence</span>
-                        <span class="lp-opp-card__countdown" aria-label="12 jours restants">J-12</span>
+                        {# Badge du type de ressource (ex: "Résidence", "Bourse", "Appel à projets") #}
+                        <span class="lp-chip lp-chip--sand">{{ resource.resourceType.name }}</span>
+
+                        {# Compte à rebours : affiché uniquement si une deadline existe ET qu'elle
+                           n'est pas passée (daysLeft > 0). On masque proprement si pas de deadline. #}
+                        {% if resource.deadline and daysLeft is defined and daysLeft > 0 %}
+                            <span class="lp-opp-card__countdown" aria-label="{{ daysLeft }} jours restants">
+                                J-{{ daysLeft }}
+                            </span>
+                        {% endif %}
                     </div>
-                    <h3 class="lp-opp-card__title" id="lp-opp-1-title">
-                        Résidence de création — Chartreuse de Villeneuve
+
+                    {# Titre de l'opportunité — lien vers la fiche détail.
+                       Un visiteur non connecté sera redirigé par Symfony vers /login
+                       (comportement par défaut du firewall, la route show est en ROLE_USER).
+                       Décision produit validée : on ne gère pas ce cas ici. #}
+                    <h3 class="lp-opp-card__title" id="lp-opp-{{ resource.id }}-title">
+                        <a href="{{ path('app_resource_show', { id: resource.id }) }}" class="lp-opp-card__title-link">
+                            {{ resource.title }}
+                        </a>
                     </h3>
+
                     <div class="lp-opp-card__metas">
-                        <span class="lp-opp-card__meta">
-                            {# Icône pin — SVG inline #}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                            </svg>
-                            Avignon
-                        </span>
-                        <span class="lp-opp-card__meta">
-                            {# Icône euro — SVG inline #}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M4 9h16M4 15h16M14 20c-3.3 0-6-2.7-6-6s2.7-6 6-6"/><path d="M14 4c3.3 0 6 2.7 6 6"/>
-                            </svg>
-                            jusqu'à 2&nbsp;000&nbsp;€
-                        </span>
+                        {# Localisation — affichée uniquement si le champ est renseigné #}
+                        {% if resource.location %}
+                            <span class="lp-opp-card__meta">
+                                {# Icône pin géolocalisation — SVG inline #}
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                                </svg>
+                                {{ resource.location }}
+                            </span>
+                        {% endif %}
+
+                        {# Deadline formatée — affichée si elle existe, en complément du J-X #}
+                        {% if resource.deadline %}
+                            <span class="lp-opp-card__meta">
+                                {# Icône calendrier — SVG inline #}
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                                </svg>
+                                {# Format court : "15 jan." — lisible et économe en espace sur la carte #}
+                                Clôture&nbsp;: {{ resource.deadline|date('d M.', 'fr') }}
+                            </span>
+                        {% endif %}
                     </div>
+
+                    {# Description tronquée à 120 caractères pour rester dans le gabarit de la carte.
+                       Le filtre `slice` de Twig fonctionne sur les chaînes de caractères :
+                         slice(début, longueur) → on prend 120 chars depuis le début.
+                       On ajoute "…" si la description est plus longue que 120 chars.
+                       Pourquoi 120 ? C'est la longueur des descriptions dans les cartes statiques
+                       d'origine — on conserve le même gabarit visuel. #}
                     <p class="lp-opp-card__desc">
-                        Résidence 4 semaines pour projets pluridisciplinaires. Hébergement inclus.
+                        {% if resource.description|length > 120 %}
+                            {{ resource.description|slice(0, 120) }}…
+                        {% else %}
+                            {{ resource.description }}
+                        {% endif %}
                     </p>
+
+                    {# Pied de carte : flèche → qui emmène vers la fiche détail #}
                     <div class="lp-opp-card__footer">
-                        <a href="{{ path('app_resource_index') }}" class="lp-opp-card__arrow" aria-label="Voir l'opportunité">→</a>
+                        <a
+                            href="{{ path('app_resource_show', { id: resource.id }) }}"
+                            class="lp-opp-card__arrow"
+                            aria-label="Voir l'opportunité : {{ resource.title }}"
+                        >→</a>
                     </div>
                 </article>
 
-                {# ── Carte 2 : Bourse ── #}
-                <article class="lp-opp-card lp-opp-card--bordered" aria-labelledby="lp-opp-2-title">
-                    <div class="lp-opp-card__header">
-                        <span class="lp-chip lp-chip--lime">Bourse</span>
-                        <span class="lp-opp-card__countdown" aria-label="28 jours restants">J-28</span>
-                    </div>
-                    <h3 class="lp-opp-card__title" id="lp-opp-2-title">
-                        Bourse Beaumarchais — SACD
-                    </h3>
-                    <div class="lp-opp-card__metas">
-                        <span class="lp-opp-card__meta">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                            </svg>
-                            Paris
-                        </span>
-                        <span class="lp-opp-card__meta">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M4 9h16M4 15h16M14 20c-3.3 0-6-2.7-6-6s2.7-6 6-6"/><path d="M14 4c3.3 0 6 2.7 6 6"/>
-                            </svg>
-                            3&nbsp;000&nbsp;€
-                        </span>
-                    </div>
-                    <p class="lp-opp-card__desc">
-                        Aide à l'écriture dramatique, musicale ou numérique pour primo-candidats.
-                    </p>
-                    <div class="lp-opp-card__footer">
-                        <a href="{{ path('app_resource_index') }}" class="lp-opp-card__arrow" aria-label="Voir l'opportunité">→</a>
-                    </div>
-                </article>
-
-                {# ── Carte 3 : Appel à projets ── #}
-                <article class="lp-opp-card" aria-labelledby="lp-opp-3-title">
-                    <div class="lp-opp-card__header">
-                        <span class="lp-chip lp-chip--orange">Appel à projets</span>
-                        <span class="lp-opp-card__countdown" aria-label="45 jours restants">J-45</span>
-                    </div>
-                    <h3 class="lp-opp-card__title" id="lp-opp-3-title">
-                        Festival Afropunk Paris — Scène ouverte
-                    </h3>
-                    <div class="lp-opp-card__metas">
-                        <span class="lp-opp-card__meta">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                            </svg>
-                            Paris
-                        </span>
-                        <span class="lp-opp-card__meta">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M4 9h16M4 15h16M14 20c-3.3 0-6-2.7-6-6s2.7-6 6-6"/><path d="M14 4c3.3 0 6 2.7 6 6"/>
-                            </svg>
-                            Cachet + promo
-                        </span>
-                    </div>
-                    <p class="lp-opp-card__desc">
-                        Candidature pour la scène émergente du festival, toutes disciplines.
-                    </p>
-                    <div class="lp-opp-card__footer">
-                        <a href="{{ path('app_resource_index') }}" class="lp-opp-card__arrow" aria-label="Voir l'opportunité">→</a>
-                    </div>
-                </article>
+                {% endfor %}
 
             </div>{# /.lp-opps__grid #}
+
+            {% endif %}{# /if opportunities is empty #}
+
         </section>
 
 
