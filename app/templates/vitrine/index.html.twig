@@ -1471,7 +1471,11 @@
        La section .lp-container plafonne déjà à 1440px, mais 960px
        suffit pour une vidéo de présentation — rendu plus élégant. */
     max-width:    960px;
-    margin-inline: auto;
+    /* margin : 40px en HAUT pour décoller la vidéo du trait sous le titre de
+       section (border-bottom du lp-section-header), "auto" sur les côtés pour
+       la CENTRER horizontalement, 0 en bas (la section a déjà padding-bottom:48px).
+       → la vidéo est aérée et centrée, plus collée au trait. */
+    margin:       40px auto 0;
     border:       1px solid var(--ink);
     /* overflow:hidden pour que la bordure couvre bien les coins
        si le navigateur ajoute des styles natifs à la <video> */
