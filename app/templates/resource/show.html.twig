@@ -781,7 +781,6 @@
                       action="{{ path('app_resource_favorite_toggle', {id: resource.id}) }}"
                       class="favorite-form"
                       data-resource-id="{{ resource.id }}"
-                      data-token="{{ csrf_token('resource_favorite_' ~ resource.id) }}"
                       data-favorited="{{ isFavorited ? 'true' : 'false' }}"
                       data-count="{{ favoriteCount }}">
 
@@ -793,18 +792,32 @@
                             aria-pressed="{{ isFavorited ? 'true' : 'false' }}"
                             aria-label="{{ isFavorited ? 'Retirer des favoris' : 'Ajouter aux favoris' }}">
 
-                        {# Icône cœur SVG : plein si favori, contour sinon #}
-                        {% if isFavorited %}
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--accent)" stroke="var(--accent)"
-                                 stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-                                <path d="M12 21s-7-4.5-9.5-9C.7 8 3 4 6.5 4 9 4 10.5 5.5 12 7.5 13.5 5.5 15 4 17.5 4 21 4 23.3 8 21.5 12 19 16.5 12 21 12 21z"/>
-                            </svg>
-                        {% else %}
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
-                                <path d="M12 21s-7-4.5-9.5-9C.7 8 3 4 6.5 4 9 4 10.5 5.5 12 7.5 13.5 5.5 15 4 17.5 4 21 4 23.3 8 21.5 12 19 16.5 12 21 12 21z"/>
-                            </svg>
-                        {% endif %}
+                        {#
+                            Stratégie double-SVG : les deux icônes cœur sont toujours dans le DOM.
+                            Le JS bascule display:none sur l'une d'elles selon l'état favori.
+                            Cela évite de reconstruire le SVG en JS (plus robuste et plus lisible).
+
+                            icon-heart-filled  → cœur PLEIN  (favori actif)
+                            icon-heart-outline → cœur CONTOUR (non favori)
+                        #}
+                        {# Cœur plein — visible si isFavorited, masqué sinon via style inline #}
+                        <svg class="icon-heart-filled"
+                             width="16" height="16" viewBox="0 0 24 24"
+                             fill="var(--accent)" stroke="var(--accent)"
+                             stroke-width="1.5" stroke-linecap="round"
+                             aria-hidden="true"
+                             style="{{ isFavorited ? '' : 'display:none' }}">
+                            <path d="M12 21s-7-4.5-9.5-9C.7 8 3 4 6.5 4 9 4 10.5 5.5 12 7.5 13.5 5.5 15 4 17.5 4 21 4 23.3 8 21.5 12 19 16.5 12 21 12 21z"/>
+                        </svg>
+                        {# Cœur contour — visible si non favori, masqué sinon #}
+                        <svg class="icon-heart-outline"
+                             width="16" height="16" viewBox="0 0 24 24"
+                             fill="none" stroke="currentColor"
+                             stroke-width="1.7" stroke-linecap="round"
+                             aria-hidden="true"
+                             style="{{ isFavorited ? 'display:none' : '' }}">
+                            <path d="M12 21s-7-4.5-9.5-9C.7 8 3 4 6.5 4 9 4 10.5 5.5 12 7.5 13.5 5.5 15 4 17.5 4 21 4 23.3 8 21.5 12 19 16.5 12 21 12 21z"/>
+                        </svg>
 
                         {{ isFavorited ? 'Dans mes favoris' : 'Ajouter aux favoris' }}
 
@@ -846,4 +859,158 @@
 
 </div>
 
+{% endblock %}
+
+{#
+ # ── Bloc JavaScript — interception du bouton Favori ──────────────────────────
+ # On étend le bloc "javascripts" défini dans base_app.html.twig plutôt que de
+ # l'écraser. {{ parent() }} garantit que le JS commun (Turbo, Stimulus, etc.)
+ # reste chargé.
+ #
+ # Pourquoi ce JS ici et pas dans un fichier séparé ?
+ # Le bouton favori n'existe que sur CETTE page → le script est minimal et
+ # n'a pas besoin d'être chargé globalement. C'est la convention du projet
+ # (cf. CLAUDE.md §15 : JS inline via {% block javascripts %}).
+ #}
+{% block javascripts %}
+{{ parent() }}
+<script>
+(function () {
+    'use strict';
+
+    // ── Sélection des éléments ──────────────────────────────────────────────
+    // On vérifie l'existence de chaque élément avant de l'utiliser (code défensif).
+    const form   = document.querySelector('.favorite-form');
+    const button = form ? form.querySelector('.btn-favorite') : null;
+
+    // Si le formulaire n'est pas sur la page (utilisateur non connecté ou élément absent),
+    // on sort immédiatement pour ne rien casser.
+    if (!form || !button) {
+        return;
+    }
+
+    // ── Stratégie pour basculer l'icône cœur ───────────────────────────────
+    // Choix retenu : deux SVG coexistent dans le DOM dès le chargement de la page.
+    // L'un porte la classe "icon-heart-filled" (cœur plein = favori actif),
+    // l'autre "icon-heart-outline" (cœur contour = non favori).
+    // On masque/affiche l'un ou l'autre avec display:none selon l'état.
+    //
+    // Alternative écartée : remplacer innerHTML du bouton à la volée → plus fragile
+    // (risque de perdre d'autres enfants du bouton, plus difficile à relire).
+    //
+    // Pour que cette approche fonctionne, les deux SVG doivent être présents dans
+    // le HTML au chargement. Voir le bloc Twig ci-dessous (ligne ~797) qui est
+    // modifié pour rendre les deux SVG présents simultanément.
+    const iconFilled  = button.querySelector('.icon-heart-filled');
+    const iconOutline = button.querySelector('.icon-heart-outline');
+
+    // Compteur affiché à côté du bouton (optionnel — peut ne pas exister si count=0 au chargement).
+    // Déclaré en "let" (pas "const") car la référence peut être réassignée plus bas
+    // quand on crée dynamiquement le span au premier ajout de favori.
+    let countSpan = button.querySelector('.favorite-count');
+
+    // ── Interception de la soumission ──────────────────────────────────────
+    form.addEventListener('submit', function (e) {
+        // Empêche la navigation par défaut du formulaire
+        e.preventDefault();
+
+        // Lecture de l'état courant depuis l'attribut data-* du formulaire
+        // (plus fiable que de lire les classes CSS)
+        const isFavorited = form.dataset.favorited === 'true';
+
+        // Construction du corps de la requête :
+        // FormData inclut automatiquement le champ <input type="hidden" name="_token">,
+        // ce qui satisfait la validation CSRF côté contrôleur Symfony.
+        const body = new FormData(form);
+
+        fetch(form.action, {
+            method: 'POST',
+            // L'en-tête X-Requested-With permet au contrôleur de détecter
+            // la requête AJAX via $request->isXmlHttpRequest().
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: body,
+        })
+        .then(function (response) {
+            // Si la réponse HTTP n'est pas ok (ex: 403 CSRF, 404, 500),
+            // on rejette la promesse pour tomber dans le catch.
+            if (!response.ok) {
+                return Promise.reject(new Error('Réponse serveur non-ok : ' + response.status));
+            }
+            return response.json();
+        })
+        .then(function (data) {
+            // ── Mise à jour de l'état du formulaire ────────────────────────
+            // On stocke le nouvel état dans data-favorited pour les soumissions
+            // ultérieures (toggle successifs sans rechargement).
+            form.dataset.favorited = data.favorited ? 'true' : 'false';
+
+            // ── Mise à jour visuelle du bouton ─────────────────────────────
+            // 1. Classe CSS active (fond coloré, couleur accent)
+            button.classList.toggle('btn-favorite--active', data.favorited);
+
+            // 2. Accessibilité : aria-pressed et aria-label
+            button.setAttribute('aria-pressed', data.favorited ? 'true' : 'false');
+            button.setAttribute('aria-label', data.favorited ? 'Retirer des favoris' : 'Ajouter aux favoris');
+
+            // 3. Texte du bouton — on cible le nœud texte directement pour ne pas
+            //    supprimer les SVG enfants.
+            //    Technique : on parcourt les childNodes à la recherche d'un Text node.
+            for (const node of button.childNodes) {
+                if (node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '') {
+                    node.textContent = data.favorited ? ' Dans mes favoris ' : ' Ajouter aux favoris ';
+                    break;
+                }
+            }
+
+            // 4. Icônes cœur : afficher/masquer selon l'état
+            if (iconFilled)  { iconFilled.style.display  = data.favorited ? '' : 'none'; }
+            if (iconOutline) { iconOutline.style.display = data.favorited ? 'none' : ''; }
+
+            // 5. Compteur de favoris
+            //
+            // Trois cas possibles à gérer :
+            //
+            // A) Le span existait déjà dans le DOM (count était > 0 au chargement
+            //    ou on l'a créé lors d'un toggle précédent) → on le met à jour.
+            //    Si le nouveau count vaut 0, on masque le span mais on le laisse
+            //    dans le DOM pour éviter de le recréer si l'utilisateur re-clique.
+            //
+            // B) Le span n'existait pas (count était 0 au chargement) et le
+            //    serveur renvoie count > 0 → on crée le span UNE SEULE FOIS
+            //    puis on réassigne countSpan pour que les toggles suivants
+            //    passent par le cas A et ne recréent pas un second span.
+            //
+            // C) Le span n'existait pas ET le serveur renvoie count = 0
+            //    (cohérence impossible en pratique, mais on le gère : rien à faire).
+            if (countSpan !== null) {
+                // Cas A : span déjà dans le DOM — mise à jour simple
+                if (data.count > 0) {
+                    countSpan.textContent    = '(' + data.count + ')';
+                    countSpan.style.display  = '';
+                } else {
+                    // count retombé à 0 : on masque le span sans le supprimer
+                    countSpan.style.display = 'none';
+                }
+            } else if (data.count > 0) {
+                // Cas B : premier favori → création du span
+                const newSpan = document.createElement('span');
+                newSpan.className   = 'favorite-count';
+                newSpan.textContent = '(' + data.count + ')';
+                button.appendChild(newSpan);
+
+                // IMPORTANT : on réassigne countSpan pour que les toggles
+                // suivants réutilisent ce span (cas A) plutôt d'en créer un second.
+                countSpan = newSpan;
+            }
+            // Cas C : count = 0 et pas de span → rien à faire
+        })
+        .catch(function (err) {
+            // En cas d'erreur réseau ou de réponse non-ok, on logue discrètement
+            // SANS modifier l'UI (l'état visuel reste cohérent avec l'état BDD
+            // inconnu — mieux que de basculer à tort).
+            console.error('[Bazaart] Erreur toggle favori :', err);
+        });
+    });
+}());
+</script>
 {% endblock %}

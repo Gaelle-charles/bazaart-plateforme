@@ -17,6 +17,7 @@ use App\Service\ResourceService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -403,35 +404,75 @@ class ResourceController extends AbstractController
      * Toggle favori : ajoute ou supprime la ressource des favoris de l'utilisateur.
      *
      * Route : POST /resources/{id}/favorite
-     * Réponse JSON : { "favorited": true|false, "count": X }
      *
-     * Cette route est conçue pour être appelée en AJAX depuis un composant Stimulus.
+     * Deux comportements selon le contexte de l'appel :
+     *
+     *   ① Appel AJAX (en-tête X-Requested-With: XMLHttpRequest, envoyé par le JS de show.html.twig)
+     *      → Réponse JSON : { "favorited": true|false, "count": int }
+     *        Le JS met à jour le bouton sans rechargement de page.
+     *
+     *   ② Appel non-AJAX (formulaire soumis normalement, sans JS — fallback navigabilité)
+     *      → Redirige vers la page précédente (Referer) ou vers la fiche resource.
+     *        Ajoute un flash message optionnel pour informer l'utilisateur.
+     *
      * Le token CSRF est spécifique à chaque ressource (resource_favorite_{id}).
+     *
+     * @return Response (JsonResponse en AJAX, RedirectResponse en non-AJAX)
      */
     #[IsGranted('ROLE_USER')]
     #[Route('/{id}/favorite', name: 'favorite_toggle', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function toggleFavorite(int $id, Request $request): JsonResponse
+    public function toggleFavorite(int $id, Request $request): Response
     {
-        // Vérification du token CSRF — protège contre les requêtes forgées
+        // ── Détection AJAX ────────────────────────────────────────────────────
+        // isXmlHttpRequest() détecte l'en-tête "X-Requested-With: XMLHttpRequest"
+        // envoyé par le fetch() dans show.html.twig. Symfony lit cet en-tête
+        // sur toutes les requêtes entrantes via la classe Request.
+        $isAjax = $request->isXmlHttpRequest();
+
+        // ── Validation du token CSRF ──────────────────────────────────────────
+        // On valide en premier pour éviter tout traitement inutile si forgé.
         if (!$this->isCsrfTokenValid('resource_favorite_' . $id, $request->request->get('_token'))) {
-            return new JsonResponse(['error' => 'Token CSRF invalide.'], Response::HTTP_FORBIDDEN);
+            if ($isAjax) {
+                // En AJAX : réponse JSON avec code 403 (le JS logge l'erreur discrètement)
+                return new JsonResponse(['error' => 'Token CSRF invalide.'], Response::HTTP_FORBIDDEN);
+            }
+
+            // En non-AJAX : flash d'erreur + redirection (pas de JSON brut affiché)
+            $this->addFlash('error', 'Action non autorisée (token CSRF invalide).');
+
+            return $this->redirectToFallback($request, $id);
         }
 
+        // ── Récupération de la ressource ──────────────────────────────────────
         $resource = $this->resourceRepository->find($id);
         if ($resource === null) {
-            return new JsonResponse(['error' => 'Ressource introuvable.'], Response::HTTP_NOT_FOUND);
+            if ($isAjax) {
+                return new JsonResponse(['error' => 'Ressource introuvable.'], Response::HTTP_NOT_FOUND);
+            }
+
+            $this->addFlash('error', 'Ressource introuvable.');
+
+            // Pas de ressource → on ne peut pas rediriger vers sa fiche, retour liste
+            return $this->redirectToRoute('app_resource_index');
         }
 
-        // Sécurité métier : on ne peut mettre en favori qu'une ressource publiée.
-        // Cela évite qu'un utilisateur infère l'existence d'une ressource non publiée
-        // via la différence de réponse (200 vs 403) — et reste cohérent avec l'UI.
+        // ── Sécurité métier : ressource publiée uniquement ────────────────────
+        // Evite qu'un utilisateur infère l'existence d'une ressource non publiée
+        // via la différence de réponse.
         if (!$resource->isPublished() && !$this->isGranted('ROLE_ADMIN')) {
-            return new JsonResponse(['error' => 'Ressource non disponible.'], Response::HTTP_FORBIDDEN);
+            if ($isAjax) {
+                return new JsonResponse(['error' => 'Ressource non disponible.'], Response::HTTP_FORBIDDEN);
+            }
+
+            $this->addFlash('error', 'Cette ressource n\'est pas disponible.');
+
+            return $this->redirectToFallback($request, $id);
         }
 
         /** @var User $user */
         $user = $this->getUser();
 
+        // ── Toggle favori ─────────────────────────────────────────────────────
         // Cherche un favori existant pour ce couple (user, resource)
         $existing = $this->favoriteRepository->findByUserAndResource($user, $resource);
 
@@ -453,9 +494,50 @@ class ResourceController extends AbstractController
         // Recompte après l'action pour retourner le total à jour
         $count = $this->favoriteRepository->countByResource($resource);
 
-        return new JsonResponse([
-            'favorited' => $favorited,
-            'count'     => $count,
-        ]);
+        // ── Réponse selon le mode ─────────────────────────────────────────────
+        if ($isAjax) {
+            // Mode AJAX : JSON consommé par le JS de show.html.twig
+            return new JsonResponse([
+                'favorited' => $favorited,
+                'count'     => $count,
+            ]);
+        }
+
+        // Mode non-AJAX (fallback sans JS) : flash discret + redirection
+        // Le message est court et informatif — sera affiché par base_app.html.twig
+        // si les flash messages y sont rendus.
+        $this->addFlash(
+            'success',
+            $favorited
+                ? 'Ressource ajoutée à vos favoris.'
+                : 'Ressource retirée de vos favoris.'
+        );
+
+        return $this->redirectToFallback($request, $id);
+    }
+
+    /**
+     * Calcule la redirection après un toggle favori en mode non-AJAX.
+     *
+     * Priorité : page précédente (Referer HTTP) → fiche de la ressource.
+     *
+     * On n'utilise pas la valeur Referer aveuglément : on vérifie qu'elle
+     * commence par le même host pour éviter les redirections vers des domaines
+     * externes (open-redirect). Symfony ne fournit pas de helper natif pour
+     * ça, donc on implémente la vérification manuellement.
+     */
+    private function redirectToFallback(Request $request, int $resourceId): RedirectResponse
+    {
+        $referer  = $request->headers->get('referer', '');
+        $baseUrl  = $request->getSchemeAndHttpHost(); // ex: https://bazaart.fr
+
+        // Redirection vers le Referer uniquement s'il appartient au même site
+        // (sécurité anti open-redirect).
+        if ($referer !== '' && str_starts_with($referer, $baseUrl)) {
+            return new RedirectResponse($referer);
+        }
+
+        // Fallback sûr : fiche de la ressource concernée
+        return $this->redirectToRoute('app_resource_show', ['id' => $resourceId]);
     }
 }
