@@ -1763,12 +1763,23 @@
                       → résolu vers /uploads/video/video-artiste-bazaart.mp4
                       → fichier attendu dans public/uploads/video/
                 #}
+                {#
+                    Vidéo d'ambiance : lecture automatique en boucle, SANS lecteur (pas de
+                    barre de contrôle).
+                    - autoplay + loop : démarre seule et tourne en boucle.
+                    - muted : OBLIGATOIRE — les navigateurs bloquent l'autoplay AVEC son.
+                      Donc la vidéo est forcément muette (pas de bande-son).
+                    - playsinline : évite le passage en plein écran forcé sur iOS.
+                    - on retire "controls" pour masquer le lecteur.
+                #}
                 <video
                     class="lp-video__player"
-                    controls
+                    autoplay
+                    muted
+                    loop
                     playsinline
-                    preload="metadata"
-                    aria-label="Vidéo de présentation de l'association Bazaart et des artistes de la diaspora afro-atlantique"
+                    preload="auto"
+                    aria-label="Vidéo d'ambiance de l'association Bazaart et des artistes de la diaspora afro-atlantique"
                 >
                     <source src="{{ asset('uploads/video/video-artiste-bazaart.mp4') }}" type="video/mp4">
                     {#
