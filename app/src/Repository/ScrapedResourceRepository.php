@@ -328,6 +328,69 @@ class ScrapedResourceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Retourne les ScrapedResource candidates à l'enrichissement IA.
+     *
+     * CONDITIONS (selon les options de la commande app:enrich-opportunities) :
+     *   - description IS NULL OU description = '' (pas encore enrichies)
+     *   - url IS NOT NULL (on a besoin de l'URL pour fetcher la page)
+     *   - status IN (pending, verified) — on n'enrichit pas les rejected ni les archived
+     *
+     * PARAMÈTRES :
+     *   @param int         $limit      Nombre max de résultats (maîtrise du coût LLM)
+     *   @param string|null $sourceSite Filtre sur le nom du site source (ex: "on-the-move.org")
+     *   @param bool        $includeWithDescription Si true (--force), inclut même celles qui
+     *                                   ont déjà une description (pour re-enrichissement)
+     *
+     * ORDRE : les plus récentes d'abord (par scrapedAt DESC) — on traite en priorité les
+     *   nouvelles opportunités, car ce sont les plus susceptibles d'être encore valides.
+     *
+     * @return ScrapedResource[]
+     */
+    public function findForEnrichment(
+        int $limit = 20,
+        ?string $sourceSite = null,
+        bool $includeWithDescription = false,
+    ): array {
+        $qb = $this->createQueryBuilder('s')
+            // On doit avoir une URL pour pouvoir fetcher la page
+            ->where('s.url IS NOT NULL')
+            // On n'enrichit pas les opportunités rejetées ou archivées
+            // (décision admin à respecter — elles sont hors cycle de vie actif)
+            ->andWhere('s.status IN (:activeStatuses)')
+            ->setParameter('activeStatuses', [
+                ScrapedResourceStatus::Pending,
+                ScrapedResourceStatus::Verified,
+            ])
+            // Les plus récentes en priorité (nouvelles opportunités actives d'abord)
+            ->orderBy('s.scrapedAt', 'DESC')
+            // Limite le nombre de résultats pour maîtriser le coût LLM et le temps d'exécution
+            ->setMaxResults($limit);
+
+        // Filtre description manquante (sauf si --force)
+        if (!$includeWithDescription) {
+            // On cible les opportunités SANS description :
+            //   - description IS NULL (jamais renseignée)
+            //   - description = '' (chaîne vide)
+            //   - description = 'Description non disponible.' (valeur placeholder parfois insérée)
+            $qb->andWhere(
+                $qb->expr()->orX(
+                    's.description IS NULL',
+                    "s.description = ''",
+                    "s.description = 'Description non disponible.'"
+                )
+            );
+        }
+
+        // Filtre par source (option --source de la commande)
+        if ($sourceSite !== null) {
+            $qb->andWhere('s.sourceSite = :sourceSite')
+               ->setParameter('sourceSite', $sourceSite);
+        }
+
+        return $qb->getQuery()->getResult();
+    }
+
+    /**
      * Retourne la date du scraping le plus récent, ou null si la table est vide.
      *
      * Utilisé dans le dashboard admin pour afficher "Dernier scraping : XX/XX/XXXX".

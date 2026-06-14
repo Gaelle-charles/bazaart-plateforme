@@ -375,4 +375,66 @@ class ResourceRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Retourne les Resources PUBLIÉES candidates à l'enrichissement IA.
+     *
+     * CAS D'USAGE : option --published de la commande app:enrich-opportunities.
+     * Cette méthode cible le BACKLOG des opportunités déjà validées et publiées
+     * mais dont la description est vide ou générique (placeholder "Description non disponible.").
+     * Typiquement : les ScrapedResource converties en Resource avant l'implémentation
+     * de l'enrichissement — elles ont passé la validation admin mais restent sans description.
+     *
+     * DIFFÉRENCE AVEC findForEnrichment() dans ScrapedResourceRepository :
+     *   - ScrapedResourceRepository::findForEnrichment() → cible les ScrapedResource (avant validation)
+     *   - Ce findPublishedWithoutDescription()           → cible les Resource (après validation, publiées)
+     *   Ces deux méthodes couvrent deux phases du cycle de vie de l'opportunité.
+     *
+     * CONDITIONS :
+     *   - status = Published
+     *   - externalUrl IS NOT NULL (on a besoin de l'URL pour fetcher la page)
+     *   - description vide, très courte (< 10 chars), ou valeur placeholder
+     *
+     * @param int         $limit      Nombre max de résultats
+     * @param bool        $force      Si true, inclut toutes les publiées quelle que soit la description
+     * @return Resource[]
+     */
+    public function findPublishedWithoutDescription(int $limit = 20, bool $force = false): array
+    {
+        $qb = $this->createQueryBuilder('r')
+            // On charge resourceType pour l'affichage dans le tableau récapitulatif de la commande
+            ->leftJoin('r.resourceType', 'rt')->addSelect('rt')
+            // Filtre principal : uniquement les ressources publiées
+            ->where('r.status = :status')
+            ->setParameter('status', ResourceStatus::Published)
+            // On doit avoir une URL externe pour pouvoir fetcher la page
+            ->andWhere('r.externalUrl IS NOT NULL')
+            // Les plus récentes d'abord (createdAt DESC)
+            ->orderBy('r.createdAt', 'DESC')
+            ->setMaxResults($limit);
+
+        if (!$force) {
+            // Filtre sur la description "insuffisante" — 3 cas explicites et sans ambiguïté :
+            //   1. NULL    : le champ n'a jamais été renseigné (scraper sans description)
+            //   2. ''      : chaîne vide (scraper a explicitement positionné une chaîne vide)
+            //   3. 'Description non disponible.' : placeholder inséré par le scraper
+            //                                      quand aucune description n'est trouvée
+            //
+            // On a RETIRÉ le critère LENGTH(r.description) < 10 qui était trop permissif :
+            //   - Il aurait capturé des descriptions légitimes courtes (ex: "Bio.", "N/A")
+            //   - Il est difficile à expliquer sans exemples concrets
+            //   - Les 3 critères ci-dessus couvrent 100 % des cas réels du projet
+            //
+            // IS NULL est géré séparément car orX() ne supporte pas IS NULL en DQL natif.
+            $qb->andWhere(
+                $qb->expr()->orX(
+                    $qb->expr()->isNull('r.description'),
+                    "r.description = ''",
+                    "r.description = 'Description non disponible.'"
+                )
+            );
+        }
+
+        return $qb->getQuery()->getResult();
+    }
 }

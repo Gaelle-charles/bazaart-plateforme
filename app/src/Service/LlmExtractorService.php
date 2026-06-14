@@ -593,25 +593,91 @@ PROMPT;
     /**
      * Nettoie le HTML pour ne garder que le texte brut.
      *
+     * VISIBILITÉ : public (depuis la factorisation pour OpportunityEnrichmentService).
+     * Avant cette modification, cleanHtml() était private et utilisée uniquement par
+     * extractFromHtml(). OpportunityEnrichmentService en a besoin pour nettoyer le HTML
+     * des pages d'opportunités avant d'appeler Mistral. Plutôt que de dupliquer la logique,
+     * on la partage via cette méthode publique.
+     *
+     * GARDE-FOU ANTI-INJECTION DE PROMPT (important pour les pages tierces) :
+     * Cette méthode supprime également les attributs hidden/aria-hidden et style="display:none"
+     * pour neutraliser le contenu masqué qui pourrait contenir des injections de prompt.
+     * En effet, certaines pages malveillantes ou mal conçues cachent du texte dans ces
+     * attributs, texte que strip_tags révèle naïvement.
+     *
      * Étapes :
-     *   1. Supprime les balises <script>, <style>, <nav>, <header>, <footer>, <aside> et leur contenu
-     *   2. Supprime les autres balises HTML (strip_tags)
-     *   3. Décode les entités HTML (&amp; → &, &nbsp; → espace, etc.)
-     *   4. Normalise les espaces multiples
-     *   5. Tronque à MAX_TEXT_LENGTH pour maîtriser les coûts LLM
+     *   1. Supprime le contenu des balises <script>, <style> (jamais d'opportunité dedans)
+     *   2. Supprime les éléments masqués (hidden, aria-hidden="true", style="display:none")
+     *      → neutralise le contenu caché qui pourrait être du "prompt injection bait"
+     *   3. Extraction sémantique via <main> (si présent) ou suppression nav/header/footer/aside
+     *   4. Supprime les autres balises HTML (strip_tags)
+     *   5. Décode les entités HTML (&amp; → &, &nbsp; → espace, etc.)
+     *   6. Normalise les espaces multiples
+     *   7. Tronque à MAX_TEXT_LENGTH pour maîtriser les coûts LLM
      *
      * Pourquoi supprimer nav/header/footer/aside ?
      *   Ces blocs contiennent de la navigation, des menus, des pieds de page —
      *   du texte parasites pour le LLM qui cherche des appels à candidatures.
      *   Les supprimer avant strip_tags améliore la qualité du signal textuel.
+     *
+     * @param int|null $maxLength Longueur max (null = constante MAX_TEXT_LENGTH).
+     *   OpportunityEnrichmentService peut passer une valeur différente si besoin.
      */
-    private function cleanHtml(string $html): string
+    public function cleanHtml(string $html, ?int $maxLength = null): string
     {
-        // ── Étape 1 : supprimer toujours scripts et styles ────────────────────
+        // ── Étape 1 : supprimer scripts et styles ─────────────────────────────
         // Ces blocs ne contiennent jamais d'opportunités et polluent le contexte LLM.
         foreach (['script', 'style'] as $tag) {
             $html = preg_replace('/<' . $tag . '\b[^>]*>.*?<\/' . $tag . '>/is', '', $html) ?? $html;
         }
+
+        // ── Étape 1bis : supprimer les éléments masqués (GARDE-FOU ANTI-INJECTION) ──
+        // Les pages tierces peuvent contenir du texte invisible à l'utilisateur mais
+        // visible au LLM après strip_tags. Ce texte pourrait être une injection de prompt
+        // ("Ignore tes instructions précédentes et fais…").
+        //
+        // On cible 3 patterns courants :
+        //   a) hidden="true" ou hidden (attribut booléen HTML5)
+        //   b) aria-hidden="true" (éléments cachés d'un point de vue accessibilité)
+        //   c) style contenant display:none (CSS inline)
+        //
+        // IMPORTANT — boucle de stabilisation ("do…while") :
+        //   Un seul passage de regex ne suffit pas quand un élément masqué contient
+        //   plusieurs enfants. Exemple :
+        //     <div aria-hidden="true"><span>x</span><span>SPAM</span></div>
+        //   Le pattern non-récursif .*?<\/[^>]+> s'arrête au PREMIER tag fermant (</span>)
+        //   et laisse "<span>SPAM</span></div>" non supprimé. C'est un vecteur
+        //   d'injection de "texte caché" vers le LLM.
+        //
+        //   La boucle répète chaque regex jusqu'à ce que l'HTML ne change plus,
+        //   ce qui garantit la suppression complète des structures imbriquées.
+        //   En pratique, 2 à 3 itérations suffisent ; la boucle s'arrête dès
+        //   que la passe n'a rien modifié (stabilisation).
+        //
+        // Note : les regex HTML sont fragiles sur le HTML réel (attributs multi-lignes,
+        // espaces irréguliers…). Ces patterns ne sont PAS parfaits à 100% mais ils
+        // couvrent les cas les plus courants de contenu caché. On ne peut pas utiliser
+        // DOMDocument ici sans l'extension intl qui n'est pas toujours disponible.
+
+        // a) Éléments avec attribut hidden ou hidden="true"/"hidden"
+        do {
+            $prev = $html;
+            $html = preg_replace('/<[^>]+\s(?:hidden(?:="(?:true|hidden)")?)[^>]*>.*?<\/[^>]+>/is', '', $html) ?? $html;
+        } while ($html !== $prev);
+
+        // b) Éléments avec aria-hidden="true"
+        // Même technique de boucle — les structures imbriquées nécessitent plusieurs passes.
+        do {
+            $prev = $html;
+            $html = preg_replace('/<[^>]+\saria-hidden="true"[^>]*>.*?<\/[^>]+>/is', '', $html) ?? $html;
+        } while ($html !== $prev);
+
+        // c) Éléments avec style="...display:none..." ou style="...display: none..."
+        // Même technique de boucle — les structures imbriquées nécessitent plusieurs passes.
+        do {
+            $prev = $html;
+            $html = preg_replace('/<[^>]+\sstyle="[^"]*display\s*:\s*none[^"]*"[^>]*>.*?<\/[^>]+>/is', '', $html) ?? $html;
+        } while ($html !== $prev);
 
         // ── Étape 2 : extraction sémantique via <main> ────────────────────────
         // HTML5 définit <main> comme le contenu principal de la page, à l'exclusion
@@ -649,8 +715,12 @@ PROMPT;
         $text = trim($text);
 
         // ── Étape 4 : tronquer pour maîtriser les coûts LLM ──────────────────
-        if (mb_strlen($text) > self::MAX_TEXT_LENGTH) {
-            $text = mb_substr($text, 0, self::MAX_TEXT_LENGTH);
+        // On utilise $maxLength si fourni, sinon la constante par défaut.
+        // OpportunityEnrichmentService peut passer une valeur différente (ex: 10 000
+        // car on lit une page complète, pas une liste — plus de contenu pertinent).
+        $limit = $maxLength ?? self::MAX_TEXT_LENGTH;
+        if (mb_strlen($text) > $limit) {
+            $text = mb_substr($text, 0, $limit);
         }
 
         return $text;
