@@ -789,7 +789,32 @@
     flex-direction: column;
     gap:            16px;
     min-height:     340px;
+    /* TOUTE la carte est cliquable ("stretched link") : position:relative ici +
+       le pseudo-élément ::after du titre-lien (plus bas) qui s'étire sur la carte.
+       Avantage : un seul vrai lien (le titre), pas de <a> imbriqués, et le titre
+       n'a plus besoin du style "lien bleu souligné" qui faisait moche. */
+    position:       relative;
+    cursor:         pointer;
+    transition:     background var(--transition-fast);
     /* border-right ajouté via modificateur */
+}
+
+/* Survol : on signale visuellement que la carte entière est cliquable. */
+.lp-opp-card:hover {
+    background: var(--bg-alt);
+}
+
+/* Le lien du titre : texte normal (couleur encre, sans soulignement). */
+.lp-opp-card__title-link {
+    color:           var(--ink);
+    text-decoration: none;
+}
+/* C'est ce ::after qui capte le clic n'importe où dans la carte. */
+.lp-opp-card__title-link::after {
+    content:  '';
+    position: absolute;
+    inset:    0;
+    z-index:  1;
 }
 
 .lp-opp-card--bordered {
@@ -1928,13 +1953,12 @@
                         {% endif %}
                     </p>
 
-                    {# Pied de carte : flèche → qui emmène vers la fiche détail #}
+                    {# Pied de carte : flèche → purement DÉCORATIVE. Toute la carte est
+                       déjà cliquable via le ::after du titre-lien (stretched link), donc
+                       on ne veut PAS un 2e <a> ici (lien redondant). aria-hidden car le
+                       lien accessible est porté par le titre. #}
                     <div class="lp-opp-card__footer">
-                        <a
-                            href="{{ path('app_resource_show', { id: resource.id }) }}"
-                            class="lp-opp-card__arrow"
-                            aria-label="Voir l'opportunité : {{ resource.title }}"
-                        >→</a>
+                        <span class="lp-opp-card__arrow" aria-hidden="true">→</span>
                     </div>
                 </article>
 
