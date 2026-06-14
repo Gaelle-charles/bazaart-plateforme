@@ -519,6 +519,12 @@
        les mots longs si nécessaire.
        Voir : https://css-tricks.com/min-content-size-grid-items/ */
     min-width:      0;
+    /* container-type: inline-size → fait de chaque colonne un "conteneur de
+       requête". Cela permet à .lp-hub__name d'être dimensionné en unités cqi
+       (% de la largeur de SA colonne) plutôt qu'en vw (% de l'écran). Résultat :
+       le titre se réduit juste ce qu'il faut pour tenir sur UNE ligne dans sa
+       colonne, quelle que soit la largeur d'écran — fini les mots coupés. */
+    container-type: inline-size;
     /* border-right ajouté via modificateur .lp-hub--bordered */
 }
 
@@ -583,20 +589,22 @@
 /* Nom du hub — Archivo Black très grand */
 .lp-hub__name {
     font-family:    var(--display);
-    font-size:      clamp(40px, 6vw, 64px);
+    /* Taille calée sur la largeur de la COLONNE (cqi) et non de l'écran (vw).
+       9cqi = 9% de la largeur de la colonne → le titre grandit/rétrécit avec
+       sa colonne. Le clamp borne entre 20px (plancher lisible) et 46px (plafond
+       esthétique sur grand écran). Ainsi "INGÉNIERIE", "CULTURELLE", "FORMATION"
+       tiennent toujours sur une seule ligne sans déborder. */
+    font-size:      clamp(20px, 9cqi, 46px);
     line-height:    .88;
     letter-spacing: -.02em;
     margin:         0;
     color:          var(--ink);
-    /* pre-line : respecte les <br> HTML forcés
-       (ex: "INGÉNIERIE<br>CULTURELLE") sans créer de scrollbar. */
-    white-space:    pre-line;
-    /* Filet de sécurité : si un seul mot (sans espace) dépasse la largeur
-       de la colonne malgré min-width:0 sur .lp-hub, il est coupé proprement.
-       overflow-wrap = coupage inter-mots (préféré), word-break = coupage brutal
-       de dernier recours. Les deux ensemble couvrent tous les navigateurs. */
-    overflow-wrap:  break-word;
-    word-break:     break-word;
+    /* nowrap : interdit le retour à la ligne AUTOMATIQUE (donc plus de mot
+       coupé en plein milieu). Les retours volontaires "INGÉNIERIE<br>CULTURELLE"
+       restent respectés car un <br> force le saut même en nowrap.
+       Plus besoin d'overflow-wrap / word-break : le dimensionnement en cqi
+       garantit déjà que le mot tient dans la colonne. */
+    white-space:    nowrap;
 }
 
 /* Description du hub */
@@ -1268,11 +1276,10 @@
         min-height: auto;
         padding:    24px 20px;
     }
-    /* Nom du hub : clamp(40px, 6vw, 64px) → minimum 40px trop large sur mobile.
-       "INGÉNIERIE" à 40px = 248px → OK sur 343px, mais on réduit pour plus d'air. */
-    .lp-hub__name {
-        font-size: clamp(28px, 7vw, 40px);
-    }
+    /* Nom du hub : plus besoin d'override mobile. Le dimensionnement en cqi
+       (défini plus haut sur .lp-hub__name) s'adapte tout seul à la largeur de
+       la colonne — sur mobile la colonne fait toute la largeur, donc le titre
+       reste grand tout en tenant sur une ligne. */
 
     /* ─ SaaS ─ */
     /* 1 colonne, padding réduit, gap réduit */
