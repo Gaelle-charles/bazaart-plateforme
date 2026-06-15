@@ -12,37 +12,37 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * Commande Symfony pour insérer 4 articles de blog publiés en base de données.
+ * Commande Symfony pour insérer (ou mettre à jour) 4 articles de blog publiés.
  *
- * Utilisation :
- *   docker compose exec app php bin/console app:seed-blog-articles
+ * Utilisations :
+ *   php bin/console app:seed-blog-articles
+ *           → crée les articles manquants, ignore ceux déjà présents.
  *
- * Cette commande est IDEMPOTENTE : pour chaque article, si un article avec
- * le même slug existe déjà en base, on le saute sans erreur.
- * Elle peut être relancée sans risque de créer des doublons.
+ *   php bin/console app:seed-blog-articles --update
+ *           → crée les articles manquants ET met à jour le contenu
+ *             (title, excerpt, content, coverImagePath) des articles existants.
+ *             L'auteur, le statut, publishedAt et createdAt ne sont PAS modifiés.
  *
- * Prérequis :
- *   - Au moins un utilisateur avec ROLE_ADMIN doit exister en base.
- *   - Si aucun admin n'est trouvé, la commande s'arrête proprement.
+ * La commande est IDEMPOTENTE : relançable sans risque de doublon.
  *
- * #[AsCommand] est l'attribut PHP 8 qui déclare le nom et la description
- * de la commande (remplace l'ancienne méthode configure() + setName()).
+ * Prérequis : au moins un utilisateur avec ROLE_ADMIN doit exister en base.
  */
 #[AsCommand(
     name: 'app:seed-blog-articles',
-    description: 'Insère 4 articles de blog publiés pour alimenter la page Ressourcerie (idempotent).',
+    description: 'Insère (ou met à jour avec --update) 4 articles de blog publiés pour la Ressourcerie.',
 )]
 class SeedBlogArticlesCommand extends Command
 {
     /**
-     * EntityManagerInterface permet de persister et flusher les entités en base.
-     * ArticleRepository permet de vérifier l'existence d'un article par slug.
+     * EntityManagerInterface : persiste et flush les entités vers PostgreSQL.
+     * ArticleRepository     : vérifie l'existence d'un article par son slug.
      *
-     * Injection par constructeur (autowiring Symfony) — pas besoin de services.yaml.
+     * Injection par constructeur (autowiring Symfony, pas de services.yaml nécessaire).
      */
     public function __construct(
         private readonly EntityManagerInterface $em,
@@ -53,10 +53,27 @@ class SeedBlogArticlesCommand extends Command
     }
 
     /**
+     * configure() déclare les options et arguments de la commande.
+     *
+     * InputOption::VALUE_NONE signifie que l'option est un drapeau booléen :
+     *   --update présent  → true
+     *   --update absent   → false (getOption renvoie null, testé avec (bool))
+     */
+    protected function configure(): void
+    {
+        $this->addOption(
+            'update',          // nom de l'option (utilisé dans --update)
+            null,              // pas de raccourci (-u réservé à Symfony en interne)
+            InputOption::VALUE_NONE,
+            'Si activé, met à jour le contenu des articles déjà existants (title, excerpt, content, coverImagePath).',
+        );
+    }
+
+    /**
      * execute() est le point d'entrée de la commande.
      *
-     * InputInterface  → arguments et options passés en CLI (non utilisés ici)
-     * OutputInterface → flux de sortie (wrappé par SymfonyStyle)
+     * InputInterface  → donne accès aux arguments et options CLI
+     * OutputInterface → flux de sortie, wrappé par SymfonyStyle
      *
      * Retourne Command::SUCCESS (0) ou Command::FAILURE (1).
      */
@@ -65,17 +82,20 @@ class SeedBlogArticlesCommand extends Command
         // SymfonyStyle fournit un affichage formaté : titres, listes, tableaux, alertes.
         $io = new SymfonyStyle($input, $output);
 
+        // Lecture de l'option --update : true si le drapeau est passé, false sinon
+        $shouldUpdate = (bool) $input->getOption('update');
+
         $io->title('Seed : 4 articles de blog Bazaart');
+
+        if ($shouldUpdate) {
+            $io->note('Mode --update activé : les articles existants seront mis à jour.');
+        }
 
         // ── Étape 1 : récupérer un utilisateur ROLE_ADMIN ─────────────────────
         //
-        // La colonne "roles" en base est un tableau JSON (ex: ["ROLE_USER","ROLE_ADMIN"]).
-        // On cherche le premier utilisateur dont la représentation JSON contient "ROLE_ADMIN".
-        //
-        // Note technique : la colonne "roles" est de type JSON en PostgreSQL, sur lequel
-        // l'opérateur SQL LIKE n'est PAS applicable (erreur "operator does not exist: json ~~").
-        // On filtre donc côté PHP via getRoles() : fiable et indépendant du type de colonne.
-        // (Le nombre d'utilisateurs reste modeste en V1, le chargement complet est acceptable.)
+        // La colonne "roles" est un tableau JSON en PostgreSQL. L'opérateur LIKE
+        // n'est pas applicable sur le type JSON, on filtre donc côté PHP via
+        // getRoles(). Le nombre d'admins est négligeable en V1.
         $admin = null;
         foreach ($this->em->getRepository(User::class)->findAll() as $candidate) {
             if (in_array('ROLE_ADMIN', $candidate->getRoles(), true)) {
@@ -84,178 +104,225 @@ class SeedBlogArticlesCommand extends Command
             }
         }
 
-        // Vérification de type stricte pour PHPStan et sécurité :
-        // getOneOrNullResult() retourne mixed, on s'assure que c'est bien un User.
+        // Vérification de type stricte pour PHPStan niveau 6
         if (!$admin instanceof User) {
             $io->error(
-                'Aucun utilisateur avec ROLE_ADMIN n\'a été trouvé en base de données. '
-                . 'Créez d\'abord un compte admin (ex: php bin/console app:create-admin), '
+                'Aucun utilisateur avec ROLE_ADMIN trouvé en base. '
+                . 'Créez d\'abord un admin (ex: php bin/console app:create-admin), '
                 . 'puis relancez cette commande.'
             );
-            // Command::FAILURE = code de retour 1 = la commande a échoué
+
             return Command::FAILURE;
         }
 
         $io->text(sprintf(
-            'Auteur admin trouvé : %s (id=%d)',
+            'Auteur admin trouve : %s (id=%d)',
             $admin->getEmail(),
             (int) $admin->getId()
         ));
 
-        // ── Étape 2 : définir les 4 articles à insérer ────────────────────────
+        // ── Étape 2 : définir les 4 articles ──────────────────────────────────
         //
-        // Chaque entrée du tableau correspond à un article.
-        // La clé "slug" est utilisée comme identifiant d'idempotence :
-        //   si un article avec ce slug existe déjà, on le saute.
+        // RÈGLE STRICTE : aucun tiret cadratin (U+2014) ni demi-cadratin (U+2013)
+        // dans aucun des textes ci-dessous. Remplacés par virgules, parenthèses,
+        // deux-points ou tiret simple (trait d'union ASCII U+002D).
         //
-        // Les contenus HTML sont exactement ceux fournis dans le brief.
-        // Aucun tiret cadratin (—) ni demi-cadratin (–) n'est présent.
+        // La clé 'slug' sert d'identifiant d'idempotence : si un article avec ce
+        // slug existe déjà, on le saute (ou on le met à jour si --update est actif).
+        // Les slugs et coverImagePath sont identiques à la version précédente du seed.
         $articles = [
+            // ── Article 1 : Financer sa résidence artistique ───────────────────
             [
-                'slug'            => 'financer-residence-artistique-etranger',
-                'title'           => 'Financer sa résidence artistique à l\'étranger',
-                'coverImagePath'  => 'uploads/articles/financer-residence-artistique-etranger.jpg',
-                'excerpt'         => 'Bourses, aides à la mobilité, fonds privés : un tour d\'horizon des leviers pour financer une résidence hors de France.',
-                'content'         => '<p>Partir en résidence à l\'étranger est une étape précieuse dans un parcours d\'artiste. Reste une question concrète : comment la financer ? Bonne nouvelle, les dispositifs existent, à condition de savoir où chercher et de s\'y prendre tôt.</p>
+                'slug'           => 'financer-residence-artistique-etranger',
+                'title'          => 'Financer sa résidence artistique à l\'étranger',
+                'coverImagePath' => 'uploads/articles/financer-residence-artistique-etranger.jpg',
+                'excerpt'        => 'Bourses, aides à la mobilité, fonds privés, financement participatif : le guide des leviers pour partir en résidence sans se ruiner.',
+                'content'        => '<p>Partir en résidence à l\'étranger est une étape précieuse : du temps pour créer, un nouvel environnement, des rencontres et souvent un vrai tremplin pour la suite. Reste la question qui freine beaucoup d\'artistes : comment financer ce projet ? Bonne nouvelle, les dispositifs existent. Encore faut il savoir où chercher, et s\'y prendre suffisamment tôt.</p>
 <h2>Les aides publiques</h2>
-<p>De nombreux organismes soutiennent la mobilité des artistes : institutions nationales, fonds européens, collectivités territoriales. Ces aides couvrent souvent le voyage, l\'hébergement ou une bourse de production. Surveillez les appels du Centre national de la musique, de l\'Institut français ou des programmes européens de mobilité.</p>
-<h2>Les fonds privés et fondations</h2>
-<p>Fondations d\'entreprise, mécènes et fonds de dotation financent régulièrement des projets artistiques. Leurs critères sont parfois plus souples que ceux du public, mais la concurrence est forte : un dossier clair et incarné fait la différence.</p>
-<h2>Monter un budget réaliste</h2>
-<p>Listez toutes vos dépenses (transport, logement, matériel, per diem) et présentez un budget équilibré. Un financement croisé, qui combine plusieurs sources, rassure les financeurs et sécurise votre projet.</p>
-<p>Sur Bazaart, retrouvez les opportunités de mobilité et de financement rassemblées au même endroit, et activez des alertes pour ne rien manquer.</p>',
+<p>De nombreux organismes soutiennent la mobilité des artistes. Selon votre discipline et votre destination, vous pouvez solliciter des institutions nationales, des fonds européens ou des collectivités territoriales (région, ville). Ces aides couvrent souvent le transport, l\'hébergement, parfois une bourse de production ou un per diem.</p>
+<p>Surveillez notamment les appels du Centre national de la musique, de l\'Institut français, ou les programmes européens dédiés à la mobilité culturelle. Les délais de dépôt sont parfois longs : anticipez de plusieurs mois.</p>
+<h2>Les fonds privés et les fondations</h2>
+<p>Fondations d\'entreprise, mécènes et fonds de dotation financent régulièrement des projets artistiques. Leurs critères sont parfois plus souples que ceux du secteur public, mais la concurrence est forte. Un dossier clair, sincère et bien incarné fait la différence : montrez en quoi la résidence sert votre parcours et votre démarche.</p>
+<h2>Le financement participatif</h2>
+<p>Le crowdfunding peut compléter un budget, surtout si vous avez déjà une communauté. Au delà de l\'argent récolté, c\'est un excellent moyen de fédérer un public autour de votre projet. Soignez la vidéo de présentation et proposez des contreparties simples et utiles.</p>
+<h2>Monter un budget solide</h2>
+<p>Listez toutes vos dépenses : transport, logement, matériel, assurance, frais de vie, production. Présentez un budget équilibré, où les recettes couvrent les dépenses. Le financement croisé, qui combine plusieurs sources, rassure les financeurs et sécurise votre projet : ne misez jamais sur une seule aide.</p>
+<h2>Nos conseils pour maximiser vos chances</h2>
+<p>Commencez tôt, lisez attentivement chaque règlement, et adaptez votre dossier à chaque financeur plutôt que d\'envoyer un texte générique. Gardez une trace de vos candidatures et de leurs échéances. Sur Bazaart, retrouvez les opportunités de mobilité et de financement au même endroit, et activez des alertes pour ne rien manquer.</p>',
             ],
+
+            // ── Article 2 : Répondre à un appel à projets ─────────────────────
             [
-                'slug'            => 'repondre-appel-a-projets-dossier-solide',
-                'title'           => 'Répondre à un appel à projets : nos conseils pour un dossier solide',
-                'coverImagePath'  => 'uploads/articles/repondre-appel-a-projets-dossier-solide.jpg',
-                'excerpt'         => 'Un bon dossier ne s\'improvise pas. Voici les réflexes qui font la différence face à un jury.',
-                'content'         => '<p>Un appel à projets, c\'est une promesse et une exigence. Pour convaincre un jury, la qualité artistique ne suffit pas : il faut aussi un dossier lisible, complet et déposé dans les temps.</p>
-<h2>Lire le règlement, vraiment</h2>
-<p>Avant tout, lisez attentivement les critères d\'éligibilité et les attendus. Un dossier hors cadre est écarté, quelle que soit sa valeur. Notez les pièces demandées et la date limite.</p>
-<h2>Soigner la note d\'intention</h2>
-<p>La note d\'intention est le cœur du dossier. Expliquez votre démarche, le sens du projet et ce que la résidence ou l\'aide va permettre. Soyez précis et sincère, évitez le jargon.</p>
-<h2>Le budget et les pièces visuelles</h2>
-<p>Présentez un budget honnête et équilibré, et joignez des visuels de qualité qui montrent votre travail. Un jury se fait une opinion en quelques secondes : facilitez lui la tâche.</p>
-<p>Anticipez toujours les délais : un dossier déposé à la dernière minute laisse peu de place aux imprévus techniques.</p>',
+                'slug'           => 'repondre-appel-a-projets-dossier-solide',
+                'title'          => 'Répondre à un appel à projets : nos conseils pour un dossier solide',
+                'coverImagePath' => 'uploads/articles/repondre-appel-a-projets-dossier-solide.jpg',
+                'excerpt'        => 'Un bon dossier ne s\'improvise pas. Méthode, note d\'intention, budget, visuels : les réflexes qui font la différence face à un jury.',
+                'content'        => '<p>Un appel à projets, c\'est une promesse et une exigence. Pour convaincre un jury, la qualité artistique ne suffit pas : il faut aussi un dossier lisible, complet, et déposé dans les temps. Voici comment mettre toutes les chances de votre côté.</p>
+<h2>Décrypter le règlement</h2>
+<p>Avant tout, lisez attentivement les critères d\'éligibilité et les attendus. Un dossier hors cadre est écarté, quelle que soit sa valeur artistique. Notez la liste exacte des pièces demandées, le format attendu et la date limite. En cas de doute, contactez l\'organisateur : mieux vaut une question que des heures de travail perdues.</p>
+<h2>La note d\'intention, le coeur du dossier</h2>
+<p>La note d\'intention est ce que le jury lit en premier et retient le plus. Expliquez votre démarche, le sens du projet, et ce que cette aide ou cette résidence va concrètement permettre. Soyez précis et sincère, allez à l\'essentiel, et bannissez le jargon. Une idée forte, clairement formulée, vaut mieux qu\'un texte ampoulé.</p>
+<h2>Le budget prévisionnel</h2>
+<p>Présentez un budget honnête et équilibré. Détaillez les postes de dépenses et les sources de financement envisagées. Un budget réaliste inspire confiance ; un budget flou ou déséquilibré inquiète.</p>
+<h2>Les pièces visuelles et le portfolio</h2>
+<p>Joignez des visuels de qualité qui montrent votre travail sous son meilleur jour. Le jury se fait une opinion en quelques secondes : facilitez lui la lecture avec des images nettes, légendées, et un portfolio cohérent.</p>
+<h2>Les erreurs à éviter</h2>
+<p>Ne déposez pas à la dernière minute : un imprévu technique peut tout gâcher. Ne réutilisez pas un dossier tel quel d\'un appel à l\'autre sans l\'adapter. Ne négligez pas la relecture : une faute ou un fichier manquant donne une impression de négligence. Anticipez, relisez, et faites vous relire.</p>',
             ],
+
+            // ── Article 3 : Diaspora afro-atlantique et création numérique ─────
             [
-                'slug'            => 'diaspora-afro-atlantique-creation-numerique',
-                'title'           => 'Diaspora afro-atlantique : les nouvelles formes de création numérique',
-                'coverImagePath'  => 'uploads/articles/diaspora-afro-atlantique-creation-numerique.jpg',
-                'excerpt'         => 'Du net art à l\'intelligence artificielle, la création numérique ouvre de nouveaux espaces aux artistes de la diaspora.',
-                'content'         => '<p>Les outils numériques redessinent la création contemporaine. Pour les artistes de la diaspora afro-atlantique, ils offrent de nouveaux territoires d\'expression, de mémoire et de diffusion.</p>
-<h2>De nouveaux langages</h2>
-<p>Net art, art génératif, réalité augmentée, créations assistées par intelligence artificielle : ces formes permettent de raconter des histoires souvent absentes des circuits traditionnels, et de toucher des publics dans le monde entier.</p>
-<h2>Mémoire et transmission</h2>
-<p>Le numérique devient aussi un outil d\'archivage et de transmission : préserver des récits, documenter des pratiques, faire dialoguer les générations et les territoires de la diaspora.</p>
-<h2>Des opportunités à saisir</h2>
-<p>Festivals, résidences et appels à projets dédiés aux arts numériques se multiplient. C\'est le moment d\'expérimenter, de se former et de candidater. Bazaart vous aide à repérer ces occasions et à vous y préparer.</p>',
+                'slug'           => 'diaspora-afro-atlantique-creation-numerique',
+                'title'          => 'Diaspora afro-atlantique : les nouvelles formes de création numérique',
+                'coverImagePath' => 'uploads/articles/diaspora-afro-atlantique-creation-numerique.jpg',
+                'excerpt'        => 'Du net art à l\'intelligence artificielle, le numérique ouvre de nouveaux territoires d\'expression, de mémoire et de diffusion aux artistes de la diaspora.',
+                'content'        => '<p>Les outils numériques redessinent la création contemporaine. Pour les artistes de la diaspora afro-atlantique, ils ouvrent de nouveaux territoires d\'expression, de mémoire et de diffusion, souvent en dehors des circuits traditionnels.</p>
+<h2>De nouveaux langages artistiques</h2>
+<p>Net art, art génératif, réalité augmentée, créations assistées par intelligence artificielle : ces formes permettent de raconter des histoires longtemps restées invisibles, et de toucher des publics partout dans le monde. Le numérique abolit certaines barrières géographiques et financières de la diffusion.</p>
+<h2>Mémoire, archive et transmission</h2>
+<p>Le numérique devient aussi un puissant outil d\'archivage et de transmission : préserver des récits, documenter des pratiques, faire dialoguer les générations et les territoires de la diaspora. Des artistes s\'emparent de ces outils pour réactiver des mémoires familiales et collectives.</p>
+<h2>L\'intelligence artificielle et ses questions</h2>
+<p>L\'IA ouvre des possibilités créatives inédites, mais soulève aussi des questions : biais des modèles, représentation, droits d\'auteur. Se les approprier de façon critique, c\'est garder la main sur le sens de son travail plutôt que de subir l\'outil.</p>
+<h2>Des opportunités concrètes à saisir</h2>
+<p>Festivals, résidences et appels à projets dédiés aux arts numériques se multiplient. C\'est le moment d\'expérimenter, de se former et de candidater. Bazaart vous aide à repérer ces occasions et à vous y préparer, pour que ces nouveaux outils deviennent de vrais leviers de création.</p>',
             ],
+
+            // ── Article 4 : Construire un portfolio d'artiste ──────────────────
             [
-                'slug'            => 'construire-portfolio-artiste',
-                'title'           => 'Construire un portfolio d\'artiste qui fait la différence',
-                'coverImagePath'  => 'uploads/articles/construire-portfolio-artiste.jpg',
-                'excerpt'         => 'Votre portfolio est votre première impression. Comment le rendre clair, cohérent et mémorable.',
-                'content'         => '<p>Le portfolio est souvent le premier contact entre un artiste et un jury, une galerie ou un partenaire. En quelques pages, il doit donner envie d\'en savoir plus.</p>
+                'slug'           => 'construire-portfolio-artiste',
+                'title'          => 'Construire un portfolio d\'artiste qui fait la différence',
+                'coverImagePath' => 'uploads/articles/construire-portfolio-artiste.jpg',
+                'excerpt'        => 'Votre portfolio est votre première impression. Sélection, narration, présentation, format : comment le rendre clair, cohérent et mémorable.',
+                'content'        => '<p>Le portfolio est souvent le premier contact entre un artiste et un jury, une galerie ou un partenaire. En quelques pages, il doit donner envie d\'en savoir plus. Voici comment le construire pour qu\'il vous serve vraiment.</p>
 <h2>Sélectionner, pas tout montrer</h2>
-<p>Choisissez vos pièces les plus fortes plutôt que de tout présenter. Un portfolio resserré et cohérent est plus convaincant qu\'un catalogue exhaustif.</p>
+<p>Choisissez vos pièces les plus fortes plutôt que de tout présenter. Un portfolio resserré et cohérent est bien plus convaincant qu\'un catalogue exhaustif. En cas de doute sur une oeuvre, retirez la : le doute se ressent.</p>
 <h2>Raconter une histoire</h2>
-<p>Organisez vos travaux pour qu\'ils racontent un parcours et une démarche. L\'ordre, les transitions et un court texte de présentation aident le lecteur à comprendre votre univers.</p>
-<h2>Soigner la forme</h2>
-<p>Des visuels de bonne qualité, une mise en page sobre et un format adapté (page en ligne ou PDF léger) font toute la différence. Pensez à mettre votre portfolio à jour régulièrement.</p>
-<p>Un portfolio clair, c\'est plus de candidatures abouties et plus d\'opportunités saisies.</p>',
+<p>Organisez vos travaux pour qu\'ils racontent un parcours et une démarche. L\'ordre des pièces, les transitions et un court texte de présentation aident le lecteur à comprendre votre univers. Un fil conducteur clair transforme une suite d\'images en propos artistique.</p>
+<h2>Soigner la présentation</h2>
+<p>Des visuels de bonne qualité, une mise en page sobre, une typographie lisible : la forme sert le fond. Évitez les fonds chargés et les effets inutiles. Chaque oeuvre mérite de respirer.</p>
+<h2>Choisir le bon format</h2>
+<p>Adaptez le format au contexte : une page en ligne pour être trouvé et partagé, un PDF léger pour les candidatures. Vérifiez que vos fichiers s\'ouvrent partout et restent légers à envoyer.</p>
+<h2>Garder son portfolio vivant</h2>
+<p>Un portfolio n\'est jamais figé. Mettez le à jour régulièrement, retirez les travaux qui ne vous ressemblent plus, ajoutez vos réalisations récentes. Un portfolio clair et actuel, c\'est plus de candidatures abouties et plus d\'opportunités saisies.</p>',
             ],
         ];
 
-        // ── Étape 3 : parcourir les articles et insérer ceux qui n'existent pas ─
+        // ── Étape 3 : parcourir les articles et créer ou mettre à jour ────────
         $createdCount = 0;
+        $updatedCount = 0;
         $skippedCount = 0;
-        // Liste pour le récap final affiché dans le tableau SymfonyStyle
+
+        // Tableau de récapitulatif pour l'affichage final (slug, action)
         $recap = [];
 
-        // Date de publication unique pour tous les articles créés lors de ce seed.
-        // On utilise new \DateTime() afin d'obtenir un DateTimeInterface valide.
+        // Date de publication pour les articles nouvellement créés (now au moment du seed)
         $publishedAt = new \DateTime();
 
+        // Booléen pour savoir si un flush est nécessaire en fin de commande
+        $hasChanges = false;
+
         foreach ($articles as $data) {
-            // ── Idempotence : vérifier si le slug existe déjà ─────────────────
-            // findOneBy(['slug' => ...]) retourne null si aucun article ne correspond.
+            // ── Idempotence : chercher si cet article existe déjà par son slug ─
             $existing = $this->articleRepository->findOneBy(['slug' => $data['slug']]);
 
-            if ($existing !== null) {
-                // Cet article existe déjà : on le saute sans modifier quoi que ce soit.
-                $io->text(sprintf('  [IGNORÉ]  %s (slug déjà présent)', $data['slug']));
-                $recap[] = [$data['slug'], 'ignoré'];
-                $skippedCount++;
+            if ($existing instanceof Article) {
+                // L'article existe déjà en base. Deux comportements possibles :
+
+                if (!$shouldUpdate) {
+                    // Sans --update : on ignore cet article (comportement historique).
+                    $io->text(sprintf('  [IGNORE]  %s (slug deja present)', $data['slug']));
+                    $recap[] = [$data['slug'], 'ignoré'];
+                    $skippedCount++;
+                    continue;
+                }
+
+                // Avec --update : on met à jour uniquement les champs de contenu.
+                // NE PAS toucher : author, status, publishedAt, createdAt.
+                // updatedAt sera rafraichi automatiquement par #[ORM\PreUpdate]
+                // quand Doctrine détecte les changements et flush.
+                $existing->setTitle($data['title']);
+                $existing->setExcerpt($data['excerpt']);
+                $existing->setContent($data['content']);
+                $existing->setCoverImagePath($data['coverImagePath']);
+
+                // persist() n'est pas nécessaire pour une entité déjà gérée par
+                // l'UnitOfWork Doctrine. Doctrine détectera les changements au flush.
+
+                $io->text(sprintf('  [MAJ]     %s', $data['slug']));
+                $recap[] = [$data['slug'], 'mis à jour'];
+                $updatedCount++;
+                $hasChanges = true;
+
                 continue;
             }
 
-            // ── Création de l'entité Article ──────────────────────────────────
+            // ── L'article n'existe pas encore : on le crée ────────────────────
             $article = new Article();
 
-            // Titre affiché en page et dans les listes
+            // Titre affiché sur la page et dans les listes
             $article->setTitle($data['title']);
 
             // Slug : identifiant URL unique (ex: /articles/financer-residence-...)
             $article->setSlug($data['slug']);
 
-            // Accroche courte (résumé en liste/carte)
+            // Accroche courte (résumé en liste ou carte)
             $article->setExcerpt($data['excerpt']);
 
             // Contenu HTML complet de l'article
             $article->setContent($data['content']);
 
-            // Chemin relatif de l'image de couverture (stockée dans public/)
+            // Chemin relatif vers l'image de couverture dans public/
             $article->setCoverImagePath($data['coverImagePath']);
 
-            // L'auteur est l'admin récupéré en début de commande
+            // L'auteur est l'admin récupéré à l'étape 1
             $article->setAuthor($admin);
 
-            // Statut "publié" — utilise l'enum PHP 8.1 ArticleStatus::Published
-            // La valeur stockée en base sera la string 'published' (backed enum)
+            // Statut "publié" via l'enum PHP 8.1 ArticleStatus::Published
+            // La valeur stockée en BDD est la string 'published' (backed enum)
             $article->setStatus(ArticleStatus::Published);
 
-            // Date de publication : now() au moment de l'exécution du seed
+            // Date de publication : maintenant, au moment de l'exécution du seed
             $article->setPublishedAt($publishedAt);
 
-            // Note : createdAt et updatedAt sont gérés automatiquement par
+            // Note : createdAt et updatedAt sont initialisés automatiquement par
             // #[ORM\PrePersist] via initTimestamps() dans l'entité Article.
-            // Il ne faut PAS les définir manuellement ici.
+            // Ne pas les définir manuellement ici.
 
-            // persist() marque l'entité pour insertion — l'INSERT SQL sera exécuté au flush()
+            // persist() marque l'entité pour insertion. L'INSERT SQL sera lancé au flush()
             $this->em->persist($article);
 
-            $io->text(sprintf('  [CRÉÉ]    %s', $data['slug']));
+            $io->text(sprintf('  [CREE]    %s', $data['slug']));
             $recap[] = [$data['slug'], 'créé'];
             $createdCount++;
+            $hasChanges = true;
         }
 
-        // ── Étape 4 : flush — envoyer tous les INSERTs en une seule transaction ─
-        // On flush uniquement si au moins un article a été créé pour éviter
-        // une transaction vide inutile.
-        if ($createdCount > 0) {
+        // ── Étape 4 : flush - envoyer toutes les opérations en une transaction ──
+        // On flush uniquement si au moins une entité a été créée ou modifiée
+        // pour éviter une transaction vide inutile.
+        if ($hasChanges) {
             $this->em->flush();
         }
 
         // ── Étape 5 : afficher le récapitulatif ───────────────────────────────
         $io->newLine();
-        // Tableau SymfonyStyle : 2 colonnes, 1 ligne par article
+        // Tableau SymfonyStyle : 2 colonnes, 1 ligne par article traité
         $io->table(
             ['Slug', 'Action'],
             $recap
         );
 
-        // Message de synthèse coloré selon le résultat
-        if ($createdCount > 0) {
+        // Message de synthèse adapté selon les compteurs
+        if ($createdCount > 0 || $updatedCount > 0) {
             $io->success(sprintf(
-                '%d article(s) créé(s), %d ignoré(s) (slug déjà présent).',
+                '%d article(s) créé(s), %d mis à jour, %d ignoré(s).',
                 $createdCount,
+                $updatedCount,
                 $skippedCount
             ));
         } else {
             $io->info(sprintf(
-                'Aucun article créé : les %d article(s) existaient déjà (idempotence).',
+                'Aucune modification : les %d article(s) existaient déjà (utilisez --update pour forcer la mise à jour).',
                 $skippedCount
             ));
         }
