@@ -376,11 +376,28 @@
                    placeholder="Ex: CNM - Centre National de la Musique" required>
         </div>
 
-        {# URL #}
+        {# URL + bouton de détection automatique du type #}
         <div class="ss-add__group">
             <label class="ss-add__label" for="url">URL</label>
             <input class="ss-add__input" type="url" id="url" name="url"
                    placeholder="https://..." required>
+            {#
+                Bouton "Détecter" — déclenche un appel AJAX vers /admin/scraping-sources/detect-type
+                qui teste l'URL et retourne le type recommandé (rss ou html_llm).
+                Le script en bas de page gère la réponse et met à jour le <select> #type.
+            #}
+            <button type="button" id="btn-detect-type"
+                    style="margin-top: 4px; padding: 3px 8px; font-family: var(--mono);
+                           font-size: 10px; letter-spacing: .05em; cursor: pointer;
+                           border: 1px solid var(--ink-mute); background: var(--bg);
+                           color: var(--ink-mute);">
+                🔍 Détecter le type
+            </button>
+            {# Zone de feedback — affichée dynamiquement par le JS après la détection #}
+            <span id="detect-feedback"
+                  style="display: none; font-size: 10px; font-family: var(--mono);
+                         margin-top: 3px; padding: 2px 6px;">
+            </span>
         </div>
 
         {# Type — RSS ou HTML_LLM uniquement #}
@@ -665,5 +682,106 @@
     Slugs connus (classes PHP dédiées) :
     <code style="background: var(--bg); border: 1px solid var(--line-soft); padding: 1px 5px;">{{ known_slugs|join(', ')|e }}</code>
 </div>
+
+<script>
+/**
+ * Détection automatique du type de source (RSS ou HTML → LLM)
+ *
+ * Quand l'admin entre une URL et clique "Détecter le type", on appelle
+ * l'endpoint AJAX /admin/scraping-sources/detect-type?url=...
+ * Le backend teste l'URL et retourne le type recommandé.
+ * On met alors à jour automatiquement le <select> #type et on affiche
+ * un message d'information sous le champ URL.
+ */
+document.addEventListener('DOMContentLoaded', function () {
+
+    const btnDetect  = document.getElementById('btn-detect-type');
+    const inputUrl   = document.getElementById('url');
+    const selectType = document.getElementById('type');
+    const feedback   = document.getElementById('detect-feedback');
+
+    // Endpoint AJAX — généré par Twig pour éviter de hardcoder l'URL
+    const detectEndpoint = '{{ path('app_admin_scraping_sources_detect_type') }}';
+
+    /**
+     * Affiche le feedback sous le champ URL.
+     * @param {string} message - Texte à afficher
+     * @param {string} color   - Couleur CSS
+     */
+    function afficherFeedback(message, color) {
+        feedback.textContent = message;
+        feedback.style.color = color;
+        feedback.style.display = 'inline-block';
+    }
+
+    /**
+     * Lance la détection automatique du type pour l'URL saisie.
+     * Appelée au clic sur le bouton "Détecter le type".
+     */
+    async function detecterType() {
+        const url = inputUrl.value.trim();
+
+        // On ne détecte que si l'URL a l'air valide (commence par http)
+        if (!url || !url.startsWith('http')) {
+            afficherFeedback('Entrez d\'abord une URL valide (http://...)', '#c00');
+            return;
+        }
+
+        // ── État "chargement" ─────────────────────────────────────────────────
+        btnDetect.disabled = true;
+        btnDetect.textContent = '⏳ Détection...';
+        afficherFeedback('Analyse en cours...', 'var(--ink-mute)');
+
+        try {
+            // Appel AJAX vers le backend PHP (FeedDetectorService)
+            const reponse = await fetch(detectEndpoint + '?url=' + encodeURIComponent(url));
+            const data    = await reponse.json();
+
+            if (!reponse.ok || data.error) {
+                afficherFeedback(data.error ?? 'Erreur lors de la détection.', '#c00');
+                return;
+            }
+
+            // ── Mise à jour du <select> type ──────────────────────────────────
+            // On cherche l'option dont la valeur correspond au type détecté
+            let typeSelectionne = false;
+            selectType.querySelectorAll('option').forEach(function (option) {
+                if (option.value === data.type) {
+                    option.selected = true;
+                    typeSelectionne = true;
+                }
+            });
+
+            // ── Feedback visuel ───────────────────────────────────────────────
+            if (typeSelectionne) {
+                const couleur = data.type === 'rss' ? '#2a7a2a' : 'var(--ink-mute)';
+                afficherFeedback('✓ ' + data.message, couleur);
+            } else {
+                afficherFeedback(data.message, 'var(--ink-mute)');
+            }
+
+        } catch (erreur) {
+            // Erreur réseau (timeout, CORS, etc.)
+            afficherFeedback('Erreur réseau — vérifiez votre connexion.', '#c00');
+        } finally {
+            // ── Restauration du bouton dans tous les cas ──────────────────────
+            btnDetect.disabled = false;
+            btnDetect.textContent = '🔍 Détecter le type';
+        }
+    }
+
+    // Clic sur le bouton → lancer la détection
+    if (btnDetect) {
+        btnDetect.addEventListener('click', detecterType);
+    }
+
+    // Si l'URL change après une détection → effacer le feedback (info périmée)
+    if (inputUrl) {
+        inputUrl.addEventListener('input', function () {
+            feedback.style.display = 'none';
+        });
+    }
+});
+</script>
 
 {% endblock %}

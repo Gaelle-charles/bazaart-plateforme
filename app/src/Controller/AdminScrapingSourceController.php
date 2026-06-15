@@ -7,9 +7,11 @@ namespace App\Controller;
 use App\Entity\ScrapingSource;
 use App\Enum\ScrapingSourceType;
 use App\Repository\ScrapingSourceRepository;
+use App\Service\FeedDetectorService;
 use App\Service\ScraperRegistry;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -23,11 +25,12 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * de l'orchestration (valider les entrées basiques, déléguer à l'EntityManager).
  *
  * Routes disponibles :
- *   GET       /admin/scraping-sources              → index()  : liste toutes les sources avec stats
- *   POST      /admin/scraping-sources/new          → create() : ajoute une source (RSS ou HTML_LLM uniquement)
- *   GET|POST  /admin/scraping-sources/{id}/edit    → edit()   : modifie une source existante
- *   POST      /admin/scraping-sources/{id}/toggle  → toggle() : bascule actif/inactif
- *   POST      /admin/scraping-sources/{id}/delete  → delete() : supprime une source
+ *   GET       /admin/scraping-sources                    → index()       : liste toutes les sources avec stats
+ *   POST      /admin/scraping-sources/new                → create()      : ajoute une source (RSS ou HTML_LLM uniquement)
+ *   GET       /admin/scraping-sources/detect-type?url=… → detectType()  : détecte automatiquement le type d'une URL
+ *   GET|POST  /admin/scraping-sources/{id}/edit          → edit()        : modifie une source existante
+ *   POST      /admin/scraping-sources/{id}/toggle        → toggle()      : bascule actif/inactif
+ *   POST      /admin/scraping-sources/{id}/delete        → delete()      : supprime une source
  *
  * Sécurité :
  *   - ROLE_ADMIN requis sur toute la classe
@@ -47,6 +50,8 @@ class AdminScrapingSourceController extends AbstractController
         private readonly EntityManagerInterface $em,
         // ScraperRegistry — pour valider les slugs soumis par l'admin
         private readonly ScraperRegistry $scraperRegistry,
+        // FeedDetectorService — pour la route AJAX de détection automatique du type
+        private readonly FeedDetectorService $feedDetector,
     ) {
     }
 
@@ -162,6 +167,81 @@ class AdminScrapingSourceController extends AbstractController
         ));
 
         return $this->redirectToRoute('app_admin_scraping_sources_index');
+    }
+
+    /**
+     * Détecte automatiquement le type d'une URL (RSS vs HTML_LLM) via AJAX.
+     *
+     * ── POURQUOI CETTE ROUTE EST PLACÉE AVANT /{id}/edit ─────────────────────
+     * Symfony résout les routes dans l'ordre où elles sont définies dans le fichier.
+     * Si /{id}/edit était déclarée avant /detect-type, le routeur capturerait
+     * "detect-type" comme une valeur de l'argument {id}, ce qui provoquerait
+     * une erreur 404 (entité int attendue) ou un comportement inattendu.
+     * Règle générale : les routes avec segments statiques ("detect-type") doivent
+     * TOUJOURS précéder les routes avec segments dynamiques ({id}) sur le même préfixe.
+     *
+     * ── FONCTIONNEMENT ────────────────────────────────────────────────────────
+     * L'admin saisit une URL dans le formulaire d'ajout/modification de source.
+     * Un appel AJAX GET est déclenché et cette route retourne en JSON :
+     *   { "type": "rss", "feed_url": "https://site.fr/feed/", "message": "Flux RSS détecté..." }
+     * ou
+     *   { "type": "html_llm", "feed_url": null, "message": "Aucun flux RSS..." }
+     *
+     * Le JS dans le template lit la réponse et pré-sélectionne le bon type dans le select.
+     * Si feed_url est non null, il peut aussi proposer de remplir le champ "URL du flux".
+     *
+     * ── SÉCURITÉ ──────────────────────────────────────────────────────────────
+     * CSRF non requis : cet endpoint est en lecture seule (aucune mutation BDD).
+     * Le déclenchement d'une requête HTTP vers une URL tierce ne présente pas de
+     * risque SSRF significatif ici car :
+     *   - L'accès est restreint à ROLE_ADMIN
+     *   - La réponse n'est jamais exécutée, juste analysée pour ses métadonnées
+     *   - Les URLs d'intranet ne seront pas accessibles depuis le conteneur Docker prod
+     *
+     * @param Request $request La requête HTTP courante (paramètre GET "url" attendu)
+     *
+     * @return JsonResponse
+     *   200 : { type: string, feed_url: string|null, message: string }
+     *   400 : { error: string } si l'URL est absente ou invalide
+     */
+    #[Route('/detect-type', name: 'app_admin_scraping_sources_detect_type', methods: ['GET'])]
+    public function detectType(Request $request): JsonResponse
+    {
+        // ── Lecture et nettoyage du paramètre URL ──────────────────────────────
+        // Le paramètre est transmis en query string : /detect-type?url=https://...
+        // On nettoie les espaces pour éviter les erreurs sur les URLs copiées-collées.
+        $url = trim((string) $request->query->get('url', ''));
+
+        // ── Validation : URL obligatoire ───────────────────────────────────────
+        if ($url === '') {
+            return new JsonResponse(
+                ['error' => 'Paramètre "url" manquant. Passez une URL en query string : /detect-type?url=https://...'],
+                Response::HTTP_BAD_REQUEST
+            );
+        }
+
+        // ── Validation : format URL minimal ───────────────────────────────────
+        // filter_var avec FILTER_VALIDATE_URL vérifie que l'URL commence par un schéma
+        // valide (http:// ou https://) et a une structure d'URL correcte.
+        // Elle ne fait pas de requête réseau — c'est une validation syntaxique.
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            return new JsonResponse(
+                ['error' => 'URL invalide. Elle doit commencer par http:// ou https:// et avoir une structure d\'URL correcte.'],
+                Response::HTTP_BAD_REQUEST
+            );
+        }
+
+        // ── Délégation au service de détection ────────────────────────────────
+        // FeedDetectorService::detect() encapsule toute la logique HTTP + heuristique.
+        // Il ne lève jamais d'exception — retourne toujours un tableau valide.
+        // Conformément à CLAUDE.md §4 : aucune logique métier dans le controller.
+        $result = $this->feedDetector->detect($url);
+
+        // ── Retour JSON ────────────────────────────────────────────────────────
+        // JsonResponse sérialise automatiquement le tableau en JSON avec Content-Type
+        // application/json. Pas besoin de json_encode() manuellement.
+        // Le code HTTP 200 est implicite (valeur par défaut de JsonResponse).
+        return new JsonResponse($result);
     }
 
     /**
