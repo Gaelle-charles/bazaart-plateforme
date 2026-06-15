@@ -134,76 +134,98 @@ class SeedBlogArticlesCommand extends Command
             // ── Article 1 : Financer sa résidence artistique ───────────────────
             [
                 'slug'           => 'financer-residence-artistique-etranger',
-                'title'          => 'Financer sa résidence artistique à l\'étranger',
+                'title'          => 'Financer sa résidence artistique à l\'étranger : le guide complet 2026',
                 'coverImagePath' => 'uploads/articles/financer-residence-artistique-etranger.jpg',
-                'excerpt'        => 'Bourses, aides à la mobilité, fonds privés, financement participatif : le guide des leviers pour partir en résidence sans se ruiner.',
-                'content'        => '<p>Partir en résidence à l\'étranger est une étape précieuse : du temps pour créer, un nouvel environnement, des rencontres et souvent un vrai tremplin pour la suite. Reste la question qui freine beaucoup d\'artistes : comment financer ce projet ? Bonne nouvelle, les dispositifs existent. Encore faut il savoir où chercher, et s\'y prendre suffisamment tôt.</p>
-<h2>Les aides publiques</h2>
-<p>De nombreux organismes soutiennent la mobilité des artistes. Selon votre discipline et votre destination, vous pouvez solliciter des institutions nationales, des fonds européens ou des collectivités territoriales (région, ville). Ces aides couvrent souvent le transport, l\'hébergement, parfois une bourse de production ou un per diem.</p>
-<p>Surveillez notamment les appels du Centre national de la musique, de l\'Institut français, ou les programmes européens dédiés à la mobilité culturelle. Les délais de dépôt sont parfois longs : anticipez de plusieurs mois.</p>
-<h2>Les fonds privés et les fondations</h2>
-<p>Fondations d\'entreprise, mécènes et fonds de dotation financent régulièrement des projets artistiques. Leurs critères sont parfois plus souples que ceux du secteur public, mais la concurrence est forte. Un dossier clair, sincère et bien incarné fait la différence : montrez en quoi la résidence sert votre parcours et votre démarche.</p>
+                'excerpt'        => 'Bourses, aides à la mobilité, mécénat, financement participatif : toutes les solutions concrètes pour financer votre résidence artistique à l\'étranger.',
+                'content'        => '<p>Décrocher une résidence artistique à l\'étranger, c\'est gagner du temps pour créer, changer de regard et tisser un réseau international. Mais une fois la sélection passée, une question revient sans cesse : comment financer ce séjour ? Entre le transport, le logement, le matériel et la vie sur place, la facture grimpe vite. La bonne nouvelle, c\'est qu\'il existe de nombreux leviers de financement, publics comme privés. Voici un guide concret pour boucler votre budget et partir sereinement.</p>
+<h2>Combien coûte vraiment une résidence à l\'étranger ?</h2>
+<p>Avant de chercher des financements, posez les chiffres. Une résidence engage généralement plusieurs types de dépenses :</p>
+<ul>
+<li>le transport aller-retour, parfois plusieurs trajets ;</li>
+<li>l\'hébergement, quand il n\'est pas pris en charge par la structure d\'accueil ;</li>
+<li>le matériel et les frais de production de vos oeuvres ;</li>
+<li>les frais de vie quotidienne (nourriture, déplacements locaux, assurance) ;</li>
+<li>une éventuelle perte de revenus pendant votre absence.</li>
+</ul>
+<p>Chiffrer ces postes avec honnêteté est la première étape. Un budget clair vous servira pour chaque demande de financement.</p>
+<h2>Les aides publiques à la mobilité</h2>
+<p>De nombreux organismes soutiennent la mobilité des artistes. Selon votre discipline et votre destination, vous pouvez solliciter des institutions nationales, des programmes européens ou des collectivités territoriales (votre région, votre ville). Ces aides couvrent souvent le voyage, l\'hébergement, parfois une bourse de production.</p>
+<p>Surveillez en particulier les appels du Centre national de la musique, de l\'Institut français et les dispositifs européens dédiés à la mobilité culturelle. Les calendriers sont parfois très en amont : commencez vos recherches plusieurs mois avant le départ.</p>
+<h2>Le mécénat et les fondations privées</h2>
+<p>Fondations d\'entreprise, mécènes et fonds de dotation financent régulièrement des projets artistiques. Leurs critères sont parfois plus souples que ceux du secteur public, mais la concurrence reste forte. Pour vous démarquer, reliez clairement votre résidence à votre démarche artistique : que va-t-elle permettre que vous ne pourriez pas faire autrement ?</p>
 <h2>Le financement participatif</h2>
-<p>Le crowdfunding peut compléter un budget, surtout si vous avez déjà une communauté. Au delà de l\'argent récolté, c\'est un excellent moyen de fédérer un public autour de votre projet. Soignez la vidéo de présentation et proposez des contreparties simples et utiles.</p>
-<h2>Monter un budget solide</h2>
-<p>Listez toutes vos dépenses : transport, logement, matériel, assurance, frais de vie, production. Présentez un budget équilibré, où les recettes couvrent les dépenses. Le financement croisé, qui combine plusieurs sources, rassure les financeurs et sécurise votre projet : ne misez jamais sur une seule aide.</p>
-<h2>Nos conseils pour maximiser vos chances</h2>
-<p>Commencez tôt, lisez attentivement chaque règlement, et adaptez votre dossier à chaque financeur plutôt que d\'envoyer un texte générique. Gardez une trace de vos candidatures et de leurs échéances. Sur Bazaart, retrouvez les opportunités de mobilité et de financement au même endroit, et activez des alertes pour ne rien manquer.</p>',
+<p>Le crowdfunding peut compléter votre budget, surtout si vous avez déjà une communauté qui vous suit. Au delà de l\'argent récolté, c\'est un formidable outil pour fédérer un public autour de votre projet. Soignez votre vidéo de présentation, racontez une histoire, et proposez des contreparties simples et sincères.</p>
+<h2>Construire un budget qui inspire confiance</h2>
+<p>La règle d\'or : ne jamais miser sur une seule source. Le financement croisé, qui combine bourse publique, mécénat et apport personnel, rassure les financeurs et sécurise votre départ. Présentez un budget équilibré, où les recettes couvrent les dépenses, et gardez une marge pour les imprévus.</p>
+<h2>Passez à l\'action</h2>
+<p>Le financement d\'une résidence se prépare comme un projet à part entière : tôt, avec méthode, et en multipliant les pistes. Pour ne rien manquer, <a href="/resources">explorez les opportunités de mobilité et de financement</a> rassemblées sur Bazaart, et <a href="/register">créez votre compte gratuitement</a> pour recevoir des alertes personnalisées. Votre prochaine résidence commence par un bon dossier de financement.</p>',
             ],
 
             // ── Article 2 : Répondre à un appel à projets ─────────────────────
             [
                 'slug'           => 'repondre-appel-a-projets-dossier-solide',
-                'title'          => 'Répondre à un appel à projets : nos conseils pour un dossier solide',
+                'title'          => 'Répondre à un appel à projets artistique : 7 étapes pour un dossier qui convainc',
                 'coverImagePath' => 'uploads/articles/repondre-appel-a-projets-dossier-solide.jpg',
-                'excerpt'        => 'Un bon dossier ne s\'improvise pas. Méthode, note d\'intention, budget, visuels : les réflexes qui font la différence face à un jury.',
-                'content'        => '<p>Un appel à projets, c\'est une promesse et une exigence. Pour convaincre un jury, la qualité artistique ne suffit pas : il faut aussi un dossier lisible, complet, et déposé dans les temps. Voici comment mettre toutes les chances de votre côté.</p>
-<h2>Décrypter le règlement</h2>
-<p>Avant tout, lisez attentivement les critères d\'éligibilité et les attendus. Un dossier hors cadre est écarté, quelle que soit sa valeur artistique. Notez la liste exacte des pièces demandées, le format attendu et la date limite. En cas de doute, contactez l\'organisateur : mieux vaut une question que des heures de travail perdues.</p>
-<h2>La note d\'intention, le coeur du dossier</h2>
-<p>La note d\'intention est ce que le jury lit en premier et retient le plus. Expliquez votre démarche, le sens du projet, et ce que cette aide ou cette résidence va concrètement permettre. Soyez précis et sincère, allez à l\'essentiel, et bannissez le jargon. Une idée forte, clairement formulée, vaut mieux qu\'un texte ampoulé.</p>
-<h2>Le budget prévisionnel</h2>
-<p>Présentez un budget honnête et équilibré. Détaillez les postes de dépenses et les sources de financement envisagées. Un budget réaliste inspire confiance ; un budget flou ou déséquilibré inquiète.</p>
-<h2>Les pièces visuelles et le portfolio</h2>
-<p>Joignez des visuels de qualité qui montrent votre travail sous son meilleur jour. Le jury se fait une opinion en quelques secondes : facilitez lui la lecture avec des images nettes, légendées, et un portfolio cohérent.</p>
-<h2>Les erreurs à éviter</h2>
-<p>Ne déposez pas à la dernière minute : un imprévu technique peut tout gâcher. Ne réutilisez pas un dossier tel quel d\'un appel à l\'autre sans l\'adapter. Ne négligez pas la relecture : une faute ou un fichier manquant donne une impression de négligence. Anticipez, relisez, et faites vous relire.</p>',
+                'excerpt'        => 'Note d\'intention, budget, visuels, calendrier : la méthode complète pour bâtir un dossier d\'appel à projets solide et convaincre un jury.',
+                'content'        => '<p>Un appel à projets, c\'est une opportunité réelle, mais aussi une compétition. Face à des dizaines de candidatures, la qualité artistique ne suffit pas toujours : c\'est souvent la clarté et le sérieux du dossier qui font la différence. Voici une méthode en étapes pour transformer une bonne idée en dossier qui retient l\'attention du jury.</p>
+<h2>1. Décrypter le règlement avant tout</h2>
+<p>Lisez attentivement les critères d\'éligibilité et les attendus. Un dossier hors cadre est écarté, quelle que soit sa valeur. Repérez la liste exacte des pièces demandées, le format attendu et la date limite. En cas de doute, posez la question à l\'organisateur : mieux vaut un mail que des heures de travail perdues.</p>
+<h2>2. Clarifier votre intention</h2>
+<p>La note d\'intention est le coeur du dossier, ce que le jury lit en premier et retient le plus. Expliquez votre démarche, le sens du projet, et ce que cette aide va concrètement permettre. Allez à l\'essentiel, soyez sincère, et bannissez le jargon. Une idée forte clairement formulée vaut mieux qu\'un texte ampoulé.</p>
+<h2>3. Soigner le budget prévisionnel</h2>
+<p>Détaillez vos postes de dépenses et vos sources de financement. Un budget réaliste et équilibré inspire confiance ; un budget flou inquiète. N\'hésitez pas à valoriser vos apports en nature (temps, matériel déjà possédé).</p>
+<h2>4. Choisir des visuels qui parlent</h2>
+<p>Joignez des images nettes, légendées, qui montrent votre travail sous son meilleur jour. Le jury se fait une opinion en quelques secondes : un portfolio cohérent et soigné facilite sa lecture et renforce votre crédibilité.</p>
+<h2>5. Proposer un calendrier crédible</h2>
+<p>Un planning clair, avec des étapes réalistes, montre que vous maîtrisez votre projet. Évitez les délais intenables qui sonnent faux.</p>
+<h2>6. Relire, faire relire, vérifier</h2>
+<p>Une faute, un fichier manquant ou un lien mort donnent une impression de négligence. Relisez à tête reposée, faites relire par un tiers, et vérifiez chaque pièce avant l\'envoi.</p>
+<h2>7. Anticiper le dépôt</h2>
+<p>Ne déposez jamais à la dernière minute : un imprévu technique peut tout gâcher. Visez la veille de la date limite.</p>
+<h2>Les erreurs qui coûtent cher</h2>
+<p>Réutiliser un dossier tel quel d\'un appel à l\'autre, négliger la note d\'intention, oublier une pièce : ces erreurs fréquentes sont évitables. Adaptez toujours votre candidature au dispositif visé.</p>
+<h2>Trouvez votre prochain appel à projets</h2>
+<p>La régularité paie : plus vous candidatez avec méthode, plus vos chances augmentent. <a href="/resources">Parcourez les appels à projets et bourses</a> rassemblés sur Bazaart, et <a href="/register">inscrivez-vous gratuitement</a> pour être alerté dès qu\'une opportunité correspond à votre profil.</p>',
             ],
 
             // ── Article 3 : Diaspora afro-atlantique et création numérique ─────
             [
                 'slug'           => 'diaspora-afro-atlantique-creation-numerique',
-                'title'          => 'Diaspora afro-atlantique : les nouvelles formes de création numérique',
+                'title'          => 'Diaspora afro-atlantique et création numérique : un nouveau territoire artistique',
                 'coverImagePath' => 'uploads/articles/diaspora-afro-atlantique-creation-numerique.jpg',
-                'excerpt'        => 'Du net art à l\'intelligence artificielle, le numérique ouvre de nouveaux territoires d\'expression, de mémoire et de diffusion aux artistes de la diaspora.',
-                'content'        => '<p>Les outils numériques redessinent la création contemporaine. Pour les artistes de la diaspora afro-atlantique, ils ouvrent de nouveaux territoires d\'expression, de mémoire et de diffusion, souvent en dehors des circuits traditionnels.</p>
+                'excerpt'        => 'Net art, art génératif, intelligence artificielle : comment le numérique offre aux artistes de la diaspora afro-atlantique de nouveaux espaces de création et de mémoire.',
+                'content'        => '<p>Les outils numériques redessinent la création contemporaine. Pour les artistes de la diaspora afro-atlantique, ils ouvrent bien plus qu\'un terrain technique : un territoire d\'expression, de mémoire et de diffusion, souvent loin des circuits traditionnels. Tour d\'horizon d\'un champ en pleine effervescence et des opportunités qu\'il dessine.</p>
 <h2>De nouveaux langages artistiques</h2>
-<p>Net art, art génératif, réalité augmentée, créations assistées par intelligence artificielle : ces formes permettent de raconter des histoires longtemps restées invisibles, et de toucher des publics partout dans le monde. Le numérique abolit certaines barrières géographiques et financières de la diffusion.</p>
-<h2>Mémoire, archive et transmission</h2>
-<p>Le numérique devient aussi un puissant outil d\'archivage et de transmission : préserver des récits, documenter des pratiques, faire dialoguer les générations et les territoires de la diaspora. Des artistes s\'emparent de ces outils pour réactiver des mémoires familiales et collectives.</p>
+<p>Net art, art génératif, réalité augmentée, créations assistées par intelligence artificielle : ces formes permettent de raconter des histoires longtemps restées invisibles, et de toucher des publics partout dans le monde. Le numérique abaisse certaines barrières géographiques et financières de la diffusion, ce qui change la donne pour beaucoup d\'artistes.</p>
+<h2>Le numérique comme outil de mémoire</h2>
+<p>Au delà de la création, le numérique devient un puissant instrument d\'archivage et de transmission. Préserver des récits familiaux, documenter des pratiques, faire dialoguer les générations et les territoires de la diaspora : des artistes s\'emparent de ces outils pour réactiver des mémoires collectives et leur donner une forme contemporaine.</p>
 <h2>L\'intelligence artificielle et ses questions</h2>
-<p>L\'IA ouvre des possibilités créatives inédites, mais soulève aussi des questions : biais des modèles, représentation, droits d\'auteur. Se les approprier de façon critique, c\'est garder la main sur le sens de son travail plutôt que de subir l\'outil.</p>
+<p>L\'IA ouvre des possibilités créatives inédites, mais soulève aussi des enjeux importants : biais des modèles, représentation, droits d\'auteur. Se les approprier de façon critique, c\'est garder la main sur le sens de son travail plutôt que de subir l\'outil. Les artistes qui interrogent ces technologies, autant qu\'ils les utilisent, produisent souvent les oeuvres les plus fortes.</p>
+<h2>Des compétences à acquérir</h2>
+<p>Explorer ces territoires demande de se former : logiciels, culture numérique, droits liés aux oeuvres digitales. Se faire accompagner, échanger avec des pairs et suivre des formations courtes permet de gagner un temps précieux.</p>
 <h2>Des opportunités concrètes à saisir</h2>
-<p>Festivals, résidences et appels à projets dédiés aux arts numériques se multiplient. C\'est le moment d\'expérimenter, de se former et de candidater. Bazaart vous aide à repérer ces occasions et à vous y préparer, pour que ces nouveaux outils deviennent de vrais leviers de création.</p>',
+<p>Festivals, résidences et appels à projets dédiés aux arts numériques se multiplient. C\'est le moment d\'expérimenter et de candidater. <a href="/resources">Découvrez les opportunités liées aux arts numériques</a> sur Bazaart, et <a href="/register">rejoignez la communauté</a> pour échanger, vous former et faire grandir votre pratique. Le numérique n\'est pas une mode : c\'est un nouvel espace de création à investir dès maintenant.</p>',
             ],
 
             // ── Article 4 : Construire un portfolio d'artiste ──────────────────
             [
                 'slug'           => 'construire-portfolio-artiste',
-                'title'          => 'Construire un portfolio d\'artiste qui fait la différence',
+                'title'          => 'Portfolio d\'artiste : comment le construire pour décrocher des opportunités',
                 'coverImagePath' => 'uploads/articles/construire-portfolio-artiste.jpg',
-                'excerpt'        => 'Votre portfolio est votre première impression. Sélection, narration, présentation, format : comment le rendre clair, cohérent et mémorable.',
-                'content'        => '<p>Le portfolio est souvent le premier contact entre un artiste et un jury, une galerie ou un partenaire. En quelques pages, il doit donner envie d\'en savoir plus. Voici comment le construire pour qu\'il vous serve vraiment.</p>
-<h2>Sélectionner, pas tout montrer</h2>
-<p>Choisissez vos pièces les plus fortes plutôt que de tout présenter. Un portfolio resserré et cohérent est bien plus convaincant qu\'un catalogue exhaustif. En cas de doute sur une oeuvre, retirez la : le doute se ressent.</p>
+                'excerpt'        => 'Sélection, narration, mise en page, format : la méthode pour construire un portfolio d\'artiste clair, cohérent et mémorable, qui ouvre des portes.',
+                'content'        => '<p>Le portfolio est souvent le premier contact entre un artiste et un jury, une galerie ou un partenaire. En quelques pages, il doit donner envie d\'en savoir plus. Pourtant, beaucoup d\'artistes commettent les mêmes erreurs : trop d\'oeuvres, pas de fil conducteur, une présentation négligée. Voici comment construire un portfolio qui vous serve vraiment.</p>
+<h2>Sélectionner, plutôt que tout montrer</h2>
+<p>Choisissez vos pièces les plus fortes au lieu de présenter l\'intégralité de votre travail. Un portfolio resserré et cohérent est bien plus convaincant qu\'un catalogue exhaustif. En cas de doute sur une oeuvre, retirez la : le doute se ressent toujours.</p>
 <h2>Raconter une histoire</h2>
-<p>Organisez vos travaux pour qu\'ils racontent un parcours et une démarche. L\'ordre des pièces, les transitions et un court texte de présentation aident le lecteur à comprendre votre univers. Un fil conducteur clair transforme une suite d\'images en propos artistique.</p>
+<p>Organisez vos travaux pour qu\'ils racontent un parcours et une démarche. L\'ordre des pièces, les transitions et un court texte de présentation aident le lecteur à comprendre votre univers. Un fil conducteur clair transforme une suite d\'images en véritable propos artistique.</p>
 <h2>Soigner la présentation</h2>
-<p>Des visuels de bonne qualité, une mise en page sobre, une typographie lisible : la forme sert le fond. Évitez les fonds chargés et les effets inutiles. Chaque oeuvre mérite de respirer.</p>
+<p>Des visuels de bonne qualité, une mise en page sobre et une typographie lisible : la forme sert le fond. Évitez les fonds chargés et les effets inutiles. Chaque oeuvre mérite de respirer. Pensez aussi à légender vos pièces (titre, année, technique, dimensions).</p>
 <h2>Choisir le bon format</h2>
-<p>Adaptez le format au contexte : une page en ligne pour être trouvé et partagé, un PDF léger pour les candidatures. Vérifiez que vos fichiers s\'ouvrent partout et restent légers à envoyer.</p>
-<h2>Garder son portfolio vivant</h2>
-<p>Un portfolio n\'est jamais figé. Mettez le à jour régulièrement, retirez les travaux qui ne vous ressemblent plus, ajoutez vos réalisations récentes. Un portfolio clair et actuel, c\'est plus de candidatures abouties et plus d\'opportunités saisies.</p>',
+<p>Adaptez le format au contexte : une page en ligne pour être trouvé et partagé facilement, un PDF léger pour les candidatures officielles. Vérifiez que vos fichiers s\'ouvrent partout et restent légers à envoyer. Un portfolio que personne ne parvient à ouvrir ne sert à rien.</p>
+<h2>Garder un portfolio vivant</h2>
+<p>Un portfolio n\'est jamais figé. Mettez le à jour régulièrement : retirez les travaux qui ne vous ressemblent plus, ajoutez vos réalisations récentes. Un portfolio clair et actuel, c\'est plus de candidatures abouties et plus d\'opportunités saisies.</p>
+<h2>Mettez votre portfolio au service de vos candidatures</h2>
+<p>Un bon portfolio est un investissement qui se rentabilise à chaque appel à projets. Une fois le vôtre prêt, <a href="/resources">trouvez les opportunités faites pour vous</a> sur Bazaart et <a href="/register">créez votre compte gratuitement</a> pour candidater au bon moment. Votre travail mérite d\'être vu : donnez lui le cadre qu\'il mérite.</p>',
             ],
         ];
 
