@@ -525,12 +525,15 @@
 
             {#
              # Corps de l'article.
-             # |nl2br : convertit les sauts de ligne (\n) en <br> — sans markup HTML.
-             # JAMAIS |raw ici : le contenu est saisi par l'utilisateur → risque XSS.
+             # |raw : le contenu est du HTML (paragraphes, sous-titres). On le rend tel quel.
+             # Sécurité : depuis l'ADR-0009, la publication d'articles est réservée aux
+             # ADMINS (ROLE_ADMIN). Le contenu est donc de confiance, |raw est acceptable.
+             # ATTENTION : si la publication s'ouvrait un jour aux utilisateurs, il faudrait
+             # repasser par un assainisseur (HTMLPurifier) avant d'utiliser |raw.
              # La police --serif + 18px + line-height:1.7 = standard confort de lecture.
             #}
             <div class="art-content">
-                {{ article.content|nl2br }}
+                {{ article.content|raw }}
             </div>
 
         </div>
