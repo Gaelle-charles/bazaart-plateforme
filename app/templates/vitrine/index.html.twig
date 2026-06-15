@@ -853,6 +853,15 @@
     margin:         0;
     line-height:    1.05;
     color:          var(--ink);
+    /* Troncature à 4 lignes maximum avec « … » automatique (line-clamp).
+       overflow:hidden est ici sur le h3 (non positionné) : il ne clippe donc
+       PAS le ::after du titre-lien (dont le conteneur de référence est
+       .lp-opp-card), le "stretched link" reste fonctionnel sur toute la carte. */
+    display:             -webkit-box;
+    -webkit-line-clamp:  4;
+    line-clamp:          4;
+    -webkit-box-orient:  vertical;
+    overflow:            hidden;
 }
 
 /* Méta : lieu + montant — mono, petite taille */
