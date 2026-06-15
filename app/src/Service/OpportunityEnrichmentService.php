@@ -337,8 +337,11 @@ RÈGLES STRICTES :
   Maximum 80 caractères. Résume l'essentiel : type d'opportunité + organisme si possible.
 - "description" : résumé FIDÈLE en FRANÇAIS, 2 à 4 phrases (maximum 400 caractères).
   Basé UNIQUEMENT sur le texte fourni. Mentionne si possible : de quoi il s'agit, pour qui,
-  date limite si présente. N'invente RIEN — si l'info n'est pas dans le texte, ne la mets pas.
-  Si le texte est insuffisant pour décrire l'opportunité → mets "description": "".
+  date limite si présente. N'invente RIEN. Si l'info n'est pas dans le texte, ne la mets pas.
+  Si le texte est insuffisant pour décrire l'opportunité, mets "description": "".
+- TYPOGRAPHIE : n'utilise JAMAIS de tiret cadratin (—) ni de tiret demi-cadratin (–), ni dans
+  le titre ni dans la description. Pour une incise, utilise une virgule ou des parenthèses ;
+  pour une plage de dates, utilise un tiret simple (-).
 - Réponds UNIQUEMENT avec le JSON. Aucun texte avant ou après.
 
 IMPORTANT — SÉCURITÉ :
