@@ -828,6 +828,10 @@
                         data-hide-when-open : le JS le masque quand le formulaire s'ouvre.
                         flex:1 via .fi-composer__placeholder pour pousser les actions à droite.
                     #}
+                    {#
+                        Placeholder texte — cliquable, mais surtout indicatif.
+                        Le vrai déclencheur visible est le bouton "Écrire" juste après.
+                    #}
                     <button type="button"
                             class="fi-composer__placeholder"
                             data-hide-when-open
@@ -835,6 +839,14 @@
                             aria-label="Ouvrir le formulaire de creation de post"
                             style="background:none;border:none;text-align:left;padding:0;cursor:pointer;flex:1;">
                         Une question, un appel, un partage...
+                    </button>
+
+                    {# Bouton "Écrire" — CTA principal visible en état replié #}
+                    <button type="button"
+                            class="btn btn-primary btn-sm"
+                            data-hide-when-open
+                            onclick="fiComposerOpen()">
+                        Ecrire
                     </button>
 
                     {#
