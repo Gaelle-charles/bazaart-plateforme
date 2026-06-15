@@ -5,10 +5,19 @@ metadata:
   type: project
 ---
 
-État mis à jour le 2026-05-25. Deadline V1 : **2026-06-23** (décalée du 15 au 23 juin, confirmé le 2026-06-10).
+État mis à jour le 2026-05-25. **Deadline V1 : 2026-06-22** (confirmée par Gaëlle le 2026-06-14 ; remplace les dates antérieures 15/23 juin et le 15 juin du CLAUDE.md).
 
 **Why:** Planning CDC V3 — deadline Mansa immuable. Utiliser ce tableau pour prioriser, éviter les doublons, alerter sur les glissements.
 **How to apply:** Toujours vérifier ici avant de planifier une nouvelle tâche.
+
+## MAJ 2026-06-13 — audit complet : plateforme ~95% V1, les 3 modules fonctionnels de bout en bout
+- **Scraping** : EN SERVICE en prod (cf [[project-mise-en-service-manuelle]]). 81 opp. collectées, 58 publiées. Cron RSS actif. Reste : Resartis (SSL, désactivée), surveiller 1er cron HTML lundi 15/06 7h.
+- **Forum ~92%** : complet et fonctionnel. GAP : pas d'interface admin WEB pour CRUD catégories (contournable via `app:forum:seed-categories`).
+- **Formation ~90%** (PAS 0% comme disait le CDC) : catalogue admin + parcours apprenant + progression OK. GAP : pas d'upload de `LessonResource` (PDF/templates) depuis l'admin (entité+affichage front prêts, formulaire admin absent).
+- **Messagerie / Notifications / Lives** : ~100%.
+- **RGPD/Légal ~90%** : tout le technique est là. GAP : placeholders légaux à remplir (cf [[project-legal-reminder]]).
+- **Vrai reste-à-faire J-2 = OPÉRATIONNEL** : contenu de démarrage (seed catégories forum, ≥1 formation publiée, structures) + activer crons `app:send-resource-alerts` (quotidien) et `app:live:send-reminders` (horaire) — le cron scraping est déjà installé.
+- **Souhait Gaëlle (13/06)** : élargir le scraping au web ouvert + LinkedIn, avec garde-fous anti prompt-injection. → ORIENTATION V2, à arbitrer. LinkedIn déconseillé en direct (ToS + risque juridique + blocage IP). Élargissement web ouvert et durcissement sécurité prompt vont de pair (élargir sans durcir = dangereux).
 
 ---
 

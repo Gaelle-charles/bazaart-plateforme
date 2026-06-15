@@ -33,13 +33,24 @@ L'enum ResourceStatus a `Archived = 'archived'`. La classe dynamique `status-bad
 **6. Commentaire orphelin (index.html.twig)**
 Le commentaire ligne 683-686 décrit un formulaire favori en position absolue dans les cartes, mais ce formulaire n'est pas implémenté dans index.html.twig. Architecture décrite mais non réalisée.
 
+**7. Variable de boucle Twig non réinitialisée entre itérations (vitrine index.html.twig — juin 2026)**
+Dans la boucle `{% for resource in opportunities %}`, `daysLeft` est calculé dans un `{% if resource.deadline %}` sans `{% set daysLeft = null %}` avant le test. En Twig, les variables `{% set %}` vivent dans le scope du template entier (pas de portée de boucle). Si la ressource N a une deadline et que la ressource N+1 n'en a pas, `daysLeft` conserve la valeur de N. La condition `daysLeft is defined` reste vraie et peut afficher un J-X erroné sur la carte N+1.
+**Why:** Anti-pattern de portée variable Twig classique — la variable de l'itération précédente "fuit" dans l'itération suivante.
+**How to apply:** Toujours `{% set monVar = null %}` en tout début de boucle si la variable est conditionnellement calculée à l'intérieur.
+
+**8. Classe CSS état vide non définie (vitrine index.html.twig — juin 2026)**
+`<p class="lp-opps__empty">` utilisé pour l'état vide de la section opportunités, mais `.lp-opps__empty` n'est pas défini dans le bloc `<style>` du template. Rendu sans style (police système, pas de couleur token).
+**Why:** Classe CSS utilisée sans définition locale — pattern récurrent sur les états vides/alternatifs.
+**How to apply:** Signaler en Avertissement si une classe appliquée dynamiquement (état vide, état erreur) n'a pas de définition CSS visible dans le template ou dans les fichiers CSS globaux.
+
 **Ce qui est correct :**
 - `{{ parent() }}` présent dans tous les blocs `stylesheets`
 - CSRF présent et validé côté contrôleur pour alerts et favorite_toggle
 - `rel="noopener noreferrer"` sur le lien externalUrl
 - `filter_var(FILTER_VALIDATE_URL)` bloque `javascript:` URLs côté service
 - `|nl2br` dans show.html.twig (échappe d'abord, puis convertit \n en <br>) — XSS safe
-- Aucun `|raw` sur des données utilisateur dans les 6 templates
+- Aucun `|raw` sur des données utilisateur dans les 6 templates et dans vitrine/index.html.twig
 - is_granted() utilisé correctement dans base_app.html.twig (pas getRoles())
 - Blocs title/page_title/content présents dans tous les templates
 - N+1 évité dans findPublished() et findFavoritesByUser() pour resourceType/organization
+- Dynamisation vitrine/index.html.twig : auto-échappement Twig confirmé, routes correctes, contrôleur fin, lp-opp-card--bordered cohérent avec design statique

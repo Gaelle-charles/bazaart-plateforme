@@ -56,3 +56,54 @@ Fichiers : ScrapingSource entité, ScrapingSourceType/ScrapingRunStatus enums, S
 **Why:** Les bugs de DEFAULT SQL manquants et le double getter sont des incohérences structurelles bénignes en pratique mais qui créent de la fragilité. Le flux Atom non supporté est un bug fonctionnel silencieux qui impactera les prochaines sources ajoutées. Les URLs hardcodées en JS sont un problème de maintenabilité.
 
 **How to apply:** Pour toute nouvelle entité : (1) vérifier que les DEFAULT SQL dans la migration correspondent aux valeurs PHP initiales, (2) éviter les getters doublons is/get sur le même champ, (3) dans le JS admin, toujours lire l'URL depuis un `data-url` Twig plutôt que de la hardcoder.
+
+---
+
+## Complément — Feature FeedDetectorService / detect-type (juin 2026)
+
+Fichiers : `FeedDetectorService.php` (nouveau), `AdminScrapingSourceController.php` (route detectType ajoutée), `scraping_sources.html.twig` (bouton + JS).
+
+**PHPStan niveau 6 : 0 erreur. Lint Twig : OK.**
+
+**Patterns OK validés (points forts) :**
+
+- `#[IsGranted('ROLE_ADMIN')]` déjà sur la classe → la route `/detect-type` hérite sans annotation supplémentaire.
+- Validation `filter_var(FILTER_VALIDATE_URL)` dans `detectType()` avant tout appel réseau → SSRF réduit aux URLs syntaxiquement valides.
+- `encodeURIComponent(url)` dans le `fetch()` JS → pas d'injection dans la query string.
+- Endpoint GET, aucune mutation BDD → absence de CSRF explicitement justifiée et correcte.
+- `\Throwable` attrapé dans `fetchAndInspect()` → aucune exception ne remonte jamais.
+- Timeout 8s strict + maximum 6 variantes → pas de blocage côté interface.
+- `feedback.textContent = message` (pas `innerHTML`) → XSS impossible sur le message retourné par le backend.
+- `verify_peer: false` justifié explicitement dans le docblock (sites culturels avec SSL mal configuré, données publiques en lecture).
+- Ordre de déclaration de routes : `/detect-type` avant `/{id}/edit` → routeur Symfony ne capte pas "detect-type" comme valeur d'`{id}`.
+- `data.message` affiché via `textContent` (pas `innerHTML`) → sûr même si le backend renvoie un message contenant du HTML.
+
+**Avertissements :**
+
+1. **SSRF partiel : schémas file:// et ftp:// non bloqués** — `filter_var(FILTER_VALIDATE_URL)` valide aussi `file:///etc/passwd` et `ftp://...`. L'accès ROLE_ADMIN réduit le risque, mais un admin compromis (ou une erreur de test) pourrait déclencher une requête `file://`. Fix recommandé : ajouter une vérification du schéma dans `detectType()` :
+   ```php
+   $parsed = parse_url($url);
+   if (!in_array($parsed['scheme'] ?? '', ['http', 'https'], true)) {
+       return new JsonResponse(['error' => 'Seuls les schémas http:// et https:// sont autorisés.'], 400);
+   }
+   ```
+
+2. **Pas de rate-limiting sur `/detect-type`** — Un admin peut déclencher autant d'appels AJAX vers des hôtes tiers qu'il veut (boucle JS, outil HTTP). Pour un endpoint qui fait des requêtes réseau sortantes, un rate-limiter Symfony (`RateLimiterFactory`) éviterait les abus accidentels ou intentionnels. Risque modéré car ROLE_ADMIN est un périmètre restreint.
+
+3. **`verify_peer: false` + `verify_host: false`** — Désactiver la validation SSL est compréhensible pour la détection (sites culturels avec certificats auto-signés), mais cela ouvre à des attaques MITM si le réseau Docker n'est pas de confiance. Acceptable en V1 avec la justification documentée, à ré-évaluer si l'app tourne dans un environnement multi-tenant.
+
+4. **`<channel>` comme marqueur RSS peut fausser la détection** — `str_contains($bodyLower, '<channel>')` est un marqueur fragile : `<channel>` est aussi utilisé dans certains podcasts HTML (balise `<channel>` non-standard) et dans des pages HTML qui décrivent un canal. Un faux-positif est peu probable mais possible. Le marqueur `<rss` ou `<feed` (Atom) sont plus fiables. Suggestion : limiter `<channel>` à un contexte où il apparaît après `<rss` ou en première position dans le body.
+
+5. **`extractBaseUrl()` perd le port non-standard** — Si une source est sur `https://site.fr:8080/actualites/`, la base extraite est `https://site.fr` (le port est absent). Les variantes `/feed/`, `/rss.xml` etc. seront testées sans le port → 404 garantis. Fix : inclure le port dans la reconstruction :
+   ```php
+   $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+   return $scheme . '://' . $host . $port;
+   ```
+   En pratique les sites culturels utilisent 80/443 → le manque est bénin mais mérite correction.
+
+**Suggestions :**
+
+- Le bouton "Détecter" n'est disponible que dans le formulaire d'ajout, pas dans `scraping_source_edit.html.twig`. Si ce template existe et contient un champ URL, il serait cohérent d'y ajouter le même bouton (DX).
+- `afficherFeedback('✓ ' + data.message, couleur)` : le `data.message` vient du backend PHP, donc de confiance (pas d'entrée utilisateur directe). Mais si un admin entre une URL dont le feed retourne un message forgé via redirect, ce message apparaîtrait tel quel. Risque nul ici car `textContent` est utilisé (pas `innerHTML`).
+
+**How to apply (complément) :** Pour tout endpoint admin qui déclenche des requêtes réseau sortantes, toujours (1) valider le schéma http/https explicitement en plus de FILTER_VALIDATE_URL, (2) envisager un rate-limiter même pour ROLE_ADMIN, (3) inclure le port dans la reconstruction d'URL de base.

@@ -130,4 +130,27 @@ Plateforme bazaart.fr pour artistes de la diaspora afro-atlantique.
 - ResourceVoter : 3 annotations @phpstan-ignore-line obsolètes supprimées
 - Sortie PHPStan finale : 0 erreur (79 baselinées). lint:container OK, schema:validate OK.
 
+**Chantier Stripe — Paiements V1 (15 juin 2026) :**
+- Entité `Subscription` (table `subscriptions`) : abonnements récurrents, statuts Stripe, isActive()
+- Entité `CoursePayment` (table `course_payments`) : paiements uniques formations, preuve d'achat
+- `SubscriptionRepository` : findActiveByUser(), findByStripeId()
+- `CoursePaymentRepository` : findCompletedByUserAndCourse(), findByStripePaymentIntentId()
+- `Course` : 3 nouveaux champs Stripe (price_in_cents, stripe_product_id, stripe_price_id) + getFormattedPrice()
+- `StripeService` : init SDK + createSubscriptionCheckoutSession() + createCourseCheckoutSession() + createOrUpdateCourseProduct() + constructWebhookEvent()
+- `StripeWebhookController` : route POST /stripe/webhook (PUBLIC_ACCESS), gère checkout.session.completed/subscription.updated/subscription.deleted/invoice.payment_failed
+- `SubscriptionController` : /tarifs (public), /subscribe/{plan}, /subscription/success|cancel|manage
+- `CoursePaymentController` : /formations/{slug}/payer, /formations/paiement-succes|paiement-annule
+- `AdminCourseController` : update() reçoit `priceInEuros`, convertit en centimes, appelle StripeService::createOrUpdateCourseProduct()
+- Migrations : Version20260615211300 (ALTER courses + CREATE subscriptions + CREATE course_payments) + Version20260615211301 (renommage index Doctrine)
+- Variables env : STRIPE_PUBLIC_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_MONTHLY, STRIPE_PRICE_ANNUAL dans .env (placeholders)
+- PHPStan niveau 6 : 0 erreur. lint:container : OK. doctrine:schema:validate : OK.
+- Note : aucun template Twig créé (à faire séparément). Les Price IDs LIVE/TEST sont documentés dans .env.
+
+**Chantier enrichissement IA — disciplines (15 juin 2026) :**
+- `OpportunityEnrichment` DTO : 3ème paramètre `$disciplines = null` ajouté. `isEmpty()` inclut maintenant les disciplines dans son évaluation.
+- `OpportunityEnrichmentService` : constante `MAX_DISCIPLINES_LENGTH = 150`, `MAX_RESPONSE_TOKENS` 512 → 700. Prompt système mis à jour pour 3 clés JSON (`"disciplines"` avec liste fermée de 13 valeurs). `validateAndBuildDto()` extrait et valide le champ disciplines. Log de succès enrichi.
+- `ScrapedResourceRepository::findForEnrichment()` : désormais cible aussi les records SANS disciplines (en plus de ceux sans description) — permet d'enrichir les disciplines des opportunités déjà décrites.
+- `EnrichOpportunitiesCommand` : `processScrapedResources()` reçoit `$isForce`, logique de mise à jour description/titre conditionnelle (`$hadDescription`), disciplines toujours mises à jour. `displayDryRunResult()` affiche un 4ème paramètre `$newDisciplines`.
+- Pas de migration : `ScrapedResource::disciplines` existait déjà en BDD (migration Version20260526150555).
+
 **How to apply:** Consulter `docs/cahier-des-charges-v3.md` avant toute tâche d'architecture. Priorité au fonctionnel V1.

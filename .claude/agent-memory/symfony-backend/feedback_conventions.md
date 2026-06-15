@@ -23,3 +23,5 @@ Conventions confirmées (issues du CLAUDE.md) :
 **Slugger :** `symfony/string` (qui fournit SluggerInterface) n'est PAS dans les dépendances directes de `app/composer.json`. La classe existe dans vendor (car dépendance transitive) mais pas autowirable. Utiliser une méthode `slugify()` maison avec `iconv()` (ext-iconv est listée dans composer.json).
 
 **Templates HTML natifs :** Le projet n'utilise pas Symfony Form Component pour les formulaires simples. Formulaires HTML natifs + token CSRF manuel (`csrf_token()` en Twig + `isCsrfTokenValid()` en controller).
+
+**Descriptions HTML de l'IA :** Le champ `description` des opportunités peut contenir du HTML généré par Mistral (balises p, ul, li, strong). Toujours appliquer `|striptags` avant tout slice/truncation dans les previews (admin, emails). Utiliser `|raw` uniquement dans la page de detail (resource/show.html.twig) car le HTML vient de notre pipeline IA et non d'un utilisateur.

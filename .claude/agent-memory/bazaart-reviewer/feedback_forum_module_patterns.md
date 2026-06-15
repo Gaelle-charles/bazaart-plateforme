@@ -37,5 +37,24 @@ Relecture complète du module Forum effectuée le 2026-05-25 (ForumCategory, For
 
 7. FORMDATA.CONTENT non échappé dans textarea : `{{ formData.content ?? '' }}` dans new_thread.html.twig est rendu dans un `<textarea>`. L'autoescape Twig échappe les entités HTML, ce qui est correct pour un textarea. Pas de XSS mais à vérifier si Twig encode bien > en &gt; dans ce contexte (oui, autoescape par défaut).
 
+8. COMPOSITEUR INLINE (quickPost — juin 2026) : ajout de la route POST /forum/nouveau (app_forum_quick_post). Points VALIDES à ne pas signaler :
+   - PHPStan niveau 6 : 0 erreur sur ForumController.php
+   - lint:twig : syntaxe valide
+   - Routage : POST /forum/nouveau résolu vers app_forum_quick_post sans collision (méthode distincte du GET capté par app_forum_category)
+   - GET /forum/nouveau → app_forum_category (slug "nouveau") → catégorie introuvable → 404 propre
+   - `data-show-when-open hidden` est HTML5 valide : `hidden` est un attribut booléen, `data-*` est un data attribute — les deux coexistent sans conflit
+   - `el.hidden = false` retire bien l'attribut `hidden` via IDL — conforme à la spec DOM
+   - `window.fiComposerOpen / window.fiComposerClose` : risque de collision faible (namespace spécifique "fiComposer"), documenté et acceptable en V1
+   - is_numeric() + cast (int) sur $rawCategoryId : correct pour PHPStan niveau 6, pas de cast aveugle
+   - isActive() vérifié ligne 127 avant toute utilisation de la catégorie
+   - Le bouton "Nouveau post" du header pointe toujours vers app_forum_new_thread (ligne 708)
+   - JS de tabs intact (bloc script en bas de template)
+
+   Points MINEURS à signaler :
+   - $rawCategoryId = $request->request->get('categoryId') retourne `string|null`. La vérification `is_numeric()` accepte les strings représentant des floats comme "1.5" → (int)"1.5" = 1. Sûr en pratique (PostgreSQL trouve l'ID ou retourne null) mais mérite un cast plus strict via `$request->request->getInt('categoryId', 0)` qui retourne 0 si absent ou non-numérique.
+   - Le formulaire étendu (`fi-composer-form`) ne porte pas d'attribut `novalidate` : la validation HTML5 (`required`) se déclenchera même si le formulaire est soumis depuis un état non-affiche (JS désactivé). Pas de bug, c'est une feature de sécurité (dégradation gracieuse), mais à documenter.
+   - Duplication CSS : `.fi-composer` est défini deux fois dans le bloc `<style>` (une fois avec `display:flex`, une fois avec `display:block` qui l'override). La première règle est morte code — lisibilité dégradée.
+   - `fi-composer__submit` (CSS ligne 502-504) n'a aucune propriété — commentaire "hérite des styles .btn" mais le sélecteur est présent et vide → dead code CSS mineur.
+
 **Why:** Ces points sont à surveiller dans tout nouveau module de la plateforme.
-**How to apply:** Vérifier systématiquement : mots réservés dans les slugs, NULLS LAST PostgreSQL, existence de toutes les routes CDC, nombre d'éléments de fixtures vs CDC, et race conditions sur les compteurs dénormalisés.
+**How to apply:** Vérifier systématiquement : mots réservés dans les slugs, NULLS LAST PostgreSQL, existence de toutes les routes CDC, nombre d'éléments de fixtures vs CDC, et race conditions sur les compteurs dénormalisés. Pour les compositeurs inline, vérifier la collision de règles CSS et la strictness du parsing d'ID.
