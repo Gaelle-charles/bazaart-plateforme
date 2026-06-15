@@ -1,0 +1,220 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # subscription/manage.html.twig — Gestion de l'abonnement actif
+ #
+ # Variables reçues depuis SubscriptionController::manage() :
+ #   - activeSubscription : Subscription — l'abonnement actif de l'utilisateur
+ #
+ # NOTE importante : le contrôleur redirige vers /tarifs si aucun abonnement actif.
+ # Donc à l'arrivée sur ce template, activeSubscription est toujours non-null.
+ # On conserve quand même une vérification défensive (Twig est permissif).
+ #
+ # Design : page max-width 800px, paddingTop 48px, thème Street.
+ #}
+
+{% block page_title %}Mon abonnement{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+    /*
+     * Préfixe CSS : .sm- (subscription-manage)
+     */
+
+    /* ── Conteneur de la page ─────────────────────────────────────────────── */
+    .sm-container {
+        max-width: 800px;
+        padding-top: 48px;
+        padding-bottom: 64px;
+    }
+
+    /* ── Titre principal ──────────────────────────────────────────────────── */
+    .sm-title {
+        font-family: var(--display, 'Archivo Black', sans-serif);
+        font-size: 56px;
+        line-height: 0.9;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin: 0 0 40px 0;
+    }
+
+    /* ── Carte d'abonnement ───────────────────────────────────────────────── */
+    /*
+     * Encadré sobre : bordure 1px var(--ink), pas d'ombre, pas de border-radius.
+     * Style Street : carré et net.
+     */
+    .sm-card {
+        border: 1px solid var(--ink);
+        padding: 32px;
+    }
+
+    /* ── Ligne plan ───────────────────────────────────────────────────────── */
+    .sm-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 0;
+        border-bottom: 1px solid rgba(13, 13, 13, 0.12);
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    /* Dernière ligne sans bordure basse */
+    .sm-row:last-child {
+        border-bottom: none;
+    }
+
+    /* Label de la ligne (gauche) */
+    .sm-row__label {
+        font-family: var(--mono, 'JetBrains Mono', monospace);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: var(--ink-mute, #555);
+    }
+
+    /* Valeur de la ligne (droite) */
+    .sm-row__value {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--ink);
+    }
+
+    /* ── Badge statut "ACTIF" ─────────────────────────────────────────────── */
+    /*
+     * Fond lime + texte encre : signal positif, cohérent avec le design system.
+     * Pas de border-radius : style Street.
+     */
+    .sm-badge-active {
+        display: inline-block;
+        background: var(--accent, #C6F24E);
+        color: var(--ink);
+        font-family: var(--mono, 'JetBrains Mono', monospace);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        padding: 4px 10px;
+    }
+
+    /* ── Note de renouvellement ───────────────────────────────────────────── */
+    .sm-renew-note {
+        font-size: 14px;
+        color: var(--ink);
+    }
+
+    /* ── Bloc d'information sur l'annulation ──────────────────────────────── */
+    /*
+     * En V1, pas de portail client Stripe pour l'auto-annulation.
+     * On indique le contact email. En V2 ce bloc sera remplacé par un bouton
+     * qui redirige vers le Stripe Customer Portal.
+     #}
+    .sm-cancel-info {
+        margin-top: 24px;
+        padding: 16px;
+        border: 1px solid rgba(13, 13, 13, 0.2);
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--ink-mute, #555);
+    }
+
+    .sm-cancel-info a {
+        color: var(--ink);
+        text-decoration: underline;
+    }
+
+    /* ── Bloc "pas d'abonnement" (cas défensif) ───────────────────────────── */
+    .sm-empty {
+        padding: 40px 0;
+    }
+
+    .sm-empty__text {
+        font-size: 16px;
+        margin-bottom: 24px;
+        color: var(--ink);
+    }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+<div class="sm-container">
+
+    {# Titre principal — uppercase Archivo Black 56px #}
+    <h2 class="sm-title">MON ABONNEMENT.</h2>
+
+    {#
+     # Vérification défensive : le contrôleur garantit qu'activeSubscription est non-null,
+     # mais on protège quand même le template contre une éventuelle régression future.
+     #}
+    {% if activeSubscription is defined and activeSubscription is not null %}
+
+        {# ── Carte d'information sur l'abonnement actif ───────────────────── #}
+        <div class="sm-card">
+
+            {# Ligne 1 : Plan souscrit avec son tarif #}
+            <div class="sm-row">
+                <span class="sm-row__label">Plan</span>
+                <span class="sm-row__value">
+                    {#
+                     # Affiche le libellé complet selon la valeur en BDD.
+                     # La propriété plan contient 'monthly' ou 'annual'.
+                     #}
+                    {% if activeSubscription.plan == 'monthly' %}
+                        Mensuel &#8212; 9,90 &euro;/mois
+                    {% else %}
+                        Annuel &#8212; 79 &euro;/an
+                    {% endif %}
+                </span>
+            </div>
+
+            {# Ligne 2 : Statut de l'abonnement (toujours ACTIF ici) #}
+            <div class="sm-row">
+                <span class="sm-row__label">Statut</span>
+                <span class="sm-badge-active">ACTIF</span>
+            </div>
+
+            {# Ligne 3 : Date de prochain renouvellement #}
+            <div class="sm-row">
+                <span class="sm-row__label">Prochain renouvellement</span>
+                <span class="sm-renew-note">
+                    {#
+                     # La propriété currentPeriodEnd est un \DateTimeInterface.
+                     # Le filtre |date('d/m/Y') formate en jour/mois/année (ex: 15/07/2026).
+                     #}
+                    le {{ activeSubscription.currentPeriodEnd|date('d/m/Y') }}
+                </span>
+            </div>
+
+        </div>
+        {# /sm-card #}
+
+        {#
+         # Note d'annulation — en V1, l'annulation se fait par email.
+         # TODO V2 : remplacer par un bouton redirigeant vers le Stripe Customer Portal
+         #           (stripeService->createCustomerPortalSession()).
+         #}
+        <div class="sm-cancel-info">
+            Pour annuler ton abonnement, contacte-nous à
+            <a href="mailto:hello@bazaart.fr">hello@bazaart.fr</a>.
+            Nous traiterons ta demande sous 48 h.
+        </div>
+
+    {% else %}
+
+        {#
+         # Cas défensif : ne devrait pas s'afficher car le contrôleur redirige
+         # vers /tarifs si l'abonnement est null. On l'inclut par sécurité.
+         #}
+        <div class="sm-empty">
+            <p class="sm-empty__text">Tu n'as pas d'abonnement actif.</p>
+            <a href="{{ path('app_pricing') }}" class="btn btn-ghost">
+                Voir les offres
+            </a>
+        </div>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

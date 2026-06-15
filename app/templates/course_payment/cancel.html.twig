@@ -1,0 +1,120 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # course_payment/cancel.html.twig — Annulation du paiement d'une formation
+ #
+ # Affiché si l'utilisateur clique "Retour" ou ferme la page Stripe
+ # sans compléter le paiement de la formation.
+ #
+ # IMPORTANT — Absence de la variable `course` :
+ # La route app_course_payment_cancel (/formations/paiement-annule) est une URL
+ # fixe sans paramètre {slug}. CoursePaymentController::paymentCancel()
+ # appelle render('course_payment/cancel.html.twig') SANS passer la formation.
+ # Raison : identique à success.html.twig — Stripe redirige vers une URL pré-configurée.
+ # Pour retrouver la formation associée, il faudrait en V2 lire le ?session_id=
+ # et appeler l'API Stripe pour récupérer les metadata.
+ #
+ # En V1 : page d'annulation générique avec lien vers le catalogue.
+ #
+ # Design : page centrée max-width 640px, paddingTop 80px, thème Street.
+ # Symbole ✕ en couleur var(--ink-mute) — neutre, pas alarmant.
+ #}
+
+{% block page_title %}Paiement annule{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+    /*
+     * Préfixe CSS : .cpc- (course-payment-cancel)
+     * Structure similaire à subscription/cancel.html.twig.
+     */
+
+    /* ── Conteneur centré ─────────────────────────────────────────────────── */
+    .cpc-container {
+        max-width: 640px;
+        margin: 0 auto;
+        padding-top: 80px;
+        padding-bottom: 80px;
+        text-align: center;
+    }
+
+    /*
+     * Symbole d'annulation — 80px, couleur ink-mute (gris).
+     * Intentionnellement plus petit et moins vif que le ✓ de succès.
+     * Neutre plutôt qu'alarmant : l'utilisateur a juste changé d'avis.
+     */
+    .cpc-cross {
+        font-family: var(--display, 'Archivo Black', sans-serif);
+        font-size: 80px;
+        line-height: 1;
+        color: var(--ink-mute, #555);
+        display: block;
+        margin-bottom: 24px;
+    }
+
+    /* ── Titre principal ──────────────────────────────────────────────────── */
+    .cpc-title {
+        font-family: var(--display, 'Archivo Black', sans-serif);
+        font-size: 48px;
+        line-height: 0.92;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin: 0 0 24px 0;
+    }
+
+    /* ── Texte rassurant ──────────────────────────────────────────────────── */
+    .cpc-text {
+        font-size: 16px;
+        line-height: 1.6;
+        color: var(--ink);
+        margin-bottom: 40px;
+    }
+
+    /* ── Groupe de boutons ────────────────────────────────────────────────── */
+    .cpc-actions {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+<div class="cpc-container">
+
+    {#
+     # Symbole ✕ — signale l'annulation de façon neutre.
+     # aria-hidden="true" : le titre porte l'information pour les lecteurs d'écran.
+     #}
+    <span class="cpc-cross" aria-hidden="true">&#10005;</span>
+
+    {# Titre d'annulation — uppercase Archivo Black 48px #}
+    <h2 class="cpc-title">PAIEMENT ANNULE.</h2>
+
+    {#
+     # En V1 : message générique car le titre de la formation n'est pas disponible.
+     # En V2 : intégrer le titre via metadata Stripe + ?session_id= pour personnaliser.
+     #}
+    <p class="cpc-text">
+        Ton acces a la formation n'a pas ete active. Aucun paiement n'a ete effectue.
+    </p>
+
+    {# Deux CTA : retour au catalogue (principal) — tous deux en ghost (actions secondaires) #}
+    <div class="cpc-actions">
+
+        {#
+         # On ne peut pas proposer "Retour à la formation" sans le slug.
+         # En attendant, on propose le catalogue formations comme point de repli.
+         #}
+        <a href="{{ path('app_course_index') }}" class="btn btn-ghost">
+            Voir le catalogue
+        </a>
+
+    </div>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # subscription/cancel.html.twig — Page d'annulation d'abonnement
+ #
+ # Affiché si l'utilisateur clique "Retour" ou quitte la page Stripe
+ # sans compléter le paiement.
+ # Aucune variable spécifique passée depuis SubscriptionController::cancel().
+ #
+ # Objectif : rassurer l'utilisateur (aucun prélèvement effectué)
+ # et lui proposer de revenir facilement sur la page tarifaire.
+ #
+ # Design : page centrée max-width 640px, paddingTop 80px, thème Street.
+ # Le symbole ✕ est en couleur var(--ink-mute) — neutre, pas alarmant.
+ #}
+
+{% block page_title %}Paiement annulé{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+    /*
+     * Préfixe CSS : .sc- (subscription-cancel)
+     * Même structure que success.html.twig mais avec un signal visuel neutre (✕).
+     */
+
+    /* ── Conteneur centré ─────────────────────────────────────────────────── */
+    .sc-container {
+        max-width: 640px;
+        margin: 0 auto;
+        padding-top: 80px;
+        padding-bottom: 80px;
+        text-align: center;
+    }
+
+    /*
+     * Symbole d'annulation — 80px (plus petit que le ✓ succès, intentionnellement).
+     * Couleur ink-mute (gris moyen) : neutre, pas alarmant, pas d'erreur critique.
+     */
+    .sc-cross {
+        font-family: var(--display, 'Archivo Black', sans-serif);
+        font-size: 80px;
+        line-height: 1;
+        color: var(--ink-mute, #555);
+        display: block;
+        margin-bottom: 24px;
+    }
+
+    /* ── Titre principal ──────────────────────────────────────────────────── */
+    .sc-title {
+        font-family: var(--display, 'Archivo Black', sans-serif);
+        font-size: 48px;
+        line-height: 0.92;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin: 0 0 24px 0;
+    }
+
+    /* ── Message rassurant ────────────────────────────────────────────────── */
+    .sc-text {
+        font-size: 16px;
+        line-height: 1.6;
+        color: var(--ink);
+        margin-bottom: 40px;
+    }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+<div class="sc-container">
+
+    {#
+     # Symbole ✕ — signale l'annulation sans dramatiser.
+     # aria-hidden="true" car le titre suivant porte déjà l'information pour les lecteurs d'écran.
+     #}
+    <span class="sc-cross" aria-hidden="true">&#10005;</span>
+
+    {# Titre clair — uppercase style affiche #}
+    <h2 class="sc-title">PAIEMENT ANNULE.</h2>
+
+    {#
+     # Message rassurant : on insiste sur le fait qu'aucun prélèvement n'a eu lieu.
+     # C'est la première inquiétude de l'utilisateur dans ce contexte.
+     #}
+    <p class="sc-text">
+        Ton abonnement n'a pas ete active. Aucun prelevement n'a ete effectue.
+    </p>
+
+    {# CTA retour — bouton ghost (contour) : action secondaire, pas principale #}
+    <a href="{{ path('app_pricing') }}" class="btn btn-ghost">
+        Retour aux offres
+    </a>
+
+</div>
+
+{% endblock %}

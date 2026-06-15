@@ -1,0 +1,128 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # course_payment/success.html.twig — Confirmation d'achat d'une formation
+ #
+ # Affiché après redirection Stripe suite à un paiement de formation réussi.
+ #
+ # IMPORTANT — Absence de la variable `course` :
+ # La route app_course_payment_success (/formations/paiement-succes) est une
+ # URL fixe sans paramètre {slug}. CoursePaymentController::paymentSuccess()
+ # appelle render('course_payment/success.html.twig') SANS passer la formation.
+ # Raison : Stripe redirige vers une URL pré-configurée, indépendante du slug.
+ # Pour accéder aux métadonnées de la formation (slug, titre), il faudrait en V2
+ # récupérer la session Checkout via ?session_id= et l'API Stripe.
+ #
+ # En V1 : page de confirmation générique invitant à aller dans "Mes formations".
+ #
+ # Design : page centrée max-width 640px, paddingTop 80px, thème Street.
+ #}
+
+{% block page_title %}Formation debloquee{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+    /*
+     * Préfixe CSS : .cps- (course-payment-success)
+     * Structure similaire à subscription/success.html.twig.
+     */
+
+    /* ── Conteneur centré ─────────────────────────────────────────────────── */
+    .cps-container {
+        max-width: 640px;
+        margin: 0 auto;
+        padding-top: 80px;
+        padding-bottom: 80px;
+        text-align: center;
+    }
+
+    /*
+     * Grand symbole de validation en lime.
+     * 120px comme sur subscription/success.html.twig : cohérence visuelle
+     * entre tous les écrans de confirmation positive.
+     */
+    .cps-check {
+        font-family: var(--display, 'Archivo Black', sans-serif);
+        font-size: 120px;
+        line-height: 1;
+        color: var(--accent, #C6F24E);
+        display: block;
+        margin-bottom: 24px;
+    }
+
+    /* ── Titre principal ──────────────────────────────────────────────────── */
+    .cps-title {
+        font-family: var(--display, 'Archivo Black', sans-serif);
+        font-size: 48px;
+        line-height: 0.92;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin: 0 0 24px 0;
+    }
+
+    /* ── Texte de confirmation ────────────────────────────────────────────── */
+    .cps-text {
+        font-size: 16px;
+        line-height: 1.6;
+        color: var(--ink);
+        margin-bottom: 8px;
+    }
+
+    /* Note secondaire sur le délai webhook (plus petite, atténuée) */
+    .cps-note {
+        font-family: var(--mono, 'JetBrains Mono', monospace);
+        font-size: 11px;
+        color: var(--ink-mute, #555);
+        margin-bottom: 40px;
+    }
+
+    /* ── Groupe de boutons CTA ────────────────────────────────────────────── */
+    .cps-actions {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+<div class="cps-container">
+
+    {# Grand check lime — confirmation visuelle immédiate #}
+    <span class="cps-check" aria-hidden="true">&#10003;</span>
+
+    {# Titre — uppercase Archivo Black 48px #}
+    <h2 class="cps-title">FORMATION DEBLOQUEE.</h2>
+
+    {#
+     # En V1 : message générique car le slug de la formation n'est pas disponible.
+     # En V2 : utiliser ?session_id= + API Stripe pour récupérer le titre exact.
+     #}
+    <p class="cps-text">
+        Tu as maintenant acces a ta formation. Retrouve-la dans ton espace formations.
+    </p>
+
+    {#
+     # Rappel sur la latence du webhook Stripe.
+     # Le CourseEnrollment est créé par le webhook checkout.session.completed,
+     # pas immédiatement à l'arrivée sur cette page.
+     #}
+    <p class="cps-note">
+        Si la formation n'apparait pas encore dans ton espace, patiente quelques secondes et rafraichis la page.
+    </p>
+
+    {# CTA : accéder directement au catalogue pour retrouver la formation #}
+    <div class="cps-actions">
+
+        <a href="{{ path('app_course_index') }}" class="btn btn-primary">
+            Mes formations
+        </a>
+
+    </div>
+
+</div>
+
+{% endblock %}

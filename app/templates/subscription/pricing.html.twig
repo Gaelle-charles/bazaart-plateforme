@@ -1,0 +1,483 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # subscription/pricing.html.twig — Page tarifaire des abonnements Bazaart
+ #
+ # Variables reçues depuis SubscriptionController::pricing() :
+ #   - hasActiveSubscription   : bool           — true si l'utilisateur a un abonnement actif
+ #   - activeSubscription      : Subscription|null — objet abonnement actif (null si aucun)
+ #   - monthlyPrice            : float (9.90)   — prix mensuel brut pour affichage
+ #   - annualPrice             : float (79.00)  — prix annuel brut pour affichage
+ #   - annualMonthlyEquivalent : float (6.58)   — équivalent mensuel du plan annuel
+ #
+ # Design : thème Street — affiche / street art
+ #   - Fond : var(--bg) = #F2EFE6 (crème)
+ #   - Encre : var(--ink) = #0D0D0D (quasi-noir)
+ #   - Accent : var(--accent) = #C6F24E (lime)
+ #   - border-radius: 0 partout, bordures 1px solid var(--ink), pas d'ombres
+ #   - Typographie géante : Archivo Black (--display) pour les titres
+ #   - Corps : Space Grotesk (--body), mono : JetBrains Mono (--mono)
+ #}
+
+{# Titre affiché dans la topbar du layout base_app.html.twig #}
+{% block page_title %}Abonnement{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    {# ── Styles spécifiques à la page tarifaire ──────────────────────────────── #}
+    <style>
+    /*
+     * Préfixe CSS : .pr- (pricing)
+     * On évite de polluer l'espace global avec des classes trop génériques.
+     */
+
+    /* ── En-tête de la page ──────────────────────────────────────────────── */
+    .pr-header {
+        border-bottom: 1px solid var(--ink);
+        padding-top: 48px;
+        padding-bottom: 32px;
+    }
+
+    /* Eyebrow — petite ligne de contexte au-dessus du titre principal */
+    .pr-eyebrow {
+        font-family: var(--mono, 'JetBrains Mono', monospace);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        margin-bottom: 16px;
+        color: var(--ink);
+    }
+
+    /*
+     * Titre principal géant.
+     * clamp(72px, 10vw, 140px) : au moins 72px, au plus 140px, 10vw entre les deux.
+     * line-height 0.88 : serré comme une affiche.
+     */
+    .pr-title {
+        font-family: var(--display, 'Archivo Black', sans-serif);
+        font-size: clamp(72px, 10vw, 140px);
+        line-height: 0.88;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin: 0;
+    }
+
+    /* ── Bannière "abonnement actif" ─────────────────────────────────────── */
+    /*
+     * Visible uniquement si hasActiveSubscription = true.
+     * Fond lime, texte encre : contraste maximal, lisibilité garantie.
+     */
+    .pr-active-banner {
+        background: var(--accent);
+        color: var(--ink);
+        padding: 16px 24px;
+        border: 1px solid var(--ink);
+        margin-top: 32px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .pr-active-banner__text {
+        font-size: 15px;
+        font-weight: 500;
+        flex: 1;
+    }
+
+    /* Lien "Gérer mon abonnement" dans la bannière */
+    .pr-active-banner__link {
+        font-family: var(--mono, 'JetBrains Mono', monospace);
+        font-size: 12px;
+        text-transform: uppercase;
+        color: var(--ink);
+        text-decoration: none;
+        letter-spacing: .05em;
+        white-space: nowrap;
+    }
+
+    .pr-active-banner__link:hover {
+        text-decoration: underline;
+    }
+
+    /* ── Grille 2 cartes tarifaires ──────────────────────────────────────── */
+    /*
+     * Les deux cartes sont dans une grille côte à côte.
+     * Pas de gap : la séparation est gérée par la bordure droite de la carte mensuelle.
+     * La bordure extérieure de la grille donne l'aspect "encadré" style poster.
+     */
+    .pr-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border: 1px solid var(--ink);
+        margin-top: 40px;
+    }
+
+    /* Carte mensuelle — fond crème par défaut */
+    .pr-card {
+        padding: 40px 36px;
+    }
+
+    /* La carte mensuelle a une séparation droite pour délimiter les deux colonnes */
+    .pr-card--monthly {
+        border-right: 1px solid var(--ink);
+    }
+
+    /* La carte annuelle est sur fond encre — inversion de couleurs */
+    .pr-card--annual {
+        background: var(--ink);
+        color: var(--bg);
+    }
+
+    /* ── En-tête de carte — libellé du plan ─────────────────────────────── */
+    .pr-card__label {
+        font-family: var(--mono, 'JetBrains Mono', monospace);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        margin-bottom: 16px;
+    }
+
+    /* Sur fond sombre, la couleur du label est atténuée */
+    .pr-card--annual .pr-card__label {
+        color: rgba(242, 239, 230, 0.6);
+    }
+
+    /* ── Bloc de prix ────────────────────────────────────────────────────── */
+    .pr-price {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    /*
+     * Chiffre du prix — Archivo Black 72px : l'argument visuel principal.
+     * line-height: 1 pour un bloc compact sans espace vertical superflu.
+     */
+    .pr-price__amount {
+        font-family: var(--display, 'Archivo Black', sans-serif);
+        font-size: 72px;
+        line-height: 1;
+    }
+
+    /* Période (/mois ou /an) — couleur atténuée sur fond crème */
+    .pr-price__period {
+        font-size: 16px;
+        color: var(--ink-mute, #555);
+    }
+
+    /* Sur fond sombre, la période hérite de la couleur par défaut (crème) */
+    .pr-card--annual .pr-price__period {
+        color: inherit;
+    }
+
+    /* Équivalent mensuel du plan annuel (ex: "soit 6,58 €/mois") */
+    .pr-price__equiv {
+        font-family: var(--mono, 'JetBrains Mono', monospace);
+        font-size: 12px;
+        color: rgba(242, 239, 230, 0.6);
+        margin-bottom: 24px;
+    }
+
+    /* ── Badge "Meilleure offre" — carte annuelle ───────────────────────── */
+    .pr-badge {
+        display: inline-block;
+        background: var(--accent);
+        color: var(--ink);
+        font-family: var(--mono, 'JetBrains Mono', monospace);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        padding: 4px 10px;
+        margin-bottom: 16px;
+    }
+
+    /* ── Liste des avantages ─────────────────────────────────────────────── */
+    /*
+     * Pas de puces (list-style: none) — on utilise ✓ dans le HTML.
+     * Espacement régulier entre chaque item.
+     */
+    .pr-features {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 32px 0;
+    }
+
+    .pr-features li {
+        font-size: 15px;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(13, 13, 13, 0.1);
+    }
+
+    /* Sur fond sombre, séparateur plus clair */
+    .pr-card--annual .pr-features li {
+        border-bottom-color: rgba(242, 239, 230, 0.15);
+    }
+
+    /* ── CTA carte annuelle — bouton custom fond lime ───────────────────── */
+    /*
+     * On ne peut pas utiliser btn-primary directement car la carte est sur fond noir.
+     * On crée un style spécifique pour le bouton annuel (fond lime, texte encre).
+     */
+    .btn-annual {
+        display: block;
+        width: 100%;
+        padding: 14px 24px;
+        background: var(--accent);
+        color: var(--ink);
+        border: 1px solid var(--accent);
+        font-family: var(--display, 'Archivo Black', sans-serif);
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        cursor: pointer;
+        text-align: center;
+        border-radius: 0;
+    }
+
+    .btn-annual:hover:not(:disabled) {
+        background: #b8e040; /* lime légèrement plus foncé au survol */
+    }
+
+    .btn-annual:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* ── Section formations (séparée en bas) ────────────────────────────── */
+    .pr-formations {
+        margin-top: 64px;
+        border-top: 1px solid var(--ink);
+        padding-top: 40px;
+        padding-bottom: 40px;
+    }
+
+    .pr-formations__label {
+        font-family: var(--mono, 'JetBrains Mono', monospace);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        margin-bottom: 12px;
+    }
+
+    .pr-formations__text {
+        font-size: 15px;
+        margin-bottom: 16px;
+        max-width: 600px;
+    }
+
+    .pr-formations__link {
+        font-family: var(--mono, 'JetBrains Mono', monospace);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: var(--ink);
+        text-decoration: none;
+    }
+
+    .pr-formations__link:hover {
+        text-decoration: underline;
+    }
+
+    /* ── Responsive — sur mobile, une colonne au lieu de deux ──────────── */
+    @media (max-width: 767px) {
+        .pr-grid {
+            grid-template-columns: 1fr;
+        }
+
+        /* Sur mobile, la carte mensuelle a une bordure basse à la place de droite */
+        .pr-card--monthly {
+            border-right: none;
+            border-bottom: 1px solid var(--ink);
+        }
+
+        .pr-card {
+            padding: 32px 24px;
+        }
+
+        .pr-price__amount {
+            font-size: 56px;
+        }
+    }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+{# ── EN-TETE DE PAGE ────────────────────────────────────────────────────────── #}
+<div class="pr-header">
+
+    {# Eyebrow — contexte typographique en mono uppercase, style affiche #}
+    <p class="pr-eyebrow">&#9632; ABONNEMENT</p>
+
+    {#
+     # Titre géant style affiche : deux lignes séparées par un retour à la ligne.
+     # On utilise <br> pour forcer le saut — pas de / cadratin.
+     # uppercase en CSS, pas besoin d'écrire en majuscules dans le HTML.
+     #}
+    <h2 class="pr-title">
+        REJOINS LA<br>
+        COMMUNAUTE.
+    </h2>
+
+</div>
+
+{# ── BANNIERE "ABONNEMENT ACTIF" — visible uniquement si l'utilisateur est abonné #}
+{% if hasActiveSubscription and activeSubscription is not null %}
+    {#
+     # Cette bannière informe l'utilisateur qu'il a déjà un abonnement actif.
+     # On lui évite de tenter d'en créer un second (le controller le bloquerait de toute façon).
+     #}
+    <div class="pr-active-banner">
+        <span class="pr-active-banner__text">
+            &#10003; Tu es abonne·e
+            {# On affiche le libellé du plan en français selon la valeur en BDD #}
+            — plan {{ activeSubscription.plan == 'monthly' ? 'mensuel' : 'annuel' }},
+            valable jusqu'au {{ activeSubscription.currentPeriodEnd|date('d/m/Y') }}
+        </span>
+        <a href="{{ path('app_subscription_manage') }}" class="pr-active-banner__link">
+            Gerer mon abonnement &#8594;
+        </a>
+    </div>
+{% endif %}
+
+{# ── GRILLE DES 2 CARTES TARIFAIRES ─────────────────────────────────────────── #}
+<div class="pr-grid">
+
+    {# ════════════════════════════════════════════════════════════════════════
+     # CARTE MENSUELLE
+     # ════════════════════════════════════════════════════════════════════════ #}
+    <div class="pr-card pr-card--monthly">
+
+        {# Label du plan en mono uppercase #}
+        <p class="pr-card__label">MENSUEL</p>
+
+        {# Bloc de prix : montant géant + période #}
+        <div class="pr-price">
+            <span class="pr-price__amount">9,90 &euro;</span>
+            <span class="pr-price__period">/ mois</span>
+        </div>
+
+        {# Liste des avantages inclus dans l'abonnement mensuel #}
+        <ul class="pr-features">
+            <li>&#10003; Acces au forum communautaire</li>
+            <li>&#10003; Ressourcerie complete (opportunites + alertes)</li>
+            <li>&#10003; Messagerie privee entre membres</li>
+            <li>&#10003; Acces aux lives programmes</li>
+        </ul>
+
+        {#
+         # Formulaire POST vers /subscribe/monthly.
+         # La méthode POST est obligatoire pour les actions qui modifient l'état (CSRF).
+         # Le token CSRF 'subscribe_monthly' est validé dans SubscriptionController::subscribe().
+         #}
+        <form method="post" action="{{ path('app_subscribe', {plan: 'monthly'}) }}">
+
+            {# Token CSRF — protège contre les attaques de type "cross-site request forgery" #}
+            <input type="hidden" name="_token" value="{{ csrf_token('subscribe_monthly') }}">
+
+            {#
+             # Si l'utilisateur a déjà ce plan actif, le bouton est désactivé.
+             # On compare la propriété plan de l'abonnement actif.
+             #}
+            {% if hasActiveSubscription and activeSubscription is not null and activeSubscription.plan == 'monthly' %}
+                <button type="button" class="btn btn-primary w-100" disabled>
+                    PLAN ACTUEL
+                </button>
+            {% else %}
+                <button type="submit" class="btn btn-primary w-100">
+                    S'ABONNER MAINTENANT
+                </button>
+            {% endif %}
+
+        </form>
+
+    </div>
+    {# /CARTE MENSUELLE #}
+
+    {# ════════════════════════════════════════════════════════════════════════
+     # CARTE ANNUELLE — fond encre, couleur crème (inversion thème Street)
+     # ════════════════════════════════════════════════════════════════════════ #}
+    <div class="pr-card pr-card--annual">
+
+        {# Badge "Meilleure offre" en lime sur fond encre #}
+        <div class="pr-badge">MEILLEURE OFFRE</div>
+
+        {# Label du plan en mono uppercase, couleur atténuée sur fond sombre #}
+        <p class="pr-card__label">ANNUEL</p>
+
+        {# Bloc de prix : montant géant + période #}
+        <div class="pr-price">
+            <span class="pr-price__amount">79 &euro;</span>
+            <span class="pr-price__period">/ an</span>
+        </div>
+
+        {#
+         # Équivalent mensuel avec économie réalisée.
+         # L'économie = 9,90€ x 12 mois - 79€ = 39,80€.
+         # On arrondit à 2 décimales avec le filtre Twig |round.
+         #}
+        <p class="pr-price__equiv">
+            soit {{ annualMonthlyEquivalent }} &euro;/mois
+            — economisez {{ ((9.9 * 12 - 79) | round(2))|number_format(2, ',', ' ') }} &euro;
+        </p>
+
+        {# Liste des avantages — identique au mensuel + bonus "2 mois offerts" #}
+        <ul class="pr-features">
+            <li>&#10003; Acces au forum communautaire</li>
+            <li>&#10003; Ressourcerie complete (opportunites + alertes)</li>
+            <li>&#10003; Messagerie privee entre membres</li>
+            <li>&#10003; Acces aux lives programmes</li>
+            {# Avantage exclusif du plan annuel : 2 mois gratuits vs mensuel #}
+            <li>&#10003; 2 mois offerts vs mensuel</li>
+        </ul>
+
+        {#
+         # Formulaire POST vers /subscribe/annual.
+         # Token CSRF spécifique au plan annuel : 'subscribe_annual'.
+         #}
+        <form method="post" action="{{ path('app_subscribe', {plan: 'annual'}) }}">
+
+            <input type="hidden" name="_token" value="{{ csrf_token('subscribe_annual') }}">
+
+            {% if hasActiveSubscription and activeSubscription is not null and activeSubscription.plan == 'annual' %}
+                {#
+                 # Plan annuel déjà actif : bouton désactivé.
+                 # On reprend le style btn-annual mais on force l'opacité via l'attribut disabled.
+                 #}
+                <button type="button" class="btn-annual" disabled>
+                    PLAN ACTUEL
+                </button>
+            {% else %}
+                <button type="submit" class="btn-annual">
+                    S'ABONNER &#8212; OFFRE ANNUELLE
+                </button>
+            {% endif %}
+
+        </form>
+
+    </div>
+    {# /CARTE ANNUELLE #}
+
+</div>
+{# /GRILLE #}
+
+{# ── SECTION FORMATIONS — note de bas de page tarifaire ─────────────────────── #}
+{#
+ # Rappel important : les formations sont payées séparément de l'abonnement.
+ # Conformément au CDC V3, l'abonnement ne donne PAS accès aux formations payantes.
+ # On l'indique clairement pour éviter toute confusion chez l'utilisateur.
+ #}
+<div class="pr-formations">
+    <p class="pr-formations__label">FORMATIONS</p>
+    <p class="pr-formations__text">
+        Les formations sont disponibles a l'achat individuel sur leur page
+        dédiée. L'abonnement ne les inclut pas.
+    </p>
+    <a href="{{ path('app_course_index') }}" class="pr-formations__link">
+        Voir le catalogue formations &#8594;
+    </a>
+</div>
+
+{% endblock %}

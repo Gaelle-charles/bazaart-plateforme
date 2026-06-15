@@ -1,0 +1,132 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # subscription/success.html.twig — Confirmation d'activation d'abonnement
+ #
+ # Affiché après redirection depuis Stripe (paiement réussi).
+ # Aucune variable spécifique passée depuis SubscriptionController::success().
+ # L'utilisateur est disponible via app.user (Symfony).
+ #
+ # ATTENTION (important pour Gaëlle) : cette page ne confirme PAS que l'abonnement
+ # existe en BDD. L'enregistrement effectif est réalisé de manière asynchrone par
+ # le webhook Stripe (checkout.session.completed). Il peut y avoir un délai de
+ # quelques secondes. On l'indique subtilement à l'utilisateur.
+ #
+ # Design : page centrée, max-width 640px, paddingTop 80px, thème Street.
+ #}
+
+{% block page_title %}Abonnement activé{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+    /*
+     * Préfixe CSS : .ss- (subscription-success)
+     * Page centrée de confirmation — sobre, lisible, rassurante.
+     */
+
+    /* ── Conteneur centré ─────────────────────────────────────────────────── */
+    .ss-container {
+        max-width: 640px;
+        margin: 0 auto;
+        padding-top: 80px;
+        padding-bottom: 80px;
+        text-align: center;
+    }
+
+    /*
+     * Grand symbole de validation.
+     * Arquivo Black 120px en couleur lime : visible immédiatement,
+     * cohérent avec le vert "succès" du design system.
+     */
+    .ss-check {
+        font-family: var(--display, 'Archivo Black', sans-serif);
+        font-size: 120px;
+        line-height: 1;
+        color: var(--accent, #C6F24E);
+        display: block;
+        margin-bottom: 24px;
+    }
+
+    /* ── Titre principal ──────────────────────────────────────────────────── */
+    .ss-title {
+        font-family: var(--display, 'Archivo Black', sans-serif);
+        font-size: 48px;
+        line-height: 0.92;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin: 0 0 24px 0;
+    }
+
+    /* ── Texte de confirmation ────────────────────────────────────────────── */
+    .ss-text {
+        font-size: 16px;
+        line-height: 1.6;
+        color: var(--ink);
+        margin-bottom: 8px;
+    }
+
+    /* Note secondaire sur le délai webhook (plus petite, atténuée) */
+    .ss-note {
+        font-family: var(--mono, 'JetBrains Mono', monospace);
+        font-size: 11px;
+        color: var(--ink-mute, #555);
+        margin-bottom: 40px;
+    }
+
+    /* ── Groupe de boutons CTA ────────────────────────────────────────────── */
+    /*
+     * Les deux boutons sont alignés côte à côte (flex).
+     * Sur mobile, ils passent en colonne.
+     */
+    .ss-actions {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+<div class="ss-container">
+
+    {# Grand symbole check en couleur lime — retour visuel immédiat positif #}
+    <span class="ss-check" aria-hidden="true">&#10003;</span>
+
+    {# Titre de confirmation — uppercase style affiche #}
+    <h2 class="ss-title">ABONNEMENT ACTIVE.</h2>
+
+    {# Message de bienvenue #}
+    <p class="ss-text">
+        Bienvenue dans la communaute Bazaart. Ton acces est actif immediatement.
+    </p>
+
+    {#
+     # Note technique sur la latence du webhook Stripe.
+     # On informe l'utilisateur sans l'inquiéter : le délai est de quelques secondes,
+     # pas de plusieurs minutes.
+     #}
+    <p class="ss-note">
+        Si ton abonnement n'apparait pas encore dans ton espace membre, patiente quelques secondes et rafraichis la page.
+    </p>
+
+    {# Deux CTA principaux pour guider l'utilisateur vers les fonctionnalités phares #}
+    <div class="ss-actions">
+
+        {# CTA principal : accès direct au forum communautaire #}
+        <a href="{{ path('app_forum_index') }}" class="btn btn-primary">
+            Rejoindre le forum
+        </a>
+
+        {# CTA secondaire : explorer la ressourcerie #}
+        <a href="{{ path('app_resource_index') }}" class="btn btn-ghost">
+            Explorer les opportunites
+        </a>
+
+    </div>
+
+</div>
+
+{% endblock %}

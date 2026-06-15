@@ -143,6 +143,48 @@ class Course
     #[ORM\Column(type: 'string', length: 20, enumType: CourseLevel::class, options: ['default' => 'beginner'])]
     private CourseLevel $level = CourseLevel::BEGINNER;
 
+    // ─── Tarification et intégration Stripe ──────────────────────────────────
+
+    /**
+     * Prix de la formation en centimes d'euro (ex : 2900 = 29,00€).
+     *
+     * Pourquoi des centimes ?
+     *   Stripe travaille en centimes (montant entier), et stocker en centimes
+     *   évite totalement les erreurs d'arrondi liées aux nombres à virgule flottante
+     *   (ex : 9.9 * 100 = 989.9999... en float PHP/JavaScript).
+     *
+     * null = formation gratuite ou prix non encore défini par l'admin.
+     * 0    = formation explicitement gratuite.
+     */
+    #[ORM\Column(type: 'integer', nullable: true)]
+    private ?int $priceInCents = null;
+
+    /**
+     * ID du produit Stripe correspondant à cette formation (ex : "prod_xxx").
+     *
+     * Créé automatiquement via StripeService::createOrUpdateCourseProduct()
+     * lorsque l'admin définit un prix et publie la formation.
+     *
+     * Un Product Stripe regroupe les métadonnées de la formation (nom, description).
+     * Il peut avoir plusieurs Price associés si le prix évolue (un Price est immuable).
+     *
+     * null = aucun produit Stripe créé encore (formation sans prix ou gratuite).
+     */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $stripeProductId = null;
+
+    /**
+     * ID du prix Stripe (Price) actif pour cette formation (ex : "price_xxx").
+     *
+     * Stripe ne permet pas de modifier un Price existant (immutabilité by design).
+     * Si l'admin change le prix, on crée un nouveau Price et on met à jour cet ID.
+     * L'ancien Price est archivé côté Stripe (inactive=true) mais jamais supprimé.
+     *
+     * null = pas de Price Stripe actif (formation gratuite ou en attente de configuration).
+     */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $stripePriceId = null;
+
     // ─── Publication ──────────────────────────────────────────────────────────
 
     /**
@@ -479,6 +521,90 @@ class Course
     public function removeEnrollment(CourseEnrollment $enrollment): static
     {
         $this->enrollments->removeElement($enrollment);
+        return $this;
+    }
+
+    // ─── Getters / Setters — Tarification Stripe ──────────────────────────────
+
+    /**
+     * Retourne le prix en centimes, ou null si la formation est gratuite / sans prix.
+     */
+    public function getPriceInCents(): ?int
+    {
+        return $this->priceInCents;
+    }
+
+    /**
+     * Définit le prix en centimes.
+     * Exemple : setPriceInCents(2900) pour un prix de 29,00€.
+     *
+     * Passer null pour marquer la formation comme gratuite / sans tarif défini.
+     * Attention : modifier ce champ nécessite de recréer le Price Stripe via
+     * StripeService::createOrUpdateCourseProduct() (le Price Stripe est immuable).
+     */
+    public function setPriceInCents(?int $priceInCents): static
+    {
+        $this->priceInCents = $priceInCents;
+        return $this;
+    }
+
+    /**
+     * Retourne le prix formaté en euros pour l'affichage (ex : "29,00 €").
+     *
+     * Retourne "Gratuit" si le prix est null ou égal à 0.
+     * Utilisé dans les templates Twig et les emails de confirmation.
+     *
+     * Exemples :
+     *   2900  → "29,00 €"
+     *   990   → "9,90 €"
+     *   null  → "Gratuit"
+     *   0     → "Gratuit"
+     */
+    public function getFormattedPrice(): string
+    {
+        if ($this->priceInCents === null || $this->priceInCents === 0) {
+            return 'Gratuit';
+        }
+
+        // number_format(float, décimales, séparateur_décimal, séparateur_milliers)
+        // On divise par 100 pour repasser en euros, avec 2 décimales et une virgule.
+        return number_format($this->priceInCents / 100, 2, ',', ' ') . ' €';
+    }
+
+    /**
+     * Retourne l'ID du produit Stripe associé à cette formation, ou null.
+     */
+    public function getStripeProductId(): ?string
+    {
+        return $this->stripeProductId;
+    }
+
+    /**
+     * Enregistre l'ID du produit Stripe.
+     * Appelé par StripeService::createOrUpdateCourseProduct() uniquement.
+     */
+    public function setStripeProductId(?string $stripeProductId): static
+    {
+        $this->stripeProductId = $stripeProductId;
+        return $this;
+    }
+
+    /**
+     * Retourne l'ID du prix Stripe actif pour cette formation, ou null.
+     */
+    public function getStripePriceId(): ?string
+    {
+        return $this->stripePriceId;
+    }
+
+    /**
+     * Enregistre l'ID du prix Stripe.
+     * Appelé par StripeService::createOrUpdateCourseProduct() uniquement.
+     * Remplace l'ancien Price si le prix a changé.
+     */
+    public function setStripePriceId(?string $stripePriceId): static
+    {
+        $this->stripePriceId = $stripePriceId;
         return $this;
     }
 }

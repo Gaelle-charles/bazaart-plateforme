@@ -11,6 +11,7 @@ use App\Enum\CourseLevel;
 use App\Repository\CourseModuleRepository;
 use App\Repository\CourseRepository;
 use App\Service\CourseService;
+use App\Service\StripeService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -41,10 +42,11 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class AdminCourseController extends AbstractController
 {
     public function __construct(
-        private readonly CourseService         $courseService,
-        private readonly CourseRepository      $courseRepository,
+        private readonly CourseService          $courseService,
+        private readonly CourseRepository       $courseRepository,
         private readonly CourseModuleRepository $moduleRepository,
         private readonly EntityManagerInterface $em,
+        private readonly StripeService          $stripeService,
     ) {}
 
     // ─── Liste admin de toutes les formations ─────────────────────────────────
@@ -261,6 +263,52 @@ class AdminCourseController extends AbstractController
         $course->setDescription(
             trim($request->request->getString('description')) ?: null
         );
+
+        // ── Gestion du prix (intégration Stripe) ──────────────────────────────
+        //
+        // Le formulaire admin envoie le prix en euros (float, ex : "29.90").
+        // On le convertit en centimes (int, ex : 2990) pour le stocker en BDD.
+        //
+        // Si le prix a changé (ou est nouvellement défini), on crée/met à jour
+        // le Product et le Price côté Stripe.
+        //
+        // Note : un Price Stripe est IMMUABLE — si le prix change, StripeService
+        // crée un nouveau Price et archive l'ancien. C'est transparent pour l'admin.
+        $priceEurosRaw = trim($request->request->getString('priceInEuros'));
+        if ($priceEurosRaw !== '') {
+            // Conversion du prix euros (ex : "29.90" ou "29,90") en centimes
+            // On remplace la virgule par un point pour gérer les deux formats
+            $priceEuros   = (float) str_replace(',', '.', $priceEurosRaw);
+            $priceInCents = (int) round($priceEuros * 100);
+
+            // On ne crée un nouveau Price Stripe que si le prix a réellement changé
+            // (évite d'accumuler des Price Stripe pour rien si l'admin re-sauvegarde sans changer)
+            if ($priceInCents !== $course->getPriceInCents() || $course->getStripePriceId() === null) {
+                // Mise à jour du prix en BDD
+                $course->setPriceInCents($priceInCents);
+
+                // Création/mise à jour du Product + Price Stripe
+                // Note : createOrUpdateCourseProduct() ne fait PAS de flush()
+                // C'est intentionnel — le flush() est fait après, une seule fois.
+                try {
+                    $this->stripeService->createOrUpdateCourseProduct($course);
+                    $this->addFlash('info', sprintf(
+                        'Prix Stripe mis à jour : %s (Price ID : %s)',
+                        $course->getFormattedPrice(),
+                        $course->getStripePriceId(),
+                    ));
+                } catch (\Stripe\Exception\ApiErrorException $e) {
+                    // Erreur Stripe non bloquante : on sauvegarde quand même le prix en BDD
+                    // mais on informe l'admin de l'échec Stripe
+                    $this->addFlash('warning', 'Prix sauvegardé en BDD, mais la synchronisation Stripe a échoué : ' . $e->getMessage());
+                }
+            }
+        } elseif ($course->getPriceInCents() !== null) {
+            // $priceEurosRaw est vide (l'admin a vidé le champ prix) ET un prix était défini
+            // → on efface le prix : la formation redevient gratuite.
+            // Note : on n'archive pas le Price Stripe ici (action rare, gérée manuellement si besoin).
+            $course->setPriceInCents(null);
+        }
 
         // Pas besoin de persist() car l'entité est déjà managée par Doctrine
         // (elle a été chargée via le repository → Doctrine la suit automatiquement)

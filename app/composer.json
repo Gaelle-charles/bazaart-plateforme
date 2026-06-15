@@ -15,6 +15,7 @@
         "laminas/laminas-feed": "^2.26",
         "league/oauth2-google": "^4.2",
         "lexik/jwt-authentication-bundle": "^3.2",
+        "stripe/stripe-php": "*",
         "symfony/asset": "7.4.*",
         "symfony/console": "7.4.*",
         "symfony/css-selector": "7.4.*",

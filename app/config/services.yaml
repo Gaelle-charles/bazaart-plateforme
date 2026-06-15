@@ -62,3 +62,18 @@ services:
         arguments:
             $credentialsPath: '%env(GOOGLE_SHEETS_CREDENTIALS_PATH)%'
             $spreadsheetId: '%env(GOOGLE_SHEETS_ID)%'
+
+    # StripeService — Paramètres Stripe injectés depuis les variables d'environnement.
+    #
+    # On utilise une définition explicite car Symfony ne peut pas deviner quels
+    # arguments scalaires (string) correspondent à quels paramètres d'env.
+    # Le nom du paramètre ($stripeSecretKey) est mappé à la variable d'env STRIPE_SECRET_KEY.
+    #
+    # Ces variables doivent être définies dans .env.local (dev) ou dans les secrets
+    # du serveur en production — elles ne figurent jamais dans .env commité.
+    App\Service\StripeService:
+        arguments:
+            $stripeSecretKey:     '%env(STRIPE_SECRET_KEY)%'
+            $stripeWebhookSecret: '%env(STRIPE_WEBHOOK_SECRET)%'
+            $stripePriceMonthly:  '%env(STRIPE_PRICE_MONTHLY)%'
+            $stripePriceAnnual:   '%env(STRIPE_PRICE_ANNUAL)%'
