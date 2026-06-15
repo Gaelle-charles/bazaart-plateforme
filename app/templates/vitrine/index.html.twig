@@ -1511,6 +1511,79 @@
         max-width: none;
     }
 }
+
+/* ── GRILLE 2 COLONNES TEXTE / VIDÉO ─────────────────────────────────────────
+   Disposition sous l'en-tête de section :
+     colonne gauche  → texte de présentation (1fr)
+     colonne droite  → vidéo, légèrement plus large (1.4fr) pour donner du poids
+                        à l'image par rapport au texte
+
+   align-items:center : le texte (plus court en hauteur que la vidéo) est
+   centré verticalement en face de la vidéo — rendu plus équilibré.
+
+   margin-top:40px : même décollement que l'ancien margin-top:40px du wrapper,
+   pour garder l'espace aéré entre l'en-tête de section et le contenu.
+─────────────────────────────────────────────────────────────────────────────── */
+.lp-video__grid {
+    display:               grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap:                   40px;
+    align-items:           center;
+    margin-top:            40px;
+}
+
+/* Dans la grille, le wrapper vidéo n'a plus besoin d'être centré ni contraint :
+   il doit simplement remplir sa colonne de droite à 100%.
+   On neutralise le max-width:960px et le margin:40px auto 0 de la règle globale. */
+.lp-video__grid .lp-video__wrapper {
+    max-width: none;
+    margin:    0;
+}
+
+/* ── COLONNE TEXTE ────────────────────────────────────────────────────────────
+   Le conteneur texte est pensé pour être lisible : pas de largeur max rigide,
+   la grille gère déjà la proportionnalité.
+   On laisse un espace vertical entre les deux paragraphes via gap (flex).
+─────────────────────────────────────────────────────────────────────────────── */
+.lp-video__text {
+    display:        flex;
+    flex-direction: column;
+    gap:            20px;   /* espace entre .lp-video__lead et .lp-video__desc */
+}
+
+/* Phrase d'accroche : légèrement plus grande, encre sombre, police de corps.
+   21px est un bon équilibre entre affirmé et sobre sur cette vitrine. */
+.lp-video__lead {
+    font-family:  var(--body);
+    font-size:    21px;
+    line-height:  1.45;
+    font-weight:  600;
+    color:        var(--ink);
+    margin:       0;        /* on gère l'espacement avec gap sur le parent flex */
+}
+
+/* Description longue : plus petite, couleur secondaire, line-height généreux
+   pour la lisibilité des blocs de texte (recommandation WCAG : ≥1.5 pour le corps). */
+.lp-video__desc {
+    font-family:  var(--body);
+    font-size:    15px;
+    line-height:  1.65;
+    color:        var(--ink-mute);
+    margin:       0;
+}
+
+/* ── RESPONSIVE ≤768px : empilement 1 colonne ─────────────────────────────────
+   Sur tablette et mobile, la grille passe en 1 colonne :
+     - texte AU-DESSUS (ordre naturel du DOM)
+     - vidéo EN-DESSOUS
+   Le gap vertical est réduit à 28px pour resserrer le groupe sans étouffer.
+─────────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .lp-video__grid {
+        grid-template-columns: 1fr;
+        gap:                   28px;
+    }
+}
 </style>
 {% endblock %}
 
@@ -1751,55 +1824,65 @@
                 </div>
             </div>
 
-            {# Enveloppe de la vidéo — bordure encre style "affiche imprimée" #}
-            <div class="lp-video__wrapper">
-                {#
-                    <video> : attributs choisis avec soin :
-                      - controls      : affiche les contrôles natifs (play, pause, volume, durée)
-                      - playsinline   : sur iOS, la vidéo joue dans la page sans passer
-                                        en plein écran automatiquement
-                      - preload="metadata" : le navigateur charge uniquement la durée et
-                                        la miniature, pas les données vidéo — économie réseau
-                    PAS d'autoplay   : conforme WCAG 2.1 (Criterion 1.4.2 Audio Control)
+            {# ── GRILLE 2 COLONNES : texte à gauche, vidéo à droite ───────────────────
+               La grille est placée SOUS l'en-tête de section (lp-section-header)
+               et DANS la section .lp-video (qui est déjà un .lp-container).
+               Le CSS .lp-video__grid gère la mise en page 2 colonnes et le responsive.
+            ─────────────────────────────────────────────────────────────────────────── #}
+            <div class="lp-video__grid">
 
-                    Chemin via Twig asset() :
-                      asset('uploads/video/video-artiste-bazaart.mp4')
-                      → résolu vers /uploads/video/video-artiste-bazaart.mp4
-                      → fichier attendu dans public/uploads/video/
-                #}
-                {#
-                    Vidéo d'ambiance : lecture automatique en boucle, SANS lecteur (pas de
-                    barre de contrôle).
-                    - autoplay + loop : démarre seule et tourne en boucle.
-                    - muted : OBLIGATOIRE — les navigateurs bloquent l'autoplay AVEC son.
-                      Donc la vidéo est forcément muette (pas de bande-son).
-                    - playsinline : évite le passage en plein écran forcé sur iOS.
-                    - on retire "controls" pour masquer le lecteur.
-                #}
-                <video
-                    class="lp-video__player"
-                    autoplay
-                    muted
-                    loop
-                    playsinline
-                    preload="auto"
-                    aria-label="Vidéo d'ambiance de l'association Bazaart et des artistes de la diaspora afro-atlantique"
-                >
-                    <source src="{{ asset('uploads/video/video-artiste-bazaart.mp4') }}" type="video/mp4">
+                {# ── COLONNE GAUCHE : texte de présentation ──────────────────────────────
+                   Texte provisoire — Gaëlle pourra l'ajuster directement ici.
+                   Les classes .lp-video__lead et .lp-video__desc définissent
+                   la typographie (taille, couleur, espacement) via CSS.
+                ─────────────────────────────────────────────────────────────────────────── #}
+                <div class="lp-video__text">
+                    <p class="lp-video__lead">Bazaart accompagne les artistes de la diaspora afro-atlantique.</p>
+                    <p class="lp-video__desc">Entre événements, formation et ingénierie culturelle, nous construisons un espace où la création trouve les moyens de grandir — et de rayonner.</p>
+                </div>{# /.lp-video__text #}
+
+                {# ── COLONNE DROITE : vidéo d'ambiance ───────────────────────────────────
+                   Le wrapper vidéo existant est déplacé ici SANS modification :
+                   ses attributs, son contenu, son CSS de base restent identiques.
+                   La règle .lp-video__grid .lp-video__wrapper neutralise le
+                   max-width:960px et le margin:auto qui n'ont plus de sens dans la grille.
+                ─────────────────────────────────────────────────────────────────────────── #}
+                <div class="lp-video__wrapper">
                     {#
-                        Texte de repli : affiché uniquement si le navigateur
-                        ne supporte pas la balise <video> (navigateurs très anciens).
-                        Les navigateurs modernes (Chrome, Firefox, Safari, Edge)
-                        supportent tous <video> — ce texte est une sécurité de dernier recours.
+                        Vidéo d'ambiance : lecture automatique en boucle, SANS lecteur
+                        (pas de barre de contrôle).
+                        - autoplay + loop : démarre seule et tourne en boucle.
+                        - muted : OBLIGATOIRE — les navigateurs bloquent l'autoplay AVEC son.
+                          Donc la vidéo est forcément muette (pas de bande-son).
+                        - playsinline : évite le passage en plein écran forcé sur iOS.
+                        - preload="auto" : pré-charge les données pour un démarrage immédiat.
                     #}
-                    <span class="lp-video__fallback">
-                        Votre navigateur ne supporte pas la lecture vidéo.
-                        <a href="{{ asset('uploads/video/video-artiste-bazaart.mp4') }}" download="video-artiste-bazaart.mp4" style="color:var(--ink);text-decoration:underline;">
-                            Télécharger la vidéo
-                        </a>
-                    </span>
-                </video>
-            </div>
+                    <video
+                        class="lp-video__player"
+                        autoplay
+                        muted
+                        loop
+                        playsinline
+                        preload="auto"
+                        aria-label="Vidéo d'ambiance de l'association Bazaart et des artistes de la diaspora afro-atlantique"
+                    >
+                        <source src="{{ asset('uploads/video/video-artiste-bazaart.mp4') }}" type="video/mp4">
+                        {#
+                            Texte de repli : affiché uniquement si le navigateur
+                            ne supporte pas la balise <video> (navigateurs très anciens).
+                            Les navigateurs modernes (Chrome, Firefox, Safari, Edge)
+                            supportent tous <video> — ce texte est une sécurité de dernier recours.
+                        #}
+                        <span class="lp-video__fallback">
+                            Votre navigateur ne supporte pas la lecture vidéo.
+                            <a href="{{ asset('uploads/video/video-artiste-bazaart.mp4') }}" download="video-artiste-bazaart.mp4" style="color:var(--ink);text-decoration:underline;">
+                                Télécharger la vidéo
+                            </a>
+                        </span>
+                    </video>
+                </div>{# /.lp-video__wrapper #}
+
+            </div>{# /.lp-video__grid #}
 
         </section>{# /.lp-video #}
 
