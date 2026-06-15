@@ -72,16 +72,17 @@ class SeedBlogArticlesCommand extends Command
         // La colonne "roles" en base est un tableau JSON (ex: ["ROLE_USER","ROLE_ADMIN"]).
         // On cherche le premier utilisateur dont la représentation JSON contient "ROLE_ADMIN".
         //
-        // Note technique : on utilise LIKE sur la représentation textuelle JSON.
-        // C'est une approximation volontaire, acceptable en V1 (la chaîne "ROLE_ADMIN"
-        // ne peut pas apparaître dans un autre champ de roles[] de manière ambiguë).
-        // En V2 : utiliser l'opérateur PostgreSQL natif @> sur une colonne JSONB.
-        $admin = $this->em->createQuery(
-            'SELECT u FROM App\Entity\User u WHERE u.roles LIKE :role'
-        )
-            ->setParameter('role', '%ROLE_ADMIN%')
-            ->setMaxResults(1)
-            ->getOneOrNullResult();
+        // Note technique : la colonne "roles" est de type JSON en PostgreSQL, sur lequel
+        // l'opérateur SQL LIKE n'est PAS applicable (erreur "operator does not exist: json ~~").
+        // On filtre donc côté PHP via getRoles() : fiable et indépendant du type de colonne.
+        // (Le nombre d'utilisateurs reste modeste en V1, le chargement complet est acceptable.)
+        $admin = null;
+        foreach ($this->em->getRepository(User::class)->findAll() as $candidate) {
+            if (in_array('ROLE_ADMIN', $candidate->getRoles(), true)) {
+                $admin = $candidate;
+                break;
+            }
+        }
 
         // Vérification de type stricte pour PHPStan et sécurité :
         // getOneOrNullResult() retourne mixed, on s'assure que c'est bien un User.
