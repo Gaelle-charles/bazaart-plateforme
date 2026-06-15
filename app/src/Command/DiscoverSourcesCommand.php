@@ -438,21 +438,113 @@ class DiscoverSourcesCommand extends Command
     }
 
     /**
-     * Télécharge le HTML d'une URL agrégateur via HttpClientInterface.
+     * Télécharge le HTML d'une URL agrégateur avec retry automatique sans SSL.
      *
-     * Retourne le HTML en string, ou null en cas d'erreur (timeout, HTTP non-200, etc.).
-     * L'erreur est loguée et affichée dans la console — la commande continue sur l'agrégateur suivant.
+     * Stratégie en deux temps :
+     *   1. Première tentative en SSL standard (verify_peer = true).
+     *   2. Si l'erreur contient 'ssl' ou 'certificate' (ex : certificat intermédiaire
+     *      manquant comme sur resartis.org avec DigiCert RapidSSL), on relance
+     *      la requête avec verify_peer = false et on affiche un avertissement.
+     *      Ce comportement est identique à AbstractScraper::fetchHtmlInsecure().
      *
-     * Configuration :
-     *   - User-Agent : navigateur Chrome (voir USER_AGENT)
-     *   - Timeout    : 30 secondes (voir HTTP_TIMEOUT)
-     *   - Redirections : suivies automatiquement par Symfony HttpClient
+     * Toute autre erreur (timeout, DNS, HTTP non-200) est loguée et retourne null
+     * sans retry — la commande continue sur l'agrégateur suivant.
      *
-     * @param string $url URL à télécharger
-     * @param SymfonyStyle $io Interface console pour afficher les erreurs
-     * @return string|null HTML téléchargé, ou null si erreur
+     * @param string       $url URL à télécharger
+     * @param SymfonyStyle $io  Interface console pour afficher les avertissements
+     * @return string|null HTML téléchargé, ou null si erreur non récupérable
      */
     private function downloadHtml(string $url, SymfonyStyle $io): ?string
+    {
+        // --- Première tentative : SSL activé (comportement normal) ---
+        $lastSslError = null;
+        $html = $this->fetchHtml($url, verifyPeer: true, lastError: $lastSslError);
+
+        if ($html !== null) {
+            // Succès dès la première tentative — cas nominal
+            return $html;
+        }
+
+        // --- Vérification : l'échec est-il dû à un problème SSL ? ---
+        // On inspecte le message d'erreur stocké par fetchHtml() via le paramètre
+        // $lastError passé par référence. Si le message mentionne SSL ou un
+        // certificat, on tente un second appel sans vérification.
+        if ($lastSslError !== null && $this->isSslError($lastSslError)) {
+            $warningMessage = sprintf(
+                'SSL invalide pour %s (%s) — nouvelle tentative sans vérification SSL (verify_peer=false).',
+                $url,
+                $lastSslError
+            );
+            $io->warning($warningMessage);
+            $this->logger->warning('[DiscoverSources] ' . $warningMessage);
+
+            // --- Deuxième tentative : SSL désactivé (fallback insecure) ---
+            // Même comportement qu'AbstractScraper::fetchHtmlInsecure()
+            $ignoredError = null;
+            $html = $this->fetchHtml($url, verifyPeer: false, lastError: $ignoredError);
+
+            if ($html !== null) {
+                $this->logger->info('[DiscoverSources] Succès en mode insecure.', ['url' => $url]);
+                return $html;
+            }
+
+            // Le retry a aussi échoué (ex : erreur réseau distincte)
+            $finalMessage = sprintf(
+                'Échec aussi en mode insecure pour %s — agrégateur ignoré.',
+                $url
+            );
+            $io->warning($finalMessage);
+            $this->logger->error('[DiscoverSources] ' . $finalMessage);
+            return null;
+        }
+
+        // L'erreur n'est pas SSL (timeout, DNS, HTTP non-200...) — pas de retry
+        // Le warning a déjà été affiché dans fetchHtml(), on retourne null directement.
+        return null;
+    }
+
+    /**
+     * Vérifie si un message d'erreur correspond à un problème SSL/certificat.
+     *
+     * Utilisé pour décider si un retry sans vérification SSL est justifié.
+     * On détecte les mots-clés 'ssl' et 'certificate' (insensible à la casse)
+     * qui couvrent les messages OpenSSL typiques :
+     *   - "SSL certificate OpenSSL verify result: unable to get local issuer certificate"
+     *   - "SSL: no alternative certificate subject name matches target host"
+     *   - etc.
+     *
+     * @param string $errorMessage Message d'erreur à analyser
+     * @return bool true si l'erreur est de nature SSL
+     */
+    private function isSslError(string $errorMessage): bool
+    {
+        $lower = strtolower($errorMessage);
+
+        return str_contains($lower, 'ssl') || str_contains($lower, 'certificate');
+    }
+
+    /**
+     * Effectue la requête HTTP réelle et retourne le HTML ou null.
+     *
+     * C'est la méthode de bas niveau — downloadHtml() orchestre la logique de retry,
+     * fetchHtml() ne fait qu'une seule tentative.
+     *
+     * Le paramètre $lastError est passé par référence : si une exception est levée,
+     * fetchHtml() y stocke le message pour que l'appelant puisse décider d'un retry
+     * SSL sans avoir à réexposer les détails internes de l'exception.
+     *
+     * Configuration de la requête :
+     *   - User-Agent : navigateur Chrome (voir USER_AGENT)
+     *   - Timeout    : 30 secondes (voir HTTP_TIMEOUT)
+     *   - verify_peer : contrôlé par le paramètre $verifyPeer
+     *   - Redirections : suivies automatiquement par Symfony HttpClient
+     *
+     * @param string      $url        URL à télécharger
+     * @param bool        $verifyPeer true = SSL standard, false = mode insecure
+     * @param string|null $lastError  Référence modifiée avec le message d'erreur si exception
+     * @return string|null HTML décompressé, ou null si erreur
+     */
+    private function fetchHtml(string $url, bool $verifyPeer = true, ?string &$lastError = null): ?string
     {
         try {
             $response = $this->httpClient->request('GET', $url, [
@@ -470,19 +562,27 @@ class DiscoverSourcesCommand extends Command
                     // décompresse automatiquement avant de retourner le contenu.
                 ],
                 // Timeout : 30 secondes (les pages agrégateurs peuvent être lentes)
-                'timeout' => self::HTTP_TIMEOUT,
+                'timeout'     => self::HTTP_TIMEOUT,
+                // Contrôle de la vérification SSL :
+                //   true  = comportement par défaut (certificat validé)
+                //   false = mode insecure pour les sites avec chaîne SSL incomplète
+                //           (ex : resartis.org, DigiCert RapidSSL TLS RSA CA G1 manquant)
+                'verify_peer' => $verifyPeer,
             ]);
 
             $statusCode = $response->getStatusCode();
 
             if ($statusCode !== 200) {
+                // Erreur HTTP — pas une erreur SSL, pas de retry pertinent
                 $message = sprintf(
                     'HTTP %d pour %s — agrégateur ignoré pour ce run.',
                     $statusCode,
                     $url
                 );
-                $io->warning($message);
                 $this->logger->warning('[DiscoverSources] ' . $message);
+                // On stocke le message pour l'appelant, mais sans le préfixe "SSL" :
+                // isSslError() retournera false et aucun retry SSL ne sera tenté.
+                $lastError = $message;
                 return null;
             }
 
@@ -493,29 +593,30 @@ class DiscoverSourcesCommand extends Command
             // Log debug : taille réelle reçue — visible avec -vvv pour diagnostiquer
             // les troncatures (ex : 23 853 chars au lieu de 99 000 = gzip non décompressé)
             $this->logger->debug('[DiscoverSources] HTML reçu.', [
-                'url'             => $url,
+                'url'               => $url,
+                'verify_peer'       => $verifyPeer,
                 'octets_getContent' => strlen($html),
                 'chars_mb'          => mb_strlen($html),
             ]);
 
             if (empty(trim($html))) {
                 $message = sprintf('HTML vide pour %s — agrégateur ignoré.', $url);
-                $io->warning($message);
                 $this->logger->warning('[DiscoverSources] ' . $message);
+                $lastError = $message;
                 return null;
             }
 
             return $html;
 
         } catch (\Exception $e) {
-            // Timeout, SSL, DNS — la commande doit continuer sur les autres agrégateurs
-            $message = sprintf(
-                'Erreur réseau pour %s : %s',
-                $url,
-                $e->getMessage()
-            );
-            $io->warning($message);
-            $this->logger->error('[DiscoverSources] ' . $message);
+            // Timeout, SSL, DNS — on stocke le message pour que downloadHtml()
+            // puisse décider si un retry sans SSL est justifié.
+            $lastError = $e->getMessage();
+            $this->logger->error('[DiscoverSources] Erreur réseau.', [
+                'url'         => $url,
+                'verify_peer' => $verifyPeer,
+                'erreur'      => $lastError,
+            ]);
             return null;
         }
     }

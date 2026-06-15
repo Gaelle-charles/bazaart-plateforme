@@ -9,6 +9,7 @@ avec des cadences adaptées à leur coût et leur nature :
 |---|---|---|---|---|
 | `app:read-feeds` | Flux RSS uniquement | **Toutes les 6h** | Léger (HTTP + XML) | `bazaart-feeds.log` |
 | `app:scrape-opportunities` | HTML+LLM et HTML+CSS | **3x/semaine** (lun/mer/ven 7h) | Coûteux (clé API LLM) | `bazaart-scraping.log` |
+| `app:discover-sources` | Agrégateurs (LLM) | **1x/semaine** (dimanche 6h UTC) | Coûteux (clé API LLM) | `bazaart-discover.log` |
 
 ### Pourquoi deux cadences ?
 
@@ -60,14 +61,26 @@ ssh root@206.189.3.112
 sudo crontab -e
 ```
 
-Ajouter les deux lignes suivantes :
+Ajouter les lignes suivantes :
 
 ```cron
 # ── Flux RSS : toutes les 6h (léger, pas de LLM) ─────────────────────────────────
-0 */6 * * * cd /home/bazaart && docker compose exec -T app php bin/console app:read-feeds --env=prod 2>&1 >> /var/log/bazaart-feeds.log
+0 */6 * * * /usr/bin/docker exec bazaart_platform_app php bin/console app:read-feeds >> /var/log/bazaart-scraping.log 2>&1
 
 # ── Scraping HTML+LLM : 3x/semaine lun/mer/ven à 7h00 UTC (coûteux, clé API) ─────
-0 7 * * 1,3,5 cd /home/bazaart && docker compose exec -T app php bin/console app:scrape-opportunities --env=prod 2>&1 >> /var/log/bazaart-scraping.log
+0 7 * * 1,3,5 /usr/bin/docker exec bazaart_platform_app php bin/console app:scrape-opportunities >> /var/log/bazaart-scraping.log 2>&1
+
+# ── Enrichissement IA : quotidien 7h30, après le scraping ────────────────────────
+30 7 * * * /usr/bin/docker exec bazaart_platform_app php bin/console app:enrich-opportunities --limit=30 >> /var/log/bazaart-enrich.log 2>&1
+
+# ── Alertes Ressourcerie : quotidien 8h UTC ───────────────────────────────────────
+0 8 * * * /usr/bin/docker exec bazaart_platform_app php bin/console app:send-resource-alerts >> /var/log/bazaart-resource-alerts.log 2>&1
+
+# ── Rappels lives : toutes les heures (idempotent) ───────────────────────────────
+0 * * * * /usr/bin/docker exec bazaart_platform_app php bin/console app:live:send-reminders >> /var/log/bazaart-live-reminders.log 2>&1
+
+# ── Découverte de nouvelles sources : hebdo dimanche 6h UTC (LLM, suggestions admin)
+0 6 * * 0 /usr/bin/docker exec bazaart_platform_app php bin/console app:discover-sources --env=prod >> /var/log/bazaart-discover.log 2>&1
 ```
 
 ### Explication de l'expression cron RSS (`0 */6 * * *`)
