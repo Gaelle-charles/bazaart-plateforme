@@ -126,13 +126,16 @@
                                         Description tronquée à 150 caractères.
                                         Le filtre Twig |slice coupe proprement sans casser les mots.
                                         On ajoute "…" si la description est plus longue.
+                                        striptags appliqué une seule fois via une variable pour eviter
+                                        le double calcul — la description peut contenir du HTML Mistral.
                                     #}
                                     {% if resource.description %}
+                                        {% set desc_plain = resource.description|striptags %}
                                         <p style="margin: 0 0 12px 0; color: #555555; font-size: 14px; line-height: 1.5;">
-                                            {% if resource.description|length > 150 %}
-                                                {{ resource.description|slice(0, 150) }}…
+                                            {% if desc_plain|length > 150 %}
+                                                {{ desc_plain|slice(0, 150) }}…
                                             {% else %}
-                                                {{ resource.description }}
+                                                {{ desc_plain }}
                                             {% endif %}
                                         </p>
                                     {% endif %}

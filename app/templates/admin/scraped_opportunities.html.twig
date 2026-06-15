@@ -656,7 +656,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                 </div>
                                 {% if opp.description %}
                                     <div class="adm-opp-desc">
-                                        {{ opp.description|slice(0, 140) }}{{ opp.description|length > 140 ? '…' : '' }}
+                                        {# striptags avant slice : on affiche du texte brut dans ce preview, pas du HTML #}
+                                        {{ opp.description|striptags|slice(0, 140) }}{{ opp.description|striptags|length > 140 ? '…' : '' }}
                                     </div>
                                 {% endif %}
                             </td>
@@ -902,10 +903,11 @@ document.addEventListener('DOMContentLoaded', function () {
                                         {{ opp.title }}
                                     {% endif %}
                                 </div>
-                                {# Affiche la description si disponible — utile pour se souvenir du contenu #}
+                                {# Affiche la description si disponible - utile pour se souvenir du contenu #}
                                 {% if opp.description %}
                                     <div class="adm-opp-desc">
-                                        {{ opp.description|slice(0, 100) }}{{ opp.description|length > 100 ? '…' : '' }}
+                                        {# striptags avant slice : on affiche du texte brut dans ce preview, pas du HTML #}
+                                        {{ opp.description|striptags|slice(0, 100) }}{{ opp.description|striptags|length > 100 ? '…' : '' }}
                                     </div>
                                 {% endif %}
                             </td>

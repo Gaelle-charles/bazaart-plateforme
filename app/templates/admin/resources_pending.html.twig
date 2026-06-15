@@ -322,10 +322,12 @@
                 {#
                   Description tronquée à 300 caractères.
                   On n'utilise JAMAIS |raw sur des données utilisateur (risque XSS).
+                  striptags est appliqué en plus car la description peut contenir du HTML
+                  genere par Mistral (balises p, ul, li, strong) — on affiche du texte brut ici.
                   slice() est safe car il ne désactive pas l'échappement automatique de Twig.
                 #}
                 <p class="adm-mod-card__desc">
-                    {{ resource.description|slice(0, 300) }}{{ resource.description|length > 300 ? '…' : '' }}
+                    {{ resource.description|striptags|slice(0, 300) }}{{ resource.description|striptags|length > 300 ? '…' : '' }}
                 </p>
 
                 {# Disciplines artistiques concernées (si renseignées) #}

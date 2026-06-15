@@ -674,12 +674,18 @@
 
         {# ── Description complète ── #}
         {#
-           nl2br transforme les retours à la ligne en <br> HTML.
-           La description est du texte libre saisi par la structure / admin.
-           On utilise le serif (Instrument Serif) pour un effet "article éditorial".
+           La description peut contenir du HTML structure genere par Mistral
+           (balises p, ul, li, strong) via la commande app:enrich-opportunities.
+           On utilise |raw pour que ces balises soient interpretees par le navigateur.
+
+           ATTENTION XSS : ce |raw est valide UNIQUEMENT parce que resource.description
+           est alimenté exclusivement par le pipeline IA (EnrichOpportunitiesCommand) ou
+           par un administrateur via /admin/resources/{id}/edit.
+           NE PAS utiliser |raw si une soumission artiste ou structure peut écrire
+           directement dans ce champ sans sanitisation préalable.
         #}
         <div class="resource-desc">
-            {{ resource.description|nl2br }}
+            {{ resource.description|raw }}
         </div>
 
         {# ── Disciplines ── #}

@@ -366,17 +366,26 @@ class ScrapedResourceRepository extends ServiceEntityRepository
             // Limite le nombre de résultats pour maîtriser le coût LLM et le temps d'exécution
             ->setMaxResults($limit);
 
-        // Filtre description manquante (sauf si --force)
+        // Filtre description ou disciplines manquantes (sauf si --force)
         if (!$includeWithDescription) {
-            // On cible les opportunités SANS description :
-            //   - description IS NULL (jamais renseignée)
-            //   - description = '' (chaîne vide)
-            //   - description = 'Description non disponible.' (valeur placeholder parfois insérée)
+            // On cible les opportunités qui n'ont pas de description OU pas de disciplines.
+            // Cela permet d'enrichir les disciplines même pour les records qui ont déjà
+            // une description fournie par le scraper initial (cas le plus courant pour
+            // les opportunités On The Move enrichies lors d'une passe precedente).
+            //
+            // Conditions retenues :
+            //   - description IS NULL (jamais renseignee)
+            //   - description = '' (chaine vide)
+            //   - description = 'Description non disponible.' (placeholder du scraper)
+            //   - disciplines IS NULL (jamais detectees par le LLM)
+            //   - disciplines = '' (chaine vide)
             $qb->andWhere(
                 $qb->expr()->orX(
                     's.description IS NULL',
                     "s.description = ''",
-                    "s.description = 'Description non disponible.'"
+                    "s.description = 'Description non disponible.'",
+                    's.disciplines IS NULL',
+                    "s.disciplines = ''"
                 )
             );
         }

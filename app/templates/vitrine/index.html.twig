@@ -2049,11 +2049,13 @@
                        On ajoute "…" si la description est plus longue que 120 chars.
                        Pourquoi 120 ? C'est la longueur des descriptions dans les cartes statiques
                        d'origine — on conserve le même gabarit visuel. #}
+                    {# striptags car la description peut contenir du HTML genere par Mistral.
+                       On affiche toujours du texte brut dans les cartes de la page d'accueil. #}
                     <p class="lp-opp-card__desc">
-                        {% if resource.description|length > 120 %}
-                            {{ resource.description|slice(0, 120) }}…
+                        {% if resource.description|striptags|length > 120 %}
+                            {{ resource.description|striptags|slice(0, 120) }}…
                         {% else %}
-                            {{ resource.description }}
+                            {{ resource.description|striptags }}
                         {% endif %}
                     </p>
 

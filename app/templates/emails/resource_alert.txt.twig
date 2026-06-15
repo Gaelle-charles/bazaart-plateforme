@@ -27,7 +27,8 @@ Bonjour {{ display_name }},
    Lieu : {{ resource.location }}
 {% endif %}
 {% if resource.description %}
-   {{ resource.description|slice(0, 200) }}{% if resource.description|length > 200 %}…{% endif %}
+   {%- set desc_plain = resource.description|striptags -%}
+   {{ desc_plain|slice(0, 200) }}{% if desc_plain|length > 200 %}…{% endif %}
 
 {% endif %}
    Deadline : {% if resource.deadline %}{{ resource.deadline|date('d/m/Y') }}{% else %}Non précisée{% endif %}

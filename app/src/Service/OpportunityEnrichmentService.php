@@ -62,10 +62,11 @@ class OpportunityEnrichmentService
 
     /**
      * Limite de tokens pour la réponse Mistral.
-     * Un titre (~80 chars) + une description (~400 chars) tient largement en 300 tokens.
-     * On prend 512 pour avoir de la marge.
+     * Un titre (~80 chars) + une description en HTML (~1 200 chars avec balises) + disciplines (~150 chars)
+     * peut atteindre 700-900 tokens. On prend 1 200 pour avoir de la marge sur le JSON complet.
+     * La description est maintenant du HTML structure (p, ul, li, strong), plus verbose que du texte brut.
      */
-    private const MAX_RESPONSE_TOKENS = 512;
+    private const MAX_RESPONSE_TOKENS = 1200;
 
     /**
      * Taille max du texte envoyé à Mistral (en caractères).
@@ -86,9 +87,18 @@ class OpportunityEnrichmentService
 
     /**
      * Longueur maximale de la description produite par le LLM (en caractères).
-     * Le prompt indique ~400 chars ; on tronque ici en garde-fou côté PHP.
+     * La description est maintenant du HTML structure (balises p, ul, li, strong).
+     * Le HTML prend plus de place que du texte brut (les balises s'ajoutent au contenu).
+     * Le prompt demande maximum 1 200 chars HTML ; on tronque ici en garde-fou cote PHP.
      */
-    private const MAX_DESCRIPTION_LENGTH = 500;
+    private const MAX_DESCRIPTION_LENGTH = 1500;
+
+    /**
+     * Longueur maximale du champ disciplines produit par le LLM (en caractères).
+     * La liste de disciplines la plus longue possible fait environ 130 chars — 150 offre
+     * une marge confortable sans risquer de tronquer une valeur réelle.
+     */
+    private const MAX_DISCIPLINES_LENGTH = 150;
 
     /**
      * Taille maximale du corps HTTP lu (en octets).
@@ -326,19 +336,32 @@ Tu es un assistant spécialisé dans la synthèse d'opportunités culturelles et
 
 Ta seule tâche : analyser le texte fourni par l'utilisateur et produire un JSON valide.
 
-FORMAT DE SORTIE — tu dois retourner UNIQUEMENT un objet JSON avec exactement deux clés :
+FORMAT DE SORTIE — tu dois retourner UNIQUEMENT un objet JSON avec exactement trois clés :
 {
   "titre": "...",
-  "description": "..."
+  "description": "...",
+  "disciplines": "..."
 }
 
 RÈGLES STRICTES :
 - "titre" : reformulation claire, concise et compréhensible en un coup d'oeil, en FRANÇAIS.
   Maximum 80 caractères. Résume l'essentiel : type d'opportunité + organisme si possible.
-- "description" : résumé FIDÈLE en FRANÇAIS, 2 à 4 phrases (maximum 400 caractères).
-  Basé UNIQUEMENT sur le texte fourni. Mentionne si possible : de quoi il s'agit, pour qui,
-  date limite si présente. N'invente RIEN. Si l'info n'est pas dans le texte, ne la mets pas.
-  Si le texte est insuffisant pour décrire l'opportunité, mets "description": "".
+- "description" : résumé structuré en FRANÇAIS, au format HTML, basé UNIQUEMENT sur le texte fourni.
+  N'invente RIEN. Si une information n'est pas dans le texte, ne l'inclus pas.
+  Utilise UNIQUEMENT ces balises HTML : <p>, <ul>, <li>, <strong>.
+  Structure recommandée (n'inclus que les sections dont tu as l'information) :
+  <p>[Une phrase qui résume de quoi il s'agit et pour quelle structure.]</p><ul><li><strong>Pour qui :</strong> [critères d'éligibilité]</li><li><strong>Montant / Dotation :</strong> [montant ou aide financière si mentionnée]</li><li><strong>Conditions :</strong> [conditions de candidature]</li><li><strong>Date limite :</strong> [date si mentionnée]</li></ul>
+  Maximum 1200 caractères HTML au total. Si le texte est insuffisant, mets "description": "".
+- "disciplines" : liste des disciplines artistiques concernées par cette opportunité.
+  Choisis UNE OU PLUSIEURS valeurs dans la liste suivante, séparées par des virgules :
+  Musique, Arts visuels, Danse, Cinéma / Audiovisuel, Littérature, Architecture, Design,
+  Photographie, Théâtre / Performance, Art numérique, Mode / Création textile,
+  Arts de la scène, Pluridisciplinaire.
+  Si l'opportunité s'adresse à toutes les disciplines ou à une liste très large, utilise
+  "Pluridisciplinaire".
+  Exemples valides : "Musique", "Musique, Danse", "Arts visuels, Photographie",
+  "Pluridisciplinaire".
+  Si tu ne peux pas déterminer la discipline depuis le texte, retourne "".
 - TYPOGRAPHIE : n'utilise JAMAIS de tiret cadratin (—) ni de tiret demi-cadratin (–), ni dans
   le titre ni dans la description. Pour une incise, utilise une virgule ou des parenthèses ;
   pour une plage de dates, utilise un tiret simple (-).
@@ -483,8 +506,22 @@ MSG;
         if (is_string($rawDesc)) {
             $rawDesc = trim($rawDesc);
             if (!empty($rawDesc)) {
-                // Tronquage garde-fou (le prompt demande 400 chars, on accepte jusqu'à 500)
-                $description = mb_substr($rawDesc, 0, self::MAX_DESCRIPTION_LENGTH);
+                // Tronquage garde-fou cote PHP.
+                // Le prompt demande 1 200 chars HTML ; MAX_DESCRIPTION_LENGTH est a 1 500 chars
+                // pour laisser une marge confortable (les balises HTML s'ajoutent au contenu visible).
+                // On accepte la troncature brute sur le HTML car :
+                //   1. La marge de 300 chars rend le cas rare (reponses anormales uniquement)
+                //   2. Les navigateurs corrigent le HTML partiel a l'affichage
+                //   3. Une troncature "propre" demanderait un parseur HTML complet (sur-ingenierie ici)
+                if (mb_strlen($rawDesc) > self::MAX_DESCRIPTION_LENGTH) {
+                    $this->logger->warning('[EnrichmentService] Description trop longue, troncature appliquee.', [
+                        'url'    => $url,
+                        'length' => mb_strlen($rawDesc),
+                        'max'    => self::MAX_DESCRIPTION_LENGTH,
+                    ]);
+                    $rawDesc = mb_substr($rawDesc, 0, self::MAX_DESCRIPTION_LENGTH);
+                }
+                $description = $rawDesc;
             }
             // Si la string est vide, on laisse $description = null (DTO isEmpty sera true si titre aussi null)
         } elseif ($rawDesc !== null) {
@@ -494,20 +531,41 @@ MSG;
             ]);
         }
 
-        // Log succès si on a au moins un champ
-        if ($title !== null || $description !== null) {
+        // ── Extraction des disciplines ─────────────────────────────────────────
+        // On accepte UNIQUEMENT une string. Valeur vide ("") → null.
+        $rawDisciplines = $decoded['disciplines'] ?? null;
+        $disciplines    = null;
+
+        if (is_string($rawDisciplines)) {
+            $rawDisciplines = trim($rawDisciplines);
+            if (!empty($rawDisciplines)) {
+                // Tronquage garde-fou cote PHP (le prompt utilise une liste fermee ~130 chars)
+                $disciplines = mb_substr($rawDisciplines, 0, self::MAX_DISCIPLINES_LENGTH);
+            }
+            // Si la string est vide, on laisse $disciplines = null
+        } elseif ($rawDisciplines !== null) {
+            // Le LLM a retourne un type inattendu (tableau, entier...) : on log et on ignore
+            $this->logger->warning('[EnrichmentService] Le champ "disciplines" retourné par Mistral n\'est pas une string.', [
+                'url'  => $url,
+                'type' => get_debug_type($rawDisciplines),
+            ]);
+        }
+
+        // Log succes si on a au moins un champ utilisable
+        if ($title !== null || $description !== null || $disciplines !== null) {
             $this->logger->info('[EnrichmentService] Enrichissement produit avec succès.', [
                 'url'          => $url,
                 'title_length' => $title !== null ? mb_strlen($title) : 0,
                 'desc_length'  => $description !== null ? mb_strlen($description) : 0,
+                'disciplines'  => $disciplines ?? '(aucune)',
             ]);
         } else {
-            // Le LLM a retourné du JSON valide mais sans contenu utile
+            // Le LLM a retourne du JSON valide mais sans contenu utile
             $this->logger->info('[EnrichmentService] Mistral a retourné un JSON valide mais sans contenu utilisable.', [
                 'url' => $url,
             ]);
         }
 
-        return new OpportunityEnrichment($title, $description);
+        return new OpportunityEnrichment($title, $description, $disciplines);
     }
 }

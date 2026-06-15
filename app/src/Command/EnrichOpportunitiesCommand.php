@@ -215,7 +215,7 @@ class EnrichOpportunitiesCommand extends Command
                 sourceSite: $sourceFilter,
                 includeWithDescription: $isForce,
             );
-            $stats = $this->processScrapedResources($items, $io, $isDryRun);
+            $stats = $this->processScrapedResources($items, $io, $isDryRun, $isForce);
         }
 
         $total = count($items);
@@ -259,12 +259,18 @@ class EnrichOpportunitiesCommand extends Command
      * satisfaire PHPStan niveau 6 sans mélanger Resource|ScrapedResource dans
      * un foreach unique.
      *
+     * Le parametre $isForce permet de ne pas ecraser une description existante
+     * sauf si l'utilisateur a explicitement demande --force. Les disciplines,
+     * elles, sont toujours mises a jour quand disponibles (raison d'etre principale
+     * de cette passe d'enrichissement pour les records déjà décrits).
+     *
      * @param ScrapedResource[]  $items    Entités à enrichir
      * @param SymfonyStyle       $io       Interface console
      * @param bool               $isDryRun Ne pas écrire en BDD si true
+     * @param bool               $isForce  Ecraser description+titre existants si true
      * @return array{processed: int, enriched: int, skipped: int, failed: int}
      */
-    private function processScrapedResources(array $items, SymfonyStyle $io, bool $isDryRun): array
+    private function processScrapedResources(array $items, SymfonyStyle $io, bool $isDryRun, bool $isForce = false): array
     {
         $io->text(sprintf('→ %d ScrapedResource(s) chargée(s) depuis la BDD.', count($items)));
 
@@ -304,20 +310,50 @@ class EnrichOpportunitiesCommand extends Command
                 }
 
                 if ($isDryRun) {
-                    $this->displayDryRunResult($io, $itemTitle, $enrichment->title, $enrichment->description);
+                    $this->displayDryRunResult(
+                        $io,
+                        $itemTitle,
+                        $enrichment->title,
+                        $enrichment->description,
+                        $enrichment->disciplines,
+                    );
                     $stats['enriched']++;
                     continue;
                 }
 
+                // Capture de l'état AVANT enrichissement pour decider quoi mettre a jour.
+                // Une description de placeholder ("Description non disponible.") est traitee
+                // comme absente : on l'ecrase sans avoir besoin de --force.
+                $hadDescription = !empty($item->getDescription())
+                    && $item->getDescription() !== 'Description non disponible.';
+
                 // ── Mise à jour de la description ──────────────────────────────
+                // On n'ecrase PAS une description existante sauf si --force.
+                // Un scraper a peut-etre fourni une description acceptable ; l'enrichissement
+                // l'ameliorerait, mais le risque de perte d'info n'en vaut pas la peine
+                // sans --force explicite.
                 if ($enrichment->description !== null && $enrichment->description !== '') {
-                    $item->setDescription($enrichment->description);
+                    if (!$hadDescription || $isForce) {
+                        $item->setDescription($enrichment->description);
+                    }
                 }
 
-                // ── Mise à jour du titre (seulement si description disponible) ─
-                // On ne remplace le titre que si l'enrichissement est complet (titre + description).
+                // ── Mise à jour du titre ────────────────────────────────────────
+                // On ne remplace le titre que si on vient aussi de mettre a jour la description
+                // (enrichissement complet) OU si --force. Evite de remplacer un titre correct
+                // par un titre LLM sans description associee.
                 if ($enrichment->title !== null && $enrichment->title !== '' && $enrichment->description !== null) {
-                    $item->setTitle($enrichment->title);
+                    if (!$hadDescription || $isForce) {
+                        $item->setTitle($enrichment->title);
+                    }
+                }
+
+                // ── Mise à jour des disciplines ─────────────────────────────────
+                // Les disciplines sont TOUJOURS mises a jour quand disponibles, meme si
+                // le record avait déjà une description. C'est la raison principale de cette
+                // passe d'enrichissement pour les records deja partiellement enrichis.
+                if ($enrichment->disciplines !== null && $enrichment->disciplines !== '') {
+                    $item->setDisciplines($enrichment->disciplines);
                 }
 
                 $io->writeln('<info>ENRICHI</info>');
@@ -344,6 +380,15 @@ class EnrichOpportunitiesCommand extends Command
      *
      * Méthode séparée pour avoir des types stricts (Resource[]) et
      * satisfaire PHPStan niveau 6.
+     *
+     * NOTE IMPORTANTE -- DISCIPLINES NON MISES A JOUR EN MODE --published :
+     *   Ce mode cible les Resource publiées (entité Resource, pas ScrapedResource).
+     *   Or Resource::disciplines est une relation ManyToMany vers une entité Discipline
+     *   (une Collection<Discipline>), pas un simple champ string comme sur ScrapedResource.
+     *   Mettre a jour cette relation necessite de resoudre les entites Discipline par leur nom,
+     *   ce qui est hors scope de ce service.
+     *   La detection et la persistance des disciplines via Mistral est donc reservee
+     *   au mode ScrapedResource (mode par defaut, sans --published).
      *
      * @param Resource[]   $items    Entités à enrichir
      * @param SymfonyStyle $io       Interface console
@@ -424,16 +469,18 @@ class EnrichOpportunitiesCommand extends Command
      *
      * Factorisée ici pour éviter la duplication entre processScrapedResources() et processResources().
      *
-     * @param SymfonyStyle $io             Interface console
-     * @param string       $originalTitle  Titre actuel en BDD (avant enrichissement)
-     * @param string|null  $newTitle       Titre proposé par Mistral (peut être null)
-     * @param string|null  $newDescription Description produite par Mistral (peut être null)
+     * @param SymfonyStyle $io              Interface console
+     * @param string       $originalTitle   Titre actuel en BDD (avant enrichissement)
+     * @param string|null  $newTitle        Titre proposé par Mistral (peut être null)
+     * @param string|null  $newDescription  Description produite par Mistral (peut être null)
+     * @param string|null  $newDisciplines  Disciplines détectées par Mistral (peut être null)
      */
     private function displayDryRunResult(
         SymfonyStyle $io,
         string $originalTitle,
         ?string $newTitle,
         ?string $newDescription,
+        ?string $newDisciplines = null,
     ): void {
         $io->writeln('<info>OK (dry-run)</info>');
 
@@ -448,7 +495,14 @@ class EnrichOpportunitiesCommand extends Command
         if ($newDescription !== null) {
             $io->writeln(sprintf(
                 '    Description : <info>%s</>',
-                mb_substr($newDescription, 0, 100) . '…'
+                mb_substr($newDescription, 0, 100) . '...'
+            ));
+        }
+
+        if ($newDisciplines !== null) {
+            $io->writeln(sprintf(
+                '    Disciplines : <info>%s</>',
+                $newDisciplines
             ));
         }
     }

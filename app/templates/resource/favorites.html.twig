@@ -456,9 +456,10 @@
                     {{ resource.title }}
                 </a>
 
-                {# Description courte #}
+                {# Description courte — striptags car la description peut contenir du HTML Mistral.
+                   On affiche du texte brut dans les previews, pas de balises HTML. #}
                 <p class="resource-card__desc">
-                    {{ resource.description|slice(0, 160) }}{{ resource.description|length > 160 ? '…' : '' }}
+                    {{ resource.description|striptags|slice(0, 160) }}{{ resource.description|striptags|length > 160 ? '…' : '' }}
                 </p>
 
                 {# Pied de carte : disciplines + date d'ajout #}

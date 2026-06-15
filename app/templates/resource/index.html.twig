@@ -767,9 +767,11 @@
                 {# Titre de la ressource : display, 3 lignes max #}
                 <h2 class="resource-card__title">{{ resource.title }}</h2>
 
-                {# Description tronquée à 150 caractères environ (clip CSS) #}
+                {# Description tronquée à 160 caractères pour la card.
+                   striptags est appliqué car la description peut contenir du HTML (généré par Mistral).
+                   On affiche toujours du texte brut dans les previews — jamais de balises HTML. #}
                 <p class="resource-card__desc">
-                    {{ resource.description|slice(0, 160) }}{{ resource.description|length > 160 ? '…' : '' }}
+                    {{ resource.description|striptags|slice(0, 160) }}{{ resource.description|striptags|length > 160 ? '…' : '' }}
                 </p>
 
                 {# Pied de carte : disciplines + flèche Voir #}
