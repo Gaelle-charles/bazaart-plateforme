@@ -112,6 +112,12 @@ security:
         # par #[IsGranted('ROLE_ADMIN')] au niveau méthode dans ArticleController
         # → défense en profondeur, indépendante de cette règle firewall.
         - { path: ^/articles, roles: PUBLIC_ACCESS }
+        # ── Page tarifs — PUBLIQUE ────────────────────────────────────────────
+        # Accessible sans connexion : vitrine commerciale des abonnements et formations.
+        # Les boutons "S'abonner" redirigent vers login si l'utilisateur n'est pas connecté.
+        # Le webhook Stripe (/stripe/webhook) est PUBLIC_ACCESS par nature (appel serveur Stripe).
+        - { path: ^/tarifs, roles: PUBLIC_ACCESS }
+        - { path: ^/stripe/webhook, roles: PUBLIC_ACCESS }
         # Tout le reste : authentification requise
         - { path: ^/, roles: ROLE_USER }
 
