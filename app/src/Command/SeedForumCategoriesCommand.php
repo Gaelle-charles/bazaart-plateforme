@@ -143,18 +143,20 @@ class SeedForumCategoriesCommand extends Command
         ];
 
         // ── Recherche de l'admin pour les threads d'amorce ────────────────────
-        // Les threads d'amorce doivent être attribués à un utilisateur ROLE_ADMIN.
-        // On interroge la colonne JSON "roles" de la table users via une requête DQL.
-        //
-        // Note : la colonne roles est un JSON array en PostgreSQL (ex: ["ROLE_USER", "ROLE_ADMIN"]).
-        // L'opérateur LIKE sur la représentation JSON (texte) est une approximation volontaire en V1.
-        // En V2 : utiliser l'opérateur PostgreSQL natif @> sur JSONB pour une recherche correcte.
-        $admin = $this->em->createQuery(
-            'SELECT u FROM App\Entity\User u WHERE u.roles LIKE :role'
-        )
-            ->setParameter('role', '%ROLE_ADMIN%')
-            ->setMaxResults(1)
-            ->getOneOrNullResult();
+        // La colonne `roles` est un tableau JSON en PostgreSQL — on ne peut pas
+        // utiliser LIKE dessus (erreur "operator does not exist: json ~~ unknown").
+        // Solution : charger tous les users en mémoire et filtrer en PHP avec
+        // in_array(), comme déjà fait dans SeedArticlesCommand (fix f46bd50).
+        $allUsers = $this->em->createQuery('SELECT u FROM App\Entity\User u')
+            ->getResult();
+
+        $admin = null;
+        foreach ($allUsers as $user) {
+            if (in_array('ROLE_ADMIN', $user->getRoles(), true)) {
+                $admin = $user;
+                break;
+            }
+        }
 
         if (!$admin instanceof User) {
             // Pas d'admin en base : les threads d'amorce seront ignorés.
