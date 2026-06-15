@@ -62,11 +62,11 @@ class OpportunityEnrichmentService
 
     /**
      * Limite de tokens pour la réponse Mistral.
-     * Un titre (~80 chars) + une description en HTML (~1 200 chars avec balises) + disciplines (~150 chars)
-     * peut atteindre 700-900 tokens. On prend 1 200 pour avoir de la marge sur le JSON complet.
-     * La description est maintenant du HTML structure (p, ul, li, strong), plus verbose que du texte brut.
+     * Une description complète en HTML (jusqu'à 2 500 chars) + titre (~80 chars) + disciplines (~150 chars)
+     * peut atteindre 1 500-1 800 tokens. On prend 2 000 pour avoir de la marge sur le JSON complet.
+     * La description est maintenant exhaustive (6 sections possibles) — plus verbose que les résumés courts.
      */
-    private const MAX_RESPONSE_TOKENS = 1200;
+    private const MAX_RESPONSE_TOKENS = 2000;
 
     /**
      * Taille max du texte envoyé à Mistral (en caractères).
@@ -87,11 +87,12 @@ class OpportunityEnrichmentService
 
     /**
      * Longueur maximale de la description produite par le LLM (en caractères).
-     * La description est maintenant du HTML structure (balises p, ul, li, strong).
-     * Le HTML prend plus de place que du texte brut (les balises s'ajoutent au contenu).
-     * Le prompt demande maximum 1 200 chars HTML ; on tronque ici en garde-fou cote PHP.
+     * La description est du HTML exhaustif (jusqu'à 6 sections : intro, pour qui, ce que ça offre,
+     * montant, conditions, calendrier, comment postuler). Le HTML prend plus de place que du texte
+     * brut (les balises s'ajoutent au contenu utile).
+     * Le prompt demande maximum 2 500 chars HTML ; on prend 3 000 en garde-fou PHP pour avoir de la marge.
      */
-    private const MAX_DESCRIPTION_LENGTH = 1500;
+    private const MAX_DESCRIPTION_LENGTH = 3000;
 
     /**
      * Longueur maximale du champ disciplines produit par le LLM (en caractères).
@@ -346,12 +347,13 @@ FORMAT DE SORTIE — tu dois retourner UNIQUEMENT un objet JSON avec exactement 
 RÈGLES STRICTES :
 - "titre" : reformulation claire, concise et compréhensible en un coup d'oeil, en FRANÇAIS.
   Maximum 80 caractères. Résume l'essentiel : type d'opportunité + organisme si possible.
-- "description" : résumé structuré en FRANÇAIS, au format HTML, basé UNIQUEMENT sur le texte fourni.
-  N'invente RIEN. Si une information n'est pas dans le texte, ne l'inclus pas.
+- "description" : description COMPLÈTE et structurée en FRANÇAIS, au format HTML, basée UNIQUEMENT
+  sur le texte fourni. N'invente RIEN. N'inclus que les informations présentes dans le texte source.
   Utilise UNIQUEMENT ces balises HTML : <p>, <ul>, <li>, <strong>.
-  Structure recommandée (n'inclus que les sections dont tu as l'information) :
-  <p>[Une phrase qui résume de quoi il s'agit et pour quelle structure.]</p><ul><li><strong>Pour qui :</strong> [critères d'éligibilité]</li><li><strong>Montant / Dotation :</strong> [montant ou aide financière si mentionnée]</li><li><strong>Conditions :</strong> [conditions de candidature]</li><li><strong>Date limite :</strong> [date si mentionnée]</li></ul>
-  Maximum 1200 caractères HTML au total. Si le texte est insuffisant, mets "description": "".
+  Sois EXHAUSTIF : si plusieurs informations sont disponibles dans une section, mentionne-les TOUTES.
+  Structure attendue (inclus toutes les sections pour lesquelles tu as des informations) :
+  <p>[Introduction : résume ce qu'est l'opportunité, qui la propose et dans quel contexte.]</p><ul><li><strong>Pour qui :</strong> [critères d'éligibilité détaillés : nationalité, discipline, stade de carrière, âge, statut professionnel, etc.]</li><li><strong>Ce que ca offre :</strong> [bénéfices concrets : résidence, espace de travail, accompagnement, exposition, production, publication, visibilité, etc.]</li><li><strong>Montant / Dotation :</strong> [montant exact si mentionné, frais couverts : billet d'avion, logement, repas, per diem, etc.]</li><li><strong>Conditions :</strong> [langues requises, documents à fournir, durée, lieu, contraintes spécifiques]</li><li><strong>Calendrier :</strong> [date limite de candidature, dates du programme ou de la résidence]</li><li><strong>Comment postuler :</strong> [dossier à constituer, lien ou email de candidature si mentionné]</li></ul>
+  Maximum 2500 caractères HTML au total. Si le texte est insuffisant pour décrire l'opportunité, mets "description": "".
 - "disciplines" : liste des disciplines artistiques concernées par cette opportunité.
   Choisis UNE OU PLUSIEURS valeurs dans la liste suivante, séparées par des virgules :
   Musique, Arts visuels, Danse, Cinéma / Audiovisuel, Littérature, Architecture, Design,
