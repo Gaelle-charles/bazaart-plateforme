@@ -16,6 +16,73 @@
  #}
 
 {% block title %}{{ article.title }} — Articles — BazaArt{% endblock %}
+
+{#
+ # Meta description — utilisée par Google dans les résultats de recherche.
+ # On utilise l'excerpt de l'article s'il est renseigné.
+ # Si excerpt est null (article sans accroche), le filtre |default bascule
+ # sur la description générique de base.html.twig.
+ #
+ # ⚠️ Contrainte Twig : un {% block %} NE PEUT PAS être imbriqué dans un {% if %}.
+ # Il faut mettre le if/else à l'intérieur du bloc, pas l'inverse.
+ # Twig auto-escape les valeurs dans les attributs HTML → pas besoin de |e.
+ #}
+{% block meta_description %}{{ article.excerpt|default('BazaArt, la plateforme des artistes de la diaspora afro-atlantique : opportunités, communauté et formation.') }}{% endblock %}
+
+{#
+ # meta_extra : balises spécifiques à la fiche article.
+ #
+ # canonical : indique à Google l'URL de référence pour cet article.
+ # Évite le duplicate content si l'article est accessible via plusieurs chemins.
+ # url() (vs path()) génère une URL absolue, requise pour canonical et OG.
+ #
+ # Open Graph (og:*) : métadonnées lues par Facebook, LinkedIn, WhatsApp, Slack…
+ # quand un utilisateur partage le lien. Sans ces balises, le réseau social
+ # choisit lui-même titre/image → résultat souvent médiocre.
+ #
+ # Twitter Card : métadonnées pour X (ex-Twitter). summary_large_image affiche
+ # une grande miniature sous le titre — plus accrocheur qu'un simple résumé.
+ # Même si X lit aussi les balises og:*, avoir twitter:* garantit la compatibilité.
+ #
+ # og:image / twitter:image : on n'injecte l'image que si coverImagePath est
+ # défini, pour éviter une URL cassée (image absente = mauvais aperçu).
+ # absolute_url() préfixe le chemin relatif de l'asset avec le domaine courant.
+ #}
+{% block meta_extra %}
+    {# URL canonique absolue de cet article #}
+    {% set articleUrl = url('app_article_show', {slug: article.slug}) %}
+
+    <link rel="canonical" href="{{ articleUrl }}">
+
+    {# ── Open Graph ────────────────────────────────────────────────────────── #}
+    <meta property="og:type"        content="article">
+    <meta property="og:title"       content="{{ article.title }}">
+    <meta property="og:url"         content="{{ articleUrl }}">
+    {% if article.excerpt %}
+        <meta property="og:description" content="{{ article.excerpt }}">
+    {% endif %}
+    {% if article.coverImagePath %}
+        {#
+         # absolute_url() + asset() = URL complète de l'image (ex: https://bazaart.fr/uploads/…).
+         # Les réseaux sociaux requièrent une URL absolue pour récupérer l'image.
+        #}
+        <meta property="og:image" content="{{ absolute_url(asset(article.coverImagePath)) }}">
+    {% endif %}
+    <meta property="og:site_name"   content="BazaArt">
+    <meta property="og:locale"      content="fr_FR">
+
+    {# ── Twitter Card ─────────────────────────────────────────────────────── #}
+    {# summary_large_image : grande image + titre + description sous le tweet. #}
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:title"       content="{{ article.title }}">
+    {% if article.excerpt %}
+        <meta name="twitter:description" content="{{ article.excerpt }}">
+    {% endif %}
+    {% if article.coverImagePath %}
+        <meta name="twitter:image"   content="{{ absolute_url(asset(article.coverImagePath)) }}">
+    {% endif %}
+{% endblock %}
+
 {% block page_title %}Articles{% endblock %}
 
 {% block stylesheets %}

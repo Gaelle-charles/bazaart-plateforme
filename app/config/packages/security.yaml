@@ -105,6 +105,13 @@ security:
         - { path: ^/structure/register, roles: ROLE_USER }
         # Administration : ROLE_ADMIN seulement
         - { path: ^/admin, roles: ROLE_ADMIN }
+        # ── Blog — PUBLIC pour l'indexation SEO ──────────────────────────────
+        # /articles (liste) et /articles/{slug} (fiche) sont accessibles sans
+        # connexion afin que Google puisse les indexer.
+        # La sécurité des routes de gestion (new, edit, delete, my) est portée
+        # par #[IsGranted('ROLE_ADMIN')] au niveau méthode dans ArticleController
+        # → défense en profondeur, indépendante de cette règle firewall.
+        - { path: ^/articles, roles: PUBLIC_ACCESS }
         # Tout le reste : authentification requise
         - { path: ^/, roles: ROLE_USER }
 

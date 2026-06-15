@@ -15,8 +15,17 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Controller des articles longs (blog/magazine).
+ *
+ * ACCÈS PUBLIC (SEO) :
+ *   - index() et show() sont publics — accessibles sans connexion.
+ *   - Google peut donc indexer /articles et /articles/{slug}.
+ *   - Seuls les articles PUBLIÉS sont visibles par le public.
+ *   - Les brouillons restent invisibles pour les visiteurs anonymes (→ 404).
+ *
+ * ACCÈS RESTREINT (ROLE_ADMIN) :
+ *   - new, edit, delete, my portent chacun #[IsGranted('ROLE_ADMIN')] au niveau
+ *     méthode → défense en profondeur même si access_control ouvre /articles/*.
  */
-#[IsGranted('ROLE_USER')]
 #[Route('/articles', name: 'app_article_')]
 class ArticleController extends AbstractController
 {
@@ -49,21 +58,38 @@ class ArticleController extends AbstractController
         $article = $this->articleRepository->findPublishedBySlug($slug);
 
         if ($article === null) {
-            // Peut-être que l'article existe mais est en brouillon ?
+            // L'article n'est pas publié — on vérifie s'il existe en brouillon.
             $draft = $this->articleRepository->findOneBy(['slug' => $slug]);
+
             if ($draft !== null) {
-                /** @var User $user */
-                $user = $this->getUser();
-                // Un brouillon n'est visible que par son auteur ou un admin
-                if ($draft->getAuthor() !== $user && !$this->isGranted('ROLE_ADMIN')) {
-                    throw $this->createAccessDeniedException('Cet article n\'est pas encore publié.');
+                // getUser() retourne null pour un visiteur anonyme et un objet User
+                // pour un utilisateur connecté. On n'utilise PAS @var User ici car
+                // la valeur peut légitimement être null depuis que la page est publique.
+                $currentUser = $this->getUser();
+
+                // Un visiteur anonyme (null) ne peut jamais voir un brouillon → 404.
+                // On retourne 404 et NON 403 pour ne pas révéler l'existence du brouillon.
+                if ($currentUser === null) {
+                    throw $this->createNotFoundException('Article introuvable.');
                 }
-                // L'auteur peut prévisualiser son brouillon
+
+                // Un utilisateur connecté : seul l'auteur ou un admin peut prévisualiser.
+                // On compare par IDENTIFIANT UNIQUE (getUserIdentifier = email) plutôt que
+                // par identité d'objet : $currentUser vient du token de sécurité (typé
+                // UserInterface), $draft->getAuthor() d'un proxy Doctrine ; ce ne sont pas
+                // forcément la même instance PHP. La comparaison d'identifiants scalaires
+                // est fiable quel que soit le cycle de vie des objets.
+                if ($draft->getAuthor()->getUserIdentifier() !== $currentUser->getUserIdentifier() && !$this->isGranted('ROLE_ADMIN')) {
+                    throw $this->createNotFoundException('Article introuvable.');
+                }
+
+                // L'auteur ou l'admin peut prévisualiser le brouillon avant publication.
                 return $this->render('article/show.html.twig', [
                     'article'   => $draft,
                     'isPreview' => true,
                 ]);
             }
+
             throw $this->createNotFoundException('Article introuvable.');
         }
 
@@ -77,10 +103,11 @@ class ArticleController extends AbstractController
      * Formulaire de création d'un nouvel article.
      *
      * Décision produit V1 : la publication d'articles est réservée aux admins.
-     * Les artistes et utilisateurs standard peuvent LIRE (index, show) mais
-     * ne peuvent pas CRÉER, MODIFIER ni SUPPRIMER d'articles.
-     * #[IsGranted('ROLE_ADMIN')] au niveau méthode complète la restriction de classe
-     * (qui laisse ROLE_USER accéder à index et show).
+     * La lecture (index, show) est PUBLIQUE (blog indexable pour le SEO).
+     * #[IsGranted('ROLE_ADMIN')] ci-dessous est la SEULE barrière de cette méthode :
+     * depuis que la classe n'a plus de #[IsGranted] global et que /articles est
+     * PUBLIC_ACCESS au niveau firewall, cet attribut doit IMPÉRATIVEMENT figurer
+     * sur new(), edit(), delete() et my(), sinon n'importe qui pourrait y accéder.
      */
     #[IsGranted('ROLE_ADMIN')]
     #[Route('/new', name: 'new', methods: ['GET', 'POST'])]

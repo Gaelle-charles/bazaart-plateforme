@@ -5,6 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}BazaArt{% endblock %}</title>
 
+    {#
+        ── Balises META SEO ──────────────────────────────────────────────────
+        Ces blocs sont surchargeables par chaque template enfant.
+
+        meta_description : description courte de la page (160 car. max recommandés).
+        Valeur par défaut : accroche générique Bazaart. Les pages clés (article,
+        ressource…) surchargent ce bloc avec leur propre description.
+
+        meta_extra : point d'extension pour tout ce qui est spécifique à une page :
+        - balise canonical (évite le duplicate content)
+        - Open Graph (partage sur les réseaux sociaux : og:title, og:image…)
+        - Twitter Card (miniature lors d'un partage sur X/Twitter)
+        Les pages qui n'ont rien de spécial laissent ce bloc vide.
+    #}
+    <meta name="description" content="{% block meta_description %}BazaArt, la plateforme des artistes de la diaspora afro-atlantique : opportunités, communauté et formation.{% endblock %}">
+    {% block meta_extra %}{% endblock %}
+
     {# Favicon Bazaart (PNG 512x512 — affiché dans l'onglet du navigateur et les favoris).
        Placé dans public/images/ (asset statique servi par Nginx), pas dans uploads/
        qui est un volume Docker runtime en production. #}
