@@ -202,6 +202,26 @@ class ForumController extends AbstractController
                 return $this->redirectToRoute('app_forum_new_thread', ['categorySlug' => $categorySlug]);
             }
 
+            // ── Résolution de la catégorie choisie dans le select ────────────
+            // Le template new_thread.html.twig affiche un <select name="categoryId">
+            // si plusieurs catégories existent. L'utilisateur peut avoir changé
+            // de catégorie par rapport à celle de l'URL ({categorySlug}).
+            // On résout ici la catégorie réelle à partir du champ du formulaire.
+            $categoryIdFromForm = $request->request->get('categoryId');
+            if ($categoryIdFromForm !== null && (int) $categoryIdFromForm !== $category->getId()) {
+                // L'utilisateur a sélectionné une catégorie différente de celle de l'URL.
+                // On cherche la catégorie correspondante en base.
+                $newCategory = $this->categoryRepository->find((int) $categoryIdFromForm);
+                if ($newCategory !== null && $newCategory->isActive()) {
+                    // On substitue silencieusement la catégorie — pas de redirection HTTP,
+                    // car le contenu du formulaire serait perdu. On utilise directement
+                    // la nouvelle catégorie pour la création du thread.
+                    $category = $newCategory;
+                }
+                // Si la catégorie soumise est introuvable ou inactive, on garde
+                // la catégorie de l'URL sans lever d'erreur (dégradation gracieuse).
+            }
+
             // ── Récupération de l'utilisateur connecté ────────────────────────
             /** @var User $user */
             $user = $this->getUser();
@@ -210,12 +230,16 @@ class ForumController extends AbstractController
             $result = $this->forumService->createThread($user, $category, $request->request->all());
 
             if (is_string($result)) {
-                // Le service a retourné un message d'erreur (string = erreur)
+                // Le service a retourné un message d'erreur (string = erreur).
+                // On réaffiche le formulaire avec les données saisies pour éviter
+                // à l'utilisateur de tout retaper.
                 $this->addFlash('error', $result);
                 return $this->render('forum/new_thread.html.twig', [
-                    'category' => $category,
+                    'category'      => $category,
+                    // toutes les catégories actives pour le select de catégorie
+                    'allCategories' => $this->categoryRepository->findAllActive(),
                     // On repasse les données pour pré-remplir le formulaire
-                    'formData' => $request->request->all(),
+                    'formData'      => $request->request->all(),
                 ]);
             }
 
@@ -227,10 +251,14 @@ class ForumController extends AbstractController
             ]);
         }
 
-        // Affichage du formulaire vide (méthode GET)
+        // Affichage du formulaire vide (méthode GET).
+        // On passe allCategories pour que le template puisse afficher le select
+        // permettant à l'utilisateur de choisir une catégorie différente de celle
+        // présente dans l'URL (pratique quand on arrive depuis le compositeur).
         return $this->render('forum/new_thread.html.twig', [
-            'category' => $category,
-            'formData' => [],
+            'category'      => $category,
+            'allCategories' => $this->categoryRepository->findAllActive(),
+            'formData'      => [],
         ]);
     }
 

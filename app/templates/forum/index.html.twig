@@ -472,6 +472,38 @@
     }
 
     /* ══════════════════════════════════════════════════════════════
+       COMPOSITEUR — FORMULAIRE INLINE
+       Le compositeur "écrire un post" est désormais un mini-formulaire
+       qui redirige vers /forum/{slug}/nouveau selon la catégorie choisie.
+       display:contents sur .fi-composer__form permet d'hériter du flex
+       parent .fi-composer sans créer de boite supplémentaire.
+    ══════════════════════════════════════════════════════════════ */
+
+    /* Formulaire inline : transparent pour le layout flex parent */
+    .fi-composer__form {
+        display: contents;
+    }
+
+    /* Select de catégorie dans le compositeur */
+    .fi-composer__select {
+        padding: 6px 10px;
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+    }
+
+    /* Bouton "Écrire" dans le compositeur */
+    .fi-composer__submit {
+        /* hérite des styles .btn .btn-ghost .btn-sm définis globalement */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
        RESPONSIVE
        Passage en colonne unique sous 900px, 2 colonnes entre 640-900px.
     ══════════════════════════════════════════════════════════════ */
@@ -532,7 +564,7 @@
         #}
         <div class="fi-eyebrow">
             <span aria-hidden="true">&#9632;</span>
-            FORUM + LIVES
+            FORUM COMMUNAUTAIRE
         </div>
 
         {# Titre principal — Archivo Black, très grand, uppercase via CSS #}
@@ -557,13 +589,9 @@
         {% endif %}
 
         {#
-            Bouton "Programmer un live" : lien vers la page de planification des lives.
-            Rendu en ghost button (contour encre) pour hiérarchiser visuellement.
-            En V1, redirige vers une page à créer — href="#" si non encore implémentée.
+            NOTE V1 : le bouton "Programmer un live" a été retiré.
+            La fonctionnalité Lives est reportée en V2 (cf. CDC V3 section 4).
         #}
-        <a href="#" class="btn btn-ghost btn-sm">
-            Programmer un live
-        </a>
 
     </div>
 
@@ -585,12 +613,10 @@
     <button class="fi-tab" role="tab" data-tab="questions" aria-selected="false">
         Questions
     </button>
-    <button class="fi-tab" role="tab" data-tab="lives-en-cours" aria-selected="false">
-        Lives en cours
-    </button>
-    <button class="fi-tab" role="tab" data-tab="lives-programmes" aria-selected="false">
-        Lives programmes
-    </button>
+    {#
+        NOTE V1 : les onglets "Lives en cours" et "Lives programmes" ont été retirés.
+        La fonctionnalité Lives est reportée en V2 (cf. CDC V3 section 4).
+    #}
     <button class="fi-tab" role="tab" data-tab="discussions" aria-selected="false">
         Discussions
     </button>
@@ -650,16 +676,27 @@
     ════════════════════════════════════════════════════════════════════════ #}
     <div class="fi-col-feed">
 
-        {# Zone compositeur — invite à créer un post #}
+        {# ── Zone compositeur ─────────────────────────────────────────────────
+           Mini-formulaire GET qui redirige vers /forum/{slug}/nouveau selon
+           la catégorie sélectionnée dans le <select>.
+
+           Pourquoi un formulaire GET et pas un simple lien ?
+           En V1, la route new_thread requiert un {categorySlug} dans l'URL.
+           Avec un lien simple, on ne pouvait pointer que vers la première
+           catégorie en dur. Le formulaire + JS permet de construire l'URL
+           dynamiquement selon le choix de l'utilisateur.
+
+           NOTE : le bouton "Live" a été retiré (fonctionnalité V2,
+           cf. CDC V3 section 4).
+        #}
         <div class="fi-composer">
 
-            {# Avatar : initiales de l'utilisateur connecté, ou "?" si inconnu #}
+            {# Avatar : initiale de l'email de l'utilisateur connecté, ou "?" #}
             <div class="fi-composer__avatar" aria-hidden="true">
                 {% if app.user %}
                     {#
-                        On extrait la première lettre de l'email (partie avant @).
-                        split('@')|first donne la partie locale de l'email,
-                        puis |slice(0,1)|upper donne la première lettre en majuscule.
+                        Extrait la première lettre de la partie locale de l'email.
+                        Exemple : "gaelle@bazaart.fr" → "G"
                     #}
                     {{ app.user.email|split('@')|first|slice(0,1)|upper }}
                 {% else %}
@@ -667,31 +704,97 @@
                 {% endif %}
             </div>
 
-            {# Texte d'invitation à poster #}
-            <span class="fi-composer__placeholder">
-                Une question, un appel, un partage...
-            </span>
+            {% if categories is not empty %}
 
-            {# Boutons d'action rapide du compositeur #}
-            <div class="fi-composer__actions">
-                {% if categories is not empty %}
-                    {% set firstCategory = categories|first %}
-                    <a href="{{ path('app_forum_new_thread', { categorySlug: firstCategory.slug }) }}"
-                       class="btn btn-ghost btn-sm">
-                        Post
-                    </a>
-                {% else %}
-                    {# Si aucune catégorie n'existe, on affiche le bouton désactivé #}
-                    <button class="btn btn-ghost btn-sm" disabled title="Aucune categorie disponible">
-                        Post
+                {#
+                    Formulaire GET sans vraie "action" statique car l'URL dépend
+                    du slug de la catégorie choisie.
+                    Le JS ci-dessous intercepte le submit et construit l'URL
+                    /forum/{slug}/nouveau avant de rediriger.
+                    id="composer-form" est ciblé par le script.
+                #}
+                <form class="fi-composer__form"
+                      method="get"
+                      action="#"
+                      id="composer-form">
+
+                    {#
+                        Placeholder cliquable : au clic, il focus le <select>
+                        pour guider l'utilisateur vers le choix de catégorie.
+                        aria-hidden=true car la valeur lisible est déjà dans le <select>.
+                    #}
+                    <button type="button"
+                            class="fi-composer__placeholder"
+                            style="background:none;border:none;text-align:left;padding:0;cursor:pointer;"
+                            onclick="document.getElementById('composer-cat').focus()"
+                            aria-hidden="true">
+                        Une question, un appel, un partage...
                     </button>
-                {% endif %}
 
-                {# Bouton live — fonctionnalité V2, désactivé en V1 #}
-                <a href="#" class="btn btn-ghost btn-sm">
-                    Live
-                </a>
-            </div>
+                    {# Groupe d'actions : select catégorie + bouton soumettre #}
+                    <div class="fi-composer__actions">
+
+                        {#
+                            Select des catégories actives.
+                            La valeur est le slug de la catégorie (pas l'id) car
+                            le JS en a besoin pour construire l'URL directement.
+                            id="composer-cat" est ciblé par le script.
+                        #}
+                        <select id="composer-cat"
+                                class="fi-composer__select"
+                                aria-label="Choisir une catégorie pour votre post">
+                            {% for cat in categories %}
+                                <option value="{{ cat.slug }}">
+                                    {% if cat.icon %}{{ cat.icon }} {% endif %}{{ cat.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+
+                        <button type="submit" class="btn btn-ghost btn-sm">
+                            Écrire
+                        </button>
+
+                    </div>
+
+                </form>
+
+                {#
+                    JS vanilla : au submit du formulaire compositeur, on lit la valeur
+                    du select (slug de la catégorie) et on redirige vers
+                    /forum/{slug}/nouveau via window.location.
+                    Cela évite une route intermédiaire côté Symfony juste pour faire
+                    la redirection.
+                    Note : on construit le chemin de base en Twig (path('app_forum_index'))
+                    pour que la génération d'URL reste cohérente même si le préfixe
+                    de route change.
+                #}
+                <script>
+                (function () {
+                    'use strict';
+                    var form = document.getElementById('composer-form');
+                    if (!form) { return; }
+
+                    form.addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        // Récupère le slug de la catégorie sélectionnée
+                        var slug = document.getElementById('composer-cat').value;
+                        // Chemin de base du forum (ex : "/forum") généré par Symfony
+                        // On retire le slash final s'il y en a un pour éviter les doubles //
+                        var base = '{{ path('app_forum_index') }}'.replace(/\/$/, '');
+                        // Redirige vers /forum/{slug}/nouveau
+                        window.location.href = base + '/' + slug + '/nouveau';
+                    });
+                }());
+                </script>
+
+            {% else %}
+
+                {# Aucune catégorie configurée par l'admin : placeholder désactivé #}
+                <span class="fi-composer__placeholder" style="opacity:.5">
+                    Aucune categorie disponible pour l'instant.
+                </span>
+
+            {% endif %}
 
         </div>{# fin fi-composer #}
 
@@ -870,39 +973,10 @@
 
         </div>{# fin fi-sidebar-block hot #}
 
-        {# ── 3. Lives à venir ── #}
-        <div class="fi-sidebar-block">
-            <div class="fi-sidebar-block__header">LIVES A VENIR</div>
-
-            {#
-                `upcomingLives` est optionnel : le controller forum/index ne
-                l'envoie pas encore (fonctionnalité Lives = V1 tardive).
-                On vérifie `is defined` avant d'y accéder pour éviter une
-                erreur Twig "variable does not exist".
-                Quand le controller enverra la variable, le bloc s'affichera
-                automatiquement sans modifier ce template.
-            #}
-            {% if upcomingLives is defined and upcomingLives|length > 0 %}
-                {% for live in upcomingLives %}
-                    {#
-                        En V1 les lives sont des liens externes (Twitch, YouTube, etc.).
-                        L'entité Live aura a minima : title, scheduledAt, externalUrl.
-                        Ces propriétés sont gardées en commentaire pour la future intégration.
-                    #}
-                    <div class="fi-hot-item">
-                        <div class="fi-hot-item__title">{{ live.title ?? 'Live a venir' }}</div>
-                        <div class="fi-hot-item__meta">
-                            {{ live.scheduledAt is defined ? live.scheduledAt|date('d M Y H:i') : '' }}
-                        </div>
-                    </div>
-                {% endfor %}
-            {% else %}
-                <div class="fi-sidebar-empty">
-                    Aucun live programme pour l'instant.
-                </div>
-            {% endif %}
-
-        </div>{# fin fi-sidebar-block lives #}
+        {#
+            NOTE V1 : le bloc "LIVES A VENIR" a été retiré de la sidebar.
+            La fonctionnalité Lives est reportée en V2 (cf. CDC V3 section 4).
+        #}
 
     </div>{# fin fi-col-sidebar #}
 

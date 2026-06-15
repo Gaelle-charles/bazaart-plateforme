@@ -377,11 +377,13 @@
                 </div>
 
                 {# ── Catégorie (si select présent dans le formulaire) ─────────
-                   Le controller peut passer un select de catégorie via la variable
-                   "categories" pour permettre à l'utilisateur de changer de catégorie
-                   sans revenir en arrière. On affiche ce select si la variable existe.
+                   Le controller passe allCategories (toutes les catégories actives)
+                   pour permettre à l'utilisateur de changer de catégorie sans revenir
+                   en arrière. On affiche ce select si plus d'une catégorie existe.
+                   La variable s'appelle "allCategories" (transmise par newThread())
+                   pour la distinguer clairement de la catégorie courante "category".
                 #}
-                {% if categories is defined and categories|length > 1 %}
+                {% if allCategories is defined and allCategories|length > 1 %}
                     <div class="fn-field">
                         <label for="thread-category" class="fn-label">
                             Catégorie
@@ -392,7 +394,7 @@
                                 class="fn-input fn-select"
                                 required
                                 aria-required="true">
-                            {% for cat in categories %}
+                            {% for cat in allCategories %}
                                 {#
                                     Présélectionne la catégorie courante (passée par l'URL).
                                     category.id correspond à la catégorie ouverte avant
