@@ -679,6 +679,14 @@
                 <span class="dot" aria-hidden="true"></span>Blog
             </a>
 
+            {# 5. Tarifs — abonnements et formations #}
+            <a href="{{ path('app_pricing') }}"
+               class="nav-tab"
+               data-active="{{ (currentRoute starts with 'app_pricing' or currentRoute starts with 'app_subscribe' or currentRoute starts with 'app_subscription') ? 'true' : 'false' }}"
+               {% if currentRoute starts with 'app_pricing' or currentRoute starts with 'app_subscribe' or currentRoute starts with 'app_subscription' %}aria-current="page"{% endif %}>
+                <span class="dot" aria-hidden="true"></span>Tarifs
+            </a>
+
         </nav>
 
         {# ── Côté droit — conditionnel selon l'état de connexion ──────────── #}
@@ -756,6 +764,7 @@
     <a href="{{ path('app_resource_index') }}" class="nav-mobile-item">Opportunités</a>
     <a href="{{ path('app_forum_index') }}" class="nav-mobile-item">Forum</a>
     <a href="{{ path('app_article_index') }}" class="nav-mobile-item">Blog</a>
+    <a href="{{ path('app_pricing') }}" class="nav-mobile-item">Tarifs</a>
 
     <div class="nav-mobile-sep"></div>
 
