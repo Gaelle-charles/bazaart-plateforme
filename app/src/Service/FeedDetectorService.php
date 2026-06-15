@@ -19,7 +19,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  *    - Faire un GET HTTP (timeout 8s, User-Agent Chrome pour éviter les blocages)
  *    - Si le Content-Type contient "rss", "atom" ou "xml" → flux RSS trouvé directement
  *    - Sinon inspecter les 2 000 premiers caractères du body :
- *        si <rss, <feed ou <channel> est présent → flux RSS trouvé directement
+ *        si <rss ou <feed est présent → flux RSS trouvé directement
  *    - Si HTTP 200 sans marqueur RSS → noter que l'URL principale répond (HTML probable)
  *
  *  Étape 2 : Si pas de RSS sur l'URL principale, tester les suffixes courants
@@ -56,7 +56,7 @@ class FeedDetectorService
     /**
      * Nombre de caractères du body analysés pour détecter les marqueurs RSS.
      *
-     * 2 000 caractères suffisent largement pour trouver <rss, <feed ou <channel>
+     * 2 000 caractères suffisent largement pour trouver <rss ou <feed
      * qui apparaissent toujours dans les premières lignes d'un flux valide.
      * Évite de charger le body entier (certains flux font plusieurs Mo).
      */
@@ -107,6 +107,20 @@ class FeedDetectorService
      */
     public function detect(string $url): array
     {
+        // ── Défense en profondeur : whitelist schémas (cohérent avec le controller) ─
+        // Le controller valide déjà le schéma avant d'appeler ce service.
+        // Cette vérification ici protège les appels directs au service (commandes,
+        // tests, usage futur) qui passeraient en dehors du controller.
+        // On bloque file://, ftp://, data:// etc. qui pourraient provoquer un SSRF.
+        $parsed = parse_url($url);
+        if (!in_array($parsed['scheme'] ?? '', ['http', 'https'], true)) {
+            return [
+                'type'     => 'html_llm',
+                'feed_url' => null,
+                'message'  => 'URL non supportée (seuls http:// et https:// sont autorisés).',
+            ];
+        }
+
         // ── Étape 1 : tester l'URL principale ─────────────────────────────────
         // On commence par tester l'URL telle que soumise par l'admin.
         // Si c'est déjà un flux RSS, c'est le chemin le plus rapide.
@@ -205,9 +219,14 @@ class FeedDetectorService
             return null;
         }
 
-        // Reconstruction : "https" + "://" + "cnm.fr" = "https://cnm.fr"
-        // Pas de port car les sites culturels utilisent quasi-exclusivement 80/443
-        return $scheme . '://' . $host;
+        // Le port doit être inclus s'il est non-standard (ex: :8080).
+        // Sans lui, les variantes /feed/ seraient testées sur le port par défaut (80/443)
+        // et manqueraient la cible sur les serveurs non-standard.
+        // parse_url() retourne null si le port est absent → on produit alors une chaîne vide.
+        $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+
+        // Reconstruction : "https" + "://" + "exemple.fr" + ":8080" (si non-standard)
+        return $scheme . '://' . $host . $port;
     }
 
     /**
@@ -226,9 +245,8 @@ class FeedDetectorService
      *       → toute valeur contenant "rss", "atom" ou "xml" est considérée comme RSS
      *  2. Si le Content-Type ne suffit pas (beaucoup de sites servent les flux
      *     en "text/html" ou "text/plain"), inspecter les premiers caractères du body :
-     *     - <rss   → balise ouvrante RSS 2.0
-     *     - <feed  → balise ouvrante Atom 1.0
-     *     - <channel> → balise RSS 2.0 (parfois sans la balise <rss> parente visible)
+     *     - <rss  → balise ouvrante RSS 2.0
+     *     - <feed → balise ouvrante Atom 1.0 (RFC 4287)
      *
      * ── GESTION DES ERREURS ──────────────────────────────────────────────────
      * Toute exception réseau → retourne is_rss = false, responded = false.
@@ -307,11 +325,16 @@ class FeedDetectorService
 
             // Marqueurs RSS/Atom en début de document (insensible à la casse)
             // On utilise mb_strtolower() pour une comparaison robuste.
+            // '<rss'  → balise ouvrante RSS 2.0
+            // '<feed' → balise ouvrante Atom 1.0 (RFC 4287)
+            // Note : '<channel>' retiré — il n'apparaît jamais sans '<rss>' dans un flux
+            // RSS 2.0 valide, donc il est redondant. De plus, utilisé seul il générait
+            // des faux positifs sur des pages HTML contenant ce terme (PHPStan l'avait détecté
+            // comme tautologie logique dans la combinaison avec '&&').
             $bodyLower = mb_strtolower($bodyChunk);
             if (
                 str_contains($bodyLower, '<rss')
                 || str_contains($bodyLower, '<feed')
-                || str_contains($bodyLower, '<channel>')
             ) {
                 return ['is_rss' => true, 'responded' => true];
             }

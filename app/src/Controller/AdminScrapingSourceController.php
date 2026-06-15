@@ -231,6 +231,19 @@ class AdminScrapingSourceController extends AbstractController
             );
         }
 
+        // ── Whitelist des schémas autorisés (sécurité SSRF) ──────────────────────
+        // filter_var(FILTER_VALIDATE_URL) accepte file://, ftp://, data://, etc.
+        // Ces schémas permettraient potentiellement au serveur de lire des fichiers
+        // locaux ou d'accéder à des services internes (SSRF).
+        // On restreint explicitement à http:// et https://.
+        $parsed = parse_url($url);
+        if (!in_array($parsed['scheme'] ?? '', ['http', 'https'], true)) {
+            return new JsonResponse(
+                ['error' => 'Seuls les schémas http:// et https:// sont autorisés.'],
+                Response::HTTP_BAD_REQUEST
+            );
+        }
+
         // ── Délégation au service de détection ────────────────────────────────
         // FeedDetectorService::detect() encapsule toute la logique HTTP + heuristique.
         // Il ne lève jamais d'exception — retourne toujours un tableau valide.
