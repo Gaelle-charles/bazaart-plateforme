@@ -27,6 +27,17 @@
 <style>
 
     /* ══════════════════════════════════════════════════════════════
+       RESET CRITIQUE — attribut HTML `hidden`
+       Sans cette règle, `.fi-composer__form-area { display: flex }`
+       écrase l'attribut `hidden` (priorité CSS > user-agent stylesheet).
+       Résultat sans fix : le formulaire et les boutons "open-only"
+       sont toujours visibles, le JS de toggle ne peut pas les cacher.
+       `!important` ici est intentionnel et justifié : c'est un reset
+       de comportement natif HTML, pas un raccourci.
+    ══════════════════════════════════════════════════════════════ */
+    [hidden] { display: none !important; }
+
+    /* ══════════════════════════════════════════════════════════════
        RESET ET BASE
        Appliqués à tous les éléments du module .fi-*
     ══════════════════════════════════════════════════════════════ */
