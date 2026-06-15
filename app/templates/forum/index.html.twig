@@ -699,25 +699,18 @@
         <div class="fi-thread-list" role="list">
 
             {#
-                Flatten des threads : on construit un tableau `allThreads` en
-                parcourant toutes les catégories et en accumulant leurs threads
-                via le filtre `merge`.
+                `threads` est passé par ForumController::index() — liste plate des 20
+                threads les plus récents, toutes catégories confondues, triés par
+                updatedAt DESC (activité récente en tête).
 
-                Pourquoi `merge` et non `namespace` ?
-                Twig n'a pas de `namespace` (c'est Jinja2/Python). Les variables
-                `{% set %}` dans une boucle sont limitées à la portée du bloc.
-                Le filtre `merge` crée un nouveau tableau à chaque itération —
-                cette approche est idiomatique en Twig Symfony.
+                On l'utilise directement sans reconstruire via `merge` catégorie par
+                catégorie. Le tri est désormais garanti par la BDD (ORDER BY updatedAt DESC),
+                non plus par l'ordre de parcours des catégories dans la boucle PHP.
 
-                `allThreads` est ensuite itéré une seule fois pour le rendu.
+                Rétro-compatibilité : si `threads` n'est pas défini (appel legacy ou
+                test unitaire sans le controller), on repasse sur un tableau vide.
             #}
-            {% set allThreads = [] %}
-            {% for cat in categories %}
-                {% set catThreads = latestThreadsByCategory[cat.id] ?? [] %}
-                {% if catThreads is not empty %}
-                    {% set allThreads = allThreads|merge(catThreads) %}
-                {% endif %}
-            {% endfor %}
+            {% set allThreads = threads is defined ? threads : [] %}
 
             {% if allThreads is empty %}
 

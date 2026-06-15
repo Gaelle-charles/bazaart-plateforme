@@ -46,10 +46,15 @@ class ForumController extends AbstractController
     // ─── Page d'accueil du forum ──────────────────────────────────────────────
 
     /**
-     * Affiche la liste de toutes les catégories actives du forum.
+     * Affiche la liste de toutes les catégories actives du forum
+     * ainsi que le feed des threads récents (toutes catégories confondues).
      *
-     * Pour chaque catégorie, on charge également les 3 derniers threads
-     * pour donner un aperçu de l'activité récente sans afficher tous les threads.
+     * Avant : on chargeait 3 threads par catégorie dans une boucle PHP,
+     * puis le template aplatissait tout via `merge` — tri par catégorie,
+     * pas chronologique global.
+     *
+     * Maintenant : on délègue le tri à la BDD via findRecent(20).
+     * Le template reçoit `threads` directement — plus besoin de `merge`.
      *
      * Route : GET /forum
      */
@@ -57,18 +62,18 @@ class ForumController extends AbstractController
     public function index(): Response
     {
         // Charge toutes les catégories actives, triées par orderPosition
+        // (utilisé pour la colonne gauche et le bouton "Nouveau post")
         $categories = $this->categoryRepository->findAllActive();
 
-        // Pour chaque catégorie, on récupère les derniers threads (aperçu)
-        // On construit un tableau associatif : [categoryId => [threads...]]
-        $latestThreadsByCategory = [];
-        foreach ($categories as $category) {
-            $latestThreadsByCategory[$category->getId()] = $this->threadRepository->findLatestByCategory($category, 3);
-        }
+        // Charge les 20 threads les plus récents, toutes catégories confondues,
+        // triés par updatedAt DESC (activité récente en tête du feed).
+        // findRecent() fait un FETCH JOIN sur category et author → pas de N+1.
+        $threads = $this->threadRepository->findRecent(20);
 
         return $this->render('forum/index.html.twig', [
-            'categories'              => $categories,
-            'latestThreadsByCategory' => $latestThreadsByCategory,
+            'categories' => $categories,
+            // Variable plate, triée côté BDD — le template l'utilise directement
+            'threads'    => $threads,
         ]);
     }
 

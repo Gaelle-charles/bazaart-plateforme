@@ -118,6 +118,47 @@ class ForumThreadRepository extends ServiceEntityRepository
     }
 
     /**
+     * Retourne les N threads les plus récents, toutes catégories confondues.
+     *
+     * Tri appliqué : updatedAt DESC — le thread avec la dernière activité
+     * (nouveau post ou mise à jour) remonte en tête du feed.
+     *
+     * Pourquoi updatedAt et non lastReplyAt ?
+     *   - updatedAt est toujours renseigné (jamais NULL), contrairement à lastReplyAt
+     *     qui est NULL tant qu'il n'y a pas de réponse.
+     *   - Utiliser updatedAt évite de reproduire le bug NULLS FIRST documenté
+     *     dans findByCategory() et findLatestByCategory().
+     *   - Un thread édité sans réponse remonte aussi, ce qui est souhaité ici.
+     *
+     * Jointures JOIN (pas LEFT JOIN) :
+     *   On utilise INNER JOIN sur category et author car ces relations sont
+     *   obligatoires (NOT NULL en base). Le JOIN est plus performant que
+     *   LEFT JOIN et évite de charger des threads orphelins.
+     *   Doctrine charge les entités jointes en même temps (FETCH JOIN via addSelect)
+     *   ce qui évite les requêtes N+1 lors du rendu Twig :
+     *     - thread.category.slug → pas de requête supplémentaire
+     *     - thread.author.email  → pas de requête supplémentaire
+     *
+     * Utilisé par ForumController::index() — variable `threads` dans le template.
+     *
+     * @return ForumThread[]
+     */
+    public function findRecent(int $limit = 20): array
+    {
+        return $this->createQueryBuilder('t')
+            // FETCH JOIN : charge category et author en une seule requête SQL
+            ->addSelect('c', 'u')
+            ->join('t.category', 'c')
+            ->join('t.author', 'u')
+            // Tri unique : activité la plus récente en tête (updatedAt jamais NULL)
+            ->orderBy('t.updatedAt', 'DESC')
+            // Limite le nombre de résultats pour le feed de la page d'accueil
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Retourne les N derniers threads d'une catégorie (pour les aperçus sur la page d'accueil).
      *
      * Utilisé dans ForumController::index() pour afficher un aperçu de chaque catégorie
