@@ -77,6 +77,81 @@ class ForumController extends AbstractController
         ]);
     }
 
+    // ─── Création rapide d'un thread depuis l'index du forum ──────────────────────
+
+    /**
+     * Crée un nouveau thread directement depuis le compositeur inline de l'index forum.
+     *
+     * Cette route est distincte de newThread() : elle n'a pas de {categorySlug}
+     * dans l'URL. La catégorie est transmise via le champ POST `categoryId`.
+     * Cela évite au JS d'avoir à construire l'URL dynamiquement selon la catégorie
+     * choisie — le serveur résout la catégorie depuis l'ID envoyé en POST body.
+     *
+     * En cas d'erreur de validation : on revient sur l'index avec un flash error.
+     * En cas de succès : on redirige vers le thread fraîchement créé.
+     *
+     * Route : POST /forum/nouveau
+     * Placée AVANT /{categorySlug} pour que la résolution de route Symfony
+     * priorise la route statique "/nouveau" avant la route paramétrique.
+     */
+    #[Route('/nouveau', name: 'quick_post', methods: ['POST'])]
+    public function quickPost(Request $request): Response
+    {
+        // ── Validation CSRF ───────────────────────────────────────────────────
+        // Même token que newThread() (forum_new_thread) : les deux créent un
+        // ForumThread, il est cohérent de partager l'intention du token.
+        if (!$this->isCsrfTokenValid('forum_new_thread', $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+            return $this->redirectToRoute('app_forum_index');
+        }
+
+        /** @var User $user */
+        $user = $this->getUser();
+
+        // ── Résolution de la catégorie depuis le POST body ────────────────────
+        // Le formulaire inline envoie un <select name="categoryId"> dont la
+        // valeur est l'ID de la catégorie (entier). L'ID est plus stable que le
+        // slug comme valeur de <option> et plus simple à résoudre côté serveur.
+        //
+        // On utilise getInt() plutôt que get() + is_numeric() + (int) cast :
+        //   - getInt() retourne 0 si le champ est absent, vide, non-numérique
+        //     ou un flottant comme "1.5" (contrairement à is_numeric() qui
+        //     laisse passer les flottants, (int)"1.5" → 1, comportement implicite).
+        //   - Un ID valide est toujours > 0 (auto-increment PostgreSQL).
+        //   - Pas de cast supplémentaire nécessaire : le type est déjà int.
+        $categoryId = $request->request->getInt('categoryId');
+
+        if ($categoryId <= 0) {
+            $this->addFlash('error', 'Catégorie invalide. Veuillez sélectionner une catégorie.');
+            return $this->redirectToRoute('app_forum_index');
+        }
+
+        $category = $this->categoryRepository->find($categoryId);
+
+        if ($category === null || !$category->isActive()) {
+            $this->addFlash('error', 'Catégorie introuvable ou désactivée. Veuillez réessayer.');
+            return $this->redirectToRoute('app_forum_index');
+        }
+
+        // ── Délégation au service (même logique que newThread()) ─────────────
+        // ForumService::createThread() valide le titre/contenu et crée le thread.
+        // Il retourne un string (message d'erreur) ou un ForumThread (succès).
+        $result = $this->forumService->createThread($user, $category, $request->request->all());
+
+        if (is_string($result)) {
+            // Erreur de validation (titre vide, contenu trop court, etc.)
+            $this->addFlash('error', $result);
+            return $this->redirectToRoute('app_forum_index');
+        }
+
+        // Succès : redirection vers le thread fraîchement créé
+        $this->addFlash('success', 'Votre sujet a été publié avec succès !');
+        return $this->redirectToRoute('app_forum_thread', [
+            'categorySlug' => $category->getSlug(),
+            'threadSlug'   => $result->getSlug(),
+        ]);
+    }
+
     // ─── Liste des threads d'une catégorie ────────────────────────────────────
 
     /**

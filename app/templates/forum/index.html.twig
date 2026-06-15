@@ -211,17 +211,6 @@
        COLONNE CENTRALE — FEED DE THREADS
     ══════════════════════════════════════════════════════════════ */
 
-    /* Zone compositeur "créer un post" en haut du feed */
-    .fi-composer {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        padding: 14px 16px;
-        background: var(--bg-alt);
-        border: 1px solid var(--ink);
-        margin-bottom: 16px;
-    }
-
     /* Avatar initiales : carré lime, texte encre, mono gras */
     .fi-composer__avatar {
         width: 36px;
@@ -472,19 +461,12 @@
     }
 
     /* ══════════════════════════════════════════════════════════════
-       COMPOSITEUR — FORMULAIRE INLINE
-       Le compositeur "écrire un post" est désormais un mini-formulaire
-       qui redirige vers /forum/{slug}/nouveau selon la catégorie choisie.
-       display:contents sur .fi-composer__form permet d'hériter du flex
-       parent .fi-composer sans créer de boite supplémentaire.
+       COMPOSITEUR — ELEMENTS PARTAGÉS REPLIÉ / ÉTENDU
+       .fi-composer__select : select de catégorie dans la barre repliée
+       (état replié — la version étendue utilise .fi-composer__cat-select).
     ══════════════════════════════════════════════════════════════ */
 
-    /* Formulaire inline : transparent pour le layout flex parent */
-    .fi-composer__form {
-        display: contents;
-    }
-
-    /* Select de catégorie dans le compositeur */
+    /* Select de catégorie dans la barre repliée */
     .fi-composer__select {
         padding: 6px 10px;
         border: 1px solid var(--ink);
@@ -498,9 +480,127 @@
         -webkit-appearance: none;
     }
 
-    /* Bouton "Écrire" dans le compositeur */
-    .fi-composer__submit {
-        /* hérite des styles .btn .btn-ghost .btn-sm définis globalement */
+    /* ══════════════════════════════════════════════════════════════
+       COMPOSITEUR — BARRE SUPERIEURE
+       La barre top-bar est toujours visible : avatar + éléments
+       qui changent selon l'état replié/étendu du compositeur.
+    ══════════════════════════════════════════════════════════════ */
+
+    /*
+     * On remplace display:flex sur .fi-composer par un display:block,
+     * et on met le flex sur .fi-composer__top-bar pour garder la
+     * mise en page en ligne dans l'état replié.
+     */
+    .fi-composer {
+        display: block;    /* override du flex précédent */
+        padding: 14px 16px;
+        background: var(--bg-alt);
+        border: 1px solid var(--ink);
+        margin-bottom: 16px;
+    }
+
+    /* Ligne horizontale : avatar + placeholder/label + actions */
+    .fi-composer__top-bar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    /* Label affiché en mode étendu à la place du placeholder */
+    .fi-composer__open-label {
+        flex: 1;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       COMPOSITEUR — ZONE FORMULAIRE (etat etendu)
+       Cachée par défaut via l'attribut HTML `hidden`.
+       Quand JS retire `hidden`, le display CSS reprend la main.
+    ══════════════════════════════════════════════════════════════ */
+
+    /* Conteneur flex colonne du formulaire étendu */
+    .fi-composer__form-area {
+        display: flex;          /* actif uniquement quand `hidden` est absent */
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line-soft);
+    }
+
+    /* Ligne catégorie + bouton Publier */
+    .fi-composer__form-top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    /* Select catégorie dans le formulaire étendu */
+    .fi-composer__cat-select {
+        flex: 1;
+        padding: 8px 10px;
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        appearance: none;
+        -webkit-appearance: none;
+        cursor: pointer;
+    }
+    .fi-composer__cat-select:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+    }
+
+    /* Champ titre — gras, texte encre */
+    .fi-composer__input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--body);
+        font-size: 15px;
+        font-weight: 600;
+        box-sizing: border-box;
+    }
+    .fi-composer__input::placeholder {
+        color: var(--ink-mute);
+        font-weight: 400;
+    }
+    .fi-composer__input:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+    }
+
+    /* Zone de texte contenu */
+    .fi-composer__textarea {
+        width: 100%;
+        min-height: 110px;
+        padding: 10px 12px;
+        border: 1px solid var(--ink);
+        border-radius: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--body);
+        font-size: 14px;
+        resize: vertical;
+        box-sizing: border-box;
+        line-height: 1.6;
+    }
+    .fi-composer__textarea::placeholder {
+        color: var(--ink-mute);
+    }
+    .fi-composer__textarea:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
     }
 
     /* ══════════════════════════════════════════════════════════════
@@ -676,123 +776,256 @@
     ════════════════════════════════════════════════════════════════════════ #}
     <div class="fi-col-feed">
 
-        {# ── Zone compositeur ─────────────────────────────────────────────────
-           Mini-formulaire GET qui redirige vers /forum/{slug}/nouveau selon
-           la catégorie sélectionnée dans le <select>.
+        {# ── Zone compositeur inline ────────────────────────────────────────────
+           Deux états gérés par JS vanilla :
 
-           Pourquoi un formulaire GET et pas un simple lien ?
-           En V1, la route new_thread requiert un {categorySlug} dans l'URL.
-           Avec un lien simple, on ne pouvait pointer que vers la première
-           catégorie en dur. Le formulaire + JS permet de construire l'URL
-           dynamiquement selon le choix de l'utilisateur.
+           ETAT REPLIÉ (défaut) :
+             [Avatar] [Une question, un appel, un partage...]  [Catégorie ▼] [Écrire]
+             Les éléments marqués data-hide-when-open sont visibles.
 
-           NOTE : le bouton "Live" a été retiré (fonctionnalité V2,
-           cf. CDC V3 section 4).
+           ETAT ETENDU (après clic) :
+             [Avatar] [Nouveau post...]  [Annuler]
+             -------------------------------------------------
+             [Catégorie ▼]               [Publier]
+             [Titre de votre post        ]
+             [Développez votre idée...   ]
+
+           Fonctionnement :
+             fiComposerOpen()  : ajoute hidden sur les éléments data-hide-when-open,
+                                 retire hidden sur les éléments data-show-when-open,
+                                 synchronise le select catégorie, met le focus sur titre.
+             fiComposerClose() : inverse, reset du formulaire.
+
+           CSRF : même token que newThread() (forum_new_thread).
+           Route : POST /forum/nouveau (app_forum_quick_post, sans categorySlug).
         #}
-        <div class="fi-composer">
-
-            {# Avatar : initiale de l'email de l'utilisateur connecté, ou "?" #}
-            <div class="fi-composer__avatar" aria-hidden="true">
-                {% if app.user %}
-                    {#
-                        Extrait la première lettre de la partie locale de l'email.
-                        Exemple : "gaelle@bazaart.fr" → "G"
-                    #}
-                    {{ app.user.email|split('@')|first|slice(0,1)|upper }}
-                {% else %}
-                    ?
-                {% endif %}
-            </div>
+        <div class="fi-composer" id="fi-composer">
 
             {% if categories is not empty %}
 
-                {#
-                    Formulaire GET sans vraie "action" statique car l'URL dépend
-                    du slug de la catégorie choisie.
-                    Le JS ci-dessous intercepte le submit et construit l'URL
-                    /forum/{slug}/nouveau avant de rediriger.
-                    id="composer-form" est ciblé par le script.
-                #}
-                <form class="fi-composer__form"
-                      method="get"
-                      action="#"
-                      id="composer-form">
+                {# ── Barre horizontale (toujours visible) ──────────────────── #}
+                <div class="fi-composer__top-bar">
+
+                    {# Avatar initiales : carré lime, lettre de l'email #}
+                    <div class="fi-composer__avatar" aria-hidden="true">
+                        {% if app.user %}
+                            {#
+                                Extrait la première lettre de la partie locale de l'email.
+                                Exemple : "gaelle@bazaart.fr" → "G"
+                            #}
+                            {{ app.user.email|split('@')|first|slice(0,1)|upper }}
+                        {% else %}
+                            ?
+                        {% endif %}
+                    </div>
 
                     {#
-                        Placeholder cliquable : au clic, il focus le <select>
-                        pour guider l'utilisateur vers le choix de catégorie.
-                        aria-hidden=true car la valeur lisible est déjà dans le <select>.
+                        Placeholder cliquable (état replié uniquement).
+                        data-hide-when-open : le JS le masque quand le formulaire s'ouvre.
+                        flex:1 via .fi-composer__placeholder pour pousser les actions à droite.
                     #}
                     <button type="button"
                             class="fi-composer__placeholder"
-                            style="background:none;border:none;text-align:left;padding:0;cursor:pointer;"
-                            onclick="document.getElementById('composer-cat').focus()"
-                            aria-hidden="true">
+                            data-hide-when-open
+                            onclick="fiComposerOpen()"
+                            aria-label="Ouvrir le formulaire de creation de post"
+                            style="background:none;border:none;text-align:left;padding:0;cursor:pointer;flex:1;">
                         Une question, un appel, un partage...
                     </button>
 
-                    {# Groupe d'actions : select catégorie + bouton soumettre #}
-                    <div class="fi-composer__actions">
-
-                        {#
-                            Select des catégories actives.
-                            La valeur est le slug de la catégorie (pas l'id) car
-                            le JS en a besoin pour construire l'URL directement.
-                            id="composer-cat" est ciblé par le script.
-                        #}
-                        <select id="composer-cat"
+                    {#
+                        Select rapide de catégorie + bouton "Écrire" (état replié).
+                        Quand l'utilisateur clique "Écrire", fiComposerOpen() est appelé
+                        et la valeur de ce select est synchronisée vers le select du formulaire.
+                    #}
+                    <div class="fi-composer__actions" data-hide-when-open>
+                        <select id="fi-composer-cat-quick"
                                 class="fi-composer__select"
-                                aria-label="Choisir une catégorie pour votre post">
+                                aria-label="Choisir une catégorie">
                             {% for cat in categories %}
-                                <option value="{{ cat.slug }}">
-                                    {% if cat.icon %}{{ cat.icon }} {% endif %}{{ cat.name }}
-                                </option>
+                                <option value="{{ cat.id }}">{{ cat.name }}</option>
                             {% endfor %}
                         </select>
-
-                        <button type="submit" class="btn btn-ghost btn-sm">
+                        <button type="button"
+                                class="btn btn-ghost btn-sm"
+                                onclick="fiComposerOpen()">
                             Écrire
                         </button>
-
                     </div>
 
-                </form>
+                    {#
+                        Libellé + bouton Annuler visibles uniquement en état étendu.
+                        hidden par défaut — le JS retire l'attribut au moment de l'ouverture.
+                    #}
+                    <span class="fi-composer__open-label" data-show-when-open hidden>
+                        Nouveau post...
+                    </span>
+                    <button type="button"
+                            class="btn btn-ghost btn-sm"
+                            data-show-when-open
+                            onclick="fiComposerClose()"
+                            hidden
+                            aria-label="Fermer le formulaire sans publier">
+                        Annuler
+                    </button>
 
+                </div>{# fin fi-composer__top-bar #}
+
+                {# ── Formulaire étendu (caché par défaut) ──────────────────── #}
                 {#
-                    JS vanilla : au submit du formulaire compositeur, on lit la valeur
-                    du select (slug de la catégorie) et on redirige vers
-                    /forum/{slug}/nouveau via window.location.
-                    Cela évite une route intermédiaire côté Symfony juste pour faire
-                    la redirection.
-                    Note : on construit le chemin de base en Twig (path('app_forum_index'))
-                    pour que la génération d'URL reste cohérente même si le préfixe
-                    de route change.
+                    hidden par défaut — affiché par fiComposerOpen() via JS.
+                    Action : POST /forum/nouveau (route app_forum_quick_post).
+                    La catégorie est transmise par l'id (name="categoryId").
+                    Le token CSRF est généré côté Symfony (même intention que newThread).
+                #}
+                <div class="fi-composer__form-area" data-show-when-open hidden id="fi-composer-form-area">
+
+                    <form method="post"
+                          action="{{ path('app_forum_quick_post') }}"
+                          id="fi-composer-form">
+
+                        {# Token CSRF — protège contre les faux POST depuis d'autres sites #}
+                        <input type="hidden" name="_token" value="{{ csrf_token('forum_new_thread') }}">
+
+                        {# Ligne catégorie + bouton Publier #}
+                        <div class="fi-composer__form-top">
+
+                            {#
+                                Select catégorie du formulaire réel.
+                                Sa valeur est synchronisée depuis fi-composer-cat-quick
+                                dans fiComposerOpen() pour garder la sélection cohérente.
+                                name="categoryId" : l'ID est envoyé en POST body,
+                                résolu dans ForumController::quickPost().
+                            #}
+                            <select name="categoryId"
+                                    id="fi-composer-cat-form"
+                                    class="fi-composer__cat-select"
+                                    aria-label="Categorie du post">
+                                {% for cat in categories %}
+                                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                                {% endfor %}
+                            </select>
+
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                Publier
+                            </button>
+
+                        </div>
+
+                        {# Titre du thread (obligatoire) #}
+                        <input type="text"
+                               name="title"
+                               id="fi-composer-title"
+                               class="fi-composer__input"
+                               placeholder="Titre de votre post (obligatoire)"
+                               maxlength="255"
+                               required
+                               autocomplete="off">
+
+                        {# Contenu (obligatoire) #}
+                        <textarea name="content"
+                                  id="fi-composer-content"
+                                  class="fi-composer__textarea"
+                                  placeholder="Développez votre idée, votre question ou votre annonce..."
+                                  required></textarea>
+
+                    </form>
+
+                </div>{# fin fi-composer__form-area #}
+
+                {# ── JS vanilla — ouverture / fermeture du compositeur ───────
+                   fiComposerOpen()  : affiche le formulaire, masque le placeholder.
+                   fiComposerClose() : inverse, reset du formulaire.
+                   Déclaré en window.* pour être appelable depuis les onclick HTML.
                 #}
                 <script>
                 (function () {
                     'use strict';
-                    var form = document.getElementById('composer-form');
-                    if (!form) { return; }
 
-                    form.addEventListener('submit', function (e) {
-                        e.preventDefault();
-                        // Récupère le slug de la catégorie sélectionnée
-                        var slug = document.getElementById('composer-cat').value;
-                        // Chemin de base du forum (ex : "/forum") généré par Symfony
-                        // On retire le slash final s'il y en a un pour éviter les doubles //
-                        var base = '{{ path('app_forum_index') }}'.replace(/\/$/, '');
-                        // Redirige vers /forum/{slug}/nouveau
-                        window.location.href = base + '/' + slug + '/nouveau';
-                    });
+                    /**
+                     * Ouvre le compositeur inline.
+                     *
+                     * 1. Retire l'attribut `hidden` des éléments [data-show-when-open]
+                     *    (libellé "Nouveau post..." + bouton Annuler + zone formulaire).
+                     * 2. Ajoute `hidden` sur les éléments [data-hide-when-open]
+                     *    (placeholder + select rapide + bouton "Écrire").
+                     * 3. Synchronise la valeur du quick-select vers le form-select.
+                     * 4. Met le focus sur le champ Titre.
+                     */
+                    window.fiComposerOpen = function () {
+                        var composer = document.getElementById('fi-composer');
+                        if (!composer) { return; }
+
+                        // Afficher les éléments "open only"
+                        composer.querySelectorAll('[data-show-when-open]').forEach(function (el) {
+                            el.hidden = false;
+                        });
+
+                        // Masquer les éléments "collapsed only"
+                        composer.querySelectorAll('[data-hide-when-open]').forEach(function (el) {
+                            el.hidden = true;
+                        });
+
+                        // Synchroniser la catégorie du quick-select vers le form-select
+                        var catQuick = document.getElementById('fi-composer-cat-quick');
+                        var catForm  = document.getElementById('fi-composer-cat-form');
+                        if (catQuick && catForm) {
+                            catForm.value = catQuick.value;
+                        }
+
+                        // Focus sur le titre pour que l'utilisateur puisse commencer à taper
+                        var titleField = document.getElementById('fi-composer-title');
+                        if (titleField) {
+                            titleField.focus();
+                        }
+                    };
+
+                    /**
+                     * Ferme le compositeur sans soumettre.
+                     *
+                     * 1. Remet `hidden` sur les éléments [data-show-when-open].
+                     * 2. Retire `hidden` des éléments [data-hide-when-open].
+                     * 3. Réinitialise le formulaire (vide titre + contenu).
+                     */
+                    window.fiComposerClose = function () {
+                        var composer = document.getElementById('fi-composer');
+                        if (!composer) { return; }
+
+                        // Masquer les éléments "open only"
+                        composer.querySelectorAll('[data-show-when-open]').forEach(function (el) {
+                            el.hidden = true;
+                        });
+
+                        // Réafficher les éléments "collapsed only"
+                        composer.querySelectorAll('[data-hide-when-open]').forEach(function (el) {
+                            el.hidden = false;
+                        });
+
+                        // Reset du formulaire : vide les champs pour la prochaine ouverture
+                        var form = document.getElementById('fi-composer-form');
+                        if (form) {
+                            form.reset();
+                        }
+                    };
+
                 }());
                 </script>
 
             {% else %}
 
-                {# Aucune catégorie configurée par l'admin : placeholder désactivé #}
-                <span class="fi-composer__placeholder" style="opacity:.5">
-                    Aucune categorie disponible pour l'instant.
-                </span>
+                {# Aucune catégorie configurée par l'admin : compositeur désactivé #}
+                <div class="fi-composer__top-bar">
+                    <div class="fi-composer__avatar" aria-hidden="true">
+                        {% if app.user %}
+                            {{ app.user.email|split('@')|first|slice(0,1)|upper }}
+                        {% else %}
+                            ?
+                        {% endif %}
+                    </div>
+                    <span class="fi-composer__placeholder" style="opacity:.5">
+                        Aucune categorie disponible pour l'instant.
+                    </span>
+                </div>
 
             {% endif %}
 
