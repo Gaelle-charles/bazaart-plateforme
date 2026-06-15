@@ -1,52 +1,53 @@
 {% extends 'base_app.html.twig' %}
 
 {#
- # article/show.html.twig — Lecture d'un article (thème Street)
+ # article/show.html.twig — Lecture d'un article (thème Street / design ArticleView)
  #
  # Variables transmises par ArticleController::show() :
- #   - article  : Article — l'article à afficher (publié ou brouillon si auteur/admin)
+ #   - article   : Article — l'article a afficher (publie ou brouillon si auteur/admin)
  #   - isPreview : bool — true si l'auteur visualise son propre brouillon
  #
  # Structure :
  #   - Bandeau brouillon si isPreview = true
- #   - Breadcrumb Articles → [Titre]
- #   - Layout 70/30 : corps de l'article à gauche, sidebar à droite
- #   - Corps : Instrument Serif 18px, line-height 1.7 — lecture longue
- #   - Sidebar : À propos de l'auteur + bouton retour
+ #   - Breadcrumb "← Articles"
+ #   - En-tete : eyebrow mono + H1 Archivo Black geant + excerpt serif italic
+ #   - Image de couverture pleine largeur (ratio 16/9)
+ #   - Corps de l'article avec dropcap CSS sur le premier paragraphe
+ #   - Actions admin (Modifier / Supprimer)
  #}
 
 {% block title %}{{ article.title }} — Articles — BazaArt{% endblock %}
 
 {#
- # Meta description — utilisée par Google dans les résultats de recherche.
- # On utilise l'excerpt de l'article s'il est renseigné.
+ # Meta description — utilisee par Google dans les resultats de recherche.
+ # On utilise l'excerpt de l'article s'il est renseigne.
  # Si excerpt est null (article sans accroche), le filtre |default bascule
- # sur la description générique de base.html.twig.
+ # sur la description generique de base.html.twig.
  #
- # ⚠️ Contrainte Twig : un {% block %} NE PEUT PAS être imbriqué dans un {% if %}.
- # Il faut mettre le if/else à l'intérieur du bloc, pas l'inverse.
- # Twig auto-escape les valeurs dans les attributs HTML → pas besoin de |e.
+ # ⚠️ Contrainte Twig : un {% block %} NE PEUT PAS etre imbrique dans un {% if %}.
+ # Il faut mettre le if/else a l'interieur du bloc, pas l'inverse.
+ # Twig auto-escape les valeurs dans les attributs HTML -> pas besoin de |e.
  #}
-{% block meta_description %}{{ article.excerpt|default('BazaArt, la plateforme des artistes de la diaspora afro-atlantique : opportunités, communauté et formation.') }}{% endblock %}
+{% block meta_description %}{{ article.excerpt|default('BazaArt, la plateforme des artistes de la diaspora afro-atlantique : opportunites, communaute et formation.') }}{% endblock %}
 
 {#
- # meta_extra : balises spécifiques à la fiche article.
+ # meta_extra : balises specifiques a la fiche article.
  #
- # canonical : indique à Google l'URL de référence pour cet article.
- # Évite le duplicate content si l'article est accessible via plusieurs chemins.
- # url() (vs path()) génère une URL absolue, requise pour canonical et OG.
+ # canonical : indique a Google l'URL de reference pour cet article.
+ # Evite le duplicate content si l'article est accessible via plusieurs chemins.
+ # url() (vs path()) genere une URL absolue, requise pour canonical et OG.
  #
- # Open Graph (og:*) : métadonnées lues par Facebook, LinkedIn, WhatsApp, Slack…
- # quand un utilisateur partage le lien. Sans ces balises, le réseau social
- # choisit lui-même titre/image → résultat souvent médiocre.
+ # Open Graph (og:*) : metadonnees lues par Facebook, LinkedIn, WhatsApp, Slack...
+ # quand un utilisateur partage le lien. Sans ces balises, le reseau social
+ # choisit lui-meme titre/image -> resultat souvent mediocre.
  #
- # Twitter Card : métadonnées pour X (ex-Twitter). summary_large_image affiche
- # une grande miniature sous le titre — plus accrocheur qu'un simple résumé.
- # Même si X lit aussi les balises og:*, avoir twitter:* garantit la compatibilité.
+ # Twitter Card : metadonnees pour X (ex-Twitter). summary_large_image affiche
+ # une grande miniature sous le titre — plus accrocheur qu'un simple resume.
+ # Meme si X lit aussi les balises og:*, avoir twitter:* garantit la compatibilite.
  #
  # og:image / twitter:image : on n'injecte l'image que si coverImagePath est
- # défini, pour éviter une URL cassée (image absente = mauvais aperçu).
- # absolute_url() préfixe le chemin relatif de l'asset avec le domaine courant.
+ # defini, pour eviter une URL cassee (image absente = mauvais apercu).
+ # absolute_url() prefixe le chemin relatif de l'asset avec le domaine courant.
  #}
 {% block meta_extra %}
     {# URL canonique absolue de cet article #}
@@ -63,8 +64,8 @@
     {% endif %}
     {% if article.coverImagePath %}
         {#
-         # absolute_url() + asset() = URL complète de l'image (ex: https://bazaart.fr/uploads/…).
-         # Les réseaux sociaux requièrent une URL absolue pour récupérer l'image.
+         # absolute_url() + asset() = URL complete de l'image (ex: https://bazaart.fr/uploads/...).
+         # Les reseaux sociaux requierent une URL absolue pour recuperer l'image.
         #}
         <meta property="og:image" content="{{ absolute_url(asset(article.coverImagePath)) }}">
     {% endif %}
@@ -87,15 +88,15 @@
 
 {% block stylesheets %}
 {{ parent() }}
-{# Styles préfixés .art- (articles) et .art-show- pour les éléments spécifiques à cette page #}
+{# Styles prefixes .art- pour eviter les collisions avec les autres pages #}
 <style>
 
-    /* ── Bandeau brouillon ──────────────────────────────────────────────── */
+    /* ── Bandeau brouillon ──────────────────────────────────────────────────── */
 
     /*
-     * .art-draft-banner : avertissement visible uniquement en mode aperçu.
-     * Fond encre (--ink) + texte acide (--accent) → contraste maximal,
-     * impossible à rater avant de partager un lien.
+     * .art-draft-banner : avertissement visible uniquement en mode apercu.
+     * Fond encre (--ink) + texte lime (--accent) = contraste maximal,
+     * impossible a rater avant de partager un lien.
      */
     .art-draft-banner {
         background: var(--ink);
@@ -121,171 +122,193 @@
         font-size: 11px;
     }
 
-    /* ── Breadcrumb ─────────────────────────────────────────────────────── */
+    /* ── Conteneur principal centré ─────────────────────────────────────────── */
 
     /*
-     * Navigation fil d'Ariane : Articles → [Titre tronqué]
-     * Mono + muted → discret mais lisible.
+     * .art-container : max-width 880px, centre horizontalement.
+     * Padding vertical genereux pour aerer la lecture.
+     * Les articles longs se lisent mieux sur une colonne etroite.
      */
-    .art-breadcrumb {
+    .art-container {
+        max-width: 880px;
+        margin: 0 auto;
+        padding-top: 32px;
+        padding-bottom: 64px;
+    }
+
+    /* ── Breadcrumb ──────────────────────────────────────────────────────────── */
+
+    /*
+     * Bouton "← Articles" style ghost (btn btn-sm btn-ghost du systeme design).
+     * Utilise les classes utilitaires existantes plutot que de creer un style sur mesure.
+     */
+
+    /* ── Section identite de l'article ─────────────────────────────────────── */
+
+    /*
+     * .art-identity : espace entre le breadcrumb et le corps.
+     * margin-top 32px pour respirer apres le lien retour.
+     */
+    .art-identity {
+        margin-top: 32px;
+    }
+
+    /* Eyebrow : categorie + temps + date en mono discret */
+    .art-identity__eyebrow {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin: 0 0 0;
+    }
+
+    /*
+     * Titre H1 : Archivo Black, tres grand, effet affiche.
+     * clamp() : 48px sur mobile, 8vw sur tablette, 80px max sur ecran large.
+     * line-height 0.92 : les lignes se serrent pour un bloc typographique fort.
+     * margin 16px 0 24px : espace sous l'eyebrow, espace avant l'excerpt.
+     */
+    .art-identity__title {
+        font-family: var(--display);
+        font-size: clamp(48px, 8vw, 80px);
+        line-height: 0.92;
+        letter-spacing: -.02em;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin: 16px 0 24px;
+    }
+
+    /* Excerpt / chapeau en Instrument Serif italic */
+    .art-identity__excerpt {
+        font-family: var(--serif, Georgia, serif);
+        font-size: 24px;
+        font-style: italic;
+        color: var(--ink-mute);
+        line-height: 1.4;
+        margin: 0;
+    }
+
+    /* ── Image de couverture ─────────────────────────────────────────────────── */
+
+    /*
+     * .art-cover : image pleine largeur, ratio 16/9 preserve via padding-bottom.
+     * position:relative sur le conteneur, position:absolute sur l'image
+     * = technique CSS classique pour forcer un ratio sans JS.
+     */
+    .art-cover {
+        position: relative;
+        width: 100%;
+        padding-bottom: 56.25%; /* ratio 16:9 = 9/16 = 56.25% */
+        overflow: hidden;
+        margin-top: 32px;
+        background: #e0e0e0;
+    }
+
+    .art-cover img {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    /* Placeholder si pas d'image de couverture (meme ratio 16/9) */
+    .art-cover__placeholder {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 24px;
+        justify-content: center;
         font-family: var(--mono);
         font-size: 11px;
         letter-spacing: .08em;
         text-transform: uppercase;
-        color: var(--ink-mute);
+        color: #999;
     }
 
-    .art-breadcrumb a {
-        color: var(--ink-mute);
-        text-decoration: none;
-    }
-    .art-breadcrumb a:hover { color: var(--ink); text-decoration: underline; }
-
-    .art-breadcrumb__sep { color: var(--line-soft); }
-
-    /* Titre tronqué dans le breadcrumb */
-    .art-breadcrumb__current {
-        color: var(--ink);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 360px;
-    }
-
-    /* ── Layout principal 70/30 ─────────────────────────────────────────── */
-
-    .art-layout {
-        display: grid;
-        grid-template-columns: 1fr 280px;
-        gap: 24px;
-        align-items: start;
-    }
-
-    /* ── Colonne principale — corps de l'article ────────────────────────── */
+    /* ── Corps de l'article ─────────────────────────────────────────────────── */
 
     /*
-     * .art-main : pas de rayon, bordure 1px ink → style affiche.
-     * Contrairement à l'ancien template qui utilisait var(--color-white),
-     * on utilise ici var(--bg) (crème #F2EFE6) — cohérent avec le fond page.
+     * .art-content : typographie pour la lecture longue.
+     * font-size 17px + line-height 1.65 = standard editorial confortable.
+     * Les regles CSS specifiques ci-dessous gèrent :
+     *   - dropcap sur le premier paragraphe (::first-letter)
+     *   - taille agrandie du premier para
+     *   - titres H2/H3 en Archivo Black
+     *   - espacement des paragraphes
+     *   - gras et italic
      */
-    .art-main {
-        border: 1px solid var(--ink);
-        background: var(--bg);
-        overflow: hidden;
-    }
-
-    /* Image de couverture — bande visuelle pleine largeur en haut */
-    .art-main__cover {
-        width: 100%;
-        max-height: 360px;
-        object-fit: cover;
-        display: block;
-        border-bottom: 1px solid var(--ink);
-    }
-
-    .art-main__body { padding: 36px 32px; }
-
-    /* Titre H1 en Archivo Black — très grand, uppercase */
-    .art-main__title {
-        font-family: var(--display);
-        font-size: clamp(28px, 4vw, 52px);
-        line-height: .95;
-        letter-spacing: -.02em;
-        text-transform: uppercase;
+    .art-content {
+        margin-top: 32px;
+        font-size: 17px;
+        line-height: 1.65;
         color: var(--ink);
-        margin: 0 0 16px;
     }
 
-    /* Excerpt / Chapeau : Instrument Serif, italic, legèrement muted */
-    .art-main__excerpt {
-        font-family: var(--serif);
-        font-size: 20px;
-        font-style: italic;
-        color: var(--ink-mute);
+    /*
+     * Dropcap : premiere lettre du premier paragraphe agrandie, flottante a gauche.
+     * Technique CSS pure — pas de JS. Le float + line-height 0.85 + margin-top negatif
+     * centrent visuellement la lettre sur la hauteur des 2-3 premieres lignes.
+     * Archivo Black (--display) : corps typographique ideal pour un dropcap fort.
+     */
+    .art-content > p:first-child::first-letter {
+        float: left;
+        font-family: var(--display);
+        font-size: 88px;
+        line-height: 0.85;
+        margin-right: 8px;
+        margin-top: -4px;
+        /* Pas de color specifique : herite de var(--ink) du parent */
+    }
+
+    /* Premier paragraphe legerement plus grand pour l'entree en lecture */
+    .art-content > p:first-child {
+        font-size: 22px;
         line-height: 1.5;
-        margin: 0 0 24px;
     }
 
-    /* ── Bloc méta (auteur + date + temps lecture + actions) ─────────────── */
-
-    .art-meta-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 12px;
-        padding: 16px 0;
-        border-top: 1px solid var(--ink);
-        border-bottom: 1px solid var(--ink);
-        margin-bottom: 32px;
+    /* Titres de section dans le corps : Archivo Black, 36px */
+    .art-content h2,
+    .art-content h3 {
+        font-family: var(--display);
+        font-size: 36px;
+        line-height: 1;
+        letter-spacing: -.01em;
+        text-transform: uppercase;
+        margin-top: 32px;
+        margin-bottom: 12px;
+        color: var(--ink);
     }
 
-    /* Bloc auteur : avatar + nom + date */
-    .art-meta-bar__author {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
+    /* H3 legerement plus petit que H2 */
+    .art-content h3 { font-size: 28px; }
+
+    /* Espacement entre les paragraphes */
+    .art-content p { margin-bottom: 16px; }
+
+    /* Gras et italic : simples, pas de decoration supplementaire */
+    .art-content strong { font-weight: 700; }
+    .art-content em { font-style: italic; }
+
+    /* ── Actions admin (Modifier / Supprimer) ────────────────────────────────── */
 
     /*
-     * Avatar encré : carré (pas de radius) en Archivo Black.
-     * La couleur de fond --accent (lime) + --ink (texte) = contraste WCAG AA.
+     * Affichees au-dessus du titre pour que l'admin les voie immediatement.
+     * Margin-bottom separe les actions de la zone identite.
      */
-    .art-meta-bar__avatar {
-        width: 40px;
-        height: 40px;
-        background: var(--accent);
-        color: var(--ink);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: var(--display);
-        font-size: 18px;
-        flex-shrink: 0;
-        /* Bords francs — thème Street, pas de border-radius */
-    }
-
-    .art-meta-bar__name {
-        font-family: var(--body);
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--ink);
-    }
-
-    .art-meta-bar__date {
-        font-family: var(--mono);
-        font-size: 10px;
-        letter-spacing: .08em;
-        text-transform: uppercase;
-        color: var(--ink-mute);
-        margin-top: 2px;
-    }
-
-    /* Bloc méta droite : temps de lecture estimé */
-    .art-meta-bar__reading {
-        font-family: var(--mono);
-        font-size: 10px;
-        letter-spacing: .1em;
-        text-transform: uppercase;
-        color: var(--ink-mute);
-    }
-
-    /* ── Actions admin (Modifier / Supprimer) ───────────────────────────── */
-
     .art-actions {
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
-        margin-bottom: 12px;
+        margin-bottom: 24px;
         padding-bottom: 16px;
         border-bottom: 1px solid var(--line-soft);
     }
 
-    /* Bouton "Modifier" — ghost avec bordure encre */
+    /* Bouton "Modifier" : ghost avec bordure encre */
     .art-btn-edit {
         display: inline-flex;
         align-items: center;
@@ -300,14 +323,14 @@
         text-transform: uppercase;
         color: var(--ink);
         text-decoration: none;
-        transition: background var(--transition-fast), color var(--transition-fast);
+        transition: background var(--transition-fast, .15s), color var(--transition-fast, .15s);
     }
     .art-btn-edit:hover {
         background: var(--ink);
         color: var(--accent);
     }
 
-    /* Bouton "Supprimer" — accent-2 (orange) comme signal de danger */
+    /* Bouton "Supprimer" : accent-2 (orange) comme signal de danger */
     .art-btn-delete {
         display: inline-flex;
         align-items: center;
@@ -322,125 +345,18 @@
         letter-spacing: .08em;
         text-transform: uppercase;
         cursor: pointer;
-        /* font-family dupliqué car <button> ne l'hérite pas toujours */
-        font-family: var(--mono);
-        transition: background var(--transition-fast);
+        transition: background var(--transition-fast, .15s);
     }
     .art-btn-delete:hover { background: var(--ink); color: var(--accent-2); }
 
-    /* ── Corps de l'article — lecture longue ────────────────────────────── */
-
-    /*
-     * .art-content : typographie optimisée pour la lecture longue.
-     * Instrument Serif (--serif) + 18px + line-height 1.7 = standard éditorial.
-     * Couleur : --ink (quasi-noir) pour le texte principal — meilleur contraste.
-     * |nl2br est appliqué dans le template (jamais |raw pour raisons de sécurité XSS).
-     */
-    .art-content {
-        font-family: var(--serif);
-        font-size: 18px;
-        line-height: 1.7;
-        color: var(--ink);
-    }
-
-    /* ── Sidebar ────────────────────────────────────────────────────────── */
-
-    .art-sidebar { display: flex; flex-direction: column; gap: 16px; }
-
-    /*
-     * .art-side-card : carte sidebar avec bordure 1px ink.
-     * Même motif que les cartes de la grille — cohérence visuelle.
-     */
-    .art-side-card {
-        border: 1px solid var(--ink);
-        background: var(--bg);
-        padding: 20px;
-    }
-
-    /* Label de carte sidebar (ex: "À PROPOS DE L'AUTEUR") */
-    .art-side-label {
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: .12em;
-        text-transform: uppercase;
-        color: var(--ink-mute);
-        margin-bottom: 14px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid var(--line-soft);
-    }
-
-    /* Bloc auteur dans la sidebar */
-    .art-side-author {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-    }
-
-    /* Avatar sidebar — même style que dans la méta bar */
-    .art-side-avatar {
-        width: 36px;
-        height: 36px;
-        background: var(--accent);
-        color: var(--ink);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: var(--display);
-        font-size: 16px;
-        flex-shrink: 0;
-    }
-
-    .art-side-author__name {
-        font-family: var(--body);
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--ink);
-    }
-    .art-side-author__role {
-        font-family: var(--mono);
-        font-size: 10px;
-        letter-spacing: .06em;
-        text-transform: uppercase;
-        color: var(--ink-mute);
-        margin-top: 2px;
-    }
-
-    /* Bouton "Retour aux articles" — ghost */
-    .art-back-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 12px 16px;
-        border: 1px solid var(--ink);
-        background: transparent;
-        font-family: var(--mono);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: .08em;
-        text-transform: uppercase;
-        color: var(--ink);
-        text-decoration: none;
-        transition: background var(--transition-fast), color var(--transition-fast);
-    }
-    .art-back-btn:hover {
-        background: var(--ink);
-        color: var(--accent);
-    }
-
-    /* ── Responsive ─────────────────────────────────────────────────────── */
-
-    @media (max-width: 900px) {
-        .art-layout {
-            grid-template-columns: 1fr;
-        }
-        /* La sidebar passe sous l'article sur mobile */
-        .art-sidebar { order: -1; }
-    }
+    /* ── Responsive ─────────────────────────────────────────────────────────── */
 
     @media (max-width: 600px) {
-        .art-main__body { padding: 20px 16px; }
-        .art-main__title { font-size: 28px; }
+        .art-identity__title { font-size: 42px; }
+        .art-identity__excerpt { font-size: 18px; }
+        .art-content { font-size: 16px; }
+        .art-content > p:first-child { font-size: 18px; }
+        .art-content > p:first-child::first-letter { font-size: 64px; }
     }
 </style>
 {% endblock %}
@@ -448,203 +364,103 @@
 {% block content %}
 
 {#
- # Bannière brouillon : visible uniquement si l'auteur prévisualise son brouillon.
- # isPreview est passé par ArticleController::show() quand l'article n'est pas publié.
+ # Banniere brouillon : visible uniquement si l'auteur previsualise son brouillon.
+ # isPreview est passe par ArticleController::show() quand l'article n'est pas publie.
  #}
 {% if isPreview %}
     <div class="art-draft-banner" role="alert">
-        <span>APERÇU — Cet article est en brouillon. Non visible par les autres membres.</span>
-        <a href="{{ path('app_article_edit', {id: article.id}) }}">Modifier →</a>
+        <span>APERCU - Cet article est en brouillon. Non visible par les autres membres.</span>
+        <a href="{{ path('app_article_edit', {id: article.id}) }}">Modifier</a>
     </div>
 {% endif %}
 
-{# Fil d'Ariane : Articles → Titre de l'article #}
-<nav class="art-breadcrumb" aria-label="Fil d'Ariane">
-    <a href="{{ path('app_article_index') }}">Articles</a>
-    <span class="art-breadcrumb__sep" aria-hidden="true">›</span>
-    <span class="art-breadcrumb__current" aria-current="page">
-        {{ article.title|slice(0, 60) }}{{ article.title|length > 60 ? '…' : '' }}
-    </span>
-</nav>
+{# Conteneur principal : max-width 880px, centre horizontalement #}
+<div class="art-container">
 
-{# Layout principal 70/30 #}
-<div class="art-layout">
+    {# ── Breadcrumb "← Articles" ─────────────────────────────────────────── #}
+    {#
+        Lien retour vers la liste, style ghost compact.
+        Les classes btn/btn-sm/btn-ghost utilisent le systeme design existant.
+    #}
+    <a href="{{ path('app_article_index') }}" class="btn btn-sm btn-ghost">
+        &larr; Articles
+    </a>
 
-    {# ── Colonne principale — article ────────────────────────────────────── #}
-    <main class="art-main" id="main-content">
+    {# ── Actions admin (au-dessus du titre pour visibilite immediate) ───────── #}
+    {#
+        Decidisions produit V1 : publication reservee aux ROLE_ADMIN uniquement.
+        is_granted() est sur meme sans utilisateur connecte (retourne false).
+    #}
+    {% if is_granted('ROLE_ADMIN') %}
+        <div class="art-actions" style="margin-top: 24px;">
 
-        {# Image de couverture (si disponible) #}
-        {% if article.coverImagePath %}
-            <img src="{{ asset(article.coverImagePath) }}"
-                 alt="{{ article.title }}"
-                 class="art-main__cover">
+            <a href="{{ path('app_article_edit', {id: article.id}) }}"
+               class="art-btn-edit">
+                Modifier
+            </a>
+
+            {#
+             # Formulaire de suppression en POST (semantique HTTP + protection CSRF).
+             # Le token 'article_delete_{id}' est verifie dans ArticleController::delete().
+            #}
+            <form method="post"
+                  action="{{ path('app_article_delete', {id: article.id}) }}"
+                  onsubmit="return confirm('Supprimer definitivement cet article ?')">
+                <input type="hidden" name="_token"
+                       value="{{ csrf_token('article_delete_' ~ article.id) }}">
+                <button type="submit" class="art-btn-delete">
+                    Supprimer
+                </button>
+            </form>
+
+        </div>
+    {% endif %}
+
+    {# ── Section identite : eyebrow + H1 + excerpt ───────────────────────── #}
+    <div class="art-identity">
+
+        {# Eyebrow mono : date de publication. #}
+        {# category et readingTime absents de l'entité Article en V1 (prévus V2) #}
+        <p class="art-identity__eyebrow">
+            {{- article.publishedAt|date("d M Y")|upper -}}
+        </p>
+
+        {# H1 en Archivo Black, tres grand, effet affiche #}
+        <h1 class="art-identity__title">{{ article.title }}</h1>
+
+        {# Excerpt / chapeau en Instrument Serif italic, si disponible #}
+        {% if article.excerpt %}
+            <p class="art-identity__excerpt">{{ article.excerpt }}</p>
         {% endif %}
 
-        <div class="art-main__body">
+    </div>
 
-            {# Titre H1 #}
-            <h1 class="art-main__title">{{ article.title }}</h1>
+    {# ── Image de couverture ─────────────────────────────────────────────── #}
+    {#
+        Ratio 16/9 impose via padding-bottom:56.25% (technique CSS pure).
+        object-fit:cover garantit que l'image remplit le cadre sans deformation.
+    #}
+    <div class="art-cover">
+        {% if article.coverImagePath %}
+            <img src="{{ asset(article.coverImagePath) }}"
+                 alt="{{ article.title }}">
+        {% else %}
+            {# Placeholder creme si pas d'image de couverture #}
+            <div class="art-cover__placeholder">Image de couverture</div>
+        {% endif %}
+    </div>
 
-            {# Chapeau / excerpt en serif si disponible #}
-            {% if article.excerpt %}
-                <p class="art-main__excerpt">{{ article.excerpt }}</p>
-            {% endif %}
-
-            {# ── Barre de métadonnées ──────────────────────────────────── #}
-            <div class="art-meta-bar">
-
-                {# Auteur : avatar + nom + date #}
-                <div class="art-meta-bar__author">
-                    {#
-                     # Avatar : photo si disponible, sinon carré lime avec initiale.
-                     # On utilise le profil artiste pour avoir le displayName.
-                    #}
-                    {% if article.author.artistProfile and article.author.artistProfile.avatarPath %}
-                        <img src="{{ asset(article.author.artistProfile.avatarPath) }}"
-                             alt=""
-                             style="width:40px;height:40px;object-fit:cover;border:1px solid var(--ink);">
-                    {% else %}
-                        <div class="art-meta-bar__avatar" aria-hidden="true">
-                            {{ article.author.email|first|upper }}
-                        </div>
-                    {% endif %}
-
-                    <div>
-                        <div class="art-meta-bar__name">
-                            {% if article.author.artistProfile %}
-                                {{ article.author.artistProfile.displayName }}
-                            {% else %}
-                                {{ article.author.email|split('@')|first }}
-                            {% endif %}
-                        </div>
-                        <div class="art-meta-bar__date">
-                            Publié le
-                            <time datetime="{{ (article.publishedAt ?? article.createdAt)|date('Y-m-d') }}">
-                                {{ (article.publishedAt ?? article.createdAt)|date('d/m/Y') }}
-                            </time>
-                            {#
-                             # On compare updatedAt à createdAt : si modifié après création,
-                             # on affiche la date de modification.
-                             # Twig ne supporte pas != directement pour des objets DateTime
-                             # → on compare les timestamps via |date('U').
-                            #}
-                            {% if article.updatedAt|date('U') > article.createdAt|date('U') %}
-                                · modifié le
-                                <time datetime="{{ article.updatedAt|date('Y-m-d') }}">
-                                    {{ article.updatedAt|date('d/m/Y') }}
-                                </time>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-
-                {#
-                 # Temps de lecture estimé : 200 mots/minute est la vitesse moyenne.
-                 # article.content|split(' ')|length compte les mots approximativement.
-                 # max(1) évite d'afficher "0 min".
-                #}
-                {% set wordCount = article.content|split(' ')|length %}
-                {% set readingTime = max(1, (wordCount / 200)|round) %}
-                <div class="art-meta-bar__reading">
-                    {{ readingTime }} min de lecture
-                </div>
-
-            </div>
-
-            {#
-             # Actions de gestion : Modifier + Supprimer
-             #
-             # Décision produit V1 : la publication des articles est réservée aux ADMINS.
-             # On remplace l'ancienne condition (auteur OU admin) par une condition
-             # strictement admin-only : is_granted('ROLE_ADMIN').
-             #
-             # Avant : {% if app.user and (app.user == article.author or is_granted('ROLE_ADMIN')) %}
-             # Après : {% if is_granted('ROLE_ADMIN') %}
-             #
-             # is_granted() est sûr même sans utilisateur connecté (retourne false sans
-             # lever d'exception), donc on n'a plus besoin de garder le "app.user" en garde.
-            #}
-            {% if is_granted('ROLE_ADMIN') %}
-                <div class="art-actions">
-
-                    <a href="{{ path('app_article_edit', {id: article.id}) }}"
-                       class="art-btn-edit">
-                        Modifier
-                    </a>
-
-                    {#
-                     # Formulaire de suppression : POST obligatoire (pas GET) pour
-                     # respecter la sémantique HTTP et se protéger du CSRF.
-                     # Le token CSRF (article_delete_{id}) est vérifié dans ArticleController::delete().
-                    #}
-                    <form method="post"
-                          action="{{ path('app_article_delete', {id: article.id}) }}"
-                          onsubmit="return confirm('Supprimer définitivement cet article ?')">
-                        <input type="hidden" name="_token"
-                               value="{{ csrf_token('article_delete_' ~ article.id) }}">
-                        <button type="submit" class="art-btn-delete">
-                            Supprimer
-                        </button>
-                    </form>
-
-                </div>
-            {% endif %}
-
-            {#
-             # Corps de l'article.
-             # |raw : le contenu est du HTML (paragraphes, sous-titres). On le rend tel quel.
-             # Sécurité : depuis l'ADR-0009, la publication d'articles est réservée aux
-             # ADMINS (ROLE_ADMIN). Le contenu est donc de confiance, |raw est acceptable.
-             # ATTENTION : si la publication s'ouvrait un jour aux utilisateurs, il faudrait
-             # repasser par un assainisseur (HTMLPurifier) avant d'utiliser |raw.
-             # La police --serif + 18px + line-height:1.7 = standard confort de lecture.
-            #}
-            <div class="art-content">
-                {{ article.content|raw }}
-            </div>
-
-        </div>
-    </main>
-
-    {# ── Sidebar droite ──────────────────────────────────────────────────── #}
-    <aside class="art-sidebar" aria-label="Informations complémentaires">
-
-        {# Carte "À propos de l'auteur" #}
-        <div class="art-side-card">
-            <div class="art-side-label">À propos de l'auteur</div>
-            <div class="art-side-author">
-
-                {# Avatar auteur #}
-                {% if article.author.artistProfile and article.author.artistProfile.avatarPath %}
-                    <img src="{{ asset(article.author.artistProfile.avatarPath) }}"
-                         alt=""
-                         style="width:36px;height:36px;object-fit:cover;border:1px solid var(--ink);flex-shrink:0;">
-                {% else %}
-                    <div class="art-side-avatar" aria-hidden="true">
-                        {{ article.author.email|first|upper }}
-                    </div>
-                {% endif %}
-
-                <div>
-                    <div class="art-side-author__name">
-                        {% if article.author.artistProfile %}
-                            {{ article.author.artistProfile.displayName }}
-                        {% else %}
-                            {{ article.author.email|split('@')|first }}
-                        {% endif %}
-                    </div>
-                    <div class="art-side-author__role">Membre BazaArt</div>
-                </div>
-
-            </div>
-        </div>
-
-        {# Bouton retour à la liste #}
-        <a href="{{ path('app_article_index') }}" class="art-back-btn">
-            ← Retour aux articles
-        </a>
-
-    </aside>
+    {# ── Corps de l'article ──────────────────────────────────────────────── #}
+    {#
+        |raw : le contenu est du HTML genere par l'editeur admin.
+        Securite : la publication est reservee aux ROLE_ADMIN (confiance implicite).
+        Si la publication s'ouvrait aux utilisateurs, passer par HTMLPurifier avant |raw.
+        Le dropcap sur le premier paragraphe est gere integralement en CSS
+        via .art-content > p:first-child::first-letter.
+    #}
+    <div class="art-content">
+        {{ article.content|raw }}
+    </div>
 
 </div>
 

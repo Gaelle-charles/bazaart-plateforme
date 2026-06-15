@@ -11,339 +11,480 @@
     toute collision avec les classes d'autres pages du module forum.
 
     Thème Street :
-    - Fond : var(--bg) = #F2EFE6
-    - Encre : var(--ink) = #0D0D0D
-    - Accent : var(--accent) = #C6F24E (lime)
-    - Accent 2 : var(--accent-2) = #FF6B2C (orange)
-    - Police titres : var(--display) = "Archivo Black"
-    - Police corps : var(--body) = "Space Grotesk"
-    - Police méta : var(--mono) = "JetBrains Mono"
-    - Border-radius : 0 partout (style affiche / street art)
-    - Cartes : border 1px solid var(--ink), pas d'ombre
+    - Fond principal  : var(--bg)      = #F2EFE6
+    - Fond alternatif : var(--bg-alt)  (légèrement plus sombre)
+    - Encre           : var(--ink)     = #0D0D0D
+    - Encre atténuée  : var(--ink-mute)
+    - Séparateur doux : var(--line-soft)
+    - Accent lime     : var(--accent)  = #C6F24E
+    - Accent orange   : var(--accent-2) = #FF6B2C
+    - Display         : var(--display) = "Archivo Black"
+    - Corps           : var(--body)    = "Space Grotesk"
+    - Monospace       : var(--mono)    = "JetBrains Mono"
+    - Border-radius   : 0 partout (style affiche / street art)
+    - Pas d'ombres
 #}
 <style>
 
     /* ══════════════════════════════════════════════════════════════
+       RESET ET BASE
+       Appliqués à tous les éléments du module .fi-*
+    ══════════════════════════════════════════════════════════════ */
+
+    .fi-wrapper {
+        /* Conteneur global — pas de padding propre, géré par le layout parent */
+        width: 100%;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
        EN-TÊTE DE PAGE
-       Reproduit la section header de screens-forum.jsx :
-       grand titre display + sous-titre mono + CTA à droite.
+       Flex horizontal : grand titre display à gauche, CTAs à droite.
+       borderBottom marque la limite avec la tab bar.
     ══════════════════════════════════════════════════════════════ */
 
     .fi-header {
-        /* Séparateur bas épais — marque la limite entre header et contenu */
         border-bottom: 1px solid var(--ink);
         padding: 32px 0 20px;
-        margin-bottom: 0;
-
         display: flex;
         align-items: flex-end;
         justify-content: space-between;
         gap: 24px;
     }
 
-    /* Eyebrow : texte mono uppercase avec point carré accent */
+    /* Eyebrow : contexte en mono uppercase avant le titre géant */
     .fi-eyebrow {
         font-family: var(--mono);
-        font-size: var(--eyebrow-font-size);
-        font-weight: var(--eyebrow-font-weight);
-        letter-spacing: var(--eyebrow-letter-spacing);
-        text-transform: uppercase;
-        color: var(--ink-mute);
-        display: flex;
-        align-items: center;
-        gap: var(--eyebrow-gap);
-        margin-bottom: 10px;
-    }
-    /* Point carré caractéristique du thème Street */
-    .fi-eyebrow::before {
-        content: '';
-        display: inline-block;
-        width: var(--eyebrow-dot-size);
-        height: var(--eyebrow-dot-size);
-        background: var(--accent);
-        flex-shrink: 0;
-    }
-
-    /* Titre display géant — "Archivo Black" en grandes capitales */
-    .fi-title {
-        font-family: var(--display);
-        font-size: clamp(48px, 8vw, 96px);
-        line-height: 0.9;
-        margin: 0;
-        text-transform: uppercase;
-        color: var(--ink);
-    }
-
-    /* Sous-titre mono — discret sous le grand titre */
-    .fi-subtitle {
-        font-family: var(--mono);
         font-size: 11px;
-        color: var(--ink-mute);
-        letter-spacing: .08em;
-        margin-top: 10px;
-    }
-
-    /* Bouton "Nouveau sujet +" — fond accent lime, bords francs, uppercase */
-    .fi-btn-new {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: var(--btn-padding);
-        background: var(--btn-primary-bg);
-        color: var(--btn-primary-color);
-        border: none;
-        font-family: var(--body);
-        font-size: var(--btn-font-size);
-        font-weight: var(--btn-font-weight);
-        letter-spacing: var(--btn-letter-spacing);
-        text-transform: uppercase;
-        text-decoration: none;
-        cursor: pointer;
-        /* border-radius: 0 — explicite pour Street */
-        border-radius: var(--btn-radius);
-        transition:
-            background var(--transition-fast),
-            color var(--transition-fast),
-            box-shadow var(--transition-fast);
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
-    .fi-btn-new:hover {
-        background: var(--btn-primary-hover-bg);
-        color: var(--btn-primary-hover-color);
-        /* Ombre décalée "affiche" au survol — signature Street */
-        box-shadow: var(--shadow-offset-sm);
-    }
-
-    /* ══════════════════════════════════════════════════════════════
-       BARRE STATS HORIZONTALE
-       Fond noir (--ink) sur toute la largeur, texte crème,
-       stats en mono. Inspiré de la tab-bar du prototype.
-    ══════════════════════════════════════════════════════════════ */
-
-    .fi-stats-bar {
-        background: var(--ink);
-        color: var(--bg);
-        display: flex;
-        align-items: center;
-        gap: 0;
-        /* Pas de padding horizontal — les cellules ont leurs propres paddings */
-        margin-bottom: 0;
-        /* Bordure basse pour séparer de la liste de catégories */
-        border-bottom: 1px solid var(--ink);
-    }
-
-    /* Chaque cellule de stat — séparée par border-right */
-    .fi-stats-bar__item {
-        padding: 12px 24px;
-        border-right: 1px solid rgba(242, 239, 230, .2);
-        font-family: var(--mono);
-        font-size: 11px;
+        font-weight: 700;
         letter-spacing: .1em;
         text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: 10px;
         display: flex;
         align-items: center;
         gap: 8px;
     }
-    .fi-stats-bar__item:last-child {
-        border-right: none;
-    }
-    /* Valeur numérique en gros — Archivo Black */
-    .fi-stats-bar__value {
+
+    /* Titre principal en Archivo Black — clamp pour s'adapter à la largeur d'écran */
+    .fi-title {
         font-family: var(--display);
-        font-size: 22px;
-        color: var(--accent);
-        line-height: 1;
+        font-size: clamp(64px, 9vw, 132px);
+        line-height: 0.88;
+        margin: 0;
+        text-transform: uppercase;
+        color: var(--ink);
+    }
+
+    /* Groupe de boutons CTA alignés en bas du bloc droit */
+    .fi-header__ctas {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+        padding-bottom: 4px; /* aligne visuellement avec la baseline du titre */
     }
 
     /* ══════════════════════════════════════════════════════════════
-       GRILLE DE CATÉGORIES
-       Cartes empilées verticalement, séparées par border-bottom 1px.
-       Style "liste de journal" / affiche.
+       TAB BAR
+       Flex horizontal collé, fond --bg-alt, séparateurs fins.
+       Le JS vanilla gère uniquement le style de l'onglet actif.
+       En V1 : pas de filtrage de contenu, juste un feedback visuel.
     ══════════════════════════════════════════════════════════════ */
 
-    .fi-categories {
-        /* Pas de gap — les bordures font le travail */
+    .fi-tabs {
+        border-bottom: 1px solid var(--ink);
+        background: var(--bg-alt);
         display: flex;
-        flex-direction: column;
-        border: 1px solid var(--ink);
+        overflow-x: auto; /* défilement horizontal sur petits écrans */
+        scrollbar-width: none; /* Firefox */
+        margin-bottom: 0;
+    }
+    .fi-tabs::-webkit-scrollbar {
+        display: none; /* Chrome/Safari */
     }
 
-    /* Chaque carte occupe toute la largeur, divisée en 2 colonnes */
-    .fi-cat-card {
-        display: grid;
-        /* 40% info catégorie | 60% threads récents */
-        grid-template-columns: 2fr 3fr;
-        border-bottom: 1px solid var(--ink);
-        text-decoration: none;
+    /* Chaque onglet : bouton plat sans fond par défaut */
+    .fi-tab {
+        padding: 14px 18px;
+        border: none;
+        border-right: 1px solid var(--line-soft);
+        background: transparent;
         color: var(--ink);
-        background: var(--bg);
+        font-family: var(--body);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .fi-tab:last-child {
+        border-right: none;
+    }
+    .fi-tab:hover:not(.fi-tab--active) {
+        background: var(--ink);
+        color: var(--bg);
+    }
+
+    /* Onglet actif : fond encre, texte accent lime */
+    .fi-tab--active {
+        background: var(--ink);
+        color: var(--accent);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       GRILLE 3 COLONNES
+       .85fr (catégories) | 2.2fr (feed) | .95fr (sidebar)
+       Passage en colonne unique sous 900px.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fi-grid {
+        display: grid;
+        grid-template-columns: .85fr 2.2fr .95fr;
+        gap: 24px;
+        padding-top: 24px;
+        padding-bottom: 64px;
+        align-items: start; /* les colonnes ne s'étirent pas mutuellement */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       COLONNE GAUCHE — CATEGORIES
+       Sticky pour rester visible au scroll.
+    ══════════════════════════════════════════════════════════════ */
+
+    .fi-col-cats {
+        position: sticky;
+        top: 80px;
+    }
+
+    /* Boite catégories : bord encre, pas de rayon */
+    .fi-cats-box {
+        border: 1px solid var(--ink);
+        overflow: hidden; /* le header interne sort dans les bords */
+    }
+
+    /* En-tête de la boite catégories : fond encre, texte accent mono */
+    .fi-cats-box__header {
+        padding: 14px 16px;
+        background: var(--ink);
+        color: var(--accent);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+    }
+
+    /* Chaque lien de catégorie : flex, séparateur bas, hover fond alt */
+    .fi-cat-link {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--line-soft);
+        background: transparent;
+        color: var(--ink);
+        text-decoration: none;
+        font-size: 13px;
+        font-family: var(--body);
         transition: background var(--transition-fast);
     }
-    .fi-cat-card:last-child {
+    .fi-cat-link:last-child {
         border-bottom: none;
     }
-    .fi-cat-card:hover {
-        /* Léger assombrissement au survol — discret sur fond crème */
+    .fi-cat-link:hover {
         background: var(--bg-alt);
     }
-    /* Focus clavier accessible */
-    .fi-cat-card:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: -2px;
+
+    /* Compteur de threads en mono discret */
+    .fi-cat-link__count {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        flex-shrink: 0;
+        margin-left: 8px;
     }
 
-    /* ── Colonne gauche : info de la catégorie ──────────────────── */
+    /* ══════════════════════════════════════════════════════════════
+       COLONNE CENTRALE — FEED DE THREADS
+    ══════════════════════════════════════════════════════════════ */
 
-    .fi-cat-card__info {
-        padding: 28px 24px;
-        /* Séparateur vertical entre les deux colonnes */
-        border-right: 1px solid var(--ink);
+    /* Zone compositeur "créer un post" en haut du feed */
+    .fi-composer {
         display: flex;
-        flex-direction: column;
-        gap: 12px;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 16px;
+        background: var(--bg-alt);
+        border: 1px solid var(--ink);
+        margin-bottom: 16px;
     }
 
-    /* Carré accent (lime) contenant l'icône de la catégorie */
-    .fi-cat-card__icon-wrap {
-        width: 48px;
-        height: 48px;
+    /* Avatar initiales : carré lime, texte encre, mono gras */
+    .fi-composer__avatar {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
         background: var(--accent);
+        color: var(--ink);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 22px;
-        flex-shrink: 0;
-        /* Pas de border-radius — carré franc */
+        font-family: var(--mono);
+        font-size: 14px;
+        font-weight: 700;
     }
 
-    /* Nom de la catégorie en Archivo Black grand */
-    .fi-cat-card__name {
-        font-family: var(--display);
-        font-size: 28px;
-        line-height: 1;
-        text-transform: uppercase;
-        margin: 0;
-    }
-
-    .fi-cat-card__description {
+    /* Placeholder textuel grisé */
+    .fi-composer__placeholder {
+        flex: 1;
         font-family: var(--body);
-        font-size: 13px;
+        font-size: 14px;
         color: var(--ink-mute);
-        line-height: 1.5;
-        margin: 0;
     }
 
-    /* Compteur de threads en mono — en bas de la colonne gauche */
-    .fi-cat-card__count {
-        font-family: var(--mono);
-        font-size: 11px;
-        letter-spacing: .1em;
-        text-transform: uppercase;
-        color: var(--ink-mute);
-        margin-top: auto;
-        padding-top: 8px;
+    /* Groupe de boutons du compositeur */
+    .fi-composer__actions {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
     }
-    /* La valeur numérique ressort en couleur accent */
-    .fi-cat-card__count strong {
+
+    /* Liste des threads : pas d'espacement entre les cartes */
+    .fi-thread-list {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Carte thread : lien cliquable, grille 2 colonnes */
+    .fi-thread-card {
+        display: grid;
+        grid-template-columns: 56px 1fr;
+        border: 1px solid var(--ink);
+        /* On écrase la border-top pour les cartes qui ne sont pas les premières
+           → gérée par .fi-thread-card--first en Twig (loop.first) */
+        border-top: 0;
+        text-decoration: none;
         color: var(--ink);
-        font-weight: 700;
+        transition: background var(--transition-fast);
+    }
+    /* La première carte garde sa border-top pour fermer le bloc en haut */
+    .fi-thread-card--first {
+        border-top: 1px solid var(--ink);
     }
 
-    /* ── Colonne droite : threads récents ───────────────────────── */
-
-    .fi-cat-card__threads {
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-    }
-
-    /* En-tête de la colonne droite — fond alt, label mono */
-    .fi-cat-card__threads-label {
-        padding: 10px 20px;
+    /* Rail de vote à gauche : fond alt, flèches + compteur */
+    .fi-thread-card__vote {
         background: var(--bg-alt);
-        border-bottom: 1px solid var(--ink);
-        font-family: var(--mono);
-        font-size: 10px;
-        letter-spacing: .12em;
-        font-weight: 700;
-        text-transform: uppercase;
-        color: var(--ink-mute);
-    }
-
-    /* Chaque ligne de thread dans la colonne droite */
-    .fi-thread-preview {
-        padding: 14px 20px;
-        border-bottom: 1px solid var(--line-soft);
+        border-right: 1px solid var(--line-soft);
         display: flex;
         flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 14px 0;
         gap: 4px;
     }
-    .fi-thread-preview:last-child {
-        border-bottom: none;
+
+    /* Flèches de vote — caractères Unicode */
+    .fi-vote-arrow {
+        font-size: 12px;
+        color: var(--ink-mute);
+        line-height: 1;
+        user-select: none;
+    }
+    .fi-vote-arrow--down {
+        opacity: .3;
     }
 
-    .fi-thread-preview__title {
-        font-family: var(--body);
-        font-size: 13px;
-        font-weight: 600;
+    /* Compteur numérique en Archivo Black */
+    .fi-vote-count {
+        font-family: var(--display);
+        font-size: 18px;
+        line-height: 1;
         color: var(--ink);
-        /* Tronque le titre sur une ligne */
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
 
-    .fi-thread-preview__meta {
+    /* Contenu principal du thread : méta + titre + extrait */
+    .fi-thread-card__body {
+        padding: 14px 18px;
+        transition: background var(--transition-fast);
+    }
+    .fi-thread-card:hover .fi-thread-card__body {
+        /* Hover uniquement sur la partie textuelle, le rail reste neutre */
+        background: var(--bg-alt);
+    }
+
+    /* Ligne de méta : auteur, date, badge catégorie — mono discret */
+    .fi-thread-card__meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        flex-wrap: wrap;
+    }
+    .fi-thread-card__meta-item {
         font-family: var(--mono);
         font-size: 10px;
         color: var(--ink-mute);
         letter-spacing: .04em;
     }
 
-    /* Message "Soyez le premier" quand il n'y a pas encore de threads */
-    .fi-cat-card__empty {
-        padding: 32px 20px;
+    /* Badge catégorie : chip bord encre, mono 9px */
+    .fi-cat-chip {
+        display: inline-block;
+        padding: 2px 7px;
+        border: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink);
+        line-height: 1.6;
+    }
+
+    /* Titre du thread en Archivo Black */
+    .fi-thread-card__title {
+        font-family: var(--display);
+        font-size: 22px;
+        line-height: 1.1;
+        margin: 0 0 6px;
+        text-transform: none;
+        color: var(--ink);
+    }
+
+    /* Extrait du contenu : mono discret, tronqué */
+    .fi-thread-card__excerpt {
+        font-family: var(--mono);
+        font-size: 13.5px;
+        color: var(--ink-mute);
+        margin: 0 0 8px;
+        line-height: 1.5;
+    }
+
+    /* Ligne méta basse : nb réponses, vues */
+    .fi-thread-card__stats {
         font-family: var(--mono);
         font-size: 11px;
         color: var(--ink-mute);
-        letter-spacing: .08em;
+    }
+
+    /* Message "état vide" si aucun thread n'est disponible dans aucune catégorie */
+    .fi-feed-empty {
+        padding: 60px 24px;
+        text-align: center;
+        border: 1px dashed var(--ink);
+        font-family: var(--display);
+        font-size: 24px;
         text-transform: uppercase;
-        /* Centré verticalement dans la colonne */
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex: 1;
+        color: var(--ink-mute);
     }
 
     /* ══════════════════════════════════════════════════════════════
-       ÉTAT VIDE
-       Message centré quand il n'y a aucune catégorie.
+       COLONNE DROITE — SIDEBAR
+       Sticky, même offset que la colonne catégories.
     ══════════════════════════════════════════════════════════════ */
 
-    .fi-empty {
-        padding: 80px 24px;
-        text-align: center;
-        border: 1px dashed var(--ink);
+    .fi-col-sidebar {
+        position: sticky;
+        top: 80px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
     }
-    .fi-empty__text {
-        font-family: var(--display);
-        font-size: 28px;
+
+    /* Bloc "Règle de base" : fond accent lime */
+    .fi-sidebar-rule {
+        background: var(--accent);
+        border: 1px solid var(--ink);
+        padding: 16px;
+    }
+    .fi-sidebar-rule__label {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
         text-transform: uppercase;
-        margin: 0 0 8px;
+        color: var(--ink);
+        margin-bottom: 8px;
     }
-    .fi-empty__sub {
+    .fi-sidebar-rule__text {
+        font-size: 18px;
+        font-style: italic;
+        color: var(--ink);
+        line-height: 1.4;
+        margin: 0;
+    }
+
+    /* Bloc "Hot du jour" et "Lives à venir" : structure identique */
+    .fi-sidebar-block {
+        border: 1px solid var(--ink);
+        overflow: hidden;
+    }
+    .fi-sidebar-block__header {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink);
+    }
+
+    /* Chaque item "hot" : lien vers le thread */
+    .fi-hot-item {
+        display: block;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line-soft);
+        text-decoration: none;
+        color: var(--ink);
+        transition: background var(--transition-fast);
+    }
+    .fi-hot-item:last-child {
+        border-bottom: none;
+    }
+    .fi-hot-item:hover {
+        background: var(--bg-alt);
+    }
+    .fi-hot-item__title {
+        font-family: var(--body);
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 4px;
+        line-height: 1.3;
+    }
+    .fi-hot-item__meta {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+    }
+
+    /* Placeholder "aucun live" */
+    .fi-sidebar-empty {
+        padding: 16px;
         font-family: var(--mono);
         font-size: 11px;
         color: var(--ink-mute);
-        letter-spacing: .08em;
-        text-transform: uppercase;
+        letter-spacing: .04em;
     }
 
     /* ══════════════════════════════════════════════════════════════
        RESPONSIVE
-       Sur mobile (<640px) : passage en colonne unique.
+       Passage en colonne unique sous 900px, 2 colonnes entre 640-900px.
     ══════════════════════════════════════════════════════════════ */
+
+    @media (max-width: 900px) {
+        .fi-grid {
+            /* Catégories | Feed (on masque la sidebar) */
+            grid-template-columns: .9fr 2fr;
+        }
+        .fi-col-sidebar {
+            display: none;
+        }
+    }
 
     @media (max-width: 640px) {
         .fi-header {
@@ -352,162 +493,459 @@
             gap: 16px;
         }
         .fi-title {
-            font-size: clamp(40px, 14vw, 64px);
+            font-size: clamp(48px, 14vw, 80px);
         }
-        /* Les cartes passent en colonne unique */
-        .fi-cat-card {
+        .fi-grid {
             grid-template-columns: 1fr;
         }
-        /* Supprime le séparateur vertical qui n'a plus de sens */
-        .fi-cat-card__info {
-            border-right: none;
-            border-bottom: 1px solid var(--ink);
+        .fi-col-cats {
+            position: static; /* annule le sticky sur mobile */
         }
     }
+
 </style>
 {% endblock %}
 
 {% block content %}
 
+<div class="fi-wrapper">
+
 {# ── EN-TÊTE DE PAGE ──────────────────────────────────────────────────────────
-   Structure inspirée du ScreenForum du prototype :
-   grand titre display à gauche, bouton CTA à droite.
-   Le bouton "Nouveau sujet" n'est visible que si l'utilisateur est connecté.
+   Flex horizontal : titre display + eyebrow à gauche, boutons CTA à droite.
+
+   NOTE sur la route "Nouveau post" :
+   La route app_forum_new_thread requiert un {categorySlug} car la création
+   d'un thread est toujours liée à une catégorie. On pointe vers la première
+   catégorie active si elle existe. Si le forum est vide, le bouton est absent.
+
+   Convention Twig : on teste `categories|first` pour obtenir la première
+   catégorie sans lever d'erreur si le tableau est vide.
 #}
 <div class="fi-header">
+
+    {# Bloc gauche : eyebrow + titre géant #}
     <div>
-        {# Eyebrow : contexte en mono, point carré accent #}
-        <div class="fi-eyebrow">Forum · communauté · échanges · entraide</div>
+        {#
+            Eyebrow en mono uppercase — présente le contexte de la page.
+            Le carré "■" est un caractère Unicode (U+25A0), pas un ::before CSS,
+            pour conserver l'accessibilité des lecteurs d'écran.
+        #}
+        <div class="fi-eyebrow">
+            <span aria-hidden="true">&#9632;</span>
+            FORUM + LIVES
+        </div>
 
-        {# Titre principal en Archivo Black — style "affiche" #}
-        <h1 class="fi-title">On se parle.</h1>
+        {# Titre principal — Archivo Black, très grand, uppercase via CSS #}
+        <h1 class="fi-title">ON SE PARLE.</h1>
     </div>
 
-    {# Pas de bouton "Nouveau sujet" ici : la route app_forum_new_thread
-       exige un {categorySlug}. L'utilisateur choisit d'abord une catégorie,
-       puis le bouton apparaît dans forum/category.html.twig. #}
-</div>
+    {# Bloc droit : boutons d'action principaux #}
+    <div class="fi-header__ctas">
 
-{# ── BARRE STATS ──────────────────────────────────────────────────────────────
-   Fond noir, valeurs en vert acide, labels en mono uppercase.
-   Donne un aperçu rapide de l'activité du forum.
+        {#
+            Bouton "Nouveau post" : actif uniquement si au moins une catégorie existe.
+            On prend la première catégorie comme point d'entrée par défaut.
+            Si toutes les catégories sont vides, on masque le bouton pour éviter
+            une erreur de route (categorySlug manquant).
+        #}
+        {% if categories is not empty %}
+            {% set firstCategory = categories|first %}
+            <a href="{{ path('app_forum_new_thread', { categorySlug: firstCategory.slug }) }}"
+               class="btn btn-primary">
+                Nouveau post
+            </a>
+        {% endif %}
+
+        {#
+            Bouton "Programmer un live" : lien vers la page de planification des lives.
+            Rendu en ghost button (contour encre) pour hiérarchiser visuellement.
+            En V1, redirige vers une page à créer — href="#" si non encore implémentée.
+        #}
+        <a href="#" class="btn btn-ghost btn-sm">
+            Programmer un live
+        </a>
+
+    </div>
+
+</div>{# fin fi-header #}
+
+{# ── TAB BAR ──────────────────────────────────────────────────────────────────
+   Barre de filtres horizontale.
+   En V1 : le JS active/désactive le style de l'onglet courant,
+   mais aucun filtrage de contenu n'est opéré (données statiques).
+   L'attribut data-tab permettra d'accrocher du filtrage côté client en V2.
 #}
-<div class="fi-stats-bar" role="region" aria-label="Statistiques du forum">
-    <div class="fi-stats-bar__item">
-        <span class="fi-stats-bar__value">{{ categories|length }}</span>
-        <span>Catégorie{{ categories|length > 1 ? 's' : '' }}</span>
-    </div>
-    {# Total de threads calculé depuis latestThreadsByCategory si disponible #}
-    <div class="fi-stats-bar__item">
-        <span class="fi-stats-bar__value">
-            {{- categories|reduce((carry, cat) => carry + cat.threadsCount, 0) -}}
-        </span>
-        <span>Sujets</span>
-    </div>
-</div>
+<nav class="fi-tabs" role="tablist" aria-label="Filtres du forum">
+    <button class="fi-tab fi-tab--active" role="tab" data-tab="all" aria-selected="true">
+        Tout
+    </button>
+    <button class="fi-tab" role="tab" data-tab="hot" aria-selected="false">
+        Hot
+    </button>
+    <button class="fi-tab" role="tab" data-tab="questions" aria-selected="false">
+        Questions
+    </button>
+    <button class="fi-tab" role="tab" data-tab="lives-en-cours" aria-selected="false">
+        Lives en cours
+    </button>
+    <button class="fi-tab" role="tab" data-tab="lives-programmes" aria-selected="false">
+        Lives programmes
+    </button>
+    <button class="fi-tab" role="tab" data-tab="discussions" aria-selected="false">
+        Discussions
+    </button>
+</nav>
 
-{# ── LISTE DES CATÉGORIES ─────────────────────────────────────────────────────
-   Deux états : liste non vide (grille de cartes) ou message "forum vide".
+{# ── GRILLE 3 COLONNES ────────────────────────────────────────────────────────
+   .85fr catégories | 2.2fr feed | .95fr sidebar
+   Les trois colonnes sont sticky à top: 80px sauf le feed central.
 #}
-{% if categories is empty %}
+<div class="fi-grid">
 
-    {# État vide — aucune catégorie configurée par l'admin #}
-    <div class="fi-empty" role="status">
-        <p class="fi-empty__text">Bientôt ouvert</p>
-        <p class="fi-empty__sub">Les catégories du forum seront disponibles prochainement.</p>
-    </div>
+    {# ════════════════════════════════════════════════════════════════════════
+       COLONNE GAUCHE — LISTE DES CATEGORIES
+       Affiche toutes les catégories actives avec leur compteur de threads.
+       La liste est sticky pour rester visible lors du scroll du feed.
+    ════════════════════════════════════════════════════════════════════════ #}
+    <div class="fi-col-cats">
+        <div class="fi-cats-box">
 
-{% else %}
+            {# En-tête de la boite : fond encre, texte lime #}
+            <div class="fi-cats-box__header">CATEGORIES</div>
 
-    <div class="fi-categories" role="list">
+            {# Cas vide : aucune catégorie configurée par l'admin #}
+            {% if categories is empty %}
+                <div class="fi-sidebar-empty">
+                    Aucune categorie disponible.
+                </div>
+            {% else %}
+                {#
+                    Boucle sur toutes les catégories actives.
+                    cat.threadsCount → méthode getThreadsCount() de ForumCategory,
+                    qui compte les threads via la collection Doctrine (sans requête
+                    supplémentaire si la collection est déjà chargée).
+                #}
+                {% for cat in categories %}
+                    <a href="{{ path('app_forum_category', { categorySlug: cat.slug }) }}"
+                       class="fi-cat-link"
+                       aria-label="{{ cat.name }}, {{ cat.threadsCount }} sujet{{ cat.threadsCount > 1 ? 's' : '' }}">
+                        <span class="fi-cat-link__name">{{ cat.name }}</span>
+                        <span class="fi-cat-link__count">{{ cat.threadsCount }}</span>
+                    </a>
+                {% endfor %}
+            {% endif %}
 
-        {% for category in categories %}
+        </div>
+    </div>{# fin fi-col-cats #}
+
+    {# ════════════════════════════════════════════════════════════════════════
+       COLONNE CENTRALE — FEED DE THREADS
+       Compositeur en haut (appel à l'action), puis liste des threads récents.
+
+       Source des données :
+       Le controller passe `latestThreadsByCategory` (tableau indexé par id
+       de catégorie → [threads...]). On "aplatit" (flatten) ici en Twig pour
+       obtenir une liste chronologique unifiée.
+       La dénomination `flatThreads` est une variable locale Twig.
+    ════════════════════════════════════════════════════════════════════════ #}
+    <div class="fi-col-feed">
+
+        {# Zone compositeur — invite à créer un post #}
+        <div class="fi-composer">
+
+            {# Avatar : initiales de l'utilisateur connecté, ou "?" si inconnu #}
+            <div class="fi-composer__avatar" aria-hidden="true">
+                {% if app.user %}
+                    {#
+                        On extrait la première lettre de l'email (partie avant @).
+                        split('@')|first donne la partie locale de l'email,
+                        puis |slice(0,1)|upper donne la première lettre en majuscule.
+                    #}
+                    {{ app.user.email|split('@')|first|slice(0,1)|upper }}
+                {% else %}
+                    ?
+                {% endif %}
+            </div>
+
+            {# Texte d'invitation à poster #}
+            <span class="fi-composer__placeholder">
+                Une question, un appel, un partage...
+            </span>
+
+            {# Boutons d'action rapide du compositeur #}
+            <div class="fi-composer__actions">
+                {% if categories is not empty %}
+                    {% set firstCategory = categories|first %}
+                    <a href="{{ path('app_forum_new_thread', { categorySlug: firstCategory.slug }) }}"
+                       class="btn btn-ghost btn-sm">
+                        Post
+                    </a>
+                {% else %}
+                    {# Si aucune catégorie n'existe, on affiche le bouton désactivé #}
+                    <button class="btn btn-ghost btn-sm" disabled title="Aucune categorie disponible">
+                        Post
+                    </button>
+                {% endif %}
+
+                {# Bouton live — fonctionnalité V2, désactivé en V1 #}
+                <a href="#" class="btn btn-ghost btn-sm">
+                    Live
+                </a>
+            </div>
+
+        </div>{# fin fi-composer #}
+
+        {# Liste des threads #}
+        <div class="fi-thread-list" role="list">
 
             {#
-                Chaque carte est un <a> qui pointe vers la page de la catégorie.
-                ATTENTION : on ne peut pas imbriquer un <a> dans cet <a>.
-                Les liens vers des threads individuels dans la colonne droite
-                sont donc remplacés par du texte simple (pas de lien).
-                Cela est acceptable car cliquer n'importe où sur la carte
-                navigue vers la catégorie.
+                Flatten des threads : on construit un tableau `allThreads` en
+                parcourant toutes les catégories et en accumulant leurs threads
+                via le filtre `merge`.
+
+                Pourquoi `merge` et non `namespace` ?
+                Twig n'a pas de `namespace` (c'est Jinja2/Python). Les variables
+                `{% set %}` dans une boucle sont limitées à la portée du bloc.
+                Le filtre `merge` crée un nouveau tableau à chaque itération —
+                cette approche est idiomatique en Twig Symfony.
+
+                `allThreads` est ensuite itéré une seule fois pour le rendu.
             #}
-            <a href="{{ path('app_forum_category', { categorySlug: category.slug }) }}"
-               class="fi-cat-card"
-               role="listitem"
-               aria-label="{{ category.name }} — {{ category.threadsCount }} sujet{{ category.threadsCount > 1 ? 's' : '' }}">
+            {% set allThreads = [] %}
+            {% for cat in categories %}
+                {% set catThreads = latestThreadsByCategory[cat.id] ?? [] %}
+                {% if catThreads is not empty %}
+                    {% set allThreads = allThreads|merge(catThreads) %}
+                {% endif %}
+            {% endfor %}
 
-                {# ── Colonne gauche : infos de la catégorie ── #}
-                <div class="fi-cat-card__info">
+            {% if allThreads is empty %}
 
-                    {# Icône dans carré lime si elle est définie #}
-                    {% if category.icon %}
-                        <div class="fi-cat-card__icon-wrap" aria-hidden="true">
-                            {{ category.icon }}
-                        </div>
-                    {% endif %}
-
-                    {# Nom en Archivo Black — uppercase automatique via CSS #}
-                    <h2 class="fi-cat-card__name">{{ category.name }}</h2>
-
-                    {# Description courte de la catégorie #}
-                    {% if category.description %}
-                        <p class="fi-cat-card__description">{{ category.description }}</p>
-                    {% endif %}
-
-                    {# Compteur de threads en mono — poussé en bas de la colonne #}
-                    <div class="fi-cat-card__count">
-                        <strong>{{ category.threadsCount }}</strong>
-                        sujet{{ category.threadsCount > 1 ? 's' : '' }}
-                    </div>
+                {# Etat vide : aucun thread dans aucune catégorie #}
+                <div class="fi-feed-empty" role="status">
+                    Pas encore de discussion. Soyez le premier !
                 </div>
 
-                {# ── Colonne droite : 3 derniers threads ── #}
-                <div class="fi-cat-card__threads">
+            {% else %}
 
-                    {# En-tête de la colonne droite #}
-                    <div class="fi-cat-card__threads-label" aria-hidden="true">
-                        Derniers sujets
-                    </div>
+                {% for thread in allThreads %}
 
                     {#
-                        latestThreadsByCategory est un tableau indexé par l'id
-                        de la catégorie → on récupère les threads de cette catégorie.
-                        L'opérateur ?? [] garantit un tableau vide si absent.
+                        Chaque carte est un <a> complet cliquable.
+                        La grille 2 colonnes (rail de vote | contenu) est gérée par CSS.
+                        La border-top n'est ajoutée que sur la toute première carte
+                        via la variable Twig `loop.first`.
                     #}
-                    {% set latestThreads = latestThreadsByCategory[category.id] ?? [] %}
+                    <a href="{{ path('app_forum_thread', { categorySlug: thread.category.slug, threadSlug: thread.slug }) }}"
+                       class="fi-thread-card{% if loop.first %} fi-thread-card--first{% endif %}"
+                       role="listitem"
+                       aria-label="{{ thread.title }}">
 
-                    {% if latestThreads is empty %}
-                        <div class="fi-cat-card__empty">
-                            Soyez le premier à poster !
+                        {# Rail gauche : compteur dénormalisé (repliesCount en V1 = activité) #}
+                        <div class="fi-thread-card__vote" aria-hidden="true">
+                            <span class="fi-vote-arrow">&#9650;</span>
+                            <span class="fi-vote-count">{{ thread.repliesCount }}</span>
+                            <span class="fi-vote-arrow fi-vote-arrow--down">&#9660;</span>
                         </div>
-                    {% else %}
-                        {% for thread in latestThreads %}
-                            <div class="fi-thread-preview">
-                                {# Titre tronqué si trop long #}
-                                <div class="fi-thread-preview__title">
-                                    {% if thread.pinned %}
-                                        {# Indicateur d'épinglage textuel accessible #}
-                                        <span title="Épinglé" aria-label="Épinglé">&#8902;</span>
-                                    {% endif %}
-                                    {{ thread.title }}
-                                </div>
-                                {# Méta : auteur + date en mono #}
-                                <div class="fi-thread-preview__meta">
+
+                        {# Contenu principal du thread #}
+                        <div class="fi-thread-card__body">
+
+                            {# Ligne de méta : auteur, date, badge catégorie #}
+                            <div class="fi-thread-card__meta">
+                                {#
+                                    Nom d'affichage : partie locale de l'email (avant @).
+                                    Ex : "gaelle@bazaart.fr" → "gaelle"
+                                    En V1, les profils n'ont pas forcément de username distinct.
+                                #}
+                                <span class="fi-thread-card__meta-item">
                                     {{ thread.author.email|split('@')|first }}
-                                    · {{ thread.createdAt|date('d/m/Y') }}
-                                </div>
+                                </span>
+
+                                {# Séparateur visuel #}
+                                <span class="fi-thread-card__meta-item" aria-hidden="true">·</span>
+
+                                {# Date de création du thread #}
+                                <span class="fi-thread-card__meta-item">
+                                    {{ thread.createdAt|date('d M Y') }}
+                                </span>
+
+                                {# Badge catégorie : chip bord encre #}
+                                <span class="fi-cat-chip">{{ thread.category.name }}</span>
+
+                                {# Indicateur épinglé si applicable #}
+                                {% if thread.isPinned %}
+                                    <span class="fi-cat-chip" title="Epingle" aria-label="Epingle">
+                                        EPINGLE
+                                    </span>
+                                {% endif %}
+
+                                {# Indicateur verrouillé si applicable #}
+                                {% if thread.isLocked %}
+                                    <span class="fi-cat-chip" title="Verrouille" aria-label="Verrouille">
+                                        FERME
+                                    </span>
+                                {% endif %}
                             </div>
-                        {% endfor %}
-                    {% endif %}
 
-                </div>{# fin fi-cat-card__threads #}
+                            {# Titre en Archivo Black #}
+                            <h2 class="fi-thread-card__title">{{ thread.title }}</h2>
 
-            </a>{# fin fi-cat-card #}
+                            {#
+                                Extrait du contenu tronqué à 120 caractères.
+                                thread.content → getContent() de ForumThread (champ 'content', type text).
+                                On utilise le filtre Twig |slice pour tronquer proprement.
+                            #}
+                            {% if thread.content %}
+                                {#
+                                    |striptags avant |slice : si le contenu contient du HTML
+                                    (éditeur riche), tronquer à 120 caractères sans enlever les tags
+                                    risque de couper en milieu de balise → markup malformé.
+                                    striptags produit du texte brut propre avant la troncature.
+                                #}
+                                <p class="fi-thread-card__excerpt">
+                                    {{- thread.content|striptags|slice(0, 120) -}}
+                                    {%- if thread.content|striptags|length > 120 %}...{% endif %}
+                                </p>
+                            {% endif %}
 
-        {% endfor %}
+                            {# Méta basse : réponses et vues #}
+                            <div class="fi-thread-card__stats">
+                                {{ thread.repliesCount }} reponse{{ thread.repliesCount > 1 ? 's' : '' }}
+                                ·
+                                {{ thread.viewsCount }} vue{{ thread.viewsCount > 1 ? 's' : '' }}
+                            </div>
 
-    </div>{# fin fi-categories #}
+                        </div>{# fin fi-thread-card__body #}
 
-{% endif %}
+                    </a>{# fin fi-thread-card #}
+
+                {% endfor %}{# fin for thread in allThreads #}
+
+            {% endif %}
+
+        </div>{# fin fi-thread-list #}
+
+    </div>{# fin fi-col-feed #}
+
+    {# ════════════════════════════════════════════════════════════════════════
+       COLONNE DROITE — SIDEBAR
+       1. Regle de base (fond accent lime)
+       2. Hot du jour (4 premiers threads du feed)
+       3. Lives a venir (si la variable upcomingLives est définie)
+    ════════════════════════════════════════════════════════════════════════ #}
+    <div class="fi-col-sidebar">
+
+        {# ── 1. Règle de base ── #}
+        <div class="fi-sidebar-rule">
+            <div class="fi-sidebar-rule__label">REGLE DE BASE</div>
+            <p class="fi-sidebar-rule__text">
+                Pas de pub deguisee. Pas de spam. On reste entre nous.
+            </p>
+        </div>
+
+        {# ── 2. Hot du jour ── #}
+        <div class="fi-sidebar-block">
+            <div class="fi-sidebar-block__header">HOT DU JOUR</div>
+
+            {#
+                On affiche les 4 premiers threads toutes catégories confondues.
+                "Hot" en V1 = les premiers chargés (tri par date/activité géré
+                par le repository). Pas de score de "hotness" distinct en V1.
+                En V2 : ajouter un champ `hotScore` ou trier par
+                (repliesCount * 2 + viewsCount) sur 24h.
+
+                On réutilise `allThreads` construit dans la colonne centrale
+                (variable Twig disponible dans le même block {% content %}).
+                |slice(0, 4) extrait les 4 premiers éléments.
+            #}
+            {% if allThreads is defined and allThreads is not empty %}
+                {% for thread in allThreads|slice(0, 4) %}
+                    <a href="{{ path('app_forum_thread', { categorySlug: thread.category.slug, threadSlug: thread.slug }) }}"
+                       class="fi-hot-item">
+                        <div class="fi-hot-item__title">{{ thread.title }}</div>
+                        <div class="fi-hot-item__meta">
+                            {{ thread.repliesCount }} reponse{{ thread.repliesCount > 1 ? 's' : '' }}
+                        </div>
+                    </a>
+                {% endfor %}
+            {% else %}
+                <div class="fi-sidebar-empty">
+                    Aucune discussion pour l'instant.
+                </div>
+            {% endif %}
+
+        </div>{# fin fi-sidebar-block hot #}
+
+        {# ── 3. Lives à venir ── #}
+        <div class="fi-sidebar-block">
+            <div class="fi-sidebar-block__header">LIVES A VENIR</div>
+
+            {#
+                `upcomingLives` est optionnel : le controller forum/index ne
+                l'envoie pas encore (fonctionnalité Lives = V1 tardive).
+                On vérifie `is defined` avant d'y accéder pour éviter une
+                erreur Twig "variable does not exist".
+                Quand le controller enverra la variable, le bloc s'affichera
+                automatiquement sans modifier ce template.
+            #}
+            {% if upcomingLives is defined and upcomingLives|length > 0 %}
+                {% for live in upcomingLives %}
+                    {#
+                        En V1 les lives sont des liens externes (Twitch, YouTube, etc.).
+                        L'entité Live aura a minima : title, scheduledAt, externalUrl.
+                        Ces propriétés sont gardées en commentaire pour la future intégration.
+                    #}
+                    <div class="fi-hot-item">
+                        <div class="fi-hot-item__title">{{ live.title ?? 'Live a venir' }}</div>
+                        <div class="fi-hot-item__meta">
+                            {{ live.scheduledAt is defined ? live.scheduledAt|date('d M Y H:i') : '' }}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="fi-sidebar-empty">
+                    Aucun live programme pour l'instant.
+                </div>
+            {% endif %}
+
+        </div>{# fin fi-sidebar-block lives #}
+
+    </div>{# fin fi-col-sidebar #}
+
+</div>{# fin fi-grid #}
+
+</div>{# fin fi-wrapper #}
+
+{# ── JS VANILLA — GESTION DES ONGLETS ─────────────────────────────────────────
+   Comportement : cliquer sur un onglet le marque comme actif (fond encre,
+   texte accent) et retire la classe active des autres.
+   En V1 : aucun filtrage de contenu — uniquement le feedback visuel.
+   En V2 : brancher du filtrage AJAX ou Turbo Frames ici.
+#}
+<script>
+    (function () {
+        // On cible tous les boutons de la tab bar
+        const tabs = document.querySelectorAll('.fi-tab');
+
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                // Retire la classe active + met aria-selected=false sur tous les onglets
+                tabs.forEach(function (t) {
+                    t.classList.remove('fi-tab--active');
+                    t.setAttribute('aria-selected', 'false');
+                });
+
+                // Marque l'onglet cliqué comme actif
+                tab.classList.add('fi-tab--active');
+                tab.setAttribute('aria-selected', 'true');
+
+                // En V1 : log uniquement (aucun filtrage)
+                // En V2 : déclencher ici un filtre AJAX ou Turbo Frame
+                // console.debug('[Forum] Onglet actif :', tab.dataset.tab);
+            });
+        });
+    })();
+</script>
 
 {% endblock %}

@@ -4,45 +4,61 @@
  # resource/index.html.twig — Catalogue des ressources / opportunités
  #
  # Thème : Street (app connectée)
- # Polices : Archivo Black (--display) pour les titres, Space Grotesk (--body) pour le reste
- # Palette : fond var(--bg) sable, accent var(--accent) lime, contours var(--ink) quasi-noir
- # Design : bords francs (radius 0), grille editoriale, barre de filtres façon tableau de bord
+ # Refonte : double vue Liste + Grille, switcher JS, header géant, filtres inline
+ #
+ # Polices :
+ #   var(--display) = Archivo Black  → titres, eyebrow, grands formats
+ #   var(--body)    = Space Grotesk  → texte courant
+ #   var(--mono)    = JetBrains Mono → labels, badges, méta
+ #
+ # Palette :
+ #   var(--bg)      = #F2EFE6  fond sable
+ #   var(--ink)     = #0D0D0D  quasi-noir principal
+ #   var(--accent)  = #C6F24E  lime
+ #   var(--accent-2)= #FF6B2C  orange (urgence)
+ #
+ # Design : border-radius 0 partout, pas d'ombres, bordures 1px solid var(--ink)
  #
  # Variables Twig disponibles :
  #   resources           — tableau de Resource (uniquement la page courante, 12 max)
  #   types               — tableau de ResourceType pour le select
  #   disciplines         — tableau de Discipline pour le select
- #   currentSearch       — string (filtre texte actif)
+ #   currentSearch       — string (filtre texte actif, paramètre URL "q")
  #   currentTypeId       — int|null (filtre type actif)
  #   currentDisciplineId — int|null (filtre discipline actif)
  #   currentPage         — int (page courante, 1-based)
  #   totalPages          — int (nombre total de pages)
  #   total               — int (nombre total de résultats tous filtres confondus)
+ #
+ # Chaque resource expose :
+ #   .id, .title, .deadline (DateTimeInterface|null — utilisé avec |date('d M Y'))
+ #   .resourceType (nullable, .name), .disciplines (Collection, .name)
+ #   .organization (nullable, .name), .location (string|null)
  #}
 
-{% block title %}Ressources — Bazaart{% endblock %}
-{% block page_title %}Ressources{% endblock %}
+{% block title %}Opportunites — Bazaart{% endblock %}
+{% block page_title %}Opportunites{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* ═══════════════════════════════════════════════════════════════════════
-       CATALOGUE RESSOURCES — styles thème Street
-       Toutes les valeurs passent par des variables CSS du design-tokens.css.
-       Aucune couleur ou police en dur : on utilise var(--...) pour que
-       le design system puisse évoluer sans toucher aux templates.
-    ═══════════════════════════════════════════════════════════════════════ */
+    /* =====================================================================
+       CATALOGUE OPPORTUNITES — styles thème Street
+       Toutes les valeurs passent par les variables CSS du design-tokens.css.
+       Aucune couleur ni police en dur : on utilise var(--...) pour que le
+       design system puisse évoluer sans toucher aux templates.
+    ===================================================================== */
 
-    /* ── En-tête de section ────────────────────────────────────────────── */
+    /* ── En-tête de section ──────────────────────────────────────────── */
 
-    /* Bande supérieure : titre géant + compteur de résultats + bouton CTA */
+    /* Zone d'en-tête principale : titre géant + compteur + contrôles vue */
     .opp-header {
-        padding: var(--space-xl) 0 var(--space-lg);
+        padding-top: 32px;
+        padding-bottom: 24px;
         border-bottom: 1px solid var(--ink);
-        margin-bottom: 0;
     }
 
-    /* Ligne flex : titre à gauche, bouton soumettre à droite */
+    /* Ligne flex : gauche = eyebrow + titre géant, droite = bouton alerte + switcher */
     .opp-header__row {
         display: flex;
         align-items: flex-end;
@@ -51,377 +67,350 @@
         flex-wrap: wrap;
     }
 
-    /* Sur-titre mono (style "eyebrow" du prototype) :
-       point carré accent + texte uppercase → identité graphique forte */
-    .opp-eyebrow {
-        display: inline-flex;
+    /* Colonne droite : regroupe le bouton alerte et le switcher de vue */
+    .opp-header__controls {
+        display: flex;
         align-items: center;
-        gap: var(--space-sm);
-        font-family: var(--mono);
-        font-size: var(--eyebrow-font-size);
-        font-weight: var(--eyebrow-font-weight);
-        letter-spacing: var(--eyebrow-letter-spacing);
-        text-transform: uppercase;
-        color: var(--ink-mute);
-        margin-bottom: var(--space-sm);
-    }
-
-    /* Le petit carré vert = signal graphique "c'est actif / c'est ici" */
-    .opp-eyebrow::before {
-        content: '';
-        display: inline-block;
-        width: var(--eyebrow-dot-size);
-        height: var(--eyebrow-dot-size);
-        background: var(--accent);
+        gap: var(--space-md);
         flex-shrink: 0;
     }
 
-    /* Titre principal : très grand, uppercase, Archivo Black
-       clamp() = fluid typography : 40px min, 9vw idéal, 80px max */
-    .opp-title {
-        font-family: var(--display);
-        font-size: clamp(40px, 7vw, 80px);
-        line-height: 0.92;
-        text-transform: uppercase;
-        color: var(--ink);
-        margin: 0;
-    }
-
-    /* ── Barre de filtres ──────────────────────────────────────────────── */
-
-    /* Fond légèrement plus foncé que la page = zone fonctionnelle distincte */
-    .filter-bar {
-        background: var(--bg-alt);
-        border-bottom: 1px solid var(--ink);
-        display: flex;
-        flex-wrap: wrap;
-        align-items: stretch;
-        gap: 0;
-        margin-bottom: var(--space-xl);
-    }
-
-    /* Chaque groupe filtre = colonne verticale label + champ */
-    .filter-group {
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-        padding: var(--space-sm) var(--space-md);
-        border-right: 1px solid var(--ink);
-        flex: 1;
-        min-width: 160px;
-    }
-
-    /* Champ de recherche pleine largeur */
-    .filter-group--search {
-        flex: 2;
-        min-width: 220px;
-    }
-
-    /* Label au-dessus des champs : mono très petit, uppercase = ton éditorial */
-    .filter-label {
+    /* Sur-titre eyebrow : ■ mono uppercase, compteur intégré */
+    .opp-eyebrow {
         font-family: var(--mono);
-        font-size: 9px;
+        font-size: 11px;
         font-weight: 700;
         letter-spacing: .12em;
         text-transform: uppercase;
         color: var(--ink-mute);
+        margin-bottom: 8px;
     }
 
-    /* Inputs et selects : bords francs, transparent sur fond bg-alt */
-    .filter-input,
-    .filter-select {
-        background: transparent;
-        border: none;
-        border-bottom: 1px solid transparent;
-        padding: var(--space-xs) 0;
-        font-family: var(--body);
-        font-size: 13px;
-        font-weight: 500;
+    /* Titre principal : clamp fluid typography
+       Valeurs demandées dans le prototype : 64px min, 9vw idéal, 132px max */
+    .opp-title {
+        font-family: var(--display);
+        font-size: clamp(64px, 9vw, 132px);
+        line-height: 0.88;
+        text-transform: uppercase;
         color: var(--ink);
-        outline: none;
-        width: 100%;
-        transition: border-color var(--transition-fast);
-        cursor: text;
-    }
-    .filter-select { cursor: pointer; }
-    .filter-input:focus,
-    .filter-select:focus {
-        border-bottom-color: var(--accent);
+        margin: 8px 0 0;
     }
 
-    /* Zone boutons filtrer / réinitialiser */
-    .filter-actions {
-        display: flex;
-        align-items: center;
-        gap: var(--space-sm);
-        padding: var(--space-sm) var(--space-md);
+    /* ── Switcher vue Liste / Grille ─────────────────────────────────── */
+
+    /* Les deux boutons collés côte à côte, bordure commune */
+    .view-switcher {
+        display: inline-flex;
+        border: 1px solid var(--ink);
     }
 
-    /* Bouton "Filtrer" : style primaire Street = fond ink, texte accent au hover */
-    .btn-filter {
+    /* Chaque bouton du switcher : fond transparent par défaut */
+    .view-switcher__btn {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: var(--btn-padding-sm);
-        background: var(--ink);
-        color: var(--bg);
-        border: 2px solid var(--ink);
-        font-family: var(--body);
-        font-size: var(--btn-font-size);
-        font-weight: var(--btn-font-weight);
-        letter-spacing: var(--btn-letter-spacing);
+        gap: 5px;
+        padding: 8px 14px;
+        background: transparent;
+        color: var(--ink);
+        border: none;
+        border-right: 1px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .08em;
         text-transform: uppercase;
         cursor: pointer;
-        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+
+    /* Supprime la bordure droite du dernier bouton (sinon double bordure) */
+    .view-switcher__btn:last-child {
+        border-right: none;
+    }
+
+    /* Survol : fond lime = signal interactif Street */
+    .view-switcher__btn:hover {
+        background: var(--accent);
+        color: var(--ink);
+    }
+
+    /* ── Barre de filtres ────────────────────────────────────────────── */
+
+    /* Fond légèrement différent + bordure basse = zone fonctionnelle distincte de la page */
+    .filter-bar {
+        background: var(--bg-alt);
+        border-bottom: 1px solid var(--ink);
+        display: flex;
+        align-items: stretch;
+        flex-wrap: wrap;
+        gap: 0;
+        margin-bottom: 0;
+    }
+
+    /* Champ recherche : flex:1 pour prendre le maximum d'espace */
+    .filter-bar__search {
+        flex: 1;
+        min-width: 200px;
+        padding: 12px 16px;
+        background: transparent;
+        border: none;
+        border-right: 1px solid var(--line-soft);
+        font-family: var(--body);
+        font-size: 14px;
+        color: var(--ink);
+        outline: none;
+    }
+
+    .filter-bar__search::placeholder {
+        color: var(--ink-mute);
+    }
+
+    /* Selects disciplines et types : même padding que le champ recherche, fond transparent */
+    .filter-bar__select {
+        padding: 12px 16px;
+        background: transparent;
+        border: none;
+        border-right: 1px solid var(--line-soft);
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink);
+        outline: none;
+        cursor: pointer;
+    }
+
+    /* Bouton FILTRER : fond encre, texte accent = style CTA primaire Street */
+    .filter-bar__submit {
+        padding: 12px 24px;
+        background: var(--ink);
+        color: var(--accent);
+        border: none;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        cursor: pointer;
         transition: background var(--transition-fast), color var(--transition-fast);
         white-space: nowrap;
     }
-    .btn-filter:hover {
+
+    .filter-bar__submit:hover {
         background: var(--accent);
         color: var(--ink);
-        border-color: var(--ink);
     }
 
-    /* Bouton "Réinitialiser" : style ghost transparent */
-    .btn-reset-filter {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: var(--btn-padding-sm);
-        background: transparent;
-        color: var(--ink-mute);
-        border: 1px solid var(--line-soft);
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: .08em;
-        text-transform: uppercase;
-        text-decoration: none;
-        cursor: pointer;
-        border-radius: var(--btn-radius);
-        transition: color var(--transition-fast), border-color var(--transition-fast);
-        white-space: nowrap;
-    }
-    .btn-reset-filter:hover {
-        color: var(--ink);
-        border-color: var(--ink);
-    }
+    /* ── Compteur de résultats ───────────────────────────────────────── */
 
-    /* ── Compteur de résultats ─────────────────────────────────────────── */
     .results-count {
         font-family: var(--mono);
         font-size: 11px;
         letter-spacing: .08em;
         color: var(--ink-mute);
         text-transform: uppercase;
+        padding: var(--space-md) 0;
+        border-bottom: 1px solid var(--line-soft);
         margin-bottom: var(--space-md);
     }
 
-    /* ── Bouton soumettre (coin haut droit de l'en-tête) ──────────────── */
+    /* ── VUE LISTE ───────────────────────────────────────────────────── */
 
-    /* Style primaire accent lime */
-    .btn-submit-resource {
-        display: inline-flex;
+    /* Conteneur liste : sans fond propre, bordure top = démarcation avec les filtres */
+    .view-list {
+        border-top: 1px solid var(--ink);
+    }
+
+    /* Chaque ligne de liste : lien cliquable sur toute la surface */
+    .list-card {
+        display: flex;
         align-items: center;
-        gap: 6px;
-        padding: var(--btn-padding);
-        background: var(--accent);
+        justify-content: space-between;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--ink);
+        background: transparent;
         color: var(--ink);
-        border: 2px solid var(--ink);
-        font-family: var(--body);
-        font-size: var(--btn-font-size);
-        font-weight: var(--btn-font-weight);
-        letter-spacing: var(--btn-letter-spacing);
-        text-transform: uppercase;
         text-decoration: none;
-        white-space: nowrap;
-        flex-shrink: 0;
-        border-radius: var(--btn-radius);
-        transition: background var(--transition-fast), color var(--transition-fast);
-    }
-    .btn-submit-resource:hover {
-        background: var(--ink);
-        color: var(--accent);
+        transition: background var(--transition-fast);
+        gap: var(--space-lg);
     }
 
-    /* ── Grille de cartes ──────────────────────────────────────────────── */
-
-    /* Grille 3 colonnes desktop, 2 tablet, 1 mobile
-       Les cartes se touchent (gap:0) avec bordures partagées = style éditorial */
-    .resource-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 0;
-        border: 1px solid var(--ink);
+    /* Survol : fond bg-alt (gris sable léger) = feedback interactif discret */
+    .list-card:hover {
+        background: var(--bg-alt);
     }
 
-    @media (min-width: 640px) {
-        .resource-grid { grid-template-columns: 1fr 1fr; }
-    }
-
-    @media (min-width: 1024px) {
-        .resource-grid { grid-template-columns: 1fr 1fr 1fr; }
-    }
-
-    /* ── Carte ressource ───────────────────────────────────────────────── */
-
-    /* Chaque carte est un lien complet (clic sur toute la surface).
-       Bords francs, pas d'ombre, bordure partagée avec les voisines. */
-    .resource-card {
+    /* Colonne gauche : contient badges + titre + méta organisateur/lieu */
+    .list-card__left {
         display: flex;
         flex-direction: column;
-        gap: var(--space-md);
-        padding: var(--space-xl) var(--space-lg);
-        background: var(--bg);
-        border-right: 1px solid var(--ink);
-        border-bottom: 1px solid var(--ink);
-        position: relative;
-        text-decoration: none;
-        color: inherit;
-        transition: background var(--transition-fast);
-        min-height: 260px;
+        gap: 10px;
+        flex: 1;
+        min-width: 0; /* nécessaire pour que l'ellipse de titre fonctionne */
     }
 
-    /* Survol : fond lime = signal interactif fort (style affiche) */
-    .resource-card:hover {
-        background: var(--accent);
-    }
-
-    /* ── Ligne du haut : badge type + déadline ── */
-    .resource-card__top {
+    /* Ligne de badges (type + disciplines) */
+    .list-card__badges {
         display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: var(--space-sm);
         flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
     }
 
-    /* Badge type = chip style Street : fond accent, bords francs, mono uppercase */
-    .resource-badge-type {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: var(--chip-padding);
-        background: var(--ink);
-        color: var(--bg);
+    /* Badge type : fond accent lime + texte encre = chip principal visible */
+    .badge-type {
+        display: inline-block;
+        padding: 3px 8px;
+        background: var(--accent);
+        color: var(--ink);
         font-family: var(--mono);
-        font-size: var(--chip-font-size);
-        font-weight: var(--chip-font-weight);
-        letter-spacing: var(--chip-letter-spacing);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .08em;
         text-transform: uppercase;
-        border-radius: var(--chip-radius);
-        flex-shrink: 0;
     }
 
-    /* Sur fond vert au hover, le badge type s'inverse */
-    .resource-card:hover .resource-badge-type {
-        background: var(--ink);
-        color: var(--accent);
-    }
-
-    /* Badge deadline urgent (< 14 jours) : accent secondaire orange */
-    .resource-badge-deadline {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
+    /* Badge discipline : bordure légère, transparent */
+    .badge-disc {
+        display: inline-block;
+        padding: 3px 8px;
+        background: transparent;
+        border: 1px solid var(--ink-mute);
+        color: var(--ink-mute);
         font-family: var(--mono);
         font-size: 10px;
         font-weight: 600;
-        color: var(--ink-mute);
-        white-space: nowrap;
-    }
-
-    /* Moins de 14 jours : passage à l'orange pour signaler l'urgence */
-    .resource-badge-deadline--urgent {
-        color: var(--accent-2);
-        font-weight: 700;
-    }
-
-    /* ── Titre de la carte ── */
-    .resource-card__title {
-        font-family: var(--display);
-        font-size: 20px;
-        line-height: 1.05;
-        color: var(--ink);
-        text-decoration: none;
-        /* Limiter à 3 lignes avec ellipse — évite les cartes inégales */
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-
-    /* ── Méta (organisation) ── */
-    .resource-card__meta {
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--ink-mute);
         letter-spacing: .04em;
     }
 
-    /* ── Description courte ── */
-    .resource-card__desc {
-        font-family: var(--body);
-        font-size: 13px;
-        color: var(--ink-mute);
-        line-height: 1.5;
-        /* 2 lignes max */
+    /* Titre de la card liste : display, taille h2 réduite pour la vue compacte */
+    .list-card__title {
+        font-family: var(--display);
+        font-size: 22px;
+        line-height: 1.1;
+        color: var(--ink);
+        /* Ellipse sur 2 lignes max pour les titres très longs */
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
+        margin: 0;
+    }
+
+    /* Méta : organisation + lieu séparés par un point médian */
+    .list-card__meta {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: .04em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Colonne droite : deadline (badge urgent ou texte simple) */
+    .list-card__right {
+        text-align: right;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+    }
+
+    /* Badge URGENT : fond orange, texte encre = alerte visuelle forte */
+    .badge-urgent {
+        display: inline-block;
+        padding: 3px 8px;
+        background: var(--accent-2);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    /* Texte deadline en mono discret */
+    .deadline-text {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        white-space: nowrap;
+    }
+
+    /* Deadline sur une card urgente passe en orange pour cohérence */
+    .deadline-text--urgent {
+        color: var(--accent-2);
+        font-weight: 700;
+    }
+
+    /* ── VUE GRILLE ──────────────────────────────────────────────────── */
+
+    /* Grille 3 colonnes, bordures partagées = style tableau éditorial */
+    .view-grid {
+        display: none; /* masquée par défaut, activée par JS */
+        grid-template-columns: 1fr 1fr 1fr;
+        border: 1px solid var(--ink);
+    }
+
+    /* Sur tablette : 2 colonnes */
+    @media (max-width: 900px) {
+        .view-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    /* Sur mobile : 1 colonne */
+    @media (max-width: 580px) {
+        .view-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* Card grille : flex colonne, bordures droite + bas partagées */
+    .grid-card {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 24px 20px;
+        border-right: 1px solid var(--ink);
+        border-bottom: 1px solid var(--ink);
+        background: transparent;
+        color: var(--ink);
+        text-decoration: none;
+        transition: background var(--transition-fast);
+    }
+
+    /* Survol grille : lime = signal fort, cohérent avec la grille de la page vitrine */
+    .grid-card:hover {
+        background: var(--accent);
+    }
+
+    /* Titre dans la grille : taille réduite vs header mais toujours display */
+    .grid-card__title {
+        font-family: var(--display);
+        font-size: 20px;
+        line-height: 1.1;
+        color: var(--ink);
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin: 0;
         flex: 1;
     }
 
-    /* ── Pied de carte : disciplines + flèche ── */
-    .resource-card__footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: var(--space-sm);
-        padding-top: var(--space-sm);
-        border-top: 1px solid var(--line-soft);
+    /* Deadline dans la card grille */
+    .grid-card__deadline {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
         margin-top: auto;
     }
 
-    /* Disciplines en petit chip gris */
-    .resource-disc-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 3px 7px;
-        background: var(--bg-alt);
-        border: 1px solid var(--line-soft);
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: .04em;
-        color: var(--ink-mute);
-        border-radius: var(--chip-radius);
-    }
+    /* ── Etat vide ───────────────────────────────────────────────────── */
 
-    /* Zone disciplines flex wrap */
-    .resource-disc-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-    }
-
-    /* Flèche "Voir" = indicateur interactif */
-    .resource-card__arrow {
-        font-family: var(--mono);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: .06em;
-        color: var(--ink);
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
-
-    /* ── État vide ─────────────────────────────────────────────────────── */
-
-    /* L'état vide emprunte le style d'encadré éditoriale du prototype :
-       fond bg, bordure ink, centré, avec CTA accent */
+    /* Zone vide encadrée style éditorial : encre, fond sable, centré */
     .empty-state {
         border: 1px solid var(--ink);
         padding: var(--space-3xl) var(--space-2xl);
@@ -429,7 +418,7 @@
         background: var(--bg);
     }
 
-    /* Grand numéro décoratif style "§00" du prototype */
+    /* Grand numéro décoratif grisé = esthétique caractéristique du thème Street */
     .empty-state__icon {
         font-family: var(--display);
         font-size: 80px;
@@ -455,7 +444,7 @@
         margin-bottom: var(--space-lg);
     }
 
-    /* Lien CTA dans l'état vide : bouton accent plein */
+    /* CTA état vide : bouton accent plein */
     .empty-state__cta {
         display: inline-flex;
         align-items: center;
@@ -470,23 +459,24 @@
         letter-spacing: var(--btn-letter-spacing);
         text-transform: uppercase;
         text-decoration: none;
-        border-radius: var(--btn-radius);
         transition: background var(--transition-fast), color var(--transition-fast);
     }
+
     .empty-state__cta:hover {
         background: var(--ink);
         color: var(--accent);
     }
 
-    /* ── Pagination ────────────────────────────────────────────────────── */
+    /* ── Pagination ──────────────────────────────────────────────────── */
 
-    /* On surcharge le style par défaut de KnpPaginatorBundle pour le thème Street */
+    /* Centrage et espacement vertical du bloc de pagination */
     .pagination-wrap {
         margin-top: var(--space-xl);
         display: flex;
         justify-content: center;
     }
 
+    /* Ligne de boutons sans gap (bordures partagées = style Street) */
     .pagination-wrap .pagination {
         display: inline-flex;
         border: 1px solid var(--ink);
@@ -513,20 +503,24 @@
         transition: background var(--transition-fast), color var(--transition-fast);
     }
 
+    /* Supprime la bordure droite en double sur le dernier élément */
     .pagination-wrap .page-item:last-child .page-link {
         border-right: none;
     }
 
+    /* Page active : fond encre + texte accent = item sélectionné */
     .pagination-wrap .page-item.active .page-link {
         background: var(--ink);
         color: var(--accent);
     }
 
+    /* Survol pagination : fond lime */
     .pagination-wrap .page-item .page-link:hover {
         background: var(--accent);
         color: var(--ink);
     }
 
+    /* Page désactivée (prev sur page 1, next sur dernière page) */
     .pagination-wrap .page-item.disabled .page-link {
         opacity: .35;
         pointer-events: none;
@@ -536,145 +530,152 @@
 
 {% block content %}
 
-{# ── En-tête de page ──────────────────────────────────────────────────────── #}
+{# ── En-tête de section ───────────────────────────────────────────────────── #}
 {#
-   L'en-tête reprend le style "section header" du prototype screens-opps.jsx :
-   sur-titre eyebrow (point carré + compteur), titre géant, CTA soumettre à droite.
+   Header style prototype Street :
+   - Gauche  : eyebrow "■ OPPORTUNITES · N ACTIVES" + titre géant fluide
+   - Droite  : bouton alerte + switcher vue liste/grille
 #}
 <div class="opp-header">
     <div class="opp-header__row">
+
+        {# ── Colonne gauche : eyebrow + titre ── #}
         <div>
+            {#
+                Eyebrow : le caractère "■" est un carré Unicode standard (U+25A0).
+                On affiche le compteur total GLOBAL (variable `total`),
+                pas le nombre d'items sur la page courante.
+                Exemple pagination : "■ OPPORTUNITES · 47 ACTIVES" même si on n'en affiche que 12.
+            #}
             <div class="opp-eyebrow">
-                Opportunités
-                {#
-                    On affiche le nombre TOTAL de résultats (variable `total` fournie par le controller),
-                    pas juste le nombre sur la page courante.
-                    Exemple avec pagination : "24 actives" même si on n'en affiche que 12.
-                #}
-                {% if total is defined and total > 0 %}
-                    · {{ total }} active{{ total > 1 ? 's' : '' }}
-                {% endif %}
+                &#9632; OPPORTUNITES
+                {%- if total is defined and total > 0 %} &middot; {{ total }} ACTIVE{{ total > 1 ? 'S' : '' }}{% endif %}
             </div>
-            <h1 class="opp-title">Ce qui est<br>ouvert.</h1>
+
+            {#
+                Titre géant en deux lignes, uppercase, Archivo Black.
+                clamp(64px, 9vw, 132px) : typographie fluide selon le CDC.
+                line-height 0.88 = serré, style affiche / poster.
+            #}
+            <h1 class="opp-title">
+                CE QUI EST<br>
+                OUVERT.
+            </h1>
         </div>
 
-        {#
-            Bouton soumettre : visible UNIQUEMENT pour les structures (et admins).
-            Décision produit V1 : seules les structures proposent des opportunités.
-            Les artistes voient le catalogue et les favoris mais pas ce bouton.
-            is_granted('ROLE_STRUCTURE') couvre aussi ROLE_ADMIN (hiérarchie security.yaml).
-        #}
-        {% if is_granted('ROLE_STRUCTURE') %}
-            <a href="{{ path('app_resource_submit') }}"
-               class="btn-submit-resource"
-               title="Proposer une ressource à la communauté">
-                {# Signe plus dessiné manuellement en SVG pour cohérence avec les icônes du prototype #}
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                    <path d="M12 5v14M5 12h14"/>
-                </svg>
-                Soumettre une ressource
-            </a>
-        {% endif %}
+        {# ── Colonne droite : bouton alerte + switcher ── #}
+        <div class="opp-header__controls">
+
+            {#
+                Bouton "Creer une alerte" : visible pour tout utilisateur connecté.
+                Les alertes permettent de recevoir des notifs email quand une
+                nouvelle opportunité matche ses préférences (discipline, type…).
+                Route : app_resource_alerts
+            #}
+            {% if is_granted('ROLE_USER') %}
+                <a href="{{ path('app_resource_alerts') }}"
+                   class="btn btn-ghost btn-sm">
+                    &#128276; Creer une alerte
+                </a>
+            {% endif %}
+
+            {#
+                Switcher vue : deux boutons côte à côte avec border 1px solid var(--ink).
+                Identifiants id="btn-list" et id="btn-grid" utilisés par le JS ci-dessous.
+                L'état actif est géré dynamiquement par setView() — pas de classe CSS statique.
+            #}
+            <div class="view-switcher" role="group" aria-label="Choisir le mode d'affichage">
+                <button id="btn-list"
+                        class="view-switcher__btn"
+                        type="button"
+                        aria-pressed="true"
+                        title="Vue liste">
+                    &#9632; Liste
+                </button>
+                <button id="btn-grid"
+                        class="view-switcher__btn"
+                        type="button"
+                        aria-pressed="false"
+                        title="Vue grille">
+                    &#8862; Grille
+                </button>
+            </div>
+
+        </div>
     </div>
 </div>
 
 {# ── Barre de filtres ─────────────────────────────────────────────────────── #}
 {#
-   Formulaire GET (pas POST) car les filtres doivent être dans l'URL
-   pour permettre le partage de lien et la navigation avec le bouton retour.
-   Pas de token CSRF nécessaire ici (lecture seule).
+   Formulaire GET (pas POST) : les filtres vivent dans l'URL → partage de lien,
+   bouton retour navigateur, et pas besoin de token CSRF (lecture seule).
+   Champ caché page=1 : force un retour à la page 1 à chaque nouveau filtrage.
 #}
-<form method="get" action="{{ path('app_resource_index') }}" class="filter-bar" role="search">
+<form method="get"
+      action="{{ path('app_resource_index') }}"
+      class="filter-bar"
+      role="search"
+      aria-label="Filtrer les opportunites">
 
-    {#
-        Champ caché qui force le retour à la page 1 à chaque soumission du formulaire.
-        Sans ce champ, si l'utilisateur est sur la page 5 et change un filtre, le
-        paramètre "page=5" resterait dans l'URL soumise (via le comportement GET
-        qui conserve les champs du formulaire). Le résultat serait souvent vide
-        car la page 5 n'existe peut-être pas pour les nouveaux critères.
-        En forçant page=1, on repart toujours du début de la liste filtrée.
-    #}
+    {# Retour systématique à la page 1 quand les filtres changent #}
     <input type="hidden" name="page" value="1">
 
-    {# Champ recherche textuelle — flex 2x pour prendre plus de place #}
-    <div class="filter-group filter-group--search">
-        <label class="filter-label" for="q">Recherche</label>
-        <input class="filter-input"
-               type="text"
-               id="q"
-               name="q"
-               value="{{ currentSearch }}"
-               placeholder="Titre, mot-clé, organisateur…"
-               autocomplete="off">
-    </div>
-
-    {# Select type de ressource #}
-    <div class="filter-group">
-        <label class="filter-label" for="type">Type</label>
-        <select class="filter-select" id="type" name="type">
-            <option value="">Tous les types</option>
-            {% for type in types %}
-                <option value="{{ type.id }}"
-                        {{ currentTypeId == type.id ? 'selected' : '' }}>
-                    {{ type.icon ? type.icon ~ ' ' : '' }}{{ type.name }}
-                </option>
-            {% endfor %}
-        </select>
-    </div>
+    {#
+        Champ de recherche textuelle — flex:1 pour prendre le maximum d'espace.
+        name="q" : le contrôleur ResourceController::index() lit $request->query->get('q').
+        La variable Twig currentSearch reflète la valeur lue (initialisée à '' si absente).
+    #}
+    <input class="filter-bar__search"
+           type="text"
+           name="q"
+           value="{{ currentSearch }}"
+           placeholder="Rechercher une opportunite..."
+           autocomplete="off"
+           aria-label="Rechercher par mot-cle">
 
     {# Select discipline artistique #}
-    <div class="filter-group">
-        <label class="filter-label" for="discipline">Discipline</label>
-        <select class="filter-select" id="discipline" name="discipline">
-            <option value="">Toutes les disciplines</option>
-            {% for discipline in disciplines %}
-                <option value="{{ discipline.id }}"
-                        {{ currentDisciplineId == discipline.id ? 'selected' : '' }}>
-                    {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
-                </option>
-            {% endfor %}
-        </select>
-    </div>
+    <select class="filter-bar__select" name="discipline" aria-label="Filtrer par discipline">
+        <option value="">Toutes les disciplines</option>
+        {% for disc in disciplines %}
+            <option value="{{ disc.id }}"
+                    {% if currentDisciplineId == disc.id %}selected{% endif %}>
+                {{ disc.name }}
+            </option>
+        {% endfor %}
+    </select>
 
-    {# Boutons action : filtrer + réinitialiser si filtres actifs #}
-    <div class="filter-actions">
-        <button type="submit" class="btn-filter">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <path d="M3 5h18M6 12h12M10 19h4"/>
-            </svg>
-            Filtrer
-        </button>
-        {# Lien réinitialiser : visible uniquement quand au moins un filtre est actif #}
-        {% if currentSearch or currentTypeId or currentDisciplineId %}
-            <a href="{{ path('app_resource_index') }}"
-               class="btn-reset-filter"
-               title="Effacer tous les filtres">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-                    <path d="M6 6l12 12M18 6L6 18"/>
-                </svg>
-                Effacer
-            </a>
-        {% endif %}
-    </div>
+    {# Select type de ressource (appel d'offres, résidence, bourse...) #}
+    <select class="filter-bar__select" name="type" aria-label="Filtrer par type">
+        <option value="">Tous les types</option>
+        {% for type in types %}
+            <option value="{{ type.id }}"
+                    {% if currentTypeId == type.id %}selected{% endif %}>
+                {{ type.name }}
+            </option>
+        {% endfor %}
+    </select>
+
+    {# Bouton de soumission : fond encre + texte accent lime #}
+    <button type="submit" class="filter-bar__submit">
+        FILTRER
+    </button>
 
 </form>
 
-{# ── Résultats ────────────────────────────────────────────────────────────── #}
+{# ── Contenu principal : résultats ou état vide ───────────────────────────── #}
 {% if resources is empty %}
 
-    {# ── État vide ── #}
-    {# Deux cas : filtre sans résultat, ou catalogue vide #}
+    {# ── Etat vide ── #}
+    {# Deux cas distincts : filtre sans résultat, ou catalogue vraiment vide #}
     <div class="empty-state">
+
         {# Numéro décoratif style éditorial = esthétique caractéristique du thème Street #}
         <div class="empty-state__icon">00</div>
 
         {% if currentSearch or currentTypeId or currentDisciplineId %}
             <div class="empty-state__title">Aucun résultat</div>
             <p class="empty-state__text">
-                Aucune ressource ne correspond à vos critères de recherche.<br>
+                Aucune ressource ne correspond a vos critères de recherche.<br>
                 Essayez avec des mots-clés différents ou élargissez les filtres.
             </p>
             <a href="{{ path('app_resource_index') }}" class="empty-state__cta">
@@ -683,15 +684,14 @@
         {% else %}
             <div class="empty-state__title">Pas encore de ressources</div>
             {#
-                État vide du catalogue :
-                - Les structures voient un CTA pour soumettre la première ressource.
-                - Les artistes voient un message d'attente sans bouton (ils ne soumettent pas).
+                Les structures voient un CTA pour soumettre la première ressource.
+                Les artistes et visiteurs voient un message d'attente.
                 Décision produit V1 : seules les structures soumettent des opportunités.
             #}
             {% if is_granted('ROLE_STRUCTURE') %}
                 <p class="empty-state__text">
                     Le catalogue est vide pour l'instant.<br>
-                    Soyez la première structure à partager une opportunité avec la communauté.
+                    Soyez la première structure a partager une opportunité avec la communauté.
                 </p>
                 <a href="{{ path('app_resource_submit') }}" class="empty-state__cta">
                     Soumettre une ressource
@@ -708,128 +708,162 @@
 {% else %}
 
     {#
-        Compteur de résultats sous les filtres (mono uppercase = logique éditorial).
-        On affiche le total global (pas juste les 12 de la page courante)
-        + l'indication de pagination si on n'est pas sur la page 1.
+        Compteur de résultats actifs.
+        On affiche le total global, pas juste les items de la page courante.
+        Indication de pagination si on est au-dela de la page 1.
     #}
     <p class="results-count">
-        → {{ total }} résultat{{ total > 1 ? 's' : '' }}
-        {# Indication des filtres textuels actifs #}
+        &#8594; {{ total }} résultat{{ total > 1 ? 's' : '' }}
         {% if currentSearch %} · "{{ currentSearch }}"{% endif %}
-        {# Indication de la page courante si on est en pagination (plus d'une page) #}
         {% if totalPages > 1 %} · page {{ currentPage }}/{{ totalPages }}{% endif %}
     </p>
 
-    {# ── Grille de cartes ── #}
-    <div class="resource-grid">
+    {# ──────────────────────────────────────────────────────────────────────── #}
+    {# VUE LISTE (id="view-list") — affichée par défaut                        #}
+    {#                                                                          #}
+    {# Chaque ligne = lien cliquable sur toute la surface, avec :              #}
+    {#   - Gauche : badges (type + disciplines) + titre + méta (org · lieu)    #}
+    {#   - Droite : badge URGENT + deadline, ou juste la deadline              #}
+    {# ──────────────────────────────────────────────────────────────────────── #}
+    <div id="view-list" class="view-list">
         {% for resource in resources %}
             <a href="{{ path('app_resource_show', {id: resource.id}) }}"
-               class="resource-card"
-               aria-label="Voir {{ resource.title }}">
+               class="list-card"
+               aria-label="Voir l'opportunité : {{ resource.title }}">
 
-                {# ── Ligne badge type + deadline ── #}
-                <div class="resource-card__top">
+                {# ── Colonne gauche ── #}
+                <div class="list-card__left">
 
-                    {# Badge type : fond encre foncé, texte crème = chip "dark" du design system #}
-                    <span class="resource-badge-type">
-                        {{ resource.resourceType.icon ? resource.resourceType.icon ~ ' ' : '' }}{{ resource.resourceType.name }}
-                    </span>
+                    {# Ligne de badges : type (accent lime) + disciplines (bordure légère) #}
+                    <div class="list-card__badges">
 
-                    {# Deadline : affiché en compact si disponible #}
-                    {% if resource.deadline %}
-                        {% set daysLeft = (resource.deadline.timestamp - "now"|date('U')) // 86400 %}
-                        {% if daysLeft >= 0 %}
-                            <span class="resource-badge-deadline {{ daysLeft < 14 ? 'resource-badge-deadline--urgent' : '' }}">
-                                {# Icône sablier SVG — plus propre qu'un emoji #}
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                     stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                                    <path d="M5 3h14M5 21h14M7 3v4l5 5-5 5v4M17 3v4l-5 5 5 5v4"/>
-                                </svg>
-                                {% if daysLeft == 0 %}
-                                    Aujourd'hui !
-                                {% elseif daysLeft == 1 %}
-                                    J-1
-                                {% else %}
-                                    J-{{ daysLeft }}
-                                {% endif %}
-                            </span>
+                        {# Badge type seulement si renseigné (champ nullable) #}
+                        {% if resource.resourceType %}
+                            <span class="badge-type">{{ resource.resourceType.name }}</span>
                         {% endif %}
+
+                        {#
+                            On affiche au max 2 disciplines pour ne pas surcharger la ligne.
+                            Si plus de 2, on affiche "+N" pour signaler qu'il y en a davantage.
+                        #}
+                        {% for discipline in resource.disciplines|slice(0, 2) %}
+                            <span class="badge-disc">{{ discipline.name }}</span>
+                        {% endfor %}
+                        {% if resource.disciplines|length > 2 %}
+                            <span class="badge-disc">+{{ resource.disciplines|length - 2 }}</span>
+                        {% endif %}
+                    </div>
+
+                    {# Titre de l'opportunité : display Archivo Black, 22px, 2 lignes max #}
+                    <h2 class="list-card__title">{{ resource.title }}</h2>
+
+                    {#
+                        Méta : nom de l'organisation + lieu séparés par " · "
+                        On utilise ?? pour le fallback null (PHP 8 null coalescing en Twig).
+                        Condition : affiche le bloc seulement s'il y a au moins une info.
+                    #}
+                    {% if resource.organization or resource.location %}
+                        <div class="list-card__meta">
+                            {{ resource.organization ? resource.organization.name : '' }}
+                            {%- if resource.organization and resource.location %} &middot; {% endif -%}
+                            {{ resource.location ?? '' }}
+                        </div>
                     {% endif %}
+
                 </div>
 
-                {# Organisation soumettrice (si disponible) #}
-                {% if resource.organization %}
-                    <div class="resource-card__meta">
-                        {{ resource.organization.name }}
-                    </div>
-                {% endif %}
+                {# ── Colonne droite : deadline ── #}
+                <div class="list-card__right">
+                    {#
+                        Logique deadline :
+                        - Resource.deadline est un ?DateTimeInterface dans l'entité.
+                        - On calcule les secondes restantes avec le filtre |date("U")
+                          (timestamp Unix) qui accepte nativement les objets DateTime.
+                        - Si la deadline est dans moins de 7 jours (604 800 s) : badge URGENT.
+                        - Sinon : date sobre en mono gris.
+                    #}
+                    {% if resource.deadline %}
+                        {# Calcul des secondes restantes jusqu'à la deadline #}
+                        {% set secondsLeft = resource.deadline|date("U") - "now"|date("U") %}
 
-                {# Titre de la ressource : display, 3 lignes max #}
-                <h2 class="resource-card__title">{{ resource.title }}</h2>
-
-                {# Description tronquée à 160 caractères pour la card.
-                   striptags est appliqué car la description peut contenir du HTML (généré par Mistral).
-                   On affiche toujours du texte brut dans les previews — jamais de balises HTML. #}
-                <p class="resource-card__desc">
-                    {{ resource.description|striptags|slice(0, 160) }}{{ resource.description|striptags|length > 160 ? '…' : '' }}
-                </p>
-
-                {# Pied de carte : disciplines + flèche Voir #}
-                <div class="resource-card__footer">
-                    <div class="resource-disc-list">
-                        {% for discipline in resource.disciplines|slice(0, 2) %}
-                            <span class="resource-disc-chip">
-                                {{ discipline.icon ? discipline.icon ~ ' ' : '' }}{{ discipline.name }}
-                            </span>
-                        {% endfor %}
-                        {# Si plus de 2 disciplines : indicateur "+N" #}
-                        {% if resource.disciplines|length > 2 %}
-                            <span class="resource-disc-chip">+{{ resource.disciplines|length - 2 }}</span>
+                        {% if secondsLeft >= 0 and secondsLeft < 604800 %}
+                            {# Moins de 7 jours : badge URGENT + date en orange #}
+                            <span class="badge-urgent">URGENT</span>
+                            <span class="deadline-text deadline-text--urgent">{{ resource.deadline|date('d M Y') }}</span>
+                        {% elseif secondsLeft >= 0 %}
+                            {# Plus de 7 jours : date simple #}
+                            <span class="deadline-text">{{ resource.deadline|date('d M Y') }}</span>
                         {% endif %}
-                    </div>
-                    {# Flèche indicateur de navigation #}
-                    <span class="resource-card__arrow" aria-hidden="true">Voir →</span>
+                    {% endif %}
                 </div>
 
             </a>
         {% endfor %}
     </div>
+    {# ── Fin vue liste ── #}
+
+    {# ──────────────────────────────────────────────────────────────────────── #}
+    {# VUE GRILLE (id="view-grid") — masquée par défaut (display:none)         #}
+    {#                                                                          #}
+    {# Grille 3 colonnes, bordures partagées = style tableau éditorial.        #}
+    {# Le JS ci-dessous switche entre display:none et display:grid.            #}
+    {# ──────────────────────────────────────────────────────────────────────── #}
+    <div id="view-grid" class="view-grid">
+        {% for resource in resources %}
+            <a href="{{ path('app_resource_show', {id: resource.id}) }}"
+               class="grid-card"
+               aria-label="Voir l'opportunité : {{ resource.title }}">
+
+                {# Badges en haut de la card grille (type + disciplines) #}
+                <div class="list-card__badges">
+                    {% if resource.resourceType %}
+                        <span class="badge-type">{{ resource.resourceType.name }}</span>
+                    {% endif %}
+                    {% for discipline in resource.disciplines|slice(0, 2) %}
+                        <span class="badge-disc">{{ discipline.name }}</span>
+                    {% endfor %}
+                    {% if resource.disciplines|length > 2 %}
+                        <span class="badge-disc">+{{ resource.disciplines|length - 2 }}</span>
+                    {% endif %}
+                </div>
+
+                {# Titre : display Archivo Black, 3 lignes max, prend l'espace disponible #}
+                <h2 class="grid-card__title">{{ resource.title }}</h2>
+
+                {# Deadline en bas de card, mono discret. |date() formate le DateTimeInterface. #}
+                {% if resource.deadline %}
+                    <div class="grid-card__deadline">{{ resource.deadline|date('d M Y') }}</div>
+                {% endif %}
+
+            </a>
+        {% endfor %}
+    </div>
+    {# ── Fin vue grille ── #}
 
     {#
-        ── Bloc de pagination ──────────────────────────────────────────────────────
-        Affiché uniquement quand il y a plus d'une page (totalPages > 1).
-        Chaque lien PRÉSERVE les filtres actifs (type, discipline, q) pour que
-        naviguer entre les pages ne réinitialise pas la recherche.
+        ── Pagination ──────────────────────────────────────────────────────────
+        Affichée uniquement quand il y a plus d'une page (totalPages > 1).
+        Chaque lien PRESERVE les filtres actifs (type, discipline, search) pour
+        que naviguer entre les pages ne réinitialise pas la recherche.
 
-        Architecture des URL générées (exemple avec filtres) :
-          /resources?type=2&discipline=4&q=musique&page=3
+        Architecture des URLs générées (exemple avec filtres) :
+          /resources?type=2&discipline=4&search=musique&page=3
 
-        Si un filtre est null ou vide, on ne l'inclut pas dans le path() pour éviter
-        les paramètres vides (?type=&discipline=) qui polluent l'URL.
-
-        Fenêtre de pages affichées :
-          On affiche au maximum 5 numéros de page autour de la page courante.
-          Cela évite d'afficher 50 boutons si le catalogue est très grand.
-          Algorithme : fenêtre de 2 avant + 2 après = 5 pages au total, bornée entre 1 et totalPages.
-
-        Styles : on réutilise les classes .pagination-wrap / .pagination / .page-item / .page-link
-        déjà définies dans le bloc <style> ci-dessus — aucune nouvelle règle CSS nécessaire.
+        Fenetre de 5 pages max autour de la page courante (2 avant + 2 après).
+        Algorithme borné entre 1 et totalPages.
     #}
     {% if totalPages > 1 %}
 
         {#
-            Calcul de la fenêtre de pagination (pages visibles autour de la courante).
+            Calcul de la fenêtre de pagination.
             max() et min() sont des filtres Twig natifs — pas de dépendance supplémentaire.
-            windowStart = première page de la fenêtre (au moins 1)
-            windowEnd   = dernière page de la fenêtre (au plus totalPages)
         #}
         {% set windowStart = max(1, currentPage - 2) %}
         {% set windowEnd   = min(totalPages, currentPage + 2) %}
 
         {#
-            Construction du tableau de paramètres de base (filtres actifs).
-            On inclut un paramètre seulement s'il a une valeur non-vide,
-            pour garder des URLs propres : /resources?page=2 et non /resources?type=&discipline=&q=&page=2
+            Construction des paramètres de base (filtres actifs).
+            On n'inclut un paramètre que s'il a une valeur non-vide → URLs propres.
         #}
         {% set baseParams = {} %}
         {% if currentTypeId %}
@@ -845,84 +879,71 @@
         <nav class="pagination-wrap" aria-label="Navigation entre les pages de ressources">
             <ul class="pagination">
 
-                {# ── Lien "Précédent" ────────────────────────────────────────── #}
-                {# Désactivé sur la page 1 (attribut aria-disabled + classe CSS disabled) #}
+                {# Lien "Precedent" : désactivé sur la page 1 #}
                 <li class="page-item {% if currentPage <= 1 %}disabled{% endif %}">
                     {% if currentPage > 1 %}
-                        {# On fusionne les filtres de base avec la page précédente #}
                         <a class="page-link"
                            href="{{ path('app_resource_index', baseParams|merge({ page: currentPage - 1 })) }}"
                            aria-label="Page précédente">
-                            ← Préc.
+                            &larr; Prec.
                         </a>
                     {% else %}
-                        {# Span non-cliquable sur la page 1 (pas de lien vers page 0) #}
-                        <span class="page-link" aria-hidden="true">← Préc.</span>
+                        <span class="page-link" aria-hidden="true">&larr; Prec.</span>
                     {% endif %}
                 </li>
 
-                {# ── Points de suspension au début si la fenêtre ne commence pas à 1 ── #}
-                {# Exemple : si on est sur la page 8, la fenêtre commence à 6 → on affiche 1 … 6 7 8 9 10 #}
+                {# Points de suspension au début si la fenêtre ne commence pas à 1 #}
                 {% if windowStart > 1 %}
                     <li class="page-item">
                         <a class="page-link"
                            href="{{ path('app_resource_index', baseParams|merge({ page: 1 })) }}"
-                           aria-label="Page 1">
-                            1
-                        </a>
+                           aria-label="Page 1">1</a>
                     </li>
                     {% if windowStart > 2 %}
-                        {# "…" non-cliquable pour indiquer qu'il y a des pages cachées #}
                         <li class="page-item disabled" aria-hidden="true">
-                            <span class="page-link">…</span>
+                            <span class="page-link">&hellip;</span>
                         </li>
                     {% endif %}
                 {% endif %}
 
-                {# ── Numéros de page dans la fenêtre ────────────────────────── #}
+                {# Numéros de page dans la fenêtre #}
                 {% for p in windowStart..windowEnd %}
                     <li class="page-item {% if p == currentPage %}active{% endif %}">
                         {% if p == currentPage %}
-                            {# Page courante : non-cliquable, mise en valeur visuellement #}
-                            {# aria-current="page" = information d'accessibilité pour les lecteurs d'écran #}
+                            {# Page courante : non-cliquable, aria-current pour l'accessibilité #}
                             <span class="page-link" aria-current="page">{{ p }}</span>
                         {% else %}
                             <a class="page-link"
                                href="{{ path('app_resource_index', baseParams|merge({ page: p })) }}"
-                               aria-label="Page {{ p }}">
-                                {{ p }}
-                            </a>
+                               aria-label="Page {{ p }}">{{ p }}</a>
                         {% endif %}
                     </li>
                 {% endfor %}
 
-                {# ── Points de suspension à la fin si la fenêtre ne finit pas à totalPages ── #}
+                {# Points de suspension à la fin si la fenêtre ne finit pas à totalPages #}
                 {% if windowEnd < totalPages %}
                     {% if windowEnd < totalPages - 1 %}
                         <li class="page-item disabled" aria-hidden="true">
-                            <span class="page-link">…</span>
+                            <span class="page-link">&hellip;</span>
                         </li>
                     {% endif %}
                     <li class="page-item">
                         <a class="page-link"
                            href="{{ path('app_resource_index', baseParams|merge({ page: totalPages })) }}"
-                           aria-label="Page {{ totalPages }}">
-                            {{ totalPages }}
-                        </a>
+                           aria-label="Page {{ totalPages }}">{{ totalPages }}</a>
                     </li>
                 {% endif %}
 
-                {# ── Lien "Suivant" ──────────────────────────────────────────── #}
-                {# Désactivé sur la dernière page #}
+                {# Lien "Suivant" : désactivé sur la dernière page #}
                 <li class="page-item {% if currentPage >= totalPages %}disabled{% endif %}">
                     {% if currentPage < totalPages %}
                         <a class="page-link"
                            href="{{ path('app_resource_index', baseParams|merge({ page: currentPage + 1 })) }}"
                            aria-label="Page suivante">
-                            Suiv. →
+                            Suiv. &rarr;
                         </a>
                     {% else %}
-                        <span class="page-link" aria-hidden="true">Suiv. →</span>
+                        <span class="page-link" aria-hidden="true">Suiv. &rarr;</span>
                     {% endif %}
                 </li>
 
@@ -930,8 +951,70 @@
         </nav>
 
     {% endif %}
-    {# ── Fin bloc pagination ─────────────────────────────────────────────────── #}
+    {# ── Fin pagination ── #}
 
 {% endif %}
+{# ── Fin bloc résultats ── #}
 
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+<script>
+/**
+ * Switcher vue Liste / Grille — JS vanilla, sans dépendance externe
+ *
+ * Principe :
+ * - Deux conteneurs avec id="view-list" et id="view-grid" sont dans le DOM
+ * - La fonction setView(v) affiche l'un et masque l'autre
+ * - Les boutons #btn-list et #btn-grid déclenchent le changement
+ * - setView('list') est appelé immédiatement au chargement pour initialiser
+ *
+ * L'état actif du bouton est signalé visuellement par background/color
+ * (fond encre + texte accent lime = identité graphique Street).
+ */
+(function () {
+    // Récupération des éléments du DOM
+    var btnList  = document.getElementById('btn-list');
+    var btnGrid  = document.getElementById('btn-grid');
+    var viewList = document.getElementById('view-list');
+    var viewGrid = document.getElementById('view-grid');
+
+    // Sécurité : on ne fait rien si un des éléments est absent
+    // (ex : état vide où les conteneurs de vue ne sont pas rendus)
+    if (!btnList || !btnGrid || !viewList || !viewGrid) {
+        return;
+    }
+
+    /**
+     * setView(v) — affiche la vue demandée, masque l'autre, met à jour les boutons
+     * @param {string} v — 'list' ou 'grid'
+     */
+    function setView(v) {
+        // Affichage des conteneurs
+        // La vue grille doit être display:grid (pas display:block) pour que la grille CSS fonctionne
+        viewList.style.display = v === 'list' ? 'block' : 'none';
+        viewGrid.style.display = v === 'grid'  ? 'grid'  : 'none';
+
+        // Etat actif du bouton Liste : fond encre + texte accent lime
+        btnList.style.background = v === 'list' ? 'var(--ink)'    : '';
+        btnList.style.color      = v === 'list' ? 'var(--accent)' : '';
+
+        // Etat actif du bouton Grille
+        btnGrid.style.background = v === 'grid' ? 'var(--ink)'    : '';
+        btnGrid.style.color      = v === 'grid' ? 'var(--accent)' : '';
+
+        // Accessibilité : mise à jour de aria-pressed sur les boutons
+        btnList.setAttribute('aria-pressed', v === 'list' ? 'true' : 'false');
+        btnGrid.setAttribute('aria-pressed', v === 'grid' ? 'true' : 'false');
+    }
+
+    // Ecouteurs de clic sur les boutons du switcher
+    btnList.addEventListener('click', function () { setView('list'); });
+    btnGrid.addEventListener('click', function () { setView('grid'); });
+
+    // Initialisation : vue liste par défaut au chargement de la page
+    setView('list');
+}());
+</script>
 {% endblock %}
