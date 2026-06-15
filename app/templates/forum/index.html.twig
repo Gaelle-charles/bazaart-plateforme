@@ -545,7 +545,7 @@
         padding: 8px 10px;
         border: 1px solid var(--ink);
         border-radius: 0;
-        background: var(--bg);
+        background: #fff;   /* blanc pour se distinguer du fond beige var(--bg) */
         color: var(--ink);
         font-family: var(--mono);
         font-size: 11px;
@@ -557,14 +557,18 @@
         outline: 2px solid var(--accent);
         outline-offset: -2px;
     }
+    /* Couleur atténuée pour l'option placeholder "Choisissez votre categorie" */
+    .fi-composer__cat-select option[value=""] {
+        color: var(--ink-mute);
+    }
 
-    /* Champ titre — gras, texte encre */
+    /* Champ titre — gras, texte encre, fond blanc */
     .fi-composer__input {
         width: 100%;
         padding: 10px 12px;
         border: 1px solid var(--ink);
         border-radius: 0;
-        background: var(--bg);
+        background: #fff;   /* blanc pour se distinguer du fond beige */
         color: var(--ink);
         font-family: var(--body);
         font-size: 15px;
@@ -580,14 +584,14 @@
         outline-offset: -2px;
     }
 
-    /* Zone de texte contenu */
+    /* Zone de texte contenu — fond blanc */
     .fi-composer__textarea {
         width: 100%;
         min-height: 110px;
         padding: 10px 12px;
         border: 1px solid var(--ink);
         border-radius: 0;
-        background: var(--bg);
+        background: #fff;   /* blanc pour se distinguer du fond beige */
         color: var(--ink);
         font-family: var(--body);
         font-size: 14px;
@@ -834,26 +838,6 @@
                     </button>
 
                     {#
-                        Select rapide de catégorie + bouton "Écrire" (état replié).
-                        Quand l'utilisateur clique "Écrire", fiComposerOpen() est appelé
-                        et la valeur de ce select est synchronisée vers le select du formulaire.
-                    #}
-                    <div class="fi-composer__actions" data-hide-when-open>
-                        <select id="fi-composer-cat-quick"
-                                class="fi-composer__select"
-                                aria-label="Choisir une catégorie">
-                            {% for cat in categories %}
-                                <option value="{{ cat.id }}">{{ cat.name }}</option>
-                            {% endfor %}
-                        </select>
-                        <button type="button"
-                                class="btn btn-ghost btn-sm"
-                                onclick="fiComposerOpen()">
-                            Écrire
-                        </button>
-                    </div>
-
-                    {#
                         Libellé + bouton Annuler visibles uniquement en état étendu.
                         hidden par défaut — le JS retire l'attribut au moment de l'ouverture.
                     #}
@@ -900,7 +884,15 @@
                             <select name="categoryId"
                                     id="fi-composer-cat-form"
                                     class="fi-composer__cat-select"
-                                    aria-label="Categorie du post">
+                                    aria-label="Categorie du post"
+                                    required>
+                                {#
+                                    Option par défaut non sélectionnable : guide l'utilisateur
+                                    vers le choix de catégorie avant de pouvoir publier.
+                                    value="" + disabled + selected = placeholder natif HTML.
+                                    required sur le select bloque la soumission si non choisi.
+                                #}
+                                <option value="" disabled selected>Choisissez votre categorie</option>
                                 {% for cat in categories %}
                                     <option value="{{ cat.id }}">{{ cat.name }}</option>
                                 {% endfor %}
@@ -948,32 +940,27 @@
                      * 1. Retire l'attribut `hidden` des éléments [data-show-when-open]
                      *    (libellé "Nouveau post..." + bouton Annuler + zone formulaire).
                      * 2. Ajoute `hidden` sur les éléments [data-hide-when-open]
-                     *    (placeholder + select rapide + bouton "Écrire").
-                     * 3. Synchronise la valeur du quick-select vers le form-select.
-                     * 4. Met le focus sur le champ Titre.
+                     *    (placeholder texte).
+                     * 3. Met le focus sur le champ Titre.
+                     *
+                     * Note : il n'y a plus de quick-select à synchroniser —
+                     * la catégorie est choisie une seule fois, dans le formulaire.
                      */
                     window.fiComposerOpen = function () {
                         var composer = document.getElementById('fi-composer');
                         if (!composer) { return; }
 
-                        // Afficher les éléments "open only"
+                        // Afficher les éléments "open only" (label + annuler + formulaire)
                         composer.querySelectorAll('[data-show-when-open]').forEach(function (el) {
                             el.hidden = false;
                         });
 
-                        // Masquer les éléments "collapsed only"
+                        // Masquer les éléments "collapsed only" (placeholder)
                         composer.querySelectorAll('[data-hide-when-open]').forEach(function (el) {
                             el.hidden = true;
                         });
 
-                        // Synchroniser la catégorie du quick-select vers le form-select
-                        var catQuick = document.getElementById('fi-composer-cat-quick');
-                        var catForm  = document.getElementById('fi-composer-cat-form');
-                        if (catQuick && catForm) {
-                            catForm.value = catQuick.value;
-                        }
-
-                        // Focus sur le titre pour que l'utilisateur puisse commencer à taper
+                        // Focus sur le champ titre pour que l'utilisateur commence à taper
                         var titleField = document.getElementById('fi-composer-title');
                         if (titleField) {
                             titleField.focus();
