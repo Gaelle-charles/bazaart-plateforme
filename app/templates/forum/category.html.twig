@@ -408,9 +408,12 @@
 <div class="fc-header">
     <div class="fc-header__left">
         {% if category.icon %}
-            {# Icône dans un carré lime — visible uniquement si définie #}
+            {# Icône dans un carré lime — visible uniquement si définie.
+               |raw : l'icône est une entité HTML (ex: &#129309; = 🤝) issue du seed
+               (champ admin, NON saisi par l'utilisateur). Sans |raw, Twig échappe le
+               « & » et l'entité s'affiche en texte brut (« &#129309; »). #}
             <div class="fc-header__icon-wrap" aria-hidden="true">
-                {{ category.icon }}
+                {{ category.icon|raw }}
             </div>
         {% endif %}
         <div>

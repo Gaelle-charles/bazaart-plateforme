@@ -376,7 +376,8 @@
         <div class="fn-page-context">
             dans
             {% if category.icon %}
-                <span aria-hidden="true">{{ category.icon }}</span>
+                {# |raw : icône = entité HTML admin (ex: &#129309;), pas du contenu utilisateur #}
+                <span aria-hidden="true">{{ category.icon|raw }}</span>
             {% endif %}
             <strong>{{ category.name }}</strong>
         </div>
@@ -456,7 +457,7 @@
                                 #}
                                 <option value="{{ cat.id }}"
                                         {% if cat.id == category.id %}selected{% endif %}>
-                                    {% if cat.icon %}{{ cat.icon }} {% endif %}{{ cat.name }}
+                                    {% if cat.icon %}{{ cat.icon|raw }} {% endif %}{{ cat.name }}
                                 </option>
                             {% endfor %}
                         </select>
