@@ -7,6 +7,10 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    # Valeur par défaut de la variable d'env ADMIN_EMAIL (commitée, donc présente en prod).
+    # app/.env étant gitignoré, on ne peut pas y mettre la valeur partagée : on la fixe ici.
+    # Surchargeable sur le serveur via .env.local si besoin (ADMIN_EMAIL=...).
+    env(ADMIN_EMAIL): 'bonjourbazaart@gmail.com'
 
 services:
     # default configuration for services in *this* file
