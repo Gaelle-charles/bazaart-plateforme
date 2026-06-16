@@ -24,6 +24,13 @@ metadata:
 - UX : catégorie à un seul endroit (dans le formulaire), fonds blancs (#fff) sur les champs
 - Clés Stripe LIVE interceptées par GitHub Push Protection (jamais pushées) → redactées dans project_stripe.md
 
+#### Forum — images jointes + réactions emoji ✅ (15 juin, en prod, commits 9bada1e + cf05b88)
+- Image optionnelle sur threads ET réponses (champ `imagePath` ; `ForumImageService` : MIME strict, 5 Mo ; champ aussi dans le compositeur inline). Vignettes dans le feed (index + catégorie).
+- Réactions emoji toggle (like/fire/bravo/heart/idea) : `ForumReactionType`, entité `ForumReaction`, endpoint `POST /forum/react` (JSON + fallback), repository anti-N+1.
+- ADR-0011 (écart au CDC assumé par Gaëlle). PHPStan 6 OK, migration `Version20260615235907` appliquée.
+- ⚠️ PIÈGE PROD images : les uploads vivent dans le volume Docker `uploads_data` monté SEULEMENT dans `bazaart_platform_app` → nginx ne les sert pas (404 statique). Solution retenue (Option B) : PHP sert les images via `GET /forum/image/{type}/{id}` (`ForumController::image()`, BinaryFileResponse, anti path-traversal). Route déclarée AVANT category/thread (threadSlug `.+` capture les `/`). En prod, le dossier `public/uploads/forum/` doit appartenir à `www-data` (uid 82 sur Alpine), sinon erreur d'upload « Impossible d'enregistrer l'image » (créé par root via docker exec → chown -R www-data nécessaire).
+- Reste (reporté) : tests E2E upload/réactions.
+
 #### Stripe — intégration complète ✅ (faite avant cette session)
 - Abonnements mensuel (9,90€) et annuel (79€) via Stripe Checkout (mode subscription)
 - Paiements formations via Stripe Checkout (mode payment, un achat par formation)
@@ -41,6 +48,14 @@ metadata:
 - Bug corrigé : filtre ROLE_ADMIN en PHP (colonne JSON roles incompatible avec LIKE PostgreSQL)
 
 ---
+
+#### Améliorations post-forum (15 juin, soir) ✅
+- Nav : onglet **Formations** (`app_course_index`) ajouté (desktop + mobile).
+- Dashboard user : bandeau **Mon abonnement** (→ `app_subscription_manage` / `/tarifs`) + widget **Mes formations**.
+- Ressourcerie : `Resource::getExternalUrlNormalized()` (lien « Candidater » sans schéma → 404 corrigé), utilisé dans show + admin pending.
+- Forum : taille des images du détail post bornée ; icônes catégorie rendues via `|raw` (entités HTML du seed).
+- **Proposer une formation (ADR-0012, Option B)** : entité `CourseProposal` + statut + revue admin. User : `/formations/propositions/nouvelle` + widget dashboard. Admin : `/admin/formations/propositions` (accepter/refuser, email à l'auteur). Migration `Version20260616020224`. Emails uniquement (pas de notif in-app en V1).
+- ⚠️ Plusieurs commits poussés sur `main` NON encore déployés (cc647a6, 6b85704, 2d41b75, b1c6870, + le lot CourseProposal). Déploiement = `git pull` + `cache:clear --env=prod` (la migration CourseProposal doit aussi tourner).
 
 ## ✅ MODULES COMPLETS (voir historique sessions précédentes pour détails)
 

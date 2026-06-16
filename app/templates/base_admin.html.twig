@@ -497,6 +497,15 @@
                 Formations
             </a>
 
+            {# Propositions de formation soumises par les membres (ADR-0012) #}
+            <a href="{{ path('app_admin_course_proposal_index') }}"
+               class="sd-link {{ app.request.attributes.get('_route') starts with 'app_admin_course_proposal' ? 'sd-link--active' : '' }}">
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14"/>
+                </svg>
+                Propositions
+            </a>
+
             {#
                 Lives planifiés — module Communauté V1.
                 Actif pour toutes les routes "app_admin_live_*".

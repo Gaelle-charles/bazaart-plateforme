@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Repository\CourseProposalRepository;
 use App\Repository\PostRepository;
 use App\Repository\ResourceRepository;
 use App\Repository\SubscriptionRepository;
@@ -25,6 +26,8 @@ class DashboardController extends AbstractController
         private readonly PostRepository $postRepository,
         // Pour afficher l'état de l'abonnement de l'utilisateur dans son tableau de bord
         private readonly SubscriptionRepository $subscriptionRepository,
+        // Pour afficher les propositions de formation de l'utilisateur (widget dédié)
+        private readonly CourseProposalRepository $courseProposalRepository,
     ) {}
 
     #[Route('/dashboard', name: 'app_dashboard')]
@@ -50,12 +53,16 @@ class DashboardController extends AbstractController
         // Abonnement actif (ou null) — alimente le widget « Mon abonnement »
         $activeSubscription = $this->subscriptionRepository->findActiveByUser($user);
 
+        // Propositions de formation de l'utilisateur (widget « Mes propositions »)
+        $myProposals = $this->courseProposalRepository->findByUser($user);
+
         return $this->render('dashboard/index.html.twig', [
             'user'               => $user,
             'recent_resources'   => $recentResources,
             'recent_posts'       => $recentPosts,
             'submissions'        => $submissions,
             'active_subscription' => $activeSubscription,
+            'my_proposals'       => $myProposals,
         ]);
     }
 }

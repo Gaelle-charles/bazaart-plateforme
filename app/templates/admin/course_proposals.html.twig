@@ -1,0 +1,152 @@
+{% extends 'base_admin.html.twig' %}
+
+{% block title %}Propositions de formation — Admin BazaArt{% endblock %}
+{% block page_title %}Propositions de formation{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Propositions de formation (admin) — préfixe .cpa- */
+    .cpa-section-title {
+        font-family: var(--display); font-size: 20px; text-transform: uppercase;
+        margin: 8px 0 16px; color: var(--ink);
+    }
+    .cpa-card {
+        border: 1px solid var(--ink); background: var(--bg); margin-bottom: 18px;
+    }
+    .cpa-card__head {
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+        padding: 16px 20px; border-bottom: 1px solid var(--ink); background: var(--bg-alt); flex-wrap: wrap;
+    }
+    .cpa-card__title { font-family: var(--display); font-size: 18px; text-transform: uppercase; margin: 0; }
+    .cpa-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-mute); letter-spacing: .04em; margin-top: 4px; }
+    .cpa-card__body { padding: 16px 20px; }
+    .cpa-block { margin-bottom: 12px; }
+    .cpa-block__label {
+        font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+        color: var(--ink-mute); margin-bottom: 4px;
+    }
+    .cpa-block__value { font-family: var(--body); font-size: 14px; color: var(--ink); line-height: 1.6; white-space: pre-wrap; }
+    .cpa-chip {
+        display: inline-block; font-family: var(--mono); font-size: 10px; font-weight: 700;
+        letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border: 1px solid var(--ink);
+    }
+    .cpa-chip--warn   { background: var(--accent-2); color: var(--ink); }
+    .cpa-chip--ok     { background: var(--ok, #1F8A5B); color: #fff; border-color: var(--ok, #1F8A5B); }
+    .cpa-chip--danger { background: var(--danger, #E5484D); color: #fff; border-color: var(--danger, #E5484D); }
+    .cpa-review {
+        padding: 14px 20px; border-top: 1px solid var(--line-soft); background: var(--bg-alt);
+    }
+    .cpa-note {
+        width: 100%; min-height: 70px; padding: 10px 12px; border: 1px solid var(--line);
+        font-family: var(--body); font-size: 13px; color: var(--ink); background: #fff;
+        box-sizing: border-box; resize: vertical; margin-bottom: 10px;
+    }
+    .cpa-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .cpa-btn {
+        display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px;
+        border: 1px solid var(--ink); font-family: var(--body); font-size: 12px; font-weight: 700;
+        letter-spacing: .06em; text-transform: uppercase; cursor: pointer; border-radius: 0;
+    }
+    .cpa-btn--accept { background: var(--accent); color: var(--ink); }
+    .cpa-btn--accept:hover { background: var(--ink); color: var(--accent); }
+    .cpa-btn--reject { background: transparent; color: var(--ink); }
+    .cpa-btn--reject:hover { background: var(--accent-2); color: var(--ink); border-color: var(--accent-2); }
+    .cpa-empty { font-family: var(--mono); font-size: 12px; color: var(--ink-mute); padding: 20px; border: 1px solid var(--line-soft); }
+    .cpa-link { color: var(--ink); }
+    .cpa-reviewed-row {
+        display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+        padding: 10px 16px; border: 1px solid var(--line-soft); border-top: none; font-size: 13px;
+    }
+    .cpa-reviewed-row:first-child { border-top: 1px solid var(--line-soft); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── EN ATTENTE ───────────────────────────────────────────────────────────── #}
+<h2 class="cpa-section-title">En attente ({{ pending|length }})</h2>
+
+{% if pending is empty %}
+    <div class="cpa-empty">Aucune proposition en attente. 🎉</div>
+{% else %}
+    {% for p in pending %}
+        <div class="cpa-card">
+            <div class="cpa-card__head">
+                <div>
+                    <h3 class="cpa-card__title">{{ p.title }}</h3>
+                    <div class="cpa-meta">
+                        par {{ p.proposedBy.email|split('@')|first }}
+                        · {{ p.createdAt|date('d/m/Y à H:i') }}
+                        {% if p.level %} · {{ p.level.label() }}{% endif %}
+                    </div>
+                </div>
+                <span class="cpa-chip cpa-chip--warn">En attente</span>
+            </div>
+
+            <div class="cpa-card__body">
+                <div class="cpa-block">
+                    <div class="cpa-block__label">Public visé</div>
+                    <div class="cpa-block__value">{{ p.targetAudience }}</div>
+                </div>
+                <div class="cpa-block">
+                    <div class="cpa-block__label">Description / programme</div>
+                    <div class="cpa-block__value">{{ p.description }}</div>
+                </div>
+                <div class="cpa-block">
+                    <div class="cpa-block__label">Expérience de l'auteur</div>
+                    <div class="cpa-block__value">{{ p.experience }}</div>
+                </div>
+                {% if p.portfolioUrl %}
+                    <div class="cpa-block">
+                        <div class="cpa-block__label">Portfolio</div>
+                        <div class="cpa-block__value">
+                            <a class="cpa-link" href="{{ p.portfolioUrl }}" target="_blank" rel="noopener noreferrer">{{ p.portfolioUrl }}</a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+
+            {#
+                Un seul formulaire, deux boutons : « Accepter » poste vers l'action accept,
+                « Refuser » surcharge la cible via formaction → action reject.
+                Le token CSRF est partagé (proposal_review_{id}) et validé par les deux actions.
+                La note est optionnelle et transmise dans les deux cas.
+            #}
+            <div class="cpa-review">
+                <form method="post" action="{{ path('app_admin_course_proposal_accept', {id: p.id}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('proposal_review_' ~ p.id) }}">
+                    <textarea name="note" class="cpa-note"
+                              placeholder="Message à l'auteur (optionnel) — motif d'acceptation ou de refus"></textarea>
+                    <div class="cpa-actions">
+                        <button type="submit" class="cpa-btn cpa-btn--accept">✓ Accepter</button>
+                        <button type="submit" class="cpa-btn cpa-btn--reject"
+                                formaction="{{ path('app_admin_course_proposal_reject', {id: p.id}) }}"
+                                onclick="return confirm('Refuser cette proposition ?')">✕ Refuser</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    {% endfor %}
+{% endif %}
+
+{# ── HISTORIQUE ───────────────────────────────────────────────────────────── #}
+<h2 class="cpa-section-title" style="margin-top:32px;">Traitées ({{ reviewed|length }})</h2>
+
+{% if reviewed is empty %}
+    <div class="cpa-empty">Aucune proposition traitée pour le moment.</div>
+{% else %}
+    {% for p in reviewed %}
+        <div class="cpa-reviewed-row">
+            <span class="cpa-chip cpa-chip--{{ p.status.badgeVariant() }}">{{ p.status.label() }}</span>
+            <strong>{{ p.title }}</strong>
+            <span class="cpa-meta">
+                par {{ p.proposedBy.email|split('@')|first }}
+                {% if p.reviewedAt %} · traitée le {{ p.reviewedAt|date('d/m/Y') }}{% endif %}
+            </span>
+            {% if p.adminNote %}<span class="cpa-meta">— « {{ p.adminNote }} »</span>{% endif %}
+        </div>
+    {% endfor %}
+{% endif %}
+
+{% endblock %}

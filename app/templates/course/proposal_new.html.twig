@@ -1,0 +1,140 @@
+{% extends 'base_app.html.twig' %}
+
+{% block title %}Proposer une formation — BazaArt{% endblock %}
+{% block page_title %}Formations{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Proposer une formation — préfixe .cp- (course-proposal). Thème Street. */
+    .cp-container { max-width: 760px; }
+
+    .cp-head { margin-bottom: 28px; }
+    .cp-back {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+        text-transform: uppercase; color: var(--ink-mute); text-decoration: none;
+        margin-bottom: 14px;
+    }
+    .cp-back:hover { color: var(--ink); }
+    .cp-title {
+        font-family: var(--display); font-size: clamp(32px, 6vw, 52px);
+        text-transform: uppercase; line-height: .95; color: var(--ink); margin: 0 0 8px;
+    }
+    .cp-intro { font-family: var(--mono); font-size: 12px; color: var(--ink-mute); letter-spacing: .04em; }
+
+    .cp-card { border: 1px solid var(--ink); background: var(--bg); }
+    .cp-card__body { padding: 28px 28px 8px; }
+    .cp-field { margin-bottom: 22px; }
+    .cp-label {
+        display: block; font-family: var(--body); font-size: var(--label-font-size, 12px);
+        font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+        color: var(--ink); margin-bottom: 4px;
+    }
+    .cp-label__opt {
+        font-family: var(--mono); font-size: 10px; font-weight: 400;
+        text-transform: none; color: var(--ink-mute); margin-left: 4px;
+    }
+    .cp-hint { font-family: var(--mono); font-size: 10px; color: var(--ink-mute); text-transform: uppercase; margin-bottom: 8px; }
+    .cp-input, .cp-textarea, .cp-select {
+        display: block; width: 100%; padding: 12px 14px;
+        border: 1px solid var(--line); border-radius: 0;
+        font-family: var(--body); font-size: 14px; color: var(--ink);
+        background: #fff; box-sizing: border-box;
+    }
+    .cp-input:focus, .cp-textarea:focus, .cp-select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .cp-textarea { min-height: 130px; resize: vertical; line-height: 1.6; }
+    .cp-card__footer {
+        padding: 20px 28px; border-top: 1px solid var(--ink); background: var(--bg-alt);
+        display: flex; gap: 12px; flex-direction: column;
+    }
+    .cp-submit {
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        width: 100%; padding: 14px 24px; background: var(--accent); color: var(--ink);
+        border: none; font-family: var(--body); font-size: 14px; font-weight: 700;
+        letter-spacing: .06em; text-transform: uppercase; cursor: pointer; border-radius: 0;
+        transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .cp-submit:hover { background: var(--ink); color: var(--accent); box-shadow: 4px 4px 0 var(--ink); }
+    .cp-cancel {
+        font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+        color: var(--ink-mute); text-decoration: none; text-align: center;
+    }
+    .cp-cancel:hover { color: var(--ink); }
+    @media (max-width: 640px) { .cp-card__body { padding: 20px; } .cp-card__footer { padding: 16px 20px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cp-container">
+
+    <div class="cp-head">
+        <a href="{{ path('app_dashboard') }}" class="cp-back">← Retour au tableau de bord</a>
+        <h1 class="cp-title">Proposer une formation</h1>
+        <p class="cp-intro">
+            Tu as une expertise à transmettre ? Propose une formation à l'équipe Bazaart.
+            Elle l'étudie et revient vers toi.
+        </p>
+    </div>
+
+    <div class="cp-card">
+        {# Formulaire HTML natif + token CSRF manuel (même convention que le forum) #}
+        <form method="post" action="{{ path('app_course_proposal_new') }}" novalidate>
+            <input type="hidden" name="_token" value="{{ csrf_token('course_proposal_new') }}">
+
+            <div class="cp-card__body">
+
+                <div class="cp-field">
+                    <label for="cp-title" class="cp-label">Titre de la formation</label>
+                    <div class="cp-hint">Court et parlant (5 à 255 caractères)</div>
+                    <input type="text" id="cp-title" name="title" class="cp-input"
+                           maxlength="255" required value="{{ formData.title ?? '' }}">
+                </div>
+
+                <div class="cp-field">
+                    <label for="cp-description" class="cp-label">Description / programme</label>
+                    <div class="cp-hint">Ce que les participant·es vont apprendre (min. 20 caractères)</div>
+                    <textarea id="cp-description" name="description" class="cp-textarea" required>{{ formData.description ?? '' }}</textarea>
+                </div>
+
+                <div class="cp-field">
+                    <label for="cp-audience" class="cp-label">Public visé</label>
+                    <div class="cp-hint">Ex : artistes émergents, porteurs de projet…</div>
+                    <textarea id="cp-audience" name="targetAudience" class="cp-textarea" style="min-height:80px" required>{{ formData.targetAudience ?? '' }}</textarea>
+                </div>
+
+                <div class="cp-field">
+                    <label for="cp-experience" class="cp-label">Ton expérience sur le sujet</label>
+                    <div class="cp-hint">Quelques lignes sur ta légitimité / parcours</div>
+                    <textarea id="cp-experience" name="experience" class="cp-textarea" required>{{ formData.experience ?? '' }}</textarea>
+                </div>
+
+                <div class="cp-field">
+                    <label for="cp-level" class="cp-label">Niveau <span class="cp-label__opt">(optionnel)</span></label>
+                    <select id="cp-level" name="level" class="cp-select">
+                        <option value="">— Indifférent —</option>
+                        {% for level in levels %}
+                            <option value="{{ level.value }}" {{ (formData.level ?? '') == level.value ? 'selected' : '' }}>
+                                {{ level.label() }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="cp-field">
+                    <label for="cp-portfolio" class="cp-label">Lien portfolio / exemple <span class="cp-label__opt">(optionnel)</span></label>
+                    <input type="url" id="cp-portfolio" name="portfolioUrl" class="cp-input"
+                           maxlength="500" placeholder="https://…" value="{{ formData.portfolioUrl ?? '' }}">
+                </div>
+
+            </div>
+
+            <div class="cp-card__footer">
+                <button type="submit" class="cp-submit">Envoyer ma proposition →</button>
+                <a href="{{ path('app_dashboard') }}" class="cp-cancel">Annuler</a>
+            </div>
+        </form>
+    </div>
+
+</div>
+{% endblock %}

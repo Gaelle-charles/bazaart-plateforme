@@ -951,6 +951,34 @@
     color: var(--accent);
 }
 
+/* ══════════════════════════════════════════════════════════════
+   WIDGET « MES FORMATIONS » (proposer + suivi des propositions)
+══════════════════════════════════════════════════════════════ */
+.db-proposals {
+    border: 1px solid var(--ink);
+    background: var(--bg-alt);
+    padding: 18px 22px;
+    margin-bottom: 24px;
+}
+.db-proposals__head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.db-proposals__list { list-style: none; margin: 0; padding: 0; }
+.db-proposals__item {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 0; border-top: 1px solid var(--line-soft);
+}
+.db-proposals__title { font-family: var(--body); font-size: 14px; color: var(--ink); }
+.db-proposals__empty { font-family: var(--mono); font-size: 12px; color: var(--ink-mute); margin: 0; }
+.db-prop-badge {
+    font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; padding: 3px 8px; border: 1px solid var(--ink); white-space: nowrap;
+}
+.db-prop-badge--warn   { background: var(--accent-2); color: var(--ink); }
+.db-prop-badge--ok     { background: var(--ok, #1F8A5B); color: #fff; border-color: var(--ok, #1F8A5B); }
+.db-prop-badge--danger { background: var(--danger, #E5484D); color: #fff; border-color: var(--danger, #E5484D); }
+
 </style>
 {% endblock %}
 
@@ -1155,6 +1183,32 @@
         <a href="{{ path('app_pricing') }}" class="db-subscription__btn">
             Découvrir l'abonnement
         </a>
+    {% endif %}
+</div>
+
+
+{# ══════════════════════════════════════════════════════════════════════════════
+   WIDGET « MES FORMATIONS »
+   Bouton « Proposer une formation » (→ formulaire) + suivi des propositions de l'user.
+══════════════════════════════════════════════════════════════════════════════ #}
+<div class="db-proposals">
+    <div class="db-proposals__head">
+        <span class="db-subscription__label">Mes formations</span>
+        <a href="{{ path('app_course_proposal_new') }}" class="db-subscription__btn">
+            Proposer une formation
+        </a>
+    </div>
+    {% if my_proposals is not empty %}
+        <ul class="db-proposals__list">
+            {% for p in my_proposals %}
+                <li class="db-proposals__item">
+                    <span class="db-proposals__title">{{ p.title }}</span>
+                    <span class="db-prop-badge db-prop-badge--{{ p.status.badgeVariant() }}">{{ p.status.label() }}</span>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="db-proposals__empty">Tu n'as pas encore proposé de formation.</p>
     {% endif %}
 </div>
 
