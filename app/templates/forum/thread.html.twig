@@ -617,10 +617,24 @@
     .ft-reply__image {
         padding: 0 16px 16px;
     }
-    .ft-post__image img,
+    /* Image du sujet : bornée pour ne pas dominer la page.
+       max-width: min(100%, 560px) → plafonnée à 560px sur grand écran,
+       mais ne dépasse jamais la largeur dispo sur mobile (100%).
+       max-height plafonne la hauteur ; width/height auto préservent le ratio. */
+    .ft-post__image img {
+        display: block;
+        max-width: min(100%, 560px);
+        max-height: 480px;
+        width: auto;
+        height: auto;
+        border: 1px solid var(--ink);
+    }
+    /* Image de réponse : un peu plus petite que celle du sujet */
     .ft-reply__image img {
         display: block;
-        max-width: 100%;
+        max-width: min(100%, 420px);
+        max-height: 340px;
+        width: auto;
         height: auto;
         border: 1px solid var(--ink);
     }
