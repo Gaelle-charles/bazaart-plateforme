@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Repository\PostRepository;
 use App\Repository\ResourceRepository;
+use App\Repository\SubscriptionRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -22,6 +23,8 @@ class DashboardController extends AbstractController
     public function __construct(
         private readonly ResourceRepository $resourceRepository,
         private readonly PostRepository $postRepository,
+        // Pour afficher l'état de l'abonnement de l'utilisateur dans son tableau de bord
+        private readonly SubscriptionRepository $subscriptionRepository,
     ) {}
 
     #[Route('/dashboard', name: 'app_dashboard')]
@@ -44,11 +47,15 @@ class DashboardController extends AbstractController
         // Nombre total de soumissions de cet utilisateur (stat personnelle)
         $submissions = count($this->resourceRepository->findByUser($user));
 
+        // Abonnement actif (ou null) — alimente le widget « Mon abonnement »
+        $activeSubscription = $this->subscriptionRepository->findActiveByUser($user);
+
         return $this->render('dashboard/index.html.twig', [
-            'user'             => $user,
-            'recent_resources' => $recentResources,
-            'recent_posts'     => $recentPosts,
-            'submissions'      => $submissions,
+            'user'               => $user,
+            'recent_resources'   => $recentResources,
+            'recent_posts'       => $recentPosts,
+            'submissions'        => $submissions,
+            'active_subscription' => $activeSubscription,
         ]);
     }
 }

@@ -891,6 +891,66 @@
     }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   BANDEAU « MON ABONNEMENT »
+   Affiché après les stats : état de l'abonnement + accès à la gestion.
+══════════════════════════════════════════════════════════════ */
+.db-subscription {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    border: 1px solid var(--ink);
+    background: var(--bg-alt);
+    padding: 18px 22px;
+    margin-bottom: 24px;
+}
+.db-subscription__info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.db-subscription__label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+}
+.db-subscription__plan {
+    font-family: var(--body);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+}
+.db-subscription__meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+}
+.db-subscription__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    background: var(--accent);
+    color: var(--ink);
+    border: 1px solid var(--ink);
+    font-family: var(--body);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-radius: 0;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.db-subscription__btn:hover {
+    background: var(--ink);
+    color: var(--accent);
+}
+
 </style>
 {% endblock %}
 
@@ -1063,6 +1123,39 @@
         <small class="db-stat__label">Notifications</small>
     </div>
 
+</div>
+
+
+{# ══════════════════════════════════════════════════════════════════════════════
+   BANDEAU « MON ABONNEMENT »
+   active_subscription est passé par DashboardController (null si pas d'abonnement).
+   - Abonné  : plan + date de renouvellement + bouton « Gérer mon abonnement »
+   - Non abonné : invitation à découvrir l'offre (→ /tarifs)
+══════════════════════════════════════════════════════════════════════════════ #}
+<div class="db-subscription">
+    {% if active_subscription %}
+        <div class="db-subscription__info">
+            <span class="db-subscription__label">Mon abonnement</span>
+            <strong class="db-subscription__plan">
+                {{ active_subscription.plan == 'annual' ? 'Abonnement annuel (79 €/an)' : 'Abonnement mensuel (9,90 €/mois)' }}
+            </strong>
+            <span class="db-subscription__meta">
+                Actif · prochain renouvellement le {{ active_subscription.currentPeriodEnd|date('d/m/Y') }}
+            </span>
+        </div>
+        <a href="{{ path('app_subscription_manage') }}" class="db-subscription__btn">
+            Gérer mon abonnement
+        </a>
+    {% else %}
+        <div class="db-subscription__info">
+            <span class="db-subscription__label">Abonnement</span>
+            <strong class="db-subscription__plan">Tu n'as pas encore d'abonnement</strong>
+            <span class="db-subscription__meta">Profite de tous les avantages de l'abonnement Bazaart.</span>
+        </div>
+        <a href="{{ path('app_pricing') }}" class="db-subscription__btn">
+            Découvrir l'abonnement
+        </a>
+    {% endif %}
 </div>
 
 
