@@ -136,6 +136,45 @@ class ForumImageService
     }
 
     /**
+     * Résout le chemin ABSOLU d'une image forum existante, de façon sécurisée.
+     *
+     * Utilisé par le contrôleur qui sert les images (Option B : les fichiers vivent
+     * dans un volume Docker monté seulement dans le conteneur PHP — nginx ne les voit
+     * pas — donc PHP les sert lui-même via BinaryFileResponse).
+     *
+     * Sécurité anti-« path traversal » :
+     *   Même si $imagePath provient de la BDD (et non directement de l'utilisateur),
+     *   on vérifie via realpath() que le fichier résolu se trouve BIEN à l'intérieur
+     *   du dossier uploads/forum/. Cela bloque toute tentative d'accès à un fichier
+     *   hors de ce dossier (ex : "uploads/forum/../../config/secret").
+     *
+     * @param string|null $imagePath Chemin relatif stocké en BDD (ex: 'uploads/forum/x.jpg')
+     * @return string|null Chemin absolu du fichier s'il existe et est légitime, sinon null.
+     */
+    public function getAbsolutePathIfExists(?string $imagePath): ?string
+    {
+        if ($imagePath === null || $imagePath === '') {
+            return null;
+        }
+
+        // Dossier de référence (réel) où doivent vivre toutes les images forum
+        $baseReal = realpath($this->projectDir . '/public/' . self::FORUM_UPLOAD_DIR);
+        // Fichier demandé (réel) — realpath() retourne false si le fichier n'existe pas
+        $fileReal = realpath($this->projectDir . '/public/' . $imagePath);
+
+        if ($baseReal === false || $fileReal === false) {
+            return null;
+        }
+
+        // Le fichier doit être STRICTEMENT à l'intérieur du dossier uploads/forum/
+        if (!str_starts_with($fileReal, $baseReal . DIRECTORY_SEPARATOR)) {
+            return null;
+        }
+
+        return $fileReal;
+    }
+
+    /**
      * Supprime un fichier image du disque s'il existe.
      *
      * Appelé lors de la suppression d'un thread/reply.

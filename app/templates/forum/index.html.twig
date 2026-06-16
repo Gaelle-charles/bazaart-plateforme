@@ -364,6 +364,20 @@
         line-height: 1.5;
     }
 
+    /* Vignette d'image jointe dans le feed — petite, bords francs */
+    .fi-thread-card__thumb {
+        margin: 0 0 10px;
+    }
+    .fi-thread-card__thumb img {
+        display: block;
+        max-width: 220px;
+        max-height: 140px;
+        width: auto;
+        height: auto;
+        object-fit: cover;
+        border: 1px solid var(--ink);
+    }
+
     /* Ligne méta basse : nb réponses, vues */
     .fi-thread-card__stats {
         font-family: var(--mono);
@@ -1210,6 +1224,14 @@
                                     {{- thread.content|striptags|slice(0, 120) -}}
                                     {%- if thread.content|striptags|length > 120 %}...{% endif %}
                                 </p>
+                            {% endif %}
+
+                            {# Vignette si le sujet a une image jointe (servie par PHP, cf. ADR-0011) #}
+                            {% if thread.imagePath %}
+                                <div class="fi-thread-card__thumb">
+                                    <img src="{{ path('app_forum_image', {type: 'thread', id: thread.id}) }}"
+                                         alt="" loading="lazy">
+                                </div>
                             {% endif %}
 
                             {# Méta basse : réponses et vues #}

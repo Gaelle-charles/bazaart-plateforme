@@ -839,8 +839,9 @@
     #}
     {% if thread.imagePath %}
         <div class="ft-post__image">
-            <a href="{{ asset(thread.imagePath) }}" target="_blank" rel="noopener">
-                <img src="{{ asset(thread.imagePath) }}" alt="Image jointe au sujet" loading="lazy">
+            {# Image servie par PHP (route app_forum_image) — cf. ADR-0011 / ForumController::image() #}
+            <a href="{{ path('app_forum_image', {type: 'thread', id: thread.id}) }}" target="_blank" rel="noopener">
+                <img src="{{ path('app_forum_image', {type: 'thread', id: thread.id}) }}" alt="Image jointe au sujet" loading="lazy">
             </a>
         </div>
     {% endif %}
@@ -1050,8 +1051,8 @@
                     {# Image jointe à la réponse (si présente) #}
                     {% if reply.imagePath %}
                         <div class="ft-reply__image">
-                            <a href="{{ asset(reply.imagePath) }}" target="_blank" rel="noopener">
-                                <img src="{{ asset(reply.imagePath) }}" alt="Image jointe à la réponse" loading="lazy">
+                            <a href="{{ path('app_forum_image', {type: 'reply', id: reply.id}) }}" target="_blank" rel="noopener">
+                                <img src="{{ path('app_forum_image', {type: 'reply', id: reply.id}) }}" alt="Image jointe à la réponse" loading="lazy">
                             </a>
                         </div>
                     {% endif %}

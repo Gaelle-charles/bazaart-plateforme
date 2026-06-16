@@ -209,6 +209,20 @@
         word-break: break-word;
     }
 
+    /* Vignette d'image jointe dans la liste de catégorie */
+    .fc-thread-item__thumb {
+        margin: 10px 0 0;
+    }
+    .fc-thread-item__thumb img {
+        display: block;
+        max-width: 220px;
+        max-height: 140px;
+        width: auto;
+        height: auto;
+        object-fit: cover;
+        border: 1px solid var(--ink);
+    }
+
     /* Métas en mono (auteur, date, réponses, vues) */
     .fc-thread-item__meta {
         font-family: var(--mono);
@@ -485,6 +499,14 @@
                             <span>dernière rép. le {{ thread.lastReplyAt|date('d/m/Y') }}</span>
                         {% endif %}
                     </div>
+
+                    {# Vignette si image jointe (servie par PHP, cf. ADR-0011) #}
+                    {% if thread.imagePath %}
+                        <div class="fc-thread-item__thumb">
+                            <img src="{{ path('app_forum_image', {type: 'thread', id: thread.id}) }}"
+                                 alt="" loading="lazy">
+                        </div>
+                    {% endif %}
                 </div>
 
                 {# Avatar carré de l'auteur (initiales) — affiché à droite #}

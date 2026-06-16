@@ -13,11 +13,14 @@ use App\Repository\ForumReactionRepository;
 use App\Repository\ForumReplyRepository;
 use App\Repository\ForumThreadRepository;
 use App\Security\Voter\ForumVoter;
+use App\Service\ForumImageService;
 use App\Service\ForumService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -46,6 +49,8 @@ class ForumController extends AbstractController
         private readonly ForumService $forumService,
         // Pour afficher les compteurs de réactions et les réactions de l'utilisateur
         private readonly ForumReactionRepository $reactionRepository,
+        // Pour résoudre et servir les fichiers image (servis par PHP — cf. image())
+        private readonly ForumImageService $forumImageService,
     ) {}
 
     // ─── Page d'accueil du forum ──────────────────────────────────────────────
@@ -161,6 +166,65 @@ class ForumController extends AbstractController
             'categorySlug' => $category->getSlug(),
             'threadSlug'   => $result->getSlug(),
         ]);
+    }
+
+    // ─── Service des images jointes ───────────────────────────────────────────
+
+    /**
+     * Sert le fichier image d'un thread ou d'une réponse (Option B — ADR-0011).
+     *
+     * Pourquoi PHP sert-il l'image au lieu de nginx ?
+     *   En prod, les fichiers uploadés vivent dans un volume Docker (`uploads_data`)
+     *   monté uniquement dans le conteneur PHP. nginx ne voit pas ce volume et
+     *   renverrait 404 en service statique. PHP, lui, y a accès → il renvoie le
+     *   fichier via BinaryFileResponse. C'est l'approche recommandée par le CDC §4.4
+     *   (« servis via contrôleur Symfony avec contrôle d'accès »).
+     *
+     * Contrôle d'accès : la route est sous /forum, donc #[IsGranted('ROLE_USER')]
+     * (déclaré sur la classe) s'applique — seuls les membres connectés voient les images.
+     *
+     * Sécurité chemin : ForumImageService::getAbsolutePathIfExists() vérifie via
+     * realpath() que le fichier est bien dans uploads/forum/ (anti path traversal).
+     *
+     * ⚠️ ORDRE DES ROUTES : cette route DOIT être déclarée AVANT app_forum_category
+     * (`/forum/{categorySlug}`) et app_forum_thread (`/forum/{categorySlug}/{threadSlug}`).
+     * En effet, threadSlug a pour contrainte `.+` qui capture aussi les `/` : sans cet
+     * ordre, `/forum/image/thread/1` serait absorbé par app_forum_thread
+     * (categorySlug=image, threadSlug=thread/1). Symfony résout dans l'ordre de
+     * déclaration → on place donc image() en premier.
+     */
+    #[Route(
+        '/image/{type}/{id}',
+        name: 'image',
+        methods: ['GET'],
+        requirements: ['type' => 'thread|reply', 'id' => '\d+']
+    )]
+    public function image(string $type, int $id): Response
+    {
+        // Résolution de l'entité cible et de son chemin d'image
+        $imagePath = $type === 'thread'
+            ? $this->threadRepository->find($id)?->getImagePath()
+            : $this->replyRepository->find($id)?->getImagePath();
+
+        // Chemin absolu validé (existe + dans uploads/forum/) ou null
+        $absolutePath = $this->forumImageService->getAbsolutePathIfExists($imagePath);
+        if ($absolutePath === null) {
+            throw $this->createNotFoundException('Image introuvable.');
+        }
+
+        // BinaryFileResponse : streaming efficace du fichier (pas tout en mémoire).
+        $response = new BinaryFileResponse($absolutePath);
+
+        // Affichage dans le navigateur (inline) plutôt que téléchargement forcé.
+        $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_INLINE);
+
+        // En-têtes de cache : les noms de fichier sont uniques (uniqid) et immuables,
+        // on peut donc mettre en cache agressivement (30 jours) côté navigateur.
+        $response->setPublic();
+        $response->setMaxAge(2592000); // 30 jours
+        $response->setAutoLastModified();
+
+        return $response;
     }
 
     // ─── Liste des threads d'une catégorie ────────────────────────────────────
