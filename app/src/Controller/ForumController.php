@@ -7,12 +7,15 @@ namespace App\Controller;
 use App\Entity\ForumThread;
 use App\Entity\ForumReply;
 use App\Entity\User;
+use App\Enum\ForumReactionType;
 use App\Repository\ForumCategoryRepository;
+use App\Repository\ForumReactionRepository;
 use App\Repository\ForumReplyRepository;
 use App\Repository\ForumThreadRepository;
 use App\Security\Voter\ForumVoter;
 use App\Service\ForumService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -41,6 +44,8 @@ class ForumController extends AbstractController
         private readonly ForumThreadRepository $threadRepository,
         private readonly ForumReplyRepository $replyRepository,
         private readonly ForumService $forumService,
+        // Pour afficher les compteurs de réactions et les réactions de l'utilisateur
+        private readonly ForumReactionRepository $reactionRepository,
     ) {}
 
     // ─── Page d'accueil du forum ──────────────────────────────────────────────
@@ -136,7 +141,13 @@ class ForumController extends AbstractController
         // ── Délégation au service (même logique que newThread()) ─────────────
         // ForumService::createThread() valide le titre/contenu et crée le thread.
         // Il retourne un string (message d'erreur) ou un ForumThread (succès).
-        $result = $this->forumService->createThread($user, $category, $request->request->all());
+        // $request->files->get('image') : fichier image optionnel (null si absent).
+        $result = $this->forumService->createThread(
+            $user,
+            $category,
+            $request->request->all(),
+            $request->files->get('image'),
+        );
 
         if (is_string($result)) {
             // Erreur de validation (titre vide, contenu trop court, etc.)
@@ -239,12 +250,31 @@ class ForumController extends AbstractController
         //   → Délégué au ForumVoter pour cohérence avec le reste du système d'auth
         $canModerate = $this->isGranted(ForumVoter::FORUM_MODERATE, $thread);
 
+        // ── Réactions emoji ───────────────────────────────────────────────────
+        // On charge en BATCH (anti-N+1) les comptages de réactions pour le thread
+        // ET toutes ses réponses en quelques requêtes seulement, plutôt qu'une
+        // requête par entité. Idem pour les réactions de l'utilisateur connecté
+        // (utilisées pour surligner les boutons déjà cliqués).
+        /** @var User $currentUser */
+        $currentUser = $this->getUser();
+        $reactionCounts = $this->reactionRepository->countForThreadAndReplies($thread, $replies);
+        $userReactions  = $this->reactionRepository->findUserReactionsForThreadAndReplies(
+            $currentUser,
+            $thread,
+            $replies
+        );
+
         return $this->render('forum/thread.html.twig', [
             'category'    => $category,
             'thread'      => $thread,
             'replies'     => $replies,
             'canReply'    => $canReply,
             'canModerate' => $canModerate,
+            // Données de réactions pour l'affichage initial de la page
+            'reactionCounts' => $reactionCounts,
+            'userReactions'  => $userReactions,
+            // Liste ordonnée des types de réaction (emoji + libellé) pour les boutons
+            'reactionTypes'  => ForumReactionType::orderedCases(),
         ]);
     }
 
@@ -302,7 +332,13 @@ class ForumController extends AbstractController
             $user = $this->getUser();
 
             // ── Délégation au service ─────────────────────────────────────────
-            $result = $this->forumService->createThread($user, $category, $request->request->all());
+            // $request->files->get('image') : image optionnelle jointe au thread.
+            $result = $this->forumService->createThread(
+                $user,
+                $category,
+                $request->request->all(),
+                $request->files->get('image'),
+            );
 
             if (is_string($result)) {
                 // Le service a retourné un message d'erreur (string = erreur).
@@ -373,7 +409,13 @@ class ForumController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
 
-        $result = $this->forumService->addReply($user, $thread, $request->request->all());
+        // $request->files->get('image') : image optionnelle jointe à la réponse.
+        $result = $this->forumService->addReply(
+            $user,
+            $thread,
+            $request->request->all(),
+            $request->files->get('image'),
+        );
 
         if (is_string($result)) {
             $this->addFlash('error', $result);
@@ -593,5 +635,112 @@ class ForumController extends AbstractController
                 'threadSlug'   => $threadSlug,
             ]) . '#replies'
         );
+    }
+
+    // ─── Réactions emoji ──────────────────────────────────────────────────────
+
+    /**
+     * Bascule une réaction emoji (toggle) sur un thread ou une réponse.
+     *
+     * Route : POST /forum/react (name: app_forum_react)
+     *
+     * Corps de la requête :
+     *   - targetType : 'thread' ou 'reply'
+     *   - targetId   : int (ID de la cible)
+     *   - type       : valeur backed de l'enum ('like','fire','bravo','heart','idea')
+     *   - _token     : token CSRF avec intention 'forum_react'
+     *
+     * Réponse JSON (succès) :
+     *   {"ok": true, "counts": {"like": 5, ...}, "userReactions": ["like"]}
+     *
+     * Fallback non-JS :
+     *   Si la requête n'est pas XHR / n'attend pas du JSON, on redirige vers
+     *   l'index du forum (le JS gère le rendu fin sans rechargement de page).
+     *
+     * Sécurité :
+     *   - CSRF vérifié EN PREMIER (cohérent avec lock/pin/delete).
+     *   - ROLE_USER garanti par #[IsGranted] au niveau de la classe.
+     */
+    #[Route('/react', name: 'react', methods: ['POST'])]
+    public function react(Request $request): Response
+    {
+        // ── Vérification CSRF EN PREMIER ──────────────────────────────────────
+        if (!$this->isCsrfTokenValid('forum_react', $request->request->get('_token'))) {
+            if ($this->isXhrOrJsonRequest($request)) {
+                return new JsonResponse(['ok' => false, 'error' => 'Token de sécurité invalide.'], 403);
+            }
+            $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+            return $this->redirectToRoute('app_forum_index');
+        }
+
+        // ── Récupération et validation des paramètres ─────────────────────────
+        $targetType = $request->request->get('targetType');
+        $targetId   = $request->request->getInt('targetId');
+        $typeValue  = (string) $request->request->get('type', '');
+
+        // targetType doit valoir 'thread' ou 'reply'
+        if (!in_array($targetType, ['thread', 'reply'], strict: true)) {
+            return $this->reactionError($request, 'Paramètre de réaction invalide.', 400);
+        }
+
+        if ($targetId <= 0) {
+            return $this->reactionError($request, 'Cible de réaction invalide.', 400);
+        }
+
+        // tryFrom() retourne null si la valeur est inconnue (au lieu de lever une exception)
+        $reactionType = ForumReactionType::tryFrom($typeValue);
+        if ($reactionType === null) {
+            return $this->reactionError($request, 'Type de réaction non reconnu.', 400);
+        }
+
+        /** @var User $user */
+        $user = $this->getUser();
+
+        // ── Délégation au service ─────────────────────────────────────────────
+        // toggleReaction() lève une \InvalidArgumentException si la cible est introuvable.
+        try {
+            $result = $this->forumService->toggleReaction($user, $targetType, $targetId, $reactionType);
+        } catch (\InvalidArgumentException $e) {
+            return $this->reactionError($request, $e->getMessage(), 404);
+        }
+
+        // ── Réponse JSON (requête XHR) ────────────────────────────────────────
+        if ($this->isXhrOrJsonRequest($request)) {
+            return new JsonResponse($result);
+        }
+
+        // ── Fallback non-JS : redirection vers l'index ────────────────────────
+        $this->addFlash('success', 'Réaction enregistrée.');
+        return $this->redirectToRoute('app_forum_index');
+    }
+
+    // ─── Helpers privés ───────────────────────────────────────────────────────
+
+    /**
+     * Construit la réponse d'erreur d'une réaction selon le contexte (JSON ou redirection).
+     *
+     * Factorise le code dupliqué de react() : pour chaque cas d'erreur, on renvoie
+     * du JSON si la requête vient du JavaScript, sinon un flash + redirection.
+     */
+    private function reactionError(Request $request, string $message, int $status): Response
+    {
+        if ($this->isXhrOrJsonRequest($request)) {
+            return new JsonResponse(['ok' => false, 'error' => $message], $status);
+        }
+        $this->addFlash('error', $message);
+        return $this->redirectToRoute('app_forum_index');
+    }
+
+    /**
+     * Détecte si la requête est une requête XHR (JavaScript) ou attend du JSON.
+     *
+     * Deux critères :
+     *   1. En-tête X-Requested-With: XMLHttpRequest (fetch/axios le positionnent souvent)
+     *   2. En-tête Accept contenant 'application/json'
+     */
+    private function isXhrOrJsonRequest(Request $request): bool
+    {
+        return $request->isXmlHttpRequest()
+            || str_contains($request->headers->get('Accept', ''), 'application/json');
     }
 }

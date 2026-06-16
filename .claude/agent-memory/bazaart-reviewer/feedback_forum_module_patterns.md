@@ -56,5 +56,22 @@ Relecture complète du module Forum effectuée le 2026-05-25 (ForumCategory, For
    - Duplication CSS : `.fi-composer` est défini deux fois dans le bloc `<style>` (une fois avec `display:flex`, une fois avec `display:block` qui l'override). La première règle est morte code — lisibilité dégradée.
    - `fi-composer__submit` (CSS ligne 502-504) n'a aucune propriété — commentaire "hérite des styles .btn" mais le sélecteur est présent et vide → dead code CSS mineur.
 
+9. FEATURE images + réactions (juin 2026 — relecture 2026-06-15) — points valides à ne pas re-signaler :
+   - PHPStan niveau 6 : 0 erreur (validé par Gaëlle avant merge).
+   - `{{ thread.content|nl2br }}` et `{{ reply.content|nl2br }}` : pas de XSS, autoescape actif.
+   - `asset(thread.imagePath)` sans `|raw` et sans contenu utilisateur dans src= : sûr.
+   - CSRF vérifié EN PREMIER dans react() : conforme au pattern lock/pin/delete.
+   - `countForThreadAndReplies()` et `findUserReactionsForThreadAndReplies()` : batch anti-N+1 correct.
+   - La contrainte UniqueConstraint Doctrine (portant sur les 3 colonnes including NULL) diverge de l'index UNIQUE SQL partiel (WHERE thread_id IS NOT NULL / WHERE reply_id IS NOT NULL). Le mapping indique lui-même que c'est attendu et sans danger. `doctrine:schema:validate` peut signaler cela — ne pas bloquer sur ce point en relecture.
+   - Tous les appelants de createThread/addReply (quickPost, newThread, reply dans ForumController) passent correctement le paramètre optionnel ?UploadedFile — signature rétrocompatible.
+   - Tests E2E : le test ForumThreadTest ne passe pas de fichier image (paramètre optionnel absent) → pas de régression de signature.
+
+   Points NEUFS identifiés dans cette relecture :
+   - [MAJEUR] `countForThreadAndReplies()` : la clause `->orWhere('r.reply IN (:replyIds)')` utilise `orWhere()` au lieu de `->andWhere(...)`. Le DQL résultant est `WHERE (r.thread = :thread) OR (r.reply IN (:replyIds))` — il peut inclure des réactions sur des réponses d'autres threads si leurs IDs coïncident. Correct pour la logique actuelle (les replyIds fournis viennent du même thread), mais fragile si l'appelant est modifié. Pattern `andWhere` avec sous-condition explicite serait plus sûr.
+   - [MAJEUR] `findUserReactionsForThreadAndReplies()` : `->orWhere('r.user = :user AND r.reply IN (:replyIds)')` — le paramètre `:user` est déjà défini par `->andWhere('r.user = :user')`. L'`orWhere` ajoute un branchement OR au lieu d'être un AND. Le DQL est `WHERE (r.user=:user AND r.thread=:thread) OR (r.user=:user AND r.reply IN (:replyIds))` — la logique est correcte ici (l'utilisateur connecté est le même dans les deux branches) mais la lisibilité est trompeuse.
+   - [MINEUR] Aucun test E2E pour les réactions (toggle, compteur, CSRF invalide) ni pour l'upload image (format invalide, trop lourd). Couverture du chemin critique manquante.
+   - [MINEUR] `ForumImageService::handleUpload()` ne gère pas l'exception `FileException` levée par `$file->move()` — elle remonte au controller qui n'en fait rien (500 si disque plein ou droits insuffisants). À wrapper dans try/catch avec retour de message d'erreur.
+   - [NIT] `ForumReactionType::Heart->label()` retourne 'Coeur' sans accent (devrait être 'Cœur'). Cosmétique mais visible dans les tooltips.
+
 **Why:** Ces points sont à surveiller dans tout nouveau module de la plateforme.
-**How to apply:** Vérifier systématiquement : mots réservés dans les slugs, NULLS LAST PostgreSQL, existence de toutes les routes CDC, nombre d'éléments de fixtures vs CDC, et race conditions sur les compteurs dénormalisés. Pour les compositeurs inline, vérifier la collision de règles CSS et la strictness du parsing d'ID.
+**How to apply:** Vérifier systématiquement : mots réservés dans les slugs, NULLS LAST PostgreSQL, existence de toutes les routes CDC, nombre d'éléments de fixtures vs CDC, race conditions sur les compteurs dénormalisés, et la logique `orWhere` vs `andWhere` dans les DQL multi-critères. Pour les uploads, toujours wrapper `file->move()` dans un try/catch.

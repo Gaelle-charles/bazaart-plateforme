@@ -95,6 +95,25 @@ class ForumThread
     #[ORM\Column(type: 'text', nullable: false)]
     private string $content;
 
+    // ─── Image attachée ─────────────────────────────────────────────────────────
+
+    /**
+     * Chemin relatif vers l'image attachée au thread (optionnel).
+     *
+     * Stocké sous la forme 'uploads/forum/forum_6481abc_0.1234.jpg'
+     * (relatif à public/). Pour construire l'URL complète dans Twig :
+     *   <img src="{{ asset(thread.imagePath) }}" alt="">
+     *
+     * nullable: true car l'image est optionnelle — un thread peut très bien
+     * n'avoir que du texte. La colonne BDD autorise NULL.
+     *
+     * La gestion du fichier sur disque est déléguée à ForumImageService :
+     *   - upload : ForumImageService::handleUpload()
+     *   - suppression : ForumImageService::deleteImage()
+     */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $imagePath = null;
+
     // ─── Modération ───────────────────────────────────────────────────────────
 
     /**
@@ -277,6 +296,17 @@ class ForumThread
     public function setContent(string $content): static
     {
         $this->content = $content;
+        return $this;
+    }
+
+    public function getImagePath(): ?string
+    {
+        return $this->imagePath;
+    }
+
+    public function setImagePath(?string $imagePath): static
+    {
+        $this->imagePath = $imagePath;
         return $this;
     }
 

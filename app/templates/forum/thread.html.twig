@@ -605,6 +605,129 @@
     border-bottom-color: var(--accent);
     color: var(--accent);
 }
+
+    /* ══════════════════════════════════════════════════════════════
+       IMAGES JOINTES (sujet + réponses)
+       Bords francs cohérents avec le thème Street.
+    ══════════════════════════════════════════════════════════════ */
+
+    .ft-post__image {
+        padding: 0 24px 20px;
+    }
+    .ft-reply__image {
+        padding: 0 16px 16px;
+    }
+    .ft-post__image img,
+    .ft-reply__image img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        border: 1px solid var(--ink);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       BARRE DE RÉACTIONS (emojis)
+       Boutons toggle : gris au repos, fond lime quand l'utilisateur a réagi.
+    ══════════════════════════════════════════════════════════════ */
+
+    .ft-reactions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        padding: 12px 24px;
+        border-top: 1px solid var(--line-soft);
+        background: var(--bg);
+    }
+    /* Variante réponse : padding réduit, aligné sur le contenu des réponses */
+    .ft-reactions--reply {
+        padding: 10px 16px;
+    }
+
+    .ft-reaction {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border: 1px solid var(--line-soft);
+        background: transparent;
+        cursor: pointer;
+        border-radius: 0;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink-mute);
+        transition:
+            border-color var(--transition-fast),
+            background var(--transition-fast),
+            color var(--transition-fast);
+    }
+    .ft-reaction:hover {
+        border-color: var(--ink);
+        color: var(--ink);
+    }
+    /* État actif : l'utilisateur a posé cette réaction → fond lime */
+    .ft-reaction.is-active {
+        border-color: var(--ink);
+        background: var(--accent);
+        color: var(--ink);
+    }
+    .ft-reaction:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+    .ft-reaction[disabled] {
+        opacity: .5;
+        cursor: default;
+    }
+    .ft-reaction__emoji {
+        font-size: 15px;
+        line-height: 1;
+    }
+    .ft-reaction__count {
+        font-weight: 700;
+        min-width: 8px;
+        text-align: left;
+    }
+
+    /* Champ d'upload de fichier dans le formulaire de réponse */
+    .ft-reply-form__image-field {
+        margin-top: 16px;
+    }
+    .ft-file {
+        display: block;
+        width: 100%;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink);
+        background: var(--input-bg);
+        border: var(--input-border);
+        padding: 8px;
+        box-sizing: border-box;
+        cursor: pointer;
+        margin-top: 8px;
+    }
+    .ft-file::file-selector-button {
+        font-family: var(--body);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink);
+        background: var(--accent);
+        border: 1px solid var(--ink);
+        padding: 6px 12px;
+        margin-right: 12px;
+        cursor: pointer;
+        border-radius: 0;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .ft-file::file-selector-button:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
+    .ft-file:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
 </style>
 {% endblock %}
 
@@ -707,6 +830,44 @@
     #}
     <div class="ft-post__content">
         {{ thread.content|nl2br }}
+    </div>
+
+    {# ── Image jointe au sujet (si présente) ──────────────────────────────────
+       thread.imagePath contient un chemin relatif (ex: 'uploads/forum/xyz.jpg').
+       asset() construit l'URL publique. Le lien permet d'ouvrir l'image en grand.
+       loading="lazy" : l'image n'est chargée que quand elle approche du viewport.
+    #}
+    {% if thread.imagePath %}
+        <div class="ft-post__image">
+            <a href="{{ asset(thread.imagePath) }}" target="_blank" rel="noopener">
+                <img src="{{ asset(thread.imagePath) }}" alt="Image jointe au sujet" loading="lazy">
+            </a>
+        </div>
+    {% endif %}
+
+    {# ── Barre de réactions du sujet ──────────────────────────────────────────
+       Boutons emoji (toggle). Le clic envoie une requête POST AJAX vers
+       app_forum_react ; le JS (bloc javascripts) met à jour compteurs et état actif.
+       data-csrf porte le token CSRF (intention 'forum_react').
+       Tout visiteur de cette page est connecté (ROLE_USER requis sur le controller).
+    #}
+    <div class="ft-reactions"
+         data-target-type="thread"
+         data-target-id="{{ thread.id }}"
+         data-csrf="{{ csrf_token('forum_react') }}"
+         aria-label="Réactions au sujet">
+        {% for type in reactionTypes %}
+            {% set isActive = type.value in (userReactions.thread[thread.id]|default([])) %}
+            <button type="button"
+                    class="ft-reaction{{ isActive ? ' is-active' : '' }}"
+                    data-reaction-type="{{ type.value }}"
+                    title="{{ type.label }}"
+                    aria-label="{{ type.label }}"
+                    aria-pressed="{{ isActive ? 'true' : 'false' }}">
+                <span class="ft-reaction__emoji" aria-hidden="true">{{ type.emoji }}</span>
+                <span class="ft-reaction__count">{{ reactionCounts.thread[thread.id][type.value]|default(0) }}</span>
+            </button>
+        {% endfor %}
     </div>
 
     {# ── Actions de modération ────────────────────────────────────────────────
@@ -886,6 +1047,35 @@
                     #}
                     <div class="ft-reply__content">{{ reply.content|nl2br }}</div>
 
+                    {# Image jointe à la réponse (si présente) #}
+                    {% if reply.imagePath %}
+                        <div class="ft-reply__image">
+                            <a href="{{ asset(reply.imagePath) }}" target="_blank" rel="noopener">
+                                <img src="{{ asset(reply.imagePath) }}" alt="Image jointe à la réponse" loading="lazy">
+                            </a>
+                        </div>
+                    {% endif %}
+
+                    {# Barre de réactions de la réponse (même mécanique que le sujet) #}
+                    <div class="ft-reactions ft-reactions--reply"
+                         data-target-type="reply"
+                         data-target-id="{{ reply.id }}"
+                         data-csrf="{{ csrf_token('forum_react') }}"
+                         aria-label="Réactions à la réponse">
+                        {% for type in reactionTypes %}
+                            {% set isActive = type.value in (userReactions.reply[reply.id]|default([])) %}
+                            <button type="button"
+                                    class="ft-reaction{{ isActive ? ' is-active' : '' }}"
+                                    data-reaction-type="{{ type.value }}"
+                                    title="{{ type.label }}"
+                                    aria-label="{{ type.label }}"
+                                    aria-pressed="{{ isActive ? 'true' : 'false' }}">
+                                <span class="ft-reaction__emoji" aria-hidden="true">{{ type.emoji }}</span>
+                                <span class="ft-reaction__count">{{ reactionCounts.reply[reply.id][type.value]|default(0) }}</span>
+                            </button>
+                        {% endfor %}
+                    </div>
+
                     {#
                         Bouton de suppression — visible uniquement si le Voter l'autorise.
                         ForumVoter::FORUM_DELETE autorise : l'auteur de la réponse,
@@ -932,7 +1122,8 @@
             La validation se fait côté controller (contenu non vide, minimum 5 caractères).
             Token CSRF unique par thread → forum_reply_{id}.
         #}
-        <form action="{{ path('app_forum_reply', { id: thread.id }) }}" method="post">
+        {# enctype="multipart/form-data" obligatoire pour transmettre le fichier image #}
+        <form action="{{ path('app_forum_reply', { id: thread.id }) }}" method="post" enctype="multipart/form-data">
             <input type="hidden" name="_token" value="{{ csrf_token('forum_reply_' ~ thread.id) }}">
 
             <div class="ft-reply-form__body">
@@ -957,6 +1148,18 @@
                           color: var(--ink-mute); margin-top: 6px; letter-spacing: .06em;
                           text-transform: uppercase;">
                     Sois utile, sois respectueux.
+                </div>
+
+                {# ── Image (optionnelle) sur la réponse ─────────────────────── #}
+                <div class="ft-reply-form__image-field">
+                    <label for="reply-image" class="ft-reply-form__label">
+                        Image <span style="font-family: var(--mono); font-size: 10px; font-weight: 400; text-transform: none; color: var(--ink-mute);">(optionnel)</span>
+                    </label>
+                    <input type="file"
+                           id="reply-image"
+                           name="image"
+                           class="ft-file"
+                           accept="image/jpeg,image/png,image/webp,image/gif">
                 </div>
             </div>
 
@@ -1001,4 +1204,88 @@
 
 {% endif %}
 
+{% endblock %}
+
+{#
+    Bloc javascripts : géré dans {% block javascripts %} (rendu en bas du <body>
+    par base_app.html.twig). On hérite des scripts Symfony UX via {{ parent() }}.
+#}
+{% block javascripts %}
+{{ parent() }}
+<script>
+/*
+ * Réactions emoji du forum (toggle AJAX).
+ *
+ * Pour chaque barre .ft-reactions :
+ *   - au clic sur un bouton emoji, on envoie une requête POST à app_forum_react
+ *     avec targetType / targetId / type / token CSRF ;
+ *   - le serveur renvoie un JSON { ok, counts, userReactions } ;
+ *   - on met à jour les compteurs et l'état actif (classe is-active) SANS recharger
+ *     la page (expérience fluide).
+ *
+ * Dégradation : en cas d'erreur réseau ou de réponse non-ok, on ne casse rien
+ * (le bouton est juste réactivé). Le fallback non-JS côté serveur existe aussi.
+ */
+(function () {
+    'use strict';
+
+    var reactUrl = '{{ path('app_forum_react') }}';
+
+    document.querySelectorAll('.ft-reactions').forEach(function (bar) {
+        var csrf       = bar.getAttribute('data-csrf');
+        var targetType = bar.getAttribute('data-target-type');
+        var targetId   = bar.getAttribute('data-target-id');
+
+        bar.querySelectorAll('.ft-reaction').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var type = btn.getAttribute('data-reaction-type');
+
+                /* On désactive le bouton le temps de la requête (anti double-clic) */
+                btn.disabled = true;
+
+                /* Corps de requête au format application/x-www-form-urlencoded */
+                var body = new URLSearchParams();
+                body.set('_token', csrf);
+                body.set('targetType', targetType);
+                body.set('targetId', targetId);
+                body.set('type', type);
+
+                fetch(reactUrl, {
+                    method: 'POST',
+                    /* X-Requested-With : indique au controller que c'est une requête AJAX
+                       (il renverra du JSON plutôt qu'une redirection). */
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: body
+                })
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    if (!data || !data.ok) { return; }
+
+                    /* Mise à jour des compteurs (tous les types renvoyés) */
+                    Object.keys(data.counts).forEach(function (t) {
+                        var b = bar.querySelector('.ft-reaction[data-reaction-type="' + t + '"]');
+                        if (b) {
+                            var c = b.querySelector('.ft-reaction__count');
+                            if (c) { c.textContent = data.counts[t]; }
+                        }
+                    });
+
+                    /* Mise à jour de l'état actif (surlignage des réactions de l'utilisateur) */
+                    bar.querySelectorAll('.ft-reaction').forEach(function (b) {
+                        var t      = b.getAttribute('data-reaction-type');
+                        var active = data.userReactions.indexOf(t) !== -1;
+                        b.classList.toggle('is-active', active);
+                        b.setAttribute('aria-pressed', active ? 'true' : 'false');
+                    });
+                })
+                .catch(function () { /* silencieux : on ne casse pas l'UI en cas d'erreur réseau */ })
+                .finally(function () { btn.disabled = false; });
+            });
+        });
+    });
+}());
+</script>
 {% endblock %}

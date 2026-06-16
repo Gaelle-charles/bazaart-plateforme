@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\ForumCategory;
+use App\Entity\ForumReaction;
 use App\Entity\ForumReply;
 use App\Entity\ForumThread;
 use App\Entity\User;
+use App\Enum\ForumReactionType;
 use App\Enum\NotificationType;
+use App\Repository\ForumReactionRepository;
 use App\Repository\ForumThreadRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 
@@ -47,6 +51,10 @@ class ForumService
         private readonly NotificationService $notificationService,
         // Injecté pour envoyer des emails de signalement à l'admin
         private readonly MailerInterface $mailer,
+        // Gère l'upload et la suppression des images attachées (threads / réponses)
+        private readonly ForumImageService $forumImageService,
+        // Requêtes sur les réactions emoji (comptages, réactions de l'utilisateur)
+        private readonly ForumReactionRepository $reactionRepository,
     ) {}
 
     // ─── Threads ──────────────────────────────────────────────────────────────
@@ -67,8 +75,12 @@ class ForumService
      * @param array{title?: string, content?: string} $data Données du formulaire POST
      * @return ForumThread|string L'entité créée en cas de succès, ou un message d'erreur
      */
-    public function createThread(User $author, ForumCategory $category, array $data): ForumThread|string
-    {
+    public function createThread(
+        User $author,
+        ForumCategory $category,
+        array $data,
+        ?UploadedFile $imageFile = null
+    ): ForumThread|string {
         // ── Validation ────────────────────────────────────────────────────────
 
         $title = trim($data['title'] ?? '');
@@ -102,6 +114,25 @@ class ForumService
         $thread->setCategory($category);
         $thread->setTitle($title);
         $thread->setContent($content);
+
+        // ── Gestion de l'image attachée (optionnelle) ──────────────────────────
+        // Si une image est fournie, on la valide et on la déplace sur le disque.
+        // handleUpload() retourne soit un chemin relatif (commençant par 'uploads/'),
+        // soit un message d'erreur. L'image étant OPTIONNELLE, une erreur d'upload
+        // (mauvais format, trop lourde) NE bloque PAS la création du thread :
+        // on retourne le message d'erreur pour que le controller l'affiche, mais
+        // seulement si l'utilisateur a explicitement tenté de joindre une image.
+        if ($imageFile !== null) {
+            $imagePath = $this->forumImageService->handleUpload($imageFile);
+            if (str_starts_with($imagePath, 'uploads/')) {
+                // Chemin valide — on le stocke sur l'entité
+                $thread->setImagePath($imagePath);
+            } else {
+                // handleUpload() a retourné un message d'erreur : on bloque et on
+                // le remonte au controller (cohérent avec le contrat ForumThread|string).
+                return $imagePath;
+            }
+        }
 
         // ── Génération et déduplication du slug ───────────────────────────────
 
@@ -169,8 +200,12 @@ class ForumService
      * @param array{content?: string, parentReplyId?: int} $data Données du formulaire
      * @return ForumReply|string La réponse créée, ou un message d'erreur
      */
-    public function addReply(User $author, ForumThread $thread, array $data): ForumReply|string
-    {
+    public function addReply(
+        User $author,
+        ForumThread $thread,
+        array $data,
+        ?UploadedFile $imageFile = null
+    ): ForumReply|string {
         // ── Validation ────────────────────────────────────────────────────────
 
         $content = trim($data['content'] ?? '');
@@ -187,6 +222,18 @@ class ForumService
         $reply->setAuthor($author);
         $reply->setThread($thread);
         $reply->setContent($content);
+
+        // ── Gestion de l'image attachée (optionnelle) ──────────────────────────
+        // Même logique que createThread() : si l'upload échoue (mauvais format,
+        // trop lourde), on bloque et on remonte le message d'erreur au controller.
+        if ($imageFile !== null) {
+            $imagePath = $this->forumImageService->handleUpload($imageFile);
+            if (str_starts_with($imagePath, 'uploads/')) {
+                $reply->setImagePath($imagePath);
+            } else {
+                return $imagePath;
+            }
+        }
 
         // Gestion de la réponse parente (feature optionnelle V1 — non exposée en UI)
         // Si un parentReplyId est passé, on résout la relation auto-référentielle.
@@ -288,6 +335,15 @@ class ForumService
      */
     public function deleteThread(ForumThread $thread): void
     {
+        // ── Nettoyage des fichiers image sur disque ────────────────────────────
+        // La cascade ORM supprime les ForumReply en BDD, mais PAS les fichiers
+        // physiques sur le disque. On les supprime donc explicitement AVANT le
+        // remove (après le flush, on n'aurait plus accès aux chemins imagePath).
+        $this->forumImageService->deleteImage($thread->getImagePath());
+        foreach ($thread->getReplies() as $reply) {
+            $this->forumImageService->deleteImage($reply->getImagePath());
+        }
+
         $this->em->remove($thread);
         $this->em->flush();
     }
@@ -308,6 +364,9 @@ class ForumService
 
         // Décrémente le compteur dénormalisé (max(0, count-1))
         $thread->decrementReplies();
+
+        // Supprime le fichier image associé à la réponse sur le disque
+        $this->forumImageService->deleteImage($reply->getImagePath());
 
         // Marque la réponse pour suppression
         $this->em->remove($reply);
@@ -441,5 +500,93 @@ class ForumService
         // En V1 on laisse l'exception remonter — elle sera gérée dans le controller
         // (flash 'error' + redirection) si nécessaire.
         $this->mailer->send($email);
+    }
+
+    // ─── Réactions (emojis) ───────────────────────────────────────────────────
+
+    /**
+     * Bascule une réaction (toggle) d'un utilisateur sur un thread ou une réponse.
+     *
+     * Comportement type Slack/Discord :
+     *   - Si la réaction N'EXISTE PAS encore → on la crée (ajout)
+     *   - Si la réaction EXISTE déjà → on la supprime (retrait)
+     *
+     * @param string            $targetType 'thread' ou 'reply'
+     * @param int               $targetId   ID de la cible
+     * @param ForumReactionType $type       Type de réaction (Like, Fire, ...)
+     *
+     * @return array{ok: bool, counts: array<string, int>, userReactions: string[]}
+     *   - ok            : toujours true si la méthode n'a pas levé d'exception
+     *   - counts        : comptages actualisés de toutes les réactions sur la cible
+     *   - userReactions : types de réactions posés par CET utilisateur sur la cible
+     *
+     * @throws \InvalidArgumentException si $targetType est invalide ou la cible introuvable
+     */
+    public function toggleReaction(
+        User $user,
+        string $targetType,
+        int $targetId,
+        ForumReactionType $type
+    ): array {
+        // ── Cas 1 : réaction sur un THREAD ────────────────────────────────────
+        if ($targetType === 'thread') {
+            $target = $this->em->find(ForumThread::class, $targetId);
+            if (!$target instanceof ForumThread) {
+                throw new \InvalidArgumentException('Sujet introuvable.');
+            }
+
+            // Toggle : on cherche une réaction (user, thread, type) déjà existante
+            $existing = $this->reactionRepository->findByUserThreadAndType($user, $target, $type);
+
+            if ($existing !== null) {
+                // Déjà réagi avec ce type → deuxième clic = on retire
+                $this->em->remove($existing);
+            } else {
+                // Pas encore réagi → premier clic = on ajoute
+                $reaction = new ForumReaction($user, $type);
+                $reaction->setThread($target);
+                $this->em->persist($reaction);
+            }
+
+            $this->em->flush();
+
+            // Retourne l'état actualisé pour le JavaScript
+            return [
+                'ok'            => true,
+                'counts'        => $this->reactionRepository->countByThread($target),
+                'userReactions' => $this->reactionRepository->findUserReactionsOnThread($user, $target),
+            ];
+        }
+
+        // ── Cas 2 : réaction sur une RÉPONSE ──────────────────────────────────
+        if ($targetType === 'reply') {
+            $target = $this->em->find(ForumReply::class, $targetId);
+            if (!$target instanceof ForumReply) {
+                throw new \InvalidArgumentException('Réponse introuvable.');
+            }
+
+            $existing = $this->reactionRepository->findByUserReplyAndType($user, $target, $type);
+
+            if ($existing !== null) {
+                $this->em->remove($existing);
+            } else {
+                $reaction = new ForumReaction($user, $type);
+                $reaction->setReply($target);
+                $this->em->persist($reaction);
+            }
+
+            $this->em->flush();
+
+            return [
+                'ok'            => true,
+                'counts'        => $this->reactionRepository->countByReply($target),
+                'userReactions' => $this->reactionRepository->findUserReactionsOnReply($user, $target),
+            ];
+        }
+
+        // ── Cas 3 : type de cible inconnu ─────────────────────────────────────
+        throw new \InvalidArgumentException(
+            sprintf('targetType invalide : "%s". Attendu : "thread" ou "reply".', $targetType)
+        );
     }
 }

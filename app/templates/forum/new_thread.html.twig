@@ -153,6 +153,54 @@
         color: var(--accent-2);
         margin-left: 2px;
     }
+    /* Mention "(optionnel)" — discrète, en gris mono */
+    .fn-label__optional {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 400;
+        letter-spacing: .04em;
+        text-transform: none;
+        color: var(--ink-mute);
+        margin-left: 4px;
+    }
+
+    /* Champ d'upload de fichier — bords francs cohérents avec les autres inputs.
+       On stylise le bouton natif via ::file-selector-button (pseudo-élément standard). */
+    .fn-file {
+        display: block;
+        width: 100%;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink);
+        background: var(--input-bg);
+        border: var(--input-border);
+        padding: 8px;
+        box-sizing: border-box;
+        cursor: pointer;
+    }
+    .fn-file::file-selector-button {
+        font-family: var(--body);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink);
+        background: var(--accent);
+        border: 1px solid var(--ink);
+        padding: 6px 12px;
+        margin-right: 12px;
+        cursor: pointer;
+        border-radius: 0;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .fn-file::file-selector-button:hover {
+        background: var(--ink);
+        color: var(--accent);
+    }
+    .fn-file:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
 
     /* Texte d'aide sous le label */
     .fn-hint {
@@ -344,7 +392,13 @@
               $this->isCsrfTokenValid('forum_new_thread', $request->request->get('_token'))
             L'action vide ("") soumet vers l'URL courante (route app_forum_new_thread).
         #}
-        <form method="post" action="" novalidate>
+        {#
+            enctype="multipart/form-data" est OBLIGATOIRE dès qu'un formulaire
+            contient un <input type="file"> : c'est l'encodage qui permet de
+            transmettre le contenu binaire du fichier. Sans lui, le champ image
+            n'arriverait pas côté serveur ($request->files->get('image') serait null).
+        #}
+        <form method="post" action="" enctype="multipart/form-data" novalidate>
 
             {# Token CSRF — protège contre les attaques Cross-Site Request Forgery #}
             <input type="hidden" name="_token" value="{{ csrf_token('forum_new_thread') }}">
@@ -433,6 +487,24 @@
                               minlength="10"
                               required
                               aria-required="true">{{ formData.content ?? '' }}</textarea>
+                </div>
+
+                {# ── Image (optionnelle) ──────────────────────────────────────
+                   Champ d'upload facultatif. La validation réelle (type MIME,
+                   taille 5 Mo) est faite côté serveur par ForumImageService —
+                   l'attribut accept="" ci-dessous n'est qu'un confort d'UI
+                   (filtre la boîte de dialogue) et NE remplace PAS la validation serveur.
+                #}
+                <div class="fn-field">
+                    <label for="thread-image" class="fn-label">
+                        Image <span class="fn-label__optional">(optionnel)</span>
+                    </label>
+                    <div class="fn-hint">JPEG, PNG, WebP ou GIF — 5 Mo maximum</div>
+                    <input type="file"
+                           id="thread-image"
+                           name="image"
+                           class="fn-file"
+                           accept="image/jpeg,image/png,image/webp,image/gif">
                 </div>
 
             </div>{# fin fn-form-card__body #}

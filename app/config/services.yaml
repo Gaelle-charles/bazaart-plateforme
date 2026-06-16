@@ -55,6 +55,12 @@ services:
         arguments:
             $projectDir: '%kernel.project_dir%'
 
+    # Injecte le chemin racine du projet dans ForumImageService
+    # (gestion des images attachées aux threads et réponses du forum)
+    App\Service\ForumImageService:
+        arguments:
+            $projectDir: '%kernel.project_dir%'
+
     # GoogleSheetsService a besoin de deux paramètres qui viennent du .env
     # $credentialsPath = chemin vers le fichier JSON du compte de service Google
     # $spreadsheetId   = l'ID du Google Sheet (visible dans l'URL du tableur)

@@ -83,6 +83,20 @@ class ForumReply
     private string $content;
 
     /**
+     * Chemin relatif vers l'image attachée à cette réponse (optionnel).
+     *
+     * Même convention que ForumThread::$imagePath :
+     *   stocké sous la forme 'uploads/forum/forum_xyz.jpg' (relatif à public/).
+     * Dans Twig : <img src="{{ asset(reply.imagePath) }}" alt="">
+     *
+     * nullable: true car l'image est optionnelle.
+     *
+     * La gestion du fichier sur disque est déléguée à ForumImageService.
+     */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $imagePath = null;
+
+    /**
      * Marque cette réponse comme étant la "solution" au thread.
      * En V1, cette info est stockée mais pas encore exposée dans l'interface.
      * Prévue pour une fonctionnalité "Marquer comme résolu" en V2.
@@ -178,6 +192,17 @@ class ForumReply
     public function setContent(string $content): static
     {
         $this->content = $content;
+        return $this;
+    }
+
+    public function getImagePath(): ?string
+    {
+        return $this->imagePath;
+    }
+
+    public function setImagePath(?string $imagePath): static
+    {
+        $this->imagePath = $imagePath;
         return $this;
     }
 
