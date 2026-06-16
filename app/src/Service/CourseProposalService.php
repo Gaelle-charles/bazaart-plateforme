@@ -24,15 +24,11 @@ use Symfony\Component\Mime\Email;
  */
 class CourseProposalService
 {
-    /**
-     * Adresse de l'équipe Bazaart qui reçoit les nouvelles propositions.
-     * TODO : externaliser en paramètre (services.yaml / .env) — même remarque que ForumService.
-     */
-    private const ADMIN_EMAIL = 'admin@bazaart.fr';
-
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly MailerInterface $mailer,
+        // Adresse de l'équipe (ADMIN_EMAIL), injectée via le bind global de services.yaml
+        private readonly string $adminEmail,
     ) {}
 
     /**
@@ -147,7 +143,7 @@ class CourseProposalService
     {
         $email = (new Email())
             ->from('noreply@bazaart.fr')
-            ->to(self::ADMIN_EMAIL)
+            ->to($this->adminEmail)
             ->subject('[Formations] Nouvelle proposition — ' . $proposal->getTitle())
             ->text(implode("\n\n", [
                 'Une nouvelle proposition de formation a été soumise.',

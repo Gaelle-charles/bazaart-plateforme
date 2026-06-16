@@ -55,6 +55,8 @@ class ForumService
         private readonly ForumImageService $forumImageService,
         // Requêtes sur les réactions emoji (comptages, réactions de l'utilisateur)
         private readonly ForumReactionRepository $reactionRepository,
+        // Adresse de l'équipe (ADMIN_EMAIL) pour les emails de signalement
+        private readonly string $adminEmail,
     ) {}
 
     // ─── Threads ──────────────────────────────────────────────────────────────
@@ -465,21 +467,14 @@ class ForumService
     public function reportThread(ForumThread $thread, User $reporter): void
     {
         // ── Adresse de destination ────────────────────────────────────────────
-        // TODO : déplacer 'admin@bazaart.fr' en paramètre de service (services.yaml)
-        // pour pouvoir la modifier sans toucher au code.
-        // Exemple dans services.yaml :
-        //   parameters:
-        //     app.admin_email: '%env(ADMIN_EMAIL)%'
-        // Puis dans le constructeur : private readonly string $adminEmail
-        // (injecté via $adminEmail: '%app.admin_email%' dans services.yaml)
-        $adminEmail = 'admin@bazaart.fr';
-
+        // $this->adminEmail vient désormais de la variable d'env ADMIN_EMAIL
+        // (bind global dans services.yaml), modifiable sans toucher au code.
         // ── Construction de l'email ───────────────────────────────────────────
         // On utilise symfony/mailer avec Email (email texte simple — pas de template Twig).
         // Pour un email HTML complet, on utiliserait TemplatedEmail (cf. ResourceAlertService).
         $email = (new Email())
             ->from('noreply@bazaart.fr')
-            ->to($adminEmail)
+            ->to($this->adminEmail)
             ->subject('[Forum Bazaart] Signalement — ' . $thread->getTitle())
             ->text(implode("\n\n", [
                 'Un thread du forum a été signalé.',

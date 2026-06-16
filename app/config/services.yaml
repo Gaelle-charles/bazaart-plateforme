@@ -32,6 +32,10 @@ services:
             # L'autowiring par nom de variable n'est PAS automatique : ce binding explicite
             # est obligatoire pour injecter $passwordResetLimiter dans ForgotPasswordController.
             Symfony\Component\RateLimiter\RateLimiterFactory $passwordResetLimiter: '@limiter.password_reset_limiter'
+            # Adresse de l'équipe Bazaart qui reçoit les emails admin (propositions de
+            # formation, signalements forum). Définie dans .env (ADMIN_EMAIL), surchargeable
+            # en prod via .env.local. Injectée partout où un service déclare $adminEmail.
+            string $adminEmail: '%env(ADMIN_EMAIL)%'
 
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name
