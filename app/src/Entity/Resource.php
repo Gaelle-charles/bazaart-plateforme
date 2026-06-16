@@ -247,6 +247,57 @@ class Resource
         return $this;
     }
 
+    /**
+     * Retourne l'URL externe NORMALISÉE pour un usage en lien (href).
+     *
+     * Pourquoi ? Beaucoup d'URL issues du scraping (ou saisies à la main) sont
+     * stockées SANS schéma, ex : "www.exemple.com/appel". Dans un href, le
+     * navigateur interprète alors l'URL comme RELATIVE → il préfixe le domaine
+     * courant → "https://app.bazaart.fr/www.exemple.com/appel" → 404.
+     * C'est la cause des « liens Candidater qui ne fonctionnent pas ».
+     *
+     * Cette méthode garantit un schéma absolu, SANS jamais casser une URL déjà
+     * valide (si elle commence déjà par http:// ou https://, on n'y touche pas) :
+     *   - "www.exemple.com/x"   → "https://www.exemple.com/x"
+     *   - "exemple.com"         → "https://exemple.com"
+     *   - "//exemple.com/x"     → "https://exemple.com/x" (URL protocole-relative)
+     *   - "http://exemple.com"  → inchangé
+     *   - "mailto:x@y.fr"       → inchangé
+     *
+     * On l'utilise dans les templates pour l'attribut href (bouton « Candidater »,
+     * preview admin). La donnée brute en BDD reste inchangée.
+     */
+    public function getExternalUrlNormalized(): ?string
+    {
+        if ($this->externalUrl === null) {
+            return null;
+        }
+
+        $url = trim($this->externalUrl);
+        if ($url === '') {
+            return null;
+        }
+
+        // Déjà un schéma http(s) → on ne touche à rien
+        if (preg_match('#^https?://#i', $url) === 1) {
+            return $url;
+        }
+
+        // URL « protocole-relative » (//exemple.com) → on force https
+        if (str_starts_with($url, '//')) {
+            return 'https:' . $url;
+        }
+
+        // Schémas non-web légitimes (mailto:, tel:) → on les laisse intacts
+        $lower = strtolower($url);
+        if (str_starts_with($lower, 'mailto:') || str_starts_with($lower, 'tel:')) {
+            return $url;
+        }
+
+        // Sinon : URL sans schéma → on préfixe https:// (défaut le plus sûr aujourd'hui)
+        return 'https://' . $url;
+    }
+
     public function getDeadline(): ?\DateTimeInterface
     {
         return $this->deadline;

@@ -659,7 +659,9 @@
         #}
         {% if resource.externalUrl %}
             <div>
-                <a href="{{ resource.externalUrl }}"
+                {# href : URL NORMALISÉE (schéma garanti) pour éviter les liens cassés
+                   interprétés comme relatifs — cf. Resource::getExternalUrlNormalized() #}
+                <a href="{{ resource.externalUrlNormalized }}"
                    target="_blank"
                    rel="noopener noreferrer"
                    class="btn-candidater">

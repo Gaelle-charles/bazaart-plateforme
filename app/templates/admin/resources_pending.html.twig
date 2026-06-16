@@ -362,8 +362,9 @@
                     {% endif %}
 
                     {% if resource.externalUrl %}
-                        {# rel="noopener" empêche la page cible d'accéder à window.opener (sécurité) #}
-                        <a href="{{ resource.externalUrl }}" target="_blank" rel="noopener noreferrer">
+                        {# rel="noopener" empêche la page cible d'accéder à window.opener (sécurité)
+                           href normalisé (schéma garanti) pour éviter les liens cassés #}
+                        <a href="{{ resource.externalUrlNormalized }}" target="_blank" rel="noopener noreferrer">
                             Lien officiel →
                         </a>
                     {% endif %}
