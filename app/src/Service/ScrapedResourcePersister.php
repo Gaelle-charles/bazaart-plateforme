@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\DTO\ScrapedOpportunity;
 use App\Entity\ScrapedResource;
+use App\Enum\ExperienceLevel;
 use App\Enum\ScrapedResourceStatus;
 use App\Repository\ScrapedResourceRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -128,6 +129,10 @@ class ScrapedResourcePersister
                         $existing->setPublishedAt($opp->publishedAt);
                     }
 
+                    // ADR-0016 Lot 1 : mise à jour des champs LLM enrichis (si disponibles)
+                    // On n'écrase que si les nouvelles valeurs sont non vides.
+                    $this->updateEnrichedFields($existing, $opp);
+
                     $reactivated++;
                     continue;
                 }
@@ -150,6 +155,9 @@ class ScrapedResourcePersister
                 if ($opp->publishedAt !== null) {
                     $existing->setPublishedAt($opp->publishedAt);
                 }
+
+                // ADR-0016 Lot 1 : mise à jour des champs LLM enrichis (si disponibles)
+                $this->updateEnrichedFields($existing, $opp);
 
                 $updated++;
                 continue;
@@ -174,6 +182,11 @@ class ScrapedResourcePersister
             // parsée en deadlineDate par ScrapedResourceListener.
             $scraped->setPublishedAt($opp->publishedAt);
 
+            // ADR-0016 Lot 1 : champs LLM enrichis (city, country, experienceLevel)
+            // Ces champs sont remplis uniquement quand le DTO provient de LlmExtractorService.
+            // Pour les scrapers RSS, ils restent à null (valeur par défaut de l'entité).
+            $this->updateEnrichedFields($scraped, $opp);
+
             // Status = pending par défaut (valeur initiale définie dans ScrapedResource)
 
             // persist() ajoute l'entité dans l'Unit of Work de Doctrine.
@@ -194,5 +207,54 @@ class ScrapedResourcePersister
             updated: $updated,
             skipped: $skipped,
         );
+    }
+
+    /**
+     * Met à jour les champs enrichis ADR-0016 Lot 1 d'une ScrapedResource
+     * depuis un ScrapedOpportunity.
+     *
+     * Règle d'écrasement :
+     *   On n'écrase que si la nouvelle valeur du DTO est non vide.
+     *   Raison : les scrapers RSS n'ont pas ces champs (ils restent à '' dans le DTO).
+     *   On ne veut pas effacer une valeur LLM existante avec une chaîne vide.
+     *
+     * Cette méthode est appelée :
+     *   - À l'insertion (Cas 1) : remplit les champs vides de la nouvelle entité.
+     *   - À la réactivation (Cas 2) : met à jour si des nouvelles données sont disponibles.
+     *   - À la mise à jour (Cas 3 & 4) : même logique.
+     *
+     * Conversion ExperienceLevel :
+     *   Le DTO stocke la backed value string (ex: "beginner").
+     *   On utilise ExperienceLevel::tryFrom() pour convertir en enum nullable.
+     *   Si la valeur est vide ou invalide → null (tous niveaux / non précisé).
+     */
+    private function updateEnrichedFields(ScrapedResource $entity, ScrapedOpportunity $opp): void
+    {
+        // Ville : on ne met à jour que si la nouvelle valeur est non vide.
+        // Troncature défensive à 150 chars : évite une violation de contrainte Doctrine
+        // si la valeur issue du DTO n'avait pas encore été tronquée en amont
+        // (ex : DTO construit manuellement dans les tests ou par un futur parseur RSS).
+        // En production normale, LlmExtractorService tronque déjà avant le DTO,
+        // mais une double protection ne coûte rien et garantit l'invariant en BDD.
+        if ($opp->city !== '') {
+            $entity->setCity(mb_substr($opp->city, 0, 150));
+        }
+
+        // Pays : même logique, colonne limitée à 100 caractères.
+        if ($opp->country !== '') {
+            $entity->setCountry(mb_substr($opp->country, 0, 100));
+        }
+
+        // Niveau d'expérience : conversion string → enum nullable
+        // ExperienceLevel::tryFrom() retourne null si la valeur est vide ou invalide.
+        // On ne met à jour que si le DTO fournit une valeur valide.
+        if ($opp->experienceLevel !== '') {
+            $level = ExperienceLevel::tryFrom($opp->experienceLevel);
+            // tryFrom retourne null si la valeur n'est pas un case valide de l'enum
+            // → pas d'exception levée, juste ignoré si invalide.
+            if ($level !== null) {
+                $entity->setExperienceLevel($level);
+            }
+        }
     }
 }

@@ -55,6 +55,32 @@ class ScrapedOpportunity
         // Null pour les opportunités issues de scrapers CSS ou LLM
         // (pas de date de publication structurée disponible dans ce cas).
         public readonly ?\DateTimeImmutable $publishedAt = null,
+
+        // ─── Champs ADR-0016 Lot 1 ───────────────────────────────────────────
+        // Ces trois champs sont remplis uniquement par LlmExtractorService.
+        // Les scrapers RSS et CSS ne renseignent pas ces champs (chaîne vide / null).
+
+        // Ville extraite par le LLM (ex: "Paris", "Lyon", "Bruxelles")
+        // Chaîne vide si non détectée.
+        public readonly string $city = '',
+
+        // Pays extrait par le LLM (nom en clair, ex: "France")
+        // Chaîne vide si non détecté.
+        public readonly string $country = '',
+
+        // Niveau d'expérience extrait par le LLM.
+        // Valeurs attendues : "beginner", "intermediate", "experienced" ou "" (tous niveaux).
+        // Sera converti en ExperienceLevel enum par ScrapedResourcePersister.
+        public readonly string $experienceLevel = '',
+
+        // Disciplines extraites par le LLM, CONTRAINTES à la liste BDD.
+        // Tableau de libellés exacts (ex: ["Musique", "Arts visuels"]).
+        // Vide si aucune discipline reconnue.
+        // Note : c'est un tableau de strings, pas d'entités Discipline.
+        //   La conversion string → Discipline est faite par DisciplineMapperService
+        //   lors de la propagation ScrapedResource → Resource.
+        /** @var string[] */
+        public readonly array $disciplinesLabels = [],
     ) {
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
+use App\Enum\ExperienceLevel;
 use App\Enum\ResourceStatus;
 use App\Enum\SubmitterRole;
 use App\Repository\ResourceRepository;
@@ -182,6 +183,46 @@ class Resource
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?User $validatedBy = null;
+
+    // ─── Champs ADR-0016 Lot 1 : localisation fine + niveau d'expérience ─────
+    // Ces trois champs enrichissent le filtrage de la Ressourcerie.
+    // Tous nullable : beaucoup d'opportunités existantes n'ont pas ces données ;
+    // les nouveaux scrapers les rempliront via le LLM enrichi.
+
+    /**
+     * Ville où se déroule l'opportunité (ex : "Paris", "Dakar", "Lyon").
+     *
+     * Complémentaire du champ $location (libre) qui pouvait mélanger ville,
+     * région et pays. Ici on isole la ville pour faciliter les filtres géo.
+     *
+     * Nullable : toutes les opportunités n'ont pas de localisation précise
+     * (ex : bourses nationales, opportunités 100 % en ligne).
+     */
+    #[ORM\Column(type: 'string', length: 150, nullable: true)]
+    private ?string $city = null;
+
+    /**
+     * Pays de l'opportunité sous forme lisible (ex : "France", "Belgique", "Sénégal").
+     *
+     * On stocke le nom en clair (pas un code ISO) car les contenus LLM et
+     * les formulaires travaillent avec des noms ; la traduction reste hors scope V1.
+     *
+     * Nullable : opportunités internationales ou sans pays précisé.
+     */
+    #[ORM\Column(type: 'string', length: 100, nullable: true)]
+    private ?string $country = null;
+
+    /**
+     * Niveau d'expérience requis pour cette opportunité.
+     *
+     * Utilise l'enum ExperienceLevel (beginner / intermediate / experienced).
+     * NULL = tous niveaux (pas de restriction déclarée, ou non précisé).
+     *
+     * Stocké comme VARCHAR en BDD via enumType — Doctrine mappe automatiquement
+     * la valeur backed de l'enum (ex : 'beginner') vers le case PHP correspondant.
+     */
+    #[ORM\Column(type: 'string', length: 20, enumType: ExperienceLevel::class, nullable: true)]
+    private ?ExperienceLevel $experienceLevel = null;
 
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -472,6 +513,62 @@ class Resource
     public function setValidatedBy(?User $validatedBy): static
     {
         $this->validatedBy = $validatedBy;
+        return $this;
+    }
+
+    // ─── Getters / Setters ADR-0016 Lot 1 ────────────────────────────────────
+
+    /**
+     * Retourne la ville de l'opportunité, ou null si non renseignée.
+     */
+    public function getCity(): ?string
+    {
+        return $this->city;
+    }
+
+    /**
+     * Définit la ville de l'opportunité.
+     * Passer null efface la valeur (opportunité sans localisation ville).
+     */
+    public function setCity(?string $city): static
+    {
+        $this->city = $city;
+        return $this;
+    }
+
+    /**
+     * Retourne le pays de l'opportunité (nom en clair), ou null si non renseigné.
+     */
+    public function getCountry(): ?string
+    {
+        return $this->country;
+    }
+
+    /**
+     * Définit le pays de l'opportunité.
+     * Ex : "France", "Belgique", "Sénégal".
+     */
+    public function setCountry(?string $country): static
+    {
+        $this->country = $country;
+        return $this;
+    }
+
+    /**
+     * Retourne le niveau d'expérience requis, ou null si tous niveaux / non précisé.
+     */
+    public function getExperienceLevel(): ?ExperienceLevel
+    {
+        return $this->experienceLevel;
+    }
+
+    /**
+     * Définit le niveau d'expérience requis.
+     * Passer null signifie « tous niveaux » (pas de restriction).
+     */
+    public function setExperienceLevel(?ExperienceLevel $experienceLevel): static
+    {
+        $this->experienceLevel = $experienceLevel;
         return $this;
     }
 }

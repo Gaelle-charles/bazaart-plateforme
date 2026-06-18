@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
+use App\Enum\ExperienceLevel;
 use App\Enum\ScrapedResourceStatus;
 use App\Repository\ScrapedResourceRepository;
 use Doctrine\ORM\Mapping as ORM;
@@ -121,6 +122,41 @@ class ScrapedResource
     #[ORM\Column(type: 'datetime')]
     private \DateTimeInterface $scrapedAt;
 
+    // ─── Champs ADR-0016 Lot 1 : localisation fine + niveau d'expérience ─────
+    // Ces champs sont remplis par le LLM enrichi (LlmExtractorService) et
+    // propagés vers l'entité Resource lors de la vérification admin.
+    // Tous nullable : les ScrapedResource issues de l'ancien scraper (avant ADR-0016)
+    // n'ont pas ces informations — la migration est donc non-destructive.
+
+    /**
+     * Ville où se déroule l'opportunité, déduite par le LLM (ex : "Paris", "Bruxelles").
+     *
+     * Rempli uniquement par LlmExtractorService — les scrapers RSS ne renseignent
+     * pas ce champ (ils ne visitent pas la page de détail).
+     */
+    #[ORM\Column(type: 'string', length: 150, nullable: true)]
+    private ?string $city = null;
+
+    /**
+     * Pays de l'opportunité, déduit par le LLM (nom en clair, ex : "France").
+     *
+     * Même source que $city : uniquement le LLM extracteur.
+     */
+    #[ORM\Column(type: 'string', length: 100, nullable: true)]
+    private ?string $country = null;
+
+    /**
+     * Niveau d'expérience requis, extrait par le LLM.
+     *
+     * Valeurs possibles : beginner / intermediate / experienced (backed values).
+     * NULL = tous niveaux, ou non précisé dans la page source.
+     *
+     * Ce champ est copié tel quel vers Resource::$experienceLevel lors de la
+     * publication admin (AdminController::verifyScrapedOpportunity).
+     */
+    #[ORM\Column(type: 'string', length: 20, enumType: ExperienceLevel::class, nullable: true)]
+    private ?ExperienceLevel $experienceLevel = null;
+
     // ── Lifecycle Callbacks ──────────────────────────────────────────────────
 
     #[ORM\PrePersist]
@@ -213,6 +249,60 @@ class ScrapedResource
     public function setScrapedAt(\DateTimeInterface $scrapedAt): static
     {
         $this->scrapedAt = $scrapedAt;
+        return $this;
+    }
+
+    // ─── Getters / Setters ADR-0016 Lot 1 ────────────────────────────────────
+
+    /**
+     * Retourne la ville extraite par le LLM, ou null si non détectée.
+     */
+    public function getCity(): ?string
+    {
+        return $this->city;
+    }
+
+    /**
+     * Définit la ville de l'opportunité (rempli par LlmExtractorService).
+     */
+    public function setCity(?string $city): static
+    {
+        $this->city = $city;
+        return $this;
+    }
+
+    /**
+     * Retourne le pays extrait par le LLM (nom en clair), ou null.
+     */
+    public function getCountry(): ?string
+    {
+        return $this->country;
+    }
+
+    /**
+     * Définit le pays de l'opportunité (rempli par LlmExtractorService).
+     */
+    public function setCountry(?string $country): static
+    {
+        $this->country = $country;
+        return $this;
+    }
+
+    /**
+     * Retourne le niveau d'expérience extrait par le LLM, ou null si tous niveaux.
+     */
+    public function getExperienceLevel(): ?ExperienceLevel
+    {
+        return $this->experienceLevel;
+    }
+
+    /**
+     * Définit le niveau d'expérience requis (rempli par LlmExtractorService).
+     * Null = tous niveaux (aucune restriction).
+     */
+    public function setExperienceLevel(?ExperienceLevel $experienceLevel): static
+    {
+        $this->experienceLevel = $experienceLevel;
         return $this;
     }
 }
