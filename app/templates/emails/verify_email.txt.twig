@@ -1,0 +1,23 @@
+BAZAART -- Confirme ton adresse email
+=====================================
+
+{% set display_name = user.email|split('@')|first %}
+Bonjour {{ display_name }},
+
+Merci d'avoir rejoint BazaArt, la plateforme des artistes de la diaspora afro-atlantique.
+
+Pour activer ton compte, confirme ton adresse email en copiant-collant le lien ci-dessous dans ton navigateur :
+
+{{ verifyUrl }}
+
+Ce lien est valable {{ expiresIn }}.
+
+---
+
+Tu n'as pas cree de compte sur BazaArt ? Ignore simplement cet email.
+Aucun compte ne sera active tant que le lien de confirmation n'est pas utilise.
+
+---
+
+BazaArt, Pole Lab : https://bazaart.fr
+Plateforme dediee aux artistes de la diaspora afro-atlantique.

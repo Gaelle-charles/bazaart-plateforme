@@ -1,0 +1,11 @@
+symfonycasts_verify_email:
+    # Durée de validité du lien de confirmation en secondes.
+    # 3600 = 1 heure — cohérent avec PasswordResetService (même durée).
+    #
+    # Pour allonger (ex. 24h pour les utilisateurs sur mobile) :
+    #   lifetime: 86400
+    #
+    # Cette valeur doit rester synchronisée avec le commentaire dans
+    # EmailVerificationService (expiresIn: '1 heure') et dans
+    # le template emails/verify_email.html.twig.
+    lifetime: 3600

@@ -60,6 +60,8 @@ class UserChecker implements UserCheckerInterface
             return;
         }
 
+        // ── Vérification 1 : compte anonymisé (RGPD) ─────────────────────────
+        //
         // Bloquer les comptes anonymisés (demande RGPD d'effacement traitée).
         // isAnonymized() retourne true si anonymizedAt !== null.
         //
@@ -70,6 +72,27 @@ class UserChecker implements UserCheckerInterface
         if ($user->isAnonymized()) {
             throw new CustomUserMessageAccountStatusException(
                 'Ce compte n\'est plus accessible. Contactez support@bazaart.fr pour toute question.'
+            );
+        }
+
+        // ── Vérification 2 : email non confirmé (Lot 1, vérification email) ───
+        //
+        // Un compte dont l'adresse email n'a pas encore été confirmée ne peut
+        // pas se connecter. Le parcours de confirmation est :
+        //   1. Inscription → email envoyé avec lien signé
+        //   2. Clic sur le lien → isVerified=true → connexion possible
+        //
+        // Ce blocage couvre TOUS les modes d'authentification déclarés dans
+        // security.yaml pour le firewall "main" : form_login ET Google OAuth.
+        // (Pour Google, isVerified est mis à true à la création du compte —
+        //  voir GoogleAuthenticator::authenticate() — donc ce bloc ne les bloque pas.)
+        //
+        // Message avec instruction claire : l'utilisateur sait quoi faire.
+        if (!$user->isVerified()) {
+            throw new CustomUserMessageAccountStatusException(
+                'Ton adresse email n\'est pas encore confirmée. '
+                . 'Consulte ta boite mail et clique sur le lien de confirmation. '
+                . 'Si tu ne retrouves pas l\'email, va sur /verifier-email/confirmation pour en recevoir un nouveau.'
             );
         }
     }

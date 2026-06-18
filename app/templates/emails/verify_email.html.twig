@@ -1,0 +1,182 @@
+{#
+    Template HTML de l'email de confirmation d'adresse email.
+
+    Variables disponibles (passées par EmailVerificationService::sendVerificationEmail) :
+      - user       : App\Entity\User  -- l'utilisateur qui vient de s'inscrire
+      - verifyUrl  : string           -- URL signée absolue (générée par VerifyEmailHelper)
+      - expiresIn  : string           -- durée de validité lisible (ex : "1 heure")
+
+    Ce template est AUTONOME : pas de {% extends %} car les emails ne peuvent pas
+    hériter du layout Twig standard (pas de session, pas de JS, client email limité).
+
+    Compatibilité email (Gmail, Outlook, Apple Mail) :
+      - On utilise des <table> pour la mise en page (CSS flexbox/grid non supporté)
+      - Tout le CSS est INLINE (la plupart des clients email ignorent les <style>)
+      - Pas de police externe (Google Fonts bloquées par certains clients)
+      - Les URLs sont ABSOLUES (verifyUrl est déjà une URL absolue)
+
+    Charte graphique Bazaart :
+      - Fond foncé header : #1a1f2e (--ink du design)
+      - Accent rouge : #C8503A (--accent-2 du design)
+      - Accent lime : #C4F53B (--accent du design)
+      - Typographie : Arial/Helvetica (compatibilité email maximale)
+
+    Règle éditoriale : AUCUN tiret cadratin "--" dans ce template.
+    (Préférence de Gaëlle : utiliser virgules, deux-points ou parenthèses.)
+#}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirme ton adresse email BazaArt</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: Arial, Helvetica, sans-serif; font-size: 16px; color: #1a1f2e;">
+
+{# Conteneur principal centré, max 600px pour la lisibilité email #}
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f4f4; padding: 20px 0;">
+    <tr>
+        <td align="center">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
+
+                {# ============================================================ #}
+                {# HEADER : fond sombre avec logo texte et badge type email      #}
+                {# ============================================================ #}
+                <tr>
+                    <td style="background-color: #1a1f2e; padding: 28px 32px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                            <tr>
+                                <td>
+                                    {# Logo texte en police serif pour rappeler l'identité Bazaart #}
+                                    <span style="font-family: Georgia, serif; font-size: 28px; font-weight: bold; color: #ffffff; letter-spacing: 2px;">
+                                        BAZAART
+                                    </span>
+                                </td>
+                                <td align="right">
+                                    {# Badge vert lime (--accent) pour signaler la bienvenue #}
+                                    <span style="background-color: #C4F53B; color: #1a1f2e; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 20px; letter-spacing: 0.08em; text-transform: uppercase;">
+                                        Bienvenue
+                                    </span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                {# ============================================================ #}
+                {# ACCROCHE VISUELLE : bande lime + texte de bienvenue            #}
+                {# ============================================================ #}
+                <tr>
+                    <td style="background-color: #C4F53B; padding: 20px 32px;">
+                        <p style="margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: 700; color: #1a1f2e; letter-spacing: 0.08em; text-transform: uppercase;">
+                            Une derniere etape avant de rejoindre la communaute
+                        </p>
+                    </td>
+                </tr>
+
+                {# ============================================================ #}
+                {# CORPS : message d'accueil et explication                       #}
+                {# ============================================================ #}
+                <tr>
+                    <td style="padding: 32px 32px 16px 32px;">
+
+                        {#
+                            On extrait la partie avant "@" de l'email pour personnaliser le message.
+                            Ex : "yasmin.diallo@gmail.com" -> "yasmin.diallo"
+                            En Lot 2 (onboarding), on pourra utiliser le vrai prenom.
+                        #}
+                        {% set display_name = user.email|split('@')|first %}
+
+                        <p style="margin: 0 0 16px 0; font-size: 20px; font-weight: bold; color: #1a1f2e;">
+                            Bonjour {{ display_name }},
+                        </p>
+                        <p style="margin: 0 0 16px 0; color: #555555; line-height: 1.7;">
+                            Merci d'avoir rejoint <strong>BazaArt</strong>, la plateforme des artistes de la diaspora afro-atlantique.
+                        </p>
+                        <p style="margin: 0 0 16px 0; color: #555555; line-height: 1.7;">
+                            Pour activer ton compte et acceder a toutes les ressources de la communaute,
+                            confirme ton adresse email en cliquant sur le bouton ci-dessous.
+                        </p>
+                        <p style="margin: 0; color: #888888; font-size: 13px; line-height: 1.6;">
+                            Ce lien est valable <strong style="color: #1a1f2e;">{{ expiresIn }}</strong>.
+                            Passe ce delai, tu pourras en demander un nouveau depuis la page de connexion.
+                        </p>
+                    </td>
+                </tr>
+
+                {# Ligne de séparation décorative cohérente avec les autres emails #}
+                <tr>
+                    <td style="padding: 0 32px;">
+                        <hr style="border: none; border-top: 2px solid #C4F53B; margin: 8px 0 24px 0;">
+                    </td>
+                </tr>
+
+                {# ============================================================ #}
+                {# BOUTON CTA : confirmer l'adresse email                         #}
+                {# ============================================================ #}
+                <tr>
+                    <td style="padding: 0 32px 32px 32px; text-align: center;">
+
+                        {#
+                            Bouton principal : fond lime avec texte sombre (lisible et accessible).
+                            Fond lime (#C4F53B) + texte sombre (#1a1f2e) = identite Bazaart.
+                            Padding genereux pour la cible tactile sur mobile.
+                        #}
+                        <a href="{{ verifyUrl }}"
+                           style="display: inline-block; background-color: #C4F53B; color: #1a1f2e; text-decoration: none; padding: 16px 40px; border-radius: 4px; font-size: 16px; font-weight: bold; letter-spacing: 0.5px; border: 2px solid #1a1f2e;">
+                            Confirmer mon adresse email
+                        </a>
+
+                        {# URL de secours en texte brut pour les clients qui bloquent les boutons #}
+                        <p style="margin: 20px 0 0 0; color: #888888; font-size: 12px; line-height: 1.5;">
+                            Si le bouton ne fonctionne pas, copie-colle ce lien dans ton navigateur :<br>
+                            <span style="color: #C8503A; word-break: break-all; font-size: 11px;">
+                                {{ verifyUrl }}
+                            </span>
+                        </p>
+
+                    </td>
+                </tr>
+
+                {# ============================================================ #}
+                {# ENCART : si l'utilisateur n'est pas a l'origine               #}
+                {# ============================================================ #}
+                <tr>
+                    <td style="padding: 0 32px 32px 32px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+                               style="background-color: #f8f8f8; border: 1px solid #e0e0e0; border-radius: 4px;">
+                            <tr>
+                                <td style="padding: 16px;">
+                                    <p style="margin: 0; color: #666666; font-size: 13px; line-height: 1.6;">
+                                        <strong style="color: #1a1f2e;">Tu n'as pas cree de compte sur BazaArt ?</strong><br>
+                                        Ignore simplement cet email. Aucun compte ne sera active
+                                        tant que le lien de confirmation n'est pas clique.
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                {# ============================================================ #}
+                {# FOOTER : infos legales et lien vers la plateforme              #}
+                {# ============================================================ #}
+                <tr>
+                    <td style="background-color: #1a1f2e; padding: 24px 32px; border-radius: 0 0 8px 8px;">
+                        <p style="margin: 0 0 8px 0; color: #aaaaaa; font-size: 12px; text-align: center; line-height: 1.6;">
+                            Tu recois cet email suite a la creation d'un compte sur
+                            <a href="https://bazaart.fr" style="color: #C4F53B; text-decoration: none;">bazaart.fr</a>.
+                        </p>
+                        <p style="margin: 0; color: #666666; font-size: 11px; text-align: center; line-height: 1.6;">
+                            BazaArt, Pole Lab : Plateforme dediee aux artistes de la diaspora afro-atlantique.
+                        </p>
+                    </td>
+                </tr>
+
+            </table>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

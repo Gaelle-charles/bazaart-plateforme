@@ -77,6 +77,23 @@ framework:
             limit: 5
             interval: '15 minutes'
 
+        # ── Rate limiter pour /verifier-email/renvoyer ────────────────────────
+        #
+        # Limite les renvois d'email de confirmation pour éviter :
+        #   1. Le spam vers la boîte d'un utilisateur (un attaquant qui connaît
+        #      l'email peut appuyer en boucle sur "renvoyer")
+        #   2. La surcharge du serveur SMTP (Brevo/Resend en production)
+        #
+        # Politique : 3 renvois maximum sur une fenêtre glissante de 10 minutes,
+        # identifié par l'adresse email (et non l'IP pour bloquer aussi les VPN).
+        #
+        # Nommage : ce limiter crée le service "limiter.verify_email_limiter".
+        # Il est lié à $verifyEmailLimiter dans services.yaml (binding explicite).
+        verify_email_limiter:
+            policy: 'sliding_window'
+            limit: 3
+            interval: '10 minutes'
+
 when@test:
     framework:
         test: true
@@ -110,3 +127,9 @@ when@test:
                 policy: 'sliding_window'
                 limit: 1000        # Pratiquement illimité en test
                 interval: '15 minutes'
+
+            # Même assouplissement pour le renvoi d'email de confirmation
+            verify_email_limiter:
+                policy: 'sliding_window'
+                limit: 1000        # Pratiquement illimité en test
+                interval: '10 minutes'
