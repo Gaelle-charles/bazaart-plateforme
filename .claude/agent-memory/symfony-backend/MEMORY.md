@@ -5,3 +5,4 @@
 - [Conventions de code](feedback_conventions.md) — PSR-12, PHPStan niveau 6, commentaires français, voters Symfony, pas de logique dans controllers
 - [Module Formation — architecture événements](project_formations_events.md) — Phase 1 livrée : CourseType/CourseEventMode enums, 7 champs Course, service validation, back-office adapté
 - [Onboarding artiste Lot 2](project_onboarding_artiste.md) — ADR-0015 Lot 2 livré : gating listener, parcours 4 étapes, migration non-destructive, email bienvenue
+- [Ressourcerie ADR-0016 Lot 1](project_ressourcerie_adr0016_lot1.md) — ExperienceLevel enum, city/country sur Resource+ScrapedResource, LLM prompt enrichi, DisciplineMapperService
