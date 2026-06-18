@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
+use App\Enum\EnrollmentStatus;
 use App\Repository\CourseEnrollmentRepository;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -25,7 +26,8 @@ use Doctrine\ORM\Mapping as ORM;
  *   à chaque fois qu'une leçon est marquée comme terminée (LessonProgress).
  *   completedAt est renseigné quand progressPercent atteint 100.
  *
- * En V2, cette entité sera étendue pour stocker le statut de paiement (Stripe).
+ * Phase 3 (juin 2026) : ajout du statut d'inscription (ACTIVE / CANCELLED)
+ * et de cancelledAt pour la logique d'annulation et remboursement.
  */
 #[ORM\Entity(repositoryClass: CourseEnrollmentRepository::class)]
 #[ORM\Table(name: 'course_enrollments')]
@@ -39,6 +41,39 @@ class CourseEnrollment
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'integer')]
     private ?int $id = null;
+
+    // ─── Statut ───────────────────────────────────────────────────────────────
+
+    /**
+     * Statut de l'inscription.
+     *
+     * Valeurs possibles : voir App\Enum\EnrollmentStatus.
+     *   ACTIVE    → inscription valide, la place est comptée (défaut)
+     *   CANCELLED → inscription annulée, la place est libérée
+     *
+     * Stocké en colonne VARCHAR(20) NOT NULL avec défaut 'active'.
+     * La valeur par défaut SQL garantit la rétro-compatibilité :
+     * les inscriptions existantes (créées avant Phase 3) héritent du statut 'active'
+     * via la valeur DEFAULT de la migration — aucune rupture de données.
+     *
+     * enumType: 'string' indique à Doctrine de stocker la valeur backing de l'enum,
+     * pas son nom (ex : 'active' et non 'ACTIVE').
+     */
+    #[ORM\Column(type: 'string', length: 20, nullable: false, options: ['default' => 'active'], enumType: EnrollmentStatus::class)]
+    private EnrollmentStatus $status = EnrollmentStatus::ACTIVE;
+
+    /**
+     * Date et heure de l'annulation de l'inscription.
+     *
+     * null tant que l'inscription est ACTIVE.
+     * Renseigné par EventCancellationService::cancelByMember() ou cancelByAdmin()
+     * au moment de l'annulation.
+     *
+     * Utile pour l'audit, les statistiques d'annulation, et les emails
+     * de confirmation d'annulation.
+     */
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $cancelledAt = null;
 
     // ─── Timestamps ───────────────────────────────────────────────────────────
 
@@ -118,6 +153,45 @@ class CourseEnrollment
     public function getId(): ?int
     {
         return $this->id;
+    }
+
+    public function getStatus(): EnrollmentStatus
+    {
+        return $this->status;
+    }
+
+    public function setStatus(EnrollmentStatus $status): static
+    {
+        $this->status = $status;
+        return $this;
+    }
+
+    /**
+     * Raccourci : l'inscription est-elle encore active ?
+     * Utilisé dans les templates et dans EventCancellationService pour les gardes.
+     */
+    public function isActive(): bool
+    {
+        return $this->status === EnrollmentStatus::ACTIVE;
+    }
+
+    /**
+     * Raccourci : l'inscription a-t-elle été annulée ?
+     */
+    public function isCancelled(): bool
+    {
+        return $this->status === EnrollmentStatus::CANCELLED;
+    }
+
+    public function getCancelledAt(): ?\DateTimeInterface
+    {
+        return $this->cancelledAt;
+    }
+
+    public function setCancelledAt(?\DateTimeInterface $cancelledAt): static
+    {
+        $this->cancelledAt = $cancelledAt;
+        return $this;
     }
 
     public function getEnrolledAt(): \DateTimeInterface

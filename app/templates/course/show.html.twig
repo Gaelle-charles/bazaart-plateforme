@@ -1,12 +1,23 @@
 {% extends 'base_app.html.twig' %}
 
 {#
- # course/show.html.twig — Page d'une formation (design Street, bloc « en avant »).
+ # course/show.html.twig — Page d'une formation ou d'un événement (design Street, bloc « en avant »).
  #
- # Variables : course (Course), isEnrolled (bool), enrollment (CourseEnrollment|null).
+ # Variables :
+ #   - course         (Course)              — la formation ou l'événement
+ #   - isEnrolled     (bool)                — l'utilisateur est-il inscrit ?
+ #   - enrollment     (CourseEnrollment|null) — l'inscription de l'utilisateur si présente
+ #   - seatsRemaining (int|null)            — places restantes (null si illimité ou pas un événement)
+ #
  # Hero : colonne gauche NOIRE (titre/sous-titre/formateur) + panneau droit LIME (stats + CTA),
  #        d'après le bloc « formation en avant » du prototype.
  # Sections suivantes : Description, Aperçu vidéo, Plan de la formation.
+ #
+ # Comportement selon le type de formation :
+ #   CONTENU  → affichage habituel (modules, leçons, progression)
+ #   EVENEMENT → affichage date/heure, mode, lieu ou "lien après inscription", places restantes
+ #              Le lien visio / l'adresse exacte NE sont PAS révélés ici (ADR-0014 §4).
+ #              L'accès est visible uniquement dans le dashboard membre après inscription.
  #}
 
 {% block page_title %}{{ course.title|e }}{% endblock %}
@@ -136,25 +147,112 @@
     {# Colonne droite : panneau lime (stats + CTA) #}
     <div class="cf-show-hero__aside">
 
-        {% if course.durationMinutesTotal is not null %}
+        {#
+         # Bloc stats — adapté selon le type de formation :
+         #   CONTENU  → durée totale, niveau, nb modules, tarif
+         #   EVENEMENT → date, mode, places restantes, tarif
+         #}
+        {% if course.isEvent() %}
+
+            {# ── Stats EVENEMENT ───────────────────────────────────────────── #}
+
+            {# Date de l'événement : startAt au format lisible #}
+            {% if course.eventStartAt is not null %}
+                <div class="cf-stat">
+                    <div class="cf-stat__value">{{ course.eventStartAt|date('d/m/Y') }}</div>
+                    <div class="cf-stat__label">Date</div>
+                </div>
+                <div class="cf-stat">
+                    <div class="cf-stat__value">{{ course.eventStartAt|date('H\\hi') }}</div>
+                    <div class="cf-stat__label">Heure de début</div>
+                </div>
+            {% endif %}
+
+            {# Mode : visio ou présentiel #}
             <div class="cf-stat">
-                <div class="cf-stat__value">{{ course.durationMinutesTotal }} min</div>
-                <div class="cf-stat__label">Durée totale</div>
+                <div class="cf-stat__value">
+                    {# Twig compare l'enum en accédant à sa valeur via .value #}
+                    {% if course.eventMode is not null and course.eventMode.value == 'online' %}
+                        En ligne
+                    {% elseif course.eventMode is not null and course.eventMode.value == 'in_person' %}
+                        Présentiel
+                    {% else %}
+                        À définir
+                    {% endif %}
+                </div>
+                <div class="cf-stat__label">Format</div>
             </div>
+
+            {#
+             # Lieu : pour un événement PRESENTIEL, on affiche la ville (pas l'adresse complète).
+             # L'adresse exacte n'est révélée qu'après inscription, dans le dashboard.
+             # Pour une VISIO, on indique que le lien sera disponible après inscription.
+             #}
+            {% if course.eventMode is not null and course.eventMode.value == 'in_person' and course.eventLocation is not null %}
+                <div class="cf-stat">
+                    {#
+                     # On n'affiche que la DERNIÈRE partie après la virgule (ville / code postal).
+                     # ex : "12 rue de la Roquette, 75011 Paris" → "75011 Paris"
+                     # |first révèlerait "12 rue de la Roquette" (adresse exacte) — interdit ADR-0014 §4.
+                     # |last est plus prudent : même si le format varie, la ville est toujours
+                     # en dernier dans une adresse française standard.
+                     #}
+                    <div class="cf-stat__value" style="font-size: 14px;">
+                        {{ course.eventLocation|split(',')|last|trim|e }}
+                    </div>
+                    <div class="cf-stat__label">Lieu (détails après inscription)</div>
+                </div>
+            {% elseif course.eventMode is not null and course.eventMode.value == 'online' %}
+                <div class="cf-stat">
+                    <div class="cf-stat__value" style="font-size: 12px;">Lien après inscription</div>
+                    <div class="cf-stat__label">Accès visio</div>
+                </div>
+            {% endif %}
+
+            {# Places restantes — avec affichage adaptatif (illimité / complet / N places) #}
+            <div class="cf-stat">
+                <div class="cf-stat__value">
+                    {% if seatsRemaining is null %}
+                        {# Capacité illimitée #}
+                        ∞
+                    {% elseif seatsRemaining == 0 %}
+                        {# Complet #}
+                        <span style="color: #d00;">Complet</span>
+                    {% else %}
+                        {{ seatsRemaining }}
+                    {% endif %}
+                </div>
+                <div class="cf-stat__label">
+                    {% if seatsRemaining is null %}Places disponibles{% else %}Places restantes{% endif %}
+                </div>
+            </div>
+
+        {% else %}
+
+            {# ── Stats CONTENU (comportement existant) ─────────────────────── #}
+
+            {% if course.durationMinutesTotal is not null %}
+                <div class="cf-stat">
+                    <div class="cf-stat__value">{{ course.durationMinutesTotal }} min</div>
+                    <div class="cf-stat__label">Durée totale</div>
+                </div>
+            {% endif %}
+
+            <div class="cf-stat">
+                <div class="cf-stat__value">{{ course.level.label() }}</div>
+                <div class="cf-stat__label">Niveau</div>
+            </div>
+
+            {% if course.modules|length > 0 %}
+                <div class="cf-stat">
+                    <div class="cf-stat__value">{{ course.modules|length }} module{{ course.modules|length > 1 ? 's' : '' }}</div>
+                    <div class="cf-stat__label">Programme</div>
+                </div>
+            {% endif %}
+
         {% endif %}
 
-        <div class="cf-stat">
-            <div class="cf-stat__value">{{ course.level.label() }}</div>
-            <div class="cf-stat__label">Niveau</div>
-        </div>
-
-        {% if course.modules|length > 0 %}
-            <div class="cf-stat">
-                <div class="cf-stat__value">{{ course.modules|length }} module{{ course.modules|length > 1 ? 's' : '' }}</div>
-                <div class="cf-stat__label">Programme</div>
-            </div>
-        {% endif %}
-
+        {# Tarif — commun aux deux types #}
         <div class="cf-stat">
             <div class="cf-stat__value">{{ course.formattedPrice }}</div>
             <div class="cf-stat__label">Tarif</div>
@@ -163,32 +261,110 @@
         {# ── CTA ── #}
         <div class="cf-aside-cta">
             {% if isEnrolled %}
-                {% if enrollment is not null %}
-                    <div class="cf-progress">
-                        <div class="cf-progress__label">
-                            <span>Progression</span>
-                            <span>{{ enrollment.progressPercent }}%</span>
+
+                {# L'utilisateur est inscrit — comportement selon le type de formation #}
+                {% if course.isEvent() %}
+                    {#
+                     # Événement inscrit : rediriger vers le dashboard où le lien/adresse est révélé.
+                     # On n'affiche PAS de barre de progression (pas de leçons pour un événement).
+                     #}
+                    <p style="font-family: var(--mono); font-size: 11px; margin: 0 0 12px;
+                               padding: 8px 10px; background: rgba(13,13,13,.08); border: 1px solid rgba(13,13,13,.2);">
+                        ✓ Inscription confirmée
+                    </p>
+                    <a href="{{ path('app_dashboard') }}" class="cf-btn cf-btn--outline">
+                        Voir l'accès sur mon dashboard
+                    </a>
+                {% else %}
+                    {# Formation CONTENU inscrite : barre de progression + lien /learn #}
+                    {% if enrollment is not null %}
+                        <div class="cf-progress">
+                            <div class="cf-progress__label">
+                                <span>Progression</span>
+                                <span>{{ enrollment.progressPercent }}%</span>
+                            </div>
+                            <div class="cf-progress__bar">
+                                <div class="cf-progress__fill" style="width: {{ enrollment.progressPercent }}%"
+                                     role="progressbar" aria-valuenow="{{ enrollment.progressPercent }}"
+                                     aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
                         </div>
-                        <div class="cf-progress__bar">
-                            <div class="cf-progress__fill" style="width: {{ enrollment.progressPercent }}%"
-                                 role="progressbar" aria-valuenow="{{ enrollment.progressPercent }}"
-                                 aria-valuemin="0" aria-valuemax="100"></div>
-                        </div>
-                    </div>
+                    {% endif %}
+                    <a href="{{ path('app_course_learn', {slug: course.slug}) }}" class="cf-btn cf-btn--outline">
+                        Continuer l'apprentissage
+                    </a>
                 {% endif %}
-                <a href="{{ path('app_course_learn', {slug: course.slug}) }}" class="cf-btn cf-btn--outline">
-                    ▶ Continuer l'apprentissage
-                </a>
 
             {% elseif app.user %}
-                {# Formulaire d'inscription — CSRF validé dans CourseController::enroll() #}
-                <form method="POST" action="{{ path('app_course_enroll', {slug: course.slug}) }}"
-                      aria-label="S'inscrire à la formation">
-                    <input type="hidden" name="_token" value="{{ csrf_token('enroll_' ~ course.id) }}">
-                    <button type="submit" class="cf-btn">S'inscrire</button>
-                </form>
+
+                {# L'utilisateur est connecté mais pas inscrit — CTA selon type et tarif #}
+                {% if course.isEvent() %}
+
+                    {#
+                     # Événement : CTA adapté selon disponibilité et tarif.
+                     # Si complet → bouton désactivé.
+                     # Si payant → formulaire vers /formations/{slug}/payer.
+                     # Si gratuit → formulaire vers /formations/{slug}/enroll.
+                     #}
+                    {% if seatsRemaining is not null and seatsRemaining == 0 %}
+                        {# Événement complet : bouton désactivé #}
+                        <button type="button" class="cf-btn" disabled
+                                style="opacity: .4; cursor: not-allowed;"
+                                aria-disabled="true">
+                            Événement complet
+                        </button>
+                    {% elseif course.priceInCents is not null and course.priceInCents > 0 %}
+                        {#
+                         # Événement PAYANT — formulaire vers CoursePaymentController::pay()
+                         # Le token CSRF est identique à celui des formations CONTENU payantes :
+                         # 'course_pay_' ~ course.slug (validé dans CoursePaymentController::pay())
+                         #}
+                        <form method="POST" action="{{ path('app_course_pay', {slug: course.slug}) }}"
+                              aria-label="Payer et s'inscrire à l'événement">
+                            <input type="hidden" name="_token" value="{{ csrf_token('course_pay_' ~ course.slug) }}">
+                            <button type="submit" class="cf-btn">
+                                Réserver ma place — {{ course.formattedPrice }}
+                            </button>
+                        </form>
+                    {% else %}
+                        {#
+                         # Événement GRATUIT — formulaire vers CourseController::enroll()
+                         # Le token CSRF utilise 'enroll_' ~ course.id (validé dans enroll())
+                         #}
+                        <form method="POST" action="{{ path('app_course_enroll', {slug: course.slug}) }}"
+                              aria-label="S'inscrire à l'événement gratuit">
+                            <input type="hidden" name="_token" value="{{ csrf_token('enroll_' ~ course.id) }}">
+                            <button type="submit" class="cf-btn">S'inscrire — Gratuit</button>
+                        </form>
+                    {% endif %}
+
+                {% else %}
+
+                    {#
+                     # Formation CONTENU — comportement existant inchangé.
+                     # (Les formations CONTENU payantes utilisent CoursePaymentController::pay(),
+                     #  les gratuites utilisent CourseController::enroll())
+                     #}
+                    {% if course.priceInCents is not null and course.priceInCents > 0 %}
+                        <form method="POST" action="{{ path('app_course_pay', {slug: course.slug}) }}"
+                              aria-label="Acheter la formation">
+                            <input type="hidden" name="_token" value="{{ csrf_token('course_pay_' ~ course.slug) }}">
+                            <button type="submit" class="cf-btn">
+                                Acheter — {{ course.formattedPrice }}
+                            </button>
+                        </form>
+                    {% else %}
+                        <form method="POST" action="{{ path('app_course_enroll', {slug: course.slug}) }}"
+                              aria-label="S'inscrire à la formation">
+                            <input type="hidden" name="_token" value="{{ csrf_token('enroll_' ~ course.id) }}">
+                            <button type="submit" class="cf-btn">S'inscrire</button>
+                        </form>
+                    {% endif %}
+
+                {% endif %}
 
             {% else %}
+                {# Visiteur non connecté — CTA générique #}
                 <a href="{{ path('app_login', {_target_path: app.request.uri}) }}" class="cf-btn">
                     Se connecter pour s'inscrire
                 </a>
@@ -224,8 +400,71 @@
     </section>
 {% endif %}
 
+{#
+ # ── BLOC INFORMATIONS ÉVÉNEMENT ──────────────────────────────────────────────
+ # Affiché UNIQUEMENT pour les formations de type EVENEMENT.
+ # Rappelle les informations pratiques (date, durée, format, note sur l'accès).
+ # Ne révèle PAS le lien visio / l'adresse exacte avant inscription (ADR-0014 §4).
+ #}
+{% if course.isEvent() %}
+    <section class="cf-section" aria-label="Informations pratiques de l'événement">
+        <div class="cf-section__header">
+            <h3 class="cf-section__title">Informations pratiques</h3>
+        </div>
+        <div class="cf-section__body">
+            {# Date et horaires #}
+            {% if course.eventStartAt is not null %}
+                <p><strong>Date :</strong> {{ course.eventStartAt|date('d/m/Y') }}</p>
+                <p><strong>Début :</strong> {{ course.eventStartAt|date('H\\hi') }}
+                {% if course.eventEndAt is not null %}
+                    — fin prévue à {{ course.eventEndAt|date('H\\hi') }}
+                {% endif %}
+                </p>
+            {% endif %}
+
+            {# Format (visio ou présentiel) avec note sur l'accès #}
+            {% if course.eventMode is not null and course.eventMode.value == 'online' %}
+                <p><strong>Format :</strong> En ligne (visioconférence)</p>
+                <p style="font-style: italic; color: var(--ink-mute);">
+                    Le lien de connexion vous sera communiqué dans votre tableau de bord
+                    après inscription. Il n'est pas affiché sur cette page.
+                </p>
+            {% elseif course.eventMode is not null and course.eventMode.value == 'in_person' %}
+                <p><strong>Format :</strong> En présentiel</p>
+                {% if course.eventLocation is not null %}
+                    {#
+                     # Pour un événement présentiel NON inscrit : on affiche seulement la ville.
+                     # L'adresse complète n'est révélée qu'après inscription, dans le dashboard.
+                     # Pour un inscrit (isEnrolled) : idem — l'adresse est dans le dashboard.
+                     #}
+                    <p><strong>Ville :</strong> {{ course.eventLocation|split(',')|last|trim|e }}</p>
+                    <p style="font-style: italic; color: var(--ink-mute);">
+                        L'adresse complète est disponible dans votre tableau de bord après inscription.
+                    </p>
+                {% endif %}
+            {% endif %}
+
+            {# Capacité #}
+            {% if course.capacity is not null %}
+                <p><strong>Capacité :</strong> {{ course.capacity }} participants max
+                    {% if seatsRemaining is not null %}
+                        —
+                        {% if seatsRemaining == 0 %}
+                            <strong style="color: #d00;">Complet</strong>
+                        {% else %}
+                            <strong>{{ seatsRemaining }} place{{ seatsRemaining > 1 ? 's' : '' }} restante{{ seatsRemaining > 1 ? 's' : '' }}</strong>
+                        {% endif %}
+                    {% endif %}
+                </p>
+            {% endif %}
+        </div>
+    </section>
+{% endif %}
+
 {# ── PLAN DE LA FORMATION ─────────────────────────────────────────────────── #}
-{% if course.modules is not empty %}
+{# Le plan (modules/leçons) n'est affiché que pour les formations CONTENU.    #}
+{# Les événements n'ont pas de structure modules/leçons.                      #}
+{% if course.isEvent() == false and course.modules is not empty %}
     <section class="cf-plan" aria-label="Plan de la formation">
         <div class="cf-section__header">
             <h3 class="cf-section__title">Plan de la formation</h3>

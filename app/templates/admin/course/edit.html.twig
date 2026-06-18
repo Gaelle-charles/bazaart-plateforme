@@ -3,15 +3,19 @@
 {#
  # admin/course/edit.html.twig — Édition d'une formation
  #
- # 3 sections :
+ # 4 sections selon le type :
  #   1. Infos de la formation (formulaire POST → app_admin_course_update)
- #   2. Modules + leçons : hiérarchie avec formulaires inline d'ajout
- #   3. Publication (si non publié)
+ #      → sélecteur de type (CONTENU / EVENEMENT), section événement conditionnelle
+ #   2. Modules + leçons (uniquement si type = CONTENU)
+ #   3. Infos événement (uniquement si type = EVENEMENT — affichées dans la section 1)
+ #   4. Publication
  #
  # Variables disponibles :
- #   - course  : Course (la formation à éditer)
- #   - modules : Collection<CourseModule> (modules de la formation)
- #   - levels  : CourseLevel[] (pour le <select>)
+ #   - course      : Course (la formation à éditer)
+ #   - modules     : Collection<CourseModule> (modules de la formation)
+ #   - levels      : CourseLevel[] (pour le <select> de niveau)
+ #   - courseTypes : CourseType[] (pour le <select> de type)
+ #   - eventModes  : CourseEventMode[] (pour le <select> de mode événement)
  #}
 
 {% block page_title %}Éditer — {{ course.title|e }}{% endblock %}
@@ -361,6 +365,39 @@
 
     .adc-pub-dot--published { background: var(--ok); border-color: var(--ok); }
     .adc-pub-dot--draft     { background: transparent; border-color: var(--ink-mute); }
+
+    /* ── Section événement (toggle selon type) ───────────────────────────── */
+    .adc-event-block {
+        padding: 14px;
+        background: rgba(var(--accent-rgb, 199,247,81), .07);
+        border: 1px dashed var(--line-soft);
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .adc-event-label {
+        font-family: var(--mono);
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    /* Badge type (CONTENU / ÉVÉNEMENT) dans la liste admin */
+    .adc-type-badge {
+        display: inline-block;
+        padding: 1px 6px;
+        font-family: var(--mono);
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .adc-type-badge--content { background: var(--bg-alt); border: 1px solid var(--line-soft); color: var(--ink-mute); }
+    .adc-type-badge--event   { background: var(--accent); border: 1px solid var(--accent); color: var(--ink); }
     </style>
 {% endblock %}
 
@@ -405,7 +442,22 @@
                     <input type="hidden" name="_token"
                            value="{{ csrf_token('update_course_' ~ course.id) }}">
 
-                    {# Titre + Sous-titre en ligne #}
+                    {# Type de formation (CONTENU / EVENEMENT) #}
+                    <div class="adc-field">
+                        <label class="adc-field__label" for="edit-type">
+                            Type de formation <span class="adc-field__required">*</span>
+                        </label>
+                        <select id="edit-type" name="type" class="adc-select">
+                            {% for courseType in courseTypes %}
+                                <option value="{{ courseType.value|e }}"
+                                        {% if course.type.value == courseType.value %}selected{% endif %}>
+                                    {{ courseType.label() }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {# Titre + Niveau en ligne #}
                     <div class="adc-form-row">
                         <div class="adc-field">
                             <label class="adc-field__label" for="edit-title">
@@ -487,6 +539,95 @@
                         </span>
                     </div>
 
+                    {#
+                     # ── SECTION ÉVÉNEMENT (visible seulement si type = EVENEMENT) ──
+                     # La visibilité est gérée par JS (updateEditEventSection).
+                     # Les valeurs existantes sont pré-remplies depuis $course.
+                     #}
+                    <div id="edit-event-section"
+                         class="adc-event-block"
+                         style="{% if not course.isEvent() %}display:none;{% endif %}">
+
+                        <p class="adc-event-label">Détails de l'événement</p>
+
+                        {# Mode (VISIO / PRESENTIEL) #}
+                        <div class="adc-field" style="margin-bottom:0;">
+                            <label class="adc-field__label" for="edit-event-mode">Mode</label>
+                            <select id="edit-event-mode" name="eventMode" class="adc-select">
+                                <option value="">— Choisir —</option>
+                                {% for mode in eventModes %}
+                                    <option value="{{ mode.value|e }}"
+                                            {% if course.eventMode is not null and course.eventMode.value == mode.value %}selected{% endif %}>
+                                        {{ mode.label() }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        {# Dates début / fin #}
+                        <div class="adc-form-row">
+                            <div class="adc-field" style="margin-bottom:0;">
+                                <label class="adc-field__label" for="edit-event-start">Début</label>
+                                <input type="datetime-local"
+                                       id="edit-event-start"
+                                       name="eventStartAt"
+                                       class="adc-input"
+                                       {# Formatage pour l'input datetime-local : Y-m-d\TH:i #}
+                                       value="{{ course.eventStartAt is not null ? course.eventStartAt|date('Y-m-d\\TH:i') : '' }}">
+                            </div>
+                            <div class="adc-field" style="margin-bottom:0;">
+                                <label class="adc-field__label" for="edit-event-end">Fin</label>
+                                <input type="datetime-local"
+                                       id="edit-event-end"
+                                       name="eventEndAt"
+                                       class="adc-input"
+                                       value="{{ course.eventEndAt is not null ? course.eventEndAt|date('Y-m-d\\TH:i') : '' }}">
+                            </div>
+                        </div>
+
+                        {# Lieu (présentiel) #}
+                        <div class="adc-field" id="edit-location-field" style="margin-bottom:0;">
+                            <label class="adc-field__label" for="edit-event-location">Lieu (adresse)</label>
+                            <input type="text"
+                                   id="edit-event-location"
+                                   name="eventLocation"
+                                   class="adc-input"
+                                   value="{{ course.eventLocation is not null ? course.eventLocation|e : '' }}"
+                                   maxlength="255"
+                                   placeholder="Ex : 12 rue de la Roquette, 75011 Paris">
+                        </div>
+
+                        {# Lien connexion (visio) #}
+                        <div class="adc-field" id="edit-url-field" style="margin-bottom:0;">
+                            <label class="adc-field__label" for="edit-event-url">Lien de connexion</label>
+                            <input type="url"
+                                   id="edit-event-url"
+                                   name="eventExternalUrl"
+                                   class="adc-input"
+                                   value="{{ course.eventExternalUrl is not null ? course.eventExternalUrl|e : '' }}"
+                                   maxlength="500"
+                                   placeholder="https://us02web.zoom.us/j/...">
+                        </div>
+
+                        {# Capacité #}
+                        <div class="adc-field" style="margin-bottom:0;">
+                            <label class="adc-field__label" for="edit-capacity">Nombre de places</label>
+                            <input type="number"
+                                   id="edit-capacity"
+                                   name="capacity"
+                                   class="adc-input"
+                                   min="1"
+                                   value="{{ course.capacity is not null ? course.capacity : '' }}"
+                                   placeholder="Vide = illimité">
+                            {% if course.seatsRemaining is not null %}
+                                <span class="adc-field__help">
+                                    Places restantes : {{ course.seatsRemaining }} / {{ course.capacity }}
+                                </span>
+                            {% endif %}
+                        </div>
+
+                    </div>{# /#edit-event-section #}
+
                     <hr class="adc-sep">
                     <button type="submit" class="adc-btn">Enregistrer les modifications</button>
 
@@ -497,11 +638,12 @@
 
         {#
          # ── SECTION 2 : MODULES ET LEÇONS ────────────────────────────────
-         # Hiérarchie : Module → Leçons (triées par orderPosition)
-         # Pour chaque module : formulaire inline d'ajout de leçon.
-         # En bas : formulaire d'ajout de module.
+         # Visible uniquement pour les formations de type CONTENU.
+         # Pour les événements, il n'y a pas de modules/leçons.
+         # data-modules-section est référencé par le JS pour le toggle.
          #}
-        <div class="adc-card">
+        <div class="adc-card" id="edit-modules-section"
+             style="{% if course.isEvent() %}display:none;{% endif %}">
             <div class="adc-card__header">
                 <h2 class="adc-card__title">
                     Modules
@@ -694,37 +836,41 @@
                 <div class="adc-card__body">
 
                     <p style="font-size: 13px; line-height: 1.6; color: var(--ink-mute); margin: 0 0 14px;">
-                        Cette formation est en brouillon.
-                        Une fois publiée, elle sera visible dans le catalogue public.
+                        {% if course.isEvent() %}
+                            Cet événement est en brouillon.
+                            Une fois publié, il sera visible dans le catalogue des formations.
+                        {% else %}
+                            Cette formation est en brouillon.
+                            Une fois publiée, elle sera visible dans le catalogue public.
+                        {% endif %}
                     </p>
 
-                    {# Résumé du contenu #}
-                    {% set lessonCount = 0 %}
-                    {% for module in modules %}
-                        {% set lessonCount = lessonCount + module.lessons|length %}
-                    {% endfor %}
+                    {% if course.isEvent() %}
+                        {#
+                         # Pour les événements, la prérequis est la validité des champs
+                         # (mode, date, lieu ou lien). La vérification est faite côté serveur
+                         # dans AdminCourseController::publish() via CourseEventValidationService.
+                         # Côté template, on affiche juste un résumé des infos.
+                         #}
+                        <div style="font-family: var(--mono); font-size: 10px; color: var(--ink-mute);
+                                    padding: 10px 12px; background: var(--bg-alt);
+                                    border: 1px solid var(--line-soft); margin-bottom: 16px;">
+                            {% if course.eventMode is not null %}
+                                {{ course.eventMode.label() }}
+                            {% else %}
+                                Mode non défini
+                            {% endif %}
+                            {% if course.eventStartAt is not null %}
+                                · {{ course.eventStartAt|date('d/m/Y H:i') }}
+                            {% endif %}
+                        </div>
 
-                    <div style="font-family: var(--mono); font-size: 10px; color: var(--ink-mute);
-                                padding: 10px 12px; background: var(--bg-alt);
-                                border: 1px solid var(--line-soft); margin-bottom: 16px;">
-                        {{ modules|length }} module{{ modules|length > 1 ? 's' : '' }}
-                        · {{ lessonCount }} leçon{{ lessonCount > 1 ? 's' : '' }}
-                    </div>
-
-                    {# Vérification préalable : au moins un module avec une leçon #}
-                    {% if modules is empty or lessonCount == 0 %}
-                        <p style="font-size: 11px; color: var(--accent-2); font-weight: 700;
-                                  font-family: var(--mono); letter-spacing: .04em;">
-                            ↳ Ajoutez au moins 1 module et 1 leçon avant de publier.
-                        </p>
-                    {% else %}
                         <form method="POST"
                               action="{{ path('app_admin_course_publish', {id: course.id}) }}"
-                              onsubmit="return confirm('Publier cette formation ? Elle sera visible publiquement.')">
+                              onsubmit="return confirm('Publier cet événement ? Il sera visible publiquement.')">
                             <input type="hidden" name="_token"
                                    value="{{ csrf_token('publish_course_' ~ course.id) }}">
                             <button type="submit" class="adc-btn adc-btn--publish" style="width: 100%; justify-content: center;">
-                                {# Icône monde/globe #}
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                      stroke="currentColor" stroke-width="2"
                                      stroke-linecap="round" stroke-linejoin="round"
@@ -732,9 +878,48 @@
                                     <circle cx="12" cy="12" r="10"/>
                                     <path d="M2 12h20M12 2a14 14 0 0 1 0 20 14 14 0 0 1 0-20z"/>
                                 </svg>
-                                Publier la formation
+                                Publier l'événement
                             </button>
                         </form>
+
+                    {% else %}
+                        {# Formation CONTENU : vérification modules/leçons #}
+                        {% set lessonCount = 0 %}
+                        {% for module in modules %}
+                            {% set lessonCount = lessonCount + module.lessons|length %}
+                        {% endfor %}
+
+                        <div style="font-family: var(--mono); font-size: 10px; color: var(--ink-mute);
+                                    padding: 10px 12px; background: var(--bg-alt);
+                                    border: 1px solid var(--line-soft); margin-bottom: 16px;">
+                            {{ modules|length }} module{{ modules|length > 1 ? 's' : '' }}
+                            · {{ lessonCount }} leçon{{ lessonCount > 1 ? 's' : '' }}
+                        </div>
+
+                        {# Vérification préalable : au moins un module avec une leçon #}
+                        {% if modules is empty or lessonCount == 0 %}
+                            <p style="font-size: 11px; color: var(--accent-2); font-weight: 700;
+                                      font-family: var(--mono); letter-spacing: .04em;">
+                                ↳ Ajoutez au moins 1 module et 1 leçon avant de publier.
+                            </p>
+                        {% else %}
+                            <form method="POST"
+                                  action="{{ path('app_admin_course_publish', {id: course.id}) }}"
+                                  onsubmit="return confirm('Publier cette formation ? Elle sera visible publiquement.')">
+                                <input type="hidden" name="_token"
+                                       value="{{ csrf_token('publish_course_' ~ course.id) }}">
+                                <button type="submit" class="adc-btn adc-btn--publish" style="width: 100%; justify-content: center;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         stroke-linecap="round" stroke-linejoin="round"
+                                         aria-hidden="true">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M2 12h20M12 2a14 14 0 0 1 0 20 14 14 0 0 1 0-20z"/>
+                                    </svg>
+                                    Publier la formation
+                                </button>
+                            </form>
+                        {% endif %}
                     {% endif %}
 
                 </div>
@@ -765,6 +950,117 @@
                         </svg>
                         Voir la page publique
                     </a>
+                </div>
+            </div>
+        {% endif %}
+
+        {#
+         # ── SECTION ANNULATION D'ÉVÉNEMENT (admin) — Phase 3 ─────────────
+         # Visible uniquement pour les formations de type EVENEMENT.
+         # Permet à l'admin d'annuler l'événement entier (rembourse tous les inscrits)
+         # ou de voir la liste des inscrits pour les annuler individuellement.
+         #
+         # La liste des inscrits est accessible via la variable 'enrollments'
+         # transmise par AdminCourseController::edit() — on l'ajoute ci-dessous.
+         #}
+        {% if course.isEvent() %}
+            <div class="adc-card" style="border-color: rgba(200,0,0,.35);">
+                <div class="adc-card__header" style="background: rgba(200,0,0,.08); border-color: rgba(200,0,0,.35);">
+                    <h2 class="adc-card__title" style="color: rgba(200,0,0,.8);">Annulation de l'événement</h2>
+                </div>
+                <div class="adc-card__body">
+
+                    {#
+                     # ── Bouton "Annuler l'événement entier" ─────────────────────
+                     # Action de masse : annule TOUTES les inscriptions actives
+                     # et rembourse tous les inscrits payants.
+                     # Confirmation JS obligatoire (irréversible + argent).
+                     # Token CSRF : 'admin_cancel_event_{courseId}'
+                     # Route : POST /admin/formations/{courseId}/annuler-evenement
+                     #}
+                    <p style="font-size: 12px; color: var(--ink-mute); margin: 0 0 14px; line-height: 1.5;">
+                        Annule cet événement, rembourse tous les inscrits payants actifs et leur envoie un email.
+                    </p>
+
+                    <form method="POST"
+                          action="{{ path('app_admin_course_event_cancel', {courseId: course.id}) }}"
+                          onsubmit="return confirm('ATTENTION — Annuler l\'événement « ' + {{ course.title|json_encode }} + ' » ? Cette action est irréversible. Tous les inscrits payants seront remboursés.');"
+                          style="margin-bottom: 20px;">
+                        <input type="hidden" name="_token"
+                               value="{{ csrf_token('admin_cancel_event_' ~ course.id) }}">
+                        <button type="submit"
+                                class="adc-btn"
+                                style="background: rgba(180,0,0,.85); border-color: rgba(180,0,0,.85); color: #fff; width: 100%; justify-content: center;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2"
+                                 stroke-linecap="round" stroke-linejoin="round"
+                                 aria-hidden="true">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="15" y1="9" x2="9" y2="15"/>
+                                <line x1="9" y1="9" x2="15" y2="15"/>
+                            </svg>
+                            Annuler l'événement &amp; rembourser
+                        </button>
+                    </form>
+
+                    {#
+                     # ── Liste des inscrits avec bouton d'annulation individuelle ─
+                     # On affiche la liste des inscriptions ACTIVES pour cet événement.
+                     # La variable 'enrollments' est transmise par AdminCourseController::edit().
+                     # Pour chaque inscrit : email, date d'inscription, bouton "Annuler".
+                     # Token CSRF : 'admin_cancel_enrollment_{enrollmentId}'
+                     # Route : POST /admin/formations/{courseId}/inscrits/{enrollmentId}/annuler
+                     #}
+                    {% if enrollments is defined and enrollments|length > 0 %}
+                        <p style="font-family: var(--mono); font-size: 9px; font-weight: 700;
+                                  letter-spacing: .1em; text-transform: uppercase;
+                                  color: var(--ink-mute); margin: 0 0 10px;">
+                            Inscrits actifs ({{ enrollments|length }})
+                        </p>
+                        <div style="border: 1px solid var(--line-soft);">
+                            {% for enrollment in enrollments %}
+                                <div style="display: flex; align-items: center; justify-content: space-between;
+                                            padding: 8px 12px; gap: 10px; border-bottom: 1px solid var(--line-soft);
+                                            {% if loop.last %}border-bottom: none;{% endif %}">
+                                    <div>
+                                        <div style="font-size: 12px; font-weight: 600;">
+                                            {{ enrollment.user.email|e }}
+                                        </div>
+                                        <div style="font-family: var(--mono); font-size: 9px; color: var(--ink-mute);">
+                                            {{ enrollment.enrolledAt|date('d/m/Y') }}
+                                            {% if enrollment.status.value != 'active' %}
+                                                · {{ enrollment.status.label() }}
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% if enrollment.isActive() %}
+                                        <form method="POST"
+                                              action="{{ path('app_admin_course_enrollment_cancel', {courseId: course.id, enrollmentId: enrollment.id}) }}"
+                                              onsubmit="return confirm('Annuler l\'inscription de ' + {{ enrollment.user.email|json_encode }} + ' ? Le paiement sera remboursé si applicable.');"
+                                              style="flex-shrink: 0;">
+                                            <input type="hidden" name="_token"
+                                                   value="{{ csrf_token('admin_cancel_enrollment_' ~ enrollment.id) }}">
+                                            <button type="submit"
+                                                    class="adc-btn adc-btn--sm"
+                                                    style="background: transparent; color: rgba(180,0,0,.8); border-color: rgba(180,0,0,.4);"
+                                                    aria-label="Annuler l'inscription de {{ enrollment.user.email|e }}">
+                                                Annuler
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <span style="font-family: var(--mono); font-size: 9px; color: var(--ink-mute);">
+                                            Annulée
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p style="font-size: 12px; color: var(--ink-mute); margin: 0;">
+                            Aucun inscrit actif pour cet événement.
+                        </p>
+                    {% endif %}
+
                 </div>
             </div>
         {% endif %}
@@ -805,6 +1101,28 @@
                         </dt>
                         <dd style="margin: 0;">{{ course.updatedAt|date('d/m/Y H:i') }}</dd>
                     {% endif %}
+
+                    {# Type — nouveau champ affiché dans le récapitulatif #}
+                    <dt style="color: var(--ink-mute); font-family: var(--mono); font-size: 9px;
+                               text-transform: uppercase; letter-spacing: .06em; align-self: center;">
+                        Type
+                    </dt>
+                    <dd style="margin: 0;">
+                        <span class="adc-type-badge {% if course.isEvent() %}adc-type-badge--event{% else %}adc-type-badge--content{% endif %}">
+                            {{ course.type.shortLabel() }}
+                        </span>
+                    </dd>
+
+                    {# Places restantes (uniquement pour les événements avec capacité) #}
+                    {% if course.isEvent() and course.capacity is not null %}
+                        <dt style="color: var(--ink-mute); font-family: var(--mono); font-size: 9px;
+                                   text-transform: uppercase; letter-spacing: .06em; align-self: center;">
+                            Places
+                        </dt>
+                        <dd style="margin: 0;">
+                            {{ course.seatsRemaining }} / {{ course.capacity }} restantes
+                        </dd>
+                    {% endif %}
                 </dl>
             </div>
         </div>
@@ -813,4 +1131,63 @@
 
 </div>{# /.adc-edit-layout #}
 
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+<script>
+/*
+ * Toggle de la section événement et de la section modules/leçons selon le type sélectionné.
+ * Même logique que new.html.twig, adaptée pour le formulaire d'édition.
+ */
+(function() {
+    'use strict';
+
+    var typeSelect     = document.getElementById('edit-type');
+    var eventSection   = document.getElementById('edit-event-section');
+    var modulesSection = document.getElementById('edit-modules-section');
+    var modeSelect     = document.getElementById('edit-event-mode');
+    var locationField  = document.getElementById('edit-location-field');
+    var urlField       = document.getElementById('edit-url-field');
+
+    function updateSections() {
+        var isEvent = typeSelect.value === 'event';
+        /* Section événement : visible si type = event */
+        eventSection.style.display   = isEvent ? '' : 'none';
+        /* Section modules : visible si type = content */
+        modulesSection.style.display = isEvent ? 'none' : '';
+    }
+
+    function updateModeFields() {
+        var mode = modeSelect.value;
+        if (mode === 'online') {
+            locationField.style.opacity      = '0.4';
+            locationField.style.pointerEvents = 'none';
+            urlField.style.opacity           = '1';
+            urlField.style.pointerEvents      = '';
+        } else if (mode === 'in_person') {
+            locationField.style.opacity      = '1';
+            locationField.style.pointerEvents = '';
+            urlField.style.opacity           = '0.4';
+            urlField.style.pointerEvents      = 'none';
+        } else {
+            locationField.style.opacity      = '1';
+            locationField.style.pointerEvents = '';
+            urlField.style.opacity           = '1';
+            urlField.style.pointerEvents      = '';
+        }
+    }
+
+    /* Initialisation : déjà géré par l'attribut style inline dans le HTML,
+       mais on ré-applique pour garantir la cohérence après JS chargé. */
+    updateSections();
+    updateModeFields();
+
+    typeSelect.addEventListener('change', function() {
+        updateSections();
+        updateModeFields();
+    });
+    modeSelect.addEventListener('change', updateModeFields);
+}());
+</script>
 {% endblock %}

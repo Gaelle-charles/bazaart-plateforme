@@ -11,6 +11,12 @@ parameters:
     # app/.env étant gitignoré, on ne peut pas y mettre la valeur partagée : on la fixe ici.
     # Surchargeable sur le serveur via .env.local si besoin (ADMIN_EMAIL=...).
     env(ADMIN_EMAIL): 'bonjourbazaart@gmail.com'
+    # Valeur par défaut de la fenêtre de remboursement (14 jours, règle droit de rétractation).
+    # Sans ce paramètre, si REFUND_WITHDRAWAL_DAYS est absent de .env ou .env.local en prod,
+    # le container Symfony ne démarrera pas ("Variable is not set").
+    # Ce fallback garantit que l'application tourne même si la variable n'est pas définie
+    # côté serveur — comportement identique à env(ADMIN_EMAIL) ci-dessus.
+    env(REFUND_WITHDRAWAL_DAYS): '14'
 
 services:
     # default configuration for services in *this* file
@@ -40,6 +46,11 @@ services:
             # formation, signalements forum). Définie dans .env (ADMIN_EMAIL), surchargeable
             # en prod via .env.local. Injectée partout où un service déclare $adminEmail.
             string $adminEmail: '%env(ADMIN_EMAIL)%'
+            # Fenêtre de remboursement en jours (droit de rétractation).
+            # Valeur par défaut 14 définie dans .env (surchargeable via .env.local).
+            # Injectée dans EventCancellationService::$refundWithdrawalDays.
+            # env(int:...) convertit la chaîne en entier PHP avant l'injection.
+            int $refundWithdrawalDays: '%env(int:REFUND_WITHDRAWAL_DAYS)%'
 
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name

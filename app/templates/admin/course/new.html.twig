@@ -4,11 +4,18 @@
  # admin/course/new.html.twig — Formulaire de création d'une formation
  #
  # Variables disponibles :
- #   - levels : CourseLevel[] (les cas de l'enum, pour le <select>)
+ #   - levels      : CourseLevel[]    — pour le <select> de niveau
+ #   - courseTypes : CourseType[]     — pour le <select> de type (CONTENU / EVENEMENT)
+ #   - eventModes  : CourseEventMode[] — pour le <select> de mode (VISIO / PRESENTIEL)
  #
  # Token CSRF : 'new_course' — validé dans AdminCourseController::new()
- # Champs requis : title, level
+ # Champs requis : title, level, type
+ # Si type = EVENEMENT : eventMode, eventStartAt requis ; lieu ou lien selon mode
  # Champs optionnels : subtitle, instructorName, trailerVideoUrl, description
+ #
+ # La section événement est masquée par défaut et révélée par JS
+ # lorsque l'admin sélectionne "Événement" dans le sélecteur de type.
+ # Pas de Stimulus ici (formulaire simple) : on utilise un écouteur inline addEventListener.
  #}
 
 {% block page_title %}Nouvelle formation{% endblock %}
@@ -188,6 +195,30 @@
     }
 
     .adc-cancel-link:hover { color: var(--ink); }
+
+    /* ── Section événement (masquée par défaut, révélée si type = EVENEMENT) ── */
+    .adc-event-section {
+        display: none;                 /* masqué par défaut */
+        flex-direction: column;
+        gap: 18px;
+        padding: 16px;
+        background: rgba(var(--accent-rgb, 199,247,81), .07);
+        border: 1px dashed var(--ink);
+        margin: 0;
+    }
+
+    .adc-event-section.is-visible {
+        display: flex;                 /* révélé par JS quand type = event */
+    }
+
+    /* ── Grille 2 colonnes pour les dates ─────────────────────────────────── */
+    .adc-form-row-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    @media (max-width: 600px) { .adc-form-row-2 { grid-template-columns: 1fr; } }
     </style>
 {% endblock %}
 
@@ -222,6 +253,28 @@
 
         {# ── SECTION : Informations principales ──────────────────────────── #}
         <p class="adc-form__section-label">Informations principales</p>
+
+        {#
+         # Sélecteur de type de formation (CONTENU / EVENEMENT)
+         # Ce champ déclenche via JS l'affichage/masquage de la section événement.
+         # id="field-type" est référencé dans le script en bas de page.
+         #}
+        <div class="adc-field">
+            <label class="adc-field__label" for="field-type">
+                Type de formation <span class="adc-field__required">*</span>
+            </label>
+            <select id="field-type" name="type" class="adc-select" required>
+                {% for courseType in courseTypes %}
+                    <option value="{{ courseType.value|e }}">
+                        {{ courseType.label() }}
+                    </option>
+                {% endfor %}
+            </select>
+            <span class="adc-field__help">
+                "Formation en ligne" = modules et leçons vidéo à la demande.
+                "Événement" = session avec date/heure précise (visio ou présentiel).
+            </span>
+        </div>
 
         {# Titre (requis) #}
         <div class="adc-field">
@@ -331,6 +384,115 @@
             </span>
         </div>
 
+        <hr class="adc-form__sep">
+
+        {#
+         # ── SECTION ÉVÉNEMENT ────────────────────────────────────────────────
+         # Révélée par JS uniquement si type = 'event'.
+         # Masquée si type = 'content' (formation classique).
+         # id="event-section" est référencé dans le script en bas de page.
+         #}
+        <div id="event-section" class="adc-event-section" aria-live="polite">
+
+            <p class="adc-form__section-label" style="margin-bottom: 0;">
+                Détails de l'événement
+            </p>
+
+            {# Mode (VISIO / PRESENTIEL) — détermine quel champ afficher ensuite #}
+            <div class="adc-field">
+                <label class="adc-field__label" for="field-event-mode">
+                    Mode <span class="adc-field__required">*</span>
+                </label>
+                <select id="field-event-mode" name="eventMode" class="adc-select">
+                    <option value="">— Choisir —</option>
+                    {% for mode in eventModes %}
+                        <option value="{{ mode.value|e }}">{{ mode.label() }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {# Dates de début et fin (en ligne sur 2 colonnes) #}
+            <div class="adc-form-row-2">
+                <div class="adc-field">
+                    <label class="adc-field__label" for="field-event-start">
+                        Début <span class="adc-field__required">*</span>
+                    </label>
+                    {#
+                     # type="datetime-local" → format natif du navigateur (YYYY-MM-DDTHH:MM).
+                     # On lit la valeur côté PHP avec DateTime::createFromFormat('Y-m-d\TH:i', ...).
+                     #}
+                    <input type="datetime-local"
+                           id="field-event-start"
+                           name="eventStartAt"
+                           class="adc-input"
+                           autocomplete="off">
+                </div>
+                <div class="adc-field">
+                    <label class="adc-field__label" for="field-event-end">
+                        Fin
+                    </label>
+                    <input type="datetime-local"
+                           id="field-event-end"
+                           name="eventEndAt"
+                           class="adc-input"
+                           autocomplete="off">
+                </div>
+            </div>
+
+            {#
+             # Champ lieu (présentiel) — affiché / requis si mode = PRESENTIEL
+             # Champ lien (visio)      — affiché / requis si mode = VISIO
+             # Les deux sont présents dans le DOM pour que la valeur ne soit pas
+             # perdue lors des aller-retours formulaire. Le serveur valide la logique.
+             #}
+            <div class="adc-field" id="event-location-field">
+                <label class="adc-field__label" for="field-event-location">
+                    Lieu de l'événement (adresse)
+                </label>
+                <input type="text"
+                       id="field-event-location"
+                       name="eventLocation"
+                       class="adc-input"
+                       placeholder="Ex : 12 rue de la Roquette, 75011 Paris"
+                       maxlength="255"
+                       autocomplete="off">
+            </div>
+
+            <div class="adc-field" id="event-url-field">
+                <label class="adc-field__label" for="field-event-url">
+                    Lien de connexion (visio)
+                </label>
+                <input type="url"
+                       id="field-event-url"
+                       name="eventExternalUrl"
+                       class="adc-input"
+                       placeholder="https://us02web.zoom.us/j/..."
+                       maxlength="500"
+                       autocomplete="off">
+                <span class="adc-field__help">
+                    URL Zoom, Google Meet, Jitsi, etc.
+                </span>
+            </div>
+
+            {# Capacité (nombre de places — null = illimité) #}
+            <div class="adc-field">
+                <label class="adc-field__label" for="field-capacity">
+                    Nombre de places
+                </label>
+                <input type="number"
+                       id="field-capacity"
+                       name="capacity"
+                       class="adc-input"
+                       min="1"
+                       placeholder="Ex : 30 (laisser vide = illimité)"
+                       autocomplete="off">
+                <span class="adc-field__help">
+                    Laisser vide pour un accès illimité.
+                </span>
+            </div>
+
+        </div>{# /#event-section #}
+
     </div>{# /.adc-form__body #}
 
     <div class="adc-form__footer">
@@ -344,4 +506,68 @@
 
 </form>
 
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+<script>
+/*
+ * Script minimal pour afficher/masquer la section événement selon le type sélectionné,
+ * et pour ajuster l'affichage lieu / lien selon le mode (VISIO ou PRESENTIEL).
+ *
+ * Pas de Stimulus ici : le formulaire est simple et ce JS est spécifique à cette page.
+ * On utilise addEventListener pour éviter les onclick inline (pratique recommandée).
+ */
+(function() {
+    'use strict';
+
+    var typeSelect    = document.getElementById('field-type');
+    var eventSection  = document.getElementById('event-section');
+    var modeSelect    = document.getElementById('field-event-mode');
+    var locationField = document.getElementById('event-location-field');
+    var urlField      = document.getElementById('event-url-field');
+
+    /** Met à jour la visibilité de la section événement selon le type. */
+    function updateEventSection() {
+        var isEvent = typeSelect.value === 'event';
+        /* Toggle la classe CSS is-visible pour afficher/masquer via CSS (display: flex) */
+        eventSection.classList.toggle('is-visible', isEvent);
+    }
+
+    /** Met à jour les champs lieu/lien selon le mode VISIO / PRESENTIEL. */
+    function updateEventModeFields() {
+        var mode = modeSelect.value;
+        /* On joue sur l'opacité + pointer-events pour ne pas perdre les valeurs saisies
+           (un display:none retirerait les champs du DOM et viderait les valeurs). */
+        if (mode === 'online') {
+            locationField.style.opacity = '0.4';
+            locationField.style.pointerEvents = 'none';
+            urlField.style.opacity = '1';
+            urlField.style.pointerEvents = '';
+        } else if (mode === 'in_person') {
+            locationField.style.opacity = '1';
+            locationField.style.pointerEvents = '';
+            urlField.style.opacity = '0.4';
+            urlField.style.pointerEvents = 'none';
+        } else {
+            /* Aucun mode sélectionné : les deux champs sont visibles */
+            locationField.style.opacity = '1';
+            locationField.style.pointerEvents = '';
+            urlField.style.opacity = '1';
+            urlField.style.pointerEvents = '';
+        }
+    }
+
+    /* Initialisation au chargement (au cas où le formulaire est repopulé après une erreur) */
+    updateEventSection();
+    updateEventModeFields();
+
+    /* Écouteurs de changement */
+    typeSelect.addEventListener('change', function() {
+        updateEventSection();
+        updateEventModeFields();
+    });
+    modeSelect.addEventListener('change', updateEventModeFields);
+}());
+</script>
 {% endblock %}

@@ -78,8 +78,14 @@
     </div>
 
     <div class="cp-card">
-        {# Formulaire HTML natif + token CSRF manuel (même convention que le forum) #}
-        <form method="post" action="{{ path('app_course_proposal_new') }}" novalidate>
+        {#
+         # ATTENTION — template archivé (ADR-0012 révisé, juin 2026).
+         # Ce formulaire n'est plus accessible : la route membre a été supprimée.
+         # Ce fichier est conservé pour archivage uniquement. Ne pas restaurer
+         # la route sans validation de l'équipe Bazaart.
+         # L'action pointe vers /dashboard comme fallback sûr (pas de 500 si rendu par erreur).
+         #}
+        <form method="post" action="{{ path('app_dashboard') }}" novalidate>
             <input type="hidden" name="_token" value="{{ csrf_token('course_proposal_new') }}">
 
             <div class="cp-card__body">

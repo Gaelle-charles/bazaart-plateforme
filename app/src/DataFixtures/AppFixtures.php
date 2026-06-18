@@ -6,12 +6,20 @@ namespace App\DataFixtures;
 
 use App\Entity\Article;
 use App\Entity\ArtistProfile;
+use App\Entity\Course;
+use App\Entity\CourseEnrollment;
+use App\Entity\CourseModule;
 use App\Entity\Discipline;
+use App\Entity\Lesson;
+use App\Entity\LessonProgress;
 use App\Entity\OrganizationProfile;
 use App\Entity\Resource;
 use App\Entity\ResourceType;
 use App\Entity\User;
 use App\Enum\ArticleStatus;
+use App\Enum\CourseEventMode;
+use App\Enum\CourseLevel;
+use App\Enum\CourseType;
 use App\Enum\ResourceStatus;
 use App\Enum\SubmitterRole;
 use Doctrine\Bundle\FixturesBundle\Fixture;
@@ -37,6 +45,7 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  *   4. Types de ressources (ResourceType)
  *   5. Ressources publiées (12)
  *   6. Articles publiés (3)
+ *   7. Formations (2 formations CONTENU publiées + 1 brouillon + 2 événements publiés + 1 inscription)
  */
 class AppFixtures extends Fixture
 {
@@ -80,6 +89,13 @@ class AppFixtures extends Fixture
 
         // ── Étape 6 : 3 articles publiés ─────────────────────────────────────
         $this->createArticles($manager, $adminUser, $artistUser);
+
+        // ── Étape 7 : Formations (module Formation) ───────────────────────────
+        // On passe $artistUser pour créer l'inscription de démonstration.
+        // Les users doivent déjà être persistés (flush() ci-dessus), mais ici
+        // on utilise les entités PHP qui sont déjà trackées par Doctrine — pas
+        // besoin d'un second flush avant de les référencer en relation.
+        $this->loadCourses($manager, $artistUser);
 
         // Flush final pour tout enregistrer en base
         $manager->flush();
@@ -786,5 +802,592 @@ class AppFixtures extends Fixture
         $propUpdatedAt->setValue($article3, new \DateTime('-3 days'));
 
         $manager->persist($article3);
+    }
+
+    // =========================================================================
+    // Création des formations (module Formation — CDC V3 §5.7)
+    // =========================================================================
+
+    /**
+     * Crée les formations de démonstration pour prévisualiser le module Formation.
+     *
+     * Contenu créé :
+     *   - Formation 1 "introduction-afrobeats-rythme-composition"       → PUBLIÉE, gratuite, CONTENU
+     *   - Formation 2 "cultural-engineering-projets-diaspora"           → PUBLIÉE, payante, CONTENU
+     *   - Formation 3 "creation-sonore-numerique-brouillon"             → BROUILLON, CONTENU
+     *   - Événement 4  "masterclass-composition-afrobeats-en-ligne"     → PUBLIÉE, payante, EVENEMENT VISIO
+     *   - Événement 5  "atelier-scenique-presence-scene-paris"          → PUBLIÉE, gratuite, EVENEMENT PRESENTIEL
+     *   - Inscription de artiste@bazaart.fr à la Formation 1
+     *   - LessonProgress sur la première leçon de la Formation 1
+     *   - Inscription de artiste@bazaart.fr à l'Événement PRESENTIEL gratuit (dashboard Phase 2)
+     *
+     * Pourquoi utiliser addModule() / addLesson() plutôt que setModule() direct ?
+     * Ces méthodes synchronisent les DEUX côtés de la relation (owning side +
+     * inverse side) en une seule opération. Si on appelait seulement
+     * $module->setCourse($course), la collection $course->modules ne serait pas
+     * mise à jour en mémoire — ce qui causerait des bugs lors des itérations
+     * Twig ou des recalculs en PHP (même si la BDD resterait correcte grâce
+     * aux FK).
+     *
+     * Pourquoi pas de flush() intermédiaire ici ?
+     * Course a cascade: ['persist'] sur ses modules, et CourseModule a
+     * cascade: ['persist'] sur ses leçons. Un seul $manager->persist($course)
+     * suffit pour propager la persistance à toute la hiérarchie.
+     * Le flush() global dans load() finalisera tout en une seule transaction.
+     */
+    private function loadCourses(ObjectManager $manager, User $artistUser): void
+    {
+        // ── Formation 1 : Introduction à l'Afrobeats (PUBLIÉE, gratuite) ──────
+        //
+        // Cette formation sert à prévisualiser le catalogue public (/formations),
+        // la page de vente (/formations/{slug}), et le parcours apprenant
+        // (/formations/{slug}/learn) car c'est elle qui reçoit l'inscription.
+
+        $courseAfrobeats = new Course();
+        $courseAfrobeats
+            ->setSlug('introduction-afrobeats-rythme-composition')
+            ->setTitle('Introduction à l\'Afrobeats : rythme et composition')
+            ->setSubtitle('Apprenez les bases des percussions et de la production afrobeats en 4 semaines')
+            ->setDescription(
+                "L'afrobeats est bien plus qu'un genre musical — c'est un langage culturel global, "
+                . "né au Nigeria dans les années 2000, qui mêle rythmes traditionnels yoruba, highlife "
+                . "ghanéen, coupures R&B et productions électroniques modernes. "
+                . "Cette formation vous introduit aux fondamentaux rythmiques et compositionnels "
+                . "qui font la signature sonore de l'afrobeats.\n\n"
+                . "Au programme : décryptage des rythmes de base (pattern 4/4, swung 8ths, "
+                . "polyrhythmie), introduction aux instruments clés (talking drum, shekere, congas), "
+                . "initiation à la production sur DAW (Ableton Live / FL Studio), "
+                . "et analyse de productions d'artistes comme Burna Boy, Wizkid et Davido.\n\n"
+                . "Aucune connaissance musicale préalable n'est requise. La formation est accessible "
+                . "aux artistes pluridisciplinaires, aux producteurs débutants et à toute personne "
+                . "souhaitant comprendre les mécanismes culturels de ce mouvement musical."
+            )
+            // Pas d'image de couverture en fixtures : null est accepté (nullable: true)
+            ->setCoverImage(null)
+            // URL de teaser : on utilise un embed YouTube public pour les fixtures
+            // (pas de Bunny Stream configuré en local)
+            ->setTrailerVideoUrl('https://www.youtube.com/embed/example-afrobeats-teaser')
+            ->setInstructorName('Kofi Mensah')
+            ->setInstructorBio(
+                'Producteur et percussionniste ghanéen basé à Paris depuis 2014. '
+                . 'Kofi a collaboré avec plus de 40 artistes de la scène afrobeats européenne. '
+                . 'Formateur régulier aux ateliers du Pôle Studio Bazaart.'
+            )
+            ->setInstructorAvatar(null)
+            // Durée totale : 4 modules × 3 leçons × ~15 min = ~180 min
+            // (valeur calculée manuellement ici pour les fixtures, sinon
+            //  CourseService::recalculateDuration() le ferait automatiquement)
+            ->setDurationMinutesTotal(185)
+            ->setLevel(CourseLevel::BEGINNER)
+            // Formation gratuite en V1 : priceInCents = null → getFormattedPrice() retourne "Gratuit"
+            ->setPriceInCents(null)
+            ->setIsPublished(true)
+            // publishedAt = date de la première publication (simulée il y a 10 jours)
+            ->setPublishedAt(new \DateTime('-10 days'));
+
+        // ── Module 1 : Histoire et origines de l'afrobeats ──────────────────
+        $moduleAfro1 = new CourseModule();
+        $moduleAfro1
+            ->setTitle('Histoire et origines de l\'afrobeats')
+            ->setDescription(
+                'Comprendre les racines culturelles pour mieux appréhender le son : '
+                . 'du highlife nigérian des années 60 à Fela Kuti, jusqu\'à l\'explosion mondiale.'
+            )
+            ->setOrderPosition(0);
+
+        // Leçon 1.1 : Disponible en aperçu gratuit (isFreePreview = true)
+        // → permet aux visiteurs non inscrits de voir un extrait du contenu
+        $lessonAfro1_1 = new Lesson();
+        $lessonAfro1_1
+            ->setTitle('Des racines africaines au Lagos Sound')
+            ->setDescription(
+                'Panorama historique : highlife, jùjú music, afrobeat de Fela Kuti '
+                . '— comment ces genres ont posé les bases de l\'afrobeats moderne.'
+            )
+            // videoBunnyId null car pas de compte Bunny Stream configuré en local.
+            // En production, ce serait l'UUID de la vidéo uploadée sur Bunny Stream.
+            ->setVideoBunnyId(null)
+            // En attendant Bunny Stream, on utilise une URL YouTube embed
+            ->setVideoUrl('https://www.youtube.com/embed/placeholder-lecon-1-1')
+            ->setDurationSeconds(780)   // 13 minutes
+            ->setOrderPosition(0)
+            // isFreePreview = true → accessible sans inscription (teaser)
+            ->setIsFreePreview(true);
+
+        // Leçon 1.2 : Réservée aux inscrits
+        $lessonAfro1_2 = new Lesson();
+        $lessonAfro1_2
+            ->setTitle('Fela Kuti et la naissance de l\'afrobeat')
+            ->setDescription(
+                'L\'héritage de Fela Anikulapo Kuti : comment son afrobeat "avec un e" '
+                . 'diffère de l\'afrobeats "avec un s" contemporain.'
+            )
+            ->setVideoBunnyId(null)
+            ->setVideoUrl('https://www.youtube.com/embed/placeholder-lecon-1-2')
+            ->setDurationSeconds(960)   // 16 minutes
+            ->setOrderPosition(1)
+            ->setIsFreePreview(false);
+
+        // Leçon 1.3 : Réservée aux inscrits
+        $lessonAfro1_3 = new Lesson();
+        $lessonAfro1_3
+            ->setTitle('L\'explosion mondiale : de Lagos à Londres')
+            ->setDescription(
+                'Comment Wizkid, Davido et Burna Boy ont exporté le son nigérian '
+                . 'sur les charts européens et américains dans les années 2010–2020.'
+            )
+            ->setVideoBunnyId(null)
+            ->setVideoUrl('https://www.youtube.com/embed/placeholder-lecon-1-3')
+            ->setDurationSeconds(840)   // 14 minutes
+            ->setOrderPosition(2)
+            ->setIsFreePreview(false);
+
+        // On attache les leçons au module via addLesson() qui synchronise les deux côtés
+        $moduleAfro1->addLesson($lessonAfro1_1);
+        $moduleAfro1->addLesson($lessonAfro1_2);
+        $moduleAfro1->addLesson($lessonAfro1_3);
+
+        // ── Module 2 : Rythme et percussions ────────────────────────────────
+        $moduleAfro2 = new CourseModule();
+        $moduleAfro2
+            ->setTitle('Rythme et percussions afrobeats')
+            ->setDescription(
+                'Décryptage des patterns rythmiques qui caractérisent le son afrobeats : '
+                . 'du 4/4 swingué aux polyrhythmies, en passant par les instruments traditionnels.'
+            )
+            ->setOrderPosition(1);
+
+        $lessonAfro2_1 = new Lesson();
+        $lessonAfro2_1
+            ->setTitle('Le pattern de base : 4/4 et swung 8ths')
+            ->setDescription(
+                'Comprendre pourquoi l\'afrobeats "groove" : analyse du swing, '
+                . 'de la syncope et du décalage rythmique par rapport à la house ou au hip-hop.'
+            )
+            ->setVideoBunnyId(null)
+            ->setVideoUrl('https://www.youtube.com/embed/placeholder-lecon-2-1')
+            ->setDurationSeconds(1020)  // 17 minutes
+            ->setOrderPosition(0)
+            ->setIsFreePreview(false);
+
+        $lessonAfro2_2 = new Lesson();
+        $lessonAfro2_2
+            ->setTitle('Shekere, talking drum et congas : les instruments clés')
+            ->setDescription(
+                'Introduction pratique aux instruments de percussion traditionnels '
+                . 'et à leur rôle dans une production afrobeats moderne.'
+            )
+            ->setVideoBunnyId(null)
+            ->setVideoUrl('https://www.youtube.com/embed/placeholder-lecon-2-2')
+            ->setDurationSeconds(1200)  // 20 minutes
+            ->setOrderPosition(1)
+            ->setIsFreePreview(false);
+
+        $lessonAfro2_3 = new Lesson();
+        $lessonAfro2_3
+            ->setTitle('Polyrhythmie : superposer plusieurs rythmes')
+            ->setDescription(
+                'Exercice pratique : construire une grille rythmique à plusieurs couches '
+                . 'en combinant kick, snare, hi-hat et percussions africaines.'
+            )
+            ->setVideoBunnyId(null)
+            ->setVideoUrl('https://www.youtube.com/embed/placeholder-lecon-2-3')
+            ->setDurationSeconds(1080)  // 18 minutes
+            ->setOrderPosition(2)
+            ->setIsFreePreview(false);
+
+        $moduleAfro2->addLesson($lessonAfro2_1);
+        $moduleAfro2->addLesson($lessonAfro2_2);
+        $moduleAfro2->addLesson($lessonAfro2_3);
+
+        // On attache les modules à la formation via addModule() qui synchronise
+        // la relation Course ↔ CourseModule (les deux côtés restent cohérents en mémoire)
+        $courseAfrobeats->addModule($moduleAfro1);
+        $courseAfrobeats->addModule($moduleAfro2);
+
+        // persist() sur la Course suffit : cascade: ['persist'] sur modules et leçons
+        // propagera automatiquement la persistance à toute la hiérarchie
+        $manager->persist($courseAfrobeats);
+
+        // ── Formation 2 : Cultural Engineering (PUBLIÉE, payante) ────────────
+        //
+        // Cette formation représente une offre premium du Pôle Lab Bazaart.
+        // Elle est publiée mais payante (priceInCents = 4900 → 49,00€).
+        // En V1 Stripe n'est pas encore intégré, donc le paiement n'est pas
+        // fonctionnel — mais les fixtures testent que le champ est bien stocké.
+
+        $courseCE = new Course();
+        $courseCE
+            ->setSlug('cultural-engineering-projets-diaspora')
+            ->setTitle('Cultural Engineering : monter et piloter un projet culturel diaspora')
+            ->setSubtitle('De l\'idée au financement : méthodes et outils du Pôle Lab Bazaart')
+            ->setDescription(
+                "Le cultural engineering est la discipline qui permet de concevoir, financer "
+                . "et déployer des projets culturels de manière structurée et durable. "
+                . "Cette formation s\'appuie sur l\'expérience concrète du Pôle Lab Bazaart "
+                . "et de ses partenaires pour vous donner les outils pratiques du secteur.\n\n"
+                . "Contenu : identification des porteurs de projets et partenaires institutionnels, "
+                . "modèles économiques hybrides (subventions + autofinancement + mécénat), "
+                . "rédaction de dossiers de subvention convaincants, gestion de projet culturel "
+                . "(planning, budget, équipe), et stratégies de communication pour les artistes "
+                . "et collectifs de la diaspora afro-atlantique.\n\n"
+                . "Cette formation est conçue pour les artistes souhaitant professionnaliser "
+                . "leur démarche, les responsables de structures culturelles en développement, "
+                . "et toute personne impliquée dans l\'accompagnement de projets artistiques."
+            )
+            ->setCoverImage(null)
+            ->setTrailerVideoUrl('https://www.youtube.com/embed/example-ce-teaser')
+            ->setInstructorName('Gaëlle Charles-Belamour')
+            ->setInstructorBio(
+                'Co-fondatrice du Pôle Lab chez Bazaart, Gaëlle accompagne des artistes '
+                . 'et collectifs culturels depuis 2019 dans la structuration de leurs projets. '
+                . 'Diplômée en gestion des organisations culturelles (Paris-Sorbonne).'
+            )
+            ->setInstructorAvatar(null)
+            ->setDurationMinutesTotal(240)
+            ->setLevel(CourseLevel::INTERMEDIATE)
+            // Formation payante : 49,00€ (4900 centimes)
+            // Stripe n'est pas intégré en V1 — le champ est stocké pour la V2
+            ->setPriceInCents(4900)
+            ->setIsPublished(true)
+            ->setPublishedAt(new \DateTime('-5 days'));
+
+        // ── Module CE-1 : Comprendre l'écosystème culturel ──────────────────
+        $moduleCE1 = new CourseModule();
+        $moduleCE1
+            ->setTitle('L\'écosystème culturel en France et en Europe')
+            ->setDescription(
+                'Cartographie des acteurs : ministères, DRAC, collectivités, fondations, '
+                . 'opérateurs culturels — qui finance quoi, comment et pourquoi.'
+            )
+            ->setOrderPosition(0);
+
+        $lessonCE1_1 = new Lesson();
+        $lessonCE1_1
+            ->setTitle('Panorama du financement public de la culture')
+            ->setDescription(
+                'MCC, DRAC, CNM, CNC, CNAP : les grands opérateurs publics et '
+                . 'leurs dispositifs de soutien aux artistes et aux structures.'
+            )
+            ->setVideoBunnyId(null)
+            ->setVideoUrl('https://www.youtube.com/embed/placeholder-ce-1-1')
+            ->setDurationSeconds(1320)  // 22 minutes
+            ->setOrderPosition(0)
+            // Leçon de présentation accessible gratuitement pour attirer les inscrits
+            ->setIsFreePreview(true);
+
+        $lessonCE1_2 = new Lesson();
+        $lessonCE1_2
+            ->setTitle('Mécénat privé et fondations : trouver les bons interlocuteurs')
+            ->setDescription(
+                'Fondation de France, fondations d\'entreprises, crowdfunding culturel : '
+                . 'identifier et approcher les financeurs privés adaptés à votre projet.'
+            )
+            ->setVideoBunnyId(null)
+            ->setVideoUrl('https://www.youtube.com/embed/placeholder-ce-1-2')
+            ->setDurationSeconds(1140)  // 19 minutes
+            ->setOrderPosition(1)
+            ->setIsFreePreview(false);
+
+        $moduleCE1->addLesson($lessonCE1_1);
+        $moduleCE1->addLesson($lessonCE1_2);
+
+        // ── Module CE-2 : Rédiger un dossier de subvention ──────────────────
+        $moduleCE2 = new CourseModule();
+        $moduleCE2
+            ->setTitle('Rédiger un dossier de subvention convaincant')
+            ->setDescription(
+                'Méthode pas à pas pour construire un dossier de demande de subvention '
+                . 'qui répond exactement aux attentes des commissions de sélection.'
+            )
+            ->setOrderPosition(1);
+
+        $lessonCE2_1 = new Lesson();
+        $lessonCE2_1
+            ->setTitle('Anatomie d\'un bon dossier : les éléments incontournables')
+            ->setDescription(
+                'Note d\'intention, budget prévisionnel, CV artistique, portfolio : '
+                . 'analyse de dossiers réels (anonymisés) acceptés et refusés.'
+            )
+            ->setVideoBunnyId(null)
+            ->setVideoUrl('https://www.youtube.com/embed/placeholder-ce-2-1')
+            ->setDurationSeconds(1500)  // 25 minutes
+            ->setOrderPosition(0)
+            ->setIsFreePreview(false);
+
+        $lessonCE2_2 = new Lesson();
+        $lessonCE2_2
+            ->setTitle('Formuler un budget prévisionnel réaliste')
+            ->setDescription(
+                'Comment estimer les coûts d\'un projet culturel, anticiper les imprévus '
+                . 'et présenter un budget crédible aux financeurs institutionnels.'
+            )
+            ->setVideoBunnyId(null)
+            ->setVideoUrl('https://www.youtube.com/embed/placeholder-ce-2-2')
+            ->setDurationSeconds(1380)  // 23 minutes
+            ->setOrderPosition(1)
+            ->setIsFreePreview(false);
+
+        $lessonCE2_3 = new Lesson();
+        $lessonCE2_3
+            ->setTitle('Adapter son dossier à chaque interlocuteur')
+            ->setDescription(
+                'Un même projet, plusieurs dossiers : personnaliser le discours selon '
+                . 'que l\'on s\'adresse à une DRAC, une fondation privée ou un mécène d\'entreprise.'
+            )
+            ->setVideoBunnyId(null)
+            ->setVideoUrl('https://www.youtube.com/embed/placeholder-ce-2-3')
+            ->setDurationSeconds(960)   // 16 minutes
+            ->setOrderPosition(2)
+            ->setIsFreePreview(false);
+
+        $moduleCE2->addLesson($lessonCE2_1);
+        $moduleCE2->addLesson($lessonCE2_2);
+        $moduleCE2->addLesson($lessonCE2_3);
+
+        $courseCE->addModule($moduleCE1);
+        $courseCE->addModule($moduleCE2);
+
+        $manager->persist($courseCE);
+
+        // ── Formation 3 : Création sonore numérique (BROUILLON) ───────────────
+        //
+        // Formation en cours de construction, isPublished = false.
+        // Elle doit :
+        //   - NE PAS apparaître dans le catalogue public (/formations)
+        //   - APPARAÎTRE dans le back-office admin (/admin/formations)
+        //
+        // Contenu intentionnellement incomplet (1 module, 1 leçon) pour simuler
+        // une formation "en cours de rédaction" réaliste.
+
+        $courseDraft = new Course();
+        $courseDraft
+            ->setSlug('creation-sonore-numerique-brouillon')
+            ->setTitle('Création sonore numérique pour artistes visuels')
+            ->setSubtitle('Initiation à l\'ambiance sonore, au sound design et au montage audio pour vos œuvres')
+            ->setDescription(
+                "Vous êtes plasticien, vidéaste ou installateur et vous souhaitez intégrer "
+                . "une dimension sonore à vos œuvres sans avoir de formation musicale ? "
+                . "Cette formation vous donne les outils pratiques pour composer des ambiances "
+                . "sonores, enregistrer des sons du quotidien et les assembler dans un logiciel "
+                . "de montage audio accessible (Audacity, Reaper).\n\n"
+                . "[Formation en cours de préparation — contenu à compléter avant publication]"
+            )
+            ->setCoverImage(null)
+            ->setTrailerVideoUrl(null)
+            ->setInstructorName('À définir')
+            ->setInstructorBio(null)
+            ->setInstructorAvatar(null)
+            ->setDurationMinutesTotal(null)  // Durée inconnue, formation incomplète
+            ->setLevel(CourseLevel::BEGINNER)
+            ->setPriceInCents(null)
+            // isPublished = false → brouillon, invisible dans le catalogue public
+            ->setIsPublished(false)
+            // publishedAt = null → jamais publiée
+            ->setPublishedAt(null);
+
+        // Module unique (brouillon incomplet)
+        $moduleDraft1 = new CourseModule();
+        $moduleDraft1
+            ->setTitle('Introduction : qu\'est-ce que le sound design ?')
+            ->setDescription('Module introductif — contenu à compléter.')
+            ->setOrderPosition(0);
+
+        // Leçon unique (titre provisoire)
+        $lessonDraft1_1 = new Lesson();
+        $lessonDraft1_1
+            ->setTitle('[À compléter] Le son dans l\'art contemporain')
+            ->setDescription('Leçon en cours de rédaction.')
+            ->setVideoBunnyId(null)
+            ->setVideoUrl(null)          // Pas encore de vidéo associée
+            ->setDurationSeconds(null)   // Durée inconnue
+            ->setOrderPosition(0)
+            ->setIsFreePreview(false);
+
+        $moduleDraft1->addLesson($lessonDraft1_1);
+        $courseDraft->addModule($moduleDraft1);
+
+        $manager->persist($courseDraft);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // ── Événement 1 : Masterclass Composition Afrobeats (VISIO, payant) ──
+        //
+        // Démontre le nouveau type EVENEMENT avec mode VISIO.
+        // Publié, payant (3900 centimes = 39,00€), capacité limitée à 30 places.
+        // Date dans le futur pour qu'il apparaisse comme "à venir".
+        // Slug : "masterclass-composition-afrobeats-en-ligne"
+
+        $eventVisio = new Course();
+        $eventVisio
+            ->setSlug('masterclass-composition-afrobeats-en-ligne')
+            ->setTitle('Masterclass : Composer un titre Afrobeats de A à Z')
+            ->setSubtitle('Session live en ligne — Zoom — avec Kofi Mensah')
+            ->setDescription(
+                "Rejoignez Kofi Mensah pour une masterclass intensive en ligne. "
+                . "En 3 heures, vous apprendrez à construire un titre afrobeats complet "
+                . "depuis le beat initial jusqu'au mixage final.\n\n"
+                . "Au programme :\n"
+                . "— Construction d'un beat afrobeats (pattern, percussions, bass)\n"
+                . "— Arrangement des parties (intro, couplet, refrain, outro)\n"
+                . "— Mixage basique sur Ableton Live / FL Studio\n"
+                . "— Session Q&A de 45 minutes\n\n"
+                . "Prérequis : avoir suivi \"Introduction à l'Afrobeats\" ou équivalent. "
+                . "Un DAW (Ableton ou FL Studio) installé sur votre ordinateur est recommandé."
+            )
+            ->setCoverImage(null)
+            ->setTrailerVideoUrl(null)
+            ->setInstructorName('Kofi Mensah')
+            ->setInstructorBio(
+                'Producteur et percussionniste ghanéen basé à Paris depuis 2014. '
+                . 'Kofi a collaboré avec plus de 40 artistes de la scène afrobeats européenne.'
+            )
+            ->setInstructorAvatar(null)
+            ->setLevel(CourseLevel::INTERMEDIATE)
+            // Payant : 39,00€ (3900 centimes). Stripe non intégré en V1 — champ stocké pour V2.
+            ->setPriceInCents(3900)
+            // ── Champs spécifiques EVENEMENT ──────────────────────────────────
+            ->setType(CourseType::EVENEMENT)
+            ->setEventMode(CourseEventMode::VISIO)
+            // Date dans le futur : +30 jours depuis le chargement des fixtures
+            ->setEventStartAt(new \DateTime('+30 days 14:00:00'))
+            ->setEventEndAt(new \DateTime('+30 days 17:00:00'))
+            ->setEventLocation(null)  // Pas d'adresse physique pour une visio
+            ->setEventExternalUrl('https://us02web.zoom.us/j/85012345678?pwd=EXAMPLE_FIXTURES_URL')
+            ->setCapacity(30)    // 30 places max — réaliste pour une masterclass interactive
+            ->setIsPublished(true)
+            ->setPublishedAt(new \DateTime('-3 days'));
+
+        $manager->persist($eventVisio);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // ── Événement 2 : Atelier scénique présentiel (PRESENTIEL, gratuit) ──
+        //
+        // Démontre le type EVENEMENT avec mode PRESENTIEL.
+        // Gratuit (priceInCents = null), capacité 20 places.
+        // Organisé à Paris dans 45 jours.
+        // Slug : "atelier-scenique-presence-scene-paris"
+
+        $eventPresentiel = new Course();
+        $eventPresentiel
+            ->setSlug('atelier-scenique-presence-scene-paris')
+            ->setTitle('Atelier : Présence scénique et performance live pour artistes diaspora')
+            ->setSubtitle('Atelier pratique en présentiel — Paris 11e — gratuit')
+            ->setDescription(
+                "Cet atelier pratique explore les techniques de présence scénique "
+                . "adaptées aux artistes de la diaspora afro-atlantique. "
+                . "Dirigé par la coach scénique Nadia Kouakou, il combine exercices "
+                . "de théâtre physique, improvisation musicale et analyse de performances "
+                . "de référence (Burna Boy, Yemi Alade, Angélique Kidjo).\n\n"
+                . "Format : atelier en demi-journée (9h–13h), groupe de 20 participants max.\n\n"
+                . "Ce que vous repartirez avec :\n"
+                . "— Techniques de placement scénique et gestion du trac\n"
+                . "— Exercices de connexion avec le public\n"
+                . "— Retour individualisé sur votre présence\n\n"
+                . "Gratuit, ouvert aux membres et non-membres Bazaart.\n"
+                . "Inscription obligatoire (places limitées)."
+            )
+            ->setCoverImage(null)
+            ->setTrailerVideoUrl(null)
+            ->setInstructorName('Nadia Kouakou')
+            ->setInstructorBio(
+                'Coach scénique et metteuse en scène. '
+                . 'Travaille avec des artistes francophones et anglophones d\'Afrique subsaharienne '
+                . 'depuis 2017. Partenaire régulière du Pôle Lab Bazaart.'
+            )
+            ->setInstructorAvatar(null)
+            ->setLevel(CourseLevel::BEGINNER)
+            // Gratuit : priceInCents = null → getFormattedPrice() retourne "Gratuit"
+            ->setPriceInCents(null)
+            // ── Champs spécifiques EVENEMENT ──────────────────────────────────
+            ->setType(CourseType::EVENEMENT)
+            ->setEventMode(CourseEventMode::PRESENTIEL)
+            // Dans 45 jours, matin (9h–13h)
+            ->setEventStartAt(new \DateTime('+45 days 09:00:00'))
+            ->setEventEndAt(new \DateTime('+45 days 13:00:00'))
+            // Adresse réelle fictive dans le 11e arrondissement de Paris
+            ->setEventLocation('12 rue de la Roquette, 75011 Paris')
+            ->setEventExternalUrl(null)  // Pas de lien visio pour un événement présentiel
+            ->setCapacity(20)    // Atelier pratique en petit groupe — 20 places max
+            ->setIsPublished(true)
+            ->setPublishedAt(new \DateTime('-1 day'));
+
+        $manager->persist($eventPresentiel);
+
+        // ── Inscription de artiste@bazaart.fr à la Formation 1 ───────────────
+        //
+        // Permet de prévisualiser le parcours apprenant :
+        //   /formations/introduction-afrobeats-rythme-composition/learn
+        //
+        // CourseEnrollment.enrolledAt est initialisé par PrePersist (pas de setEnrolledAt),
+        // donc on n'a pas besoin de le renseigner explicitement.
+
+        $enrollment = new CourseEnrollment();
+        $enrollment
+            ->setUser($artistUser)
+            ->setCourse($courseAfrobeats)
+            // 25% de progression simulée : l'artiste a commencé la formation
+            // (valeur stockée dénormalisée — cf. commentaire de l'entité CourseEnrollment)
+            ->setProgressPercent(25);
+
+        $manager->persist($enrollment);
+
+        // ── Inscription de artiste@bazaart.fr à l'Événement PRESENTIEL gratuit ─
+        //
+        // Permet de prévisualiser le dashboard membre avec la section
+        // « Mes formations & événements à venir » (ADR-0014 Phase 2).
+        //
+        // L'atelier présentiel (atelier-scenique-presence-scene-paris) est gratuit
+        // et dans 45 jours → il apparaîtra dans la section du dashboard.
+        // On pourra voir :
+        //   - Le bloc calendrier avec la date
+        //   - Le mode "Présentiel" + l'adresse complète révélée (accès dashboard)
+        //   - Le bouton "Voir la fiche"
+        //
+        // On ne crée PAS d'inscription à l'événement VISIO payant (eventVisio)
+        // car il faudrait simuler un paiement Stripe, ce qui sort du périmètre fixtures.
+
+        $enrollmentEvent = new CourseEnrollment();
+        $enrollmentEvent
+            ->setUser($artistUser)
+            ->setCourse($eventPresentiel)
+            // Pour un événement, progressPercent n'a pas de sens métier (pas de leçons),
+            // mais l'entité requiert un int — on garde 0 par défaut.
+            ->setProgressPercent(0);
+
+        $manager->persist($enrollmentEvent);
+
+        // ── LessonProgress sur la première leçon (leçon 1.1) ────────────────
+        //
+        // On simule que l'apprenant a démarré et terminé la leçon 1.1,
+        // et s'est arrêté en plein milieu de la leçon 1.2.
+        //
+        // Cela permet de tester :
+        //   - l'affichage du checkmark "leçon terminée" (leçon 1.1)
+        //   - la reprise de lecture à lastPositionSeconds (leçon 1.2)
+        //   - le calcul de progression (progressPercent = 25% ≈ 1 leçon sur 6 terminée)
+
+        // Progression sur la leçon 1.1 : TERMINÉE
+        $progress1 = new LessonProgress();
+        $progress1
+            ->setEnrollment($enrollment)
+            ->setLesson($lessonAfro1_1)
+            ->setStartedAt(new \DateTime('-8 days'))
+            ->setCompletedAt(new \DateTime('-8 days'))
+            ->setLastPositionSeconds(780); // Position = durée totale → vidéo vue en entier
+
+        $manager->persist($progress1);
+
+        // Progression sur la leçon 1.2 : COMMENCÉE, non terminée
+        // L'apprenant s'est arrêté à 4 min 42 sec (282 secondes)
+        $progress2 = new LessonProgress();
+        $progress2
+            ->setEnrollment($enrollment)
+            ->setLesson($lessonAfro1_2)
+            ->setStartedAt(new \DateTime('-7 days'))
+            // completedAt = null → leçon commencée mais pas terminée
+            ->setCompletedAt(null)
+            ->setLastPositionSeconds(282); // Reprise à 4:42
+
+        $manager->persist($progress2);
     }
 }

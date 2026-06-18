@@ -9,6 +9,7 @@ use App\Entity\Lesson;
 use App\Repository\CourseRepository;
 use App\Repository\LessonProgressRepository;
 use App\Service\CourseService;
+use App\Service\EventRegistrationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -47,6 +48,7 @@ class CourseController extends AbstractController
      */
     public function __construct(
         private readonly CourseService            $courseService,
+        private readonly EventRegistrationService $eventRegistrationService,
         private readonly CourseRepository         $courseRepository,
         private readonly LessonProgressRepository $progressRepository,
         private readonly EntityManagerInterface   $em,
@@ -115,28 +117,47 @@ class CourseController extends AbstractController
             $isEnrolled = ($enrollment !== null);
         }
 
+        // ── Données supplémentaires pour les événements ──────────────────────
+        // Pour une formation EVENEMENT, on calcule le nombre de places restantes
+        // via un COUNT SQL (et non via la collection en mémoire — cf. Phase 1 N+1).
+        // seatsRemaining = null si capacité illimitée, 0 si complet, int si places dispo.
+        $seatsRemaining = null;
+        if ($course->isEvent()) {
+            $seatsRemaining = $this->eventRegistrationService->getSeatsRemaining($course);
+        }
+
         return $this->render('course/show.html.twig', [
-            'course'     => $course,
-            'isEnrolled' => $isEnrolled,
-            'enrollment' => $enrollment,
+            'course'          => $course,
+            'isEnrolled'      => $isEnrolled,
+            'enrollment'      => $enrollment,
+            // Uniquement peuplé pour les formations EVENEMENT :
+            'seatsRemaining'  => $seatsRemaining,
         ]);
     }
 
     // ─── Inscription ─────────────────────────────────────────────────────────
 
     /**
-     * POST /formations/{slug}/enroll — Inscription à une formation.
+     * POST /formations/{slug}/enroll — Inscription à une formation ou un événement.
      *
      * Requiert d'être authentifié (IS_AUTHENTICATED_FULLY).
      * Vérifie le token CSRF pour protéger contre les requêtes forgées.
      *
-     * Flux :
-     *   1. Vérifier le token CSRF
-     *   2. Récupérer la formation publiée
-     *   3. Appeler CourseService::enrollUser()
-     *   4. Rediriger vers l'espace apprenant avec flash "success"
+     * Flux selon le type de formation :
      *
-     * En cas d'erreur (doublon, token invalide) : flash "error" + redirect show.
+     *   CONTENU gratuit :
+     *     → CourseService::enrollUser() + redirect /learn
+     *
+     *   EVENEMENT gratuit (priceInCents = null ou 0) :
+     *     → EventRegistrationService::registerForEvent() + flash success + redirect dashboard
+     *       (contrôle capacité + anti-doublon + email de confirmation)
+     *
+     *   EVENEMENT payant (priceInCents > 0) :
+     *     → Redirect vers POST /formations/{slug}/payer (CoursePaymentController::pay)
+     *       On n'initie pas le checkout ici pour respecter la séparation des responsabilités.
+     *       Le contrôle de capacité est effectué AVANT d'initier le checkout dans pay().
+     *
+     * En cas d'erreur (doublon, token invalide, complet) : flash "error" + redirect show.
      */
     #[Route('/{slug}/enroll', name: 'enroll', methods: ['POST'])]
     #[IsGranted('IS_AUTHENTICATED_FULLY')]
@@ -161,6 +182,56 @@ class CourseController extends AbstractController
         /** @var \App\Entity\User $user */
         $user = $this->getUser();
 
+        // ── Dispatch selon le type de formation ───────────────────────────────
+        if ($course->isEvent()) {
+            // ── Cas 1 : Événement PAYANT ──────────────────────────────────────
+            // Si l'événement a un prix > 0, on redirige vers le flux Stripe.
+            // CoursePaymentController::pay() gère le contrôle de capacité AVANT
+            // de lancer la session Checkout.
+            if ($course->getPriceInCents() !== null && $course->getPriceInCents() > 0) {
+                // On redirige en POST vers la route de paiement.
+                // Comme on ne peut pas faire un redirect POST direct en HTTP,
+                // on passe par un redirect GET vers la page de détail avec un paramètre
+                // qui déclenche le formulaire de paiement côté client.
+                // Solution propre : soumettre directement le formulaire de paiement dans
+                // show.html.twig (les deux formulaires — inscription gratuite ET paiement —
+                // sont distincts dans le template). Ce cas ne devrait pas arriver en pratique
+                // car le template show.html.twig affiche le formulaire de PAIEMENT (pas enroll)
+                // pour les événements payants. Si l'utilisateur arrive ici par erreur,
+                // on redirige vers la page de détail.
+                $this->addFlash('info', 'Cet événement est payant. Veuillez utiliser le bouton de paiement.');
+                return $this->redirectToRoute('app_course_show', ['slug' => $slug]);
+            }
+
+            // ── Cas 2 : Événement GRATUIT ─────────────────────────────────────
+            // Inscription directe après contrôle de capacité + anti-doublon.
+            try {
+                $this->eventRegistrationService->registerForEvent($course, $user);
+                $this->addFlash(
+                    'success',
+                    sprintf(
+                        'Inscription confirmée ! Retrouvez l\'accès à "%s" dans votre tableau de bord.',
+                        $course->getTitle(),
+                    )
+                );
+            } catch (\RuntimeException $e) {
+                // EventRegistrationService::createEventFullException() lève RuntimeException
+                // si l'événement est complet
+                $this->addFlash('error', $e->getMessage());
+                return $this->redirectToRoute('app_course_show', ['slug' => $slug]);
+            } catch (\LogicException $e) {
+                // \LogicException = double inscription (utilisateur déjà inscrit)
+                $this->addFlash('error', $e->getMessage());
+                return $this->redirectToRoute('app_course_show', ['slug' => $slug]);
+            }
+
+            // Après inscription à un événement, on redirige vers le dashboard
+            // (et non vers /learn qui n'a pas de sens pour un événement).
+            // C'est là que l'utilisateur retrouvera le lien/adresse (ADR-0014 §4).
+            return $this->redirectToRoute('app_dashboard');
+        }
+
+        // ── Cas 3 : Formation CONTENU (comportement existant inchangé) ────────
         try {
             // Délégation au service — toute la logique est là
             $this->courseService->enrollUser($course, $user);

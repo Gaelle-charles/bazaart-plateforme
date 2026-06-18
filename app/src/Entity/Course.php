@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
+use App\Enum\CourseEventMode;
 use App\Enum\CourseLevel;
+use App\Enum\CourseType;
 use App\Repository\CourseRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -184,6 +186,102 @@ class Course
      */
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $stripePriceId = null;
+
+    // ─── Type de formation et champs événement ────────────────────────────────
+
+    /**
+     * Type de la formation : CONTENU (modules/leçons) ou EVENEMENT (visio/présentiel).
+     *
+     * NOT NULL avec valeur par défaut 'content' : toutes les formations existantes
+     * au moment de la migration deviennent automatiquement de type CONTENU sans
+     * qu'aucune donnée ne soit perdue.
+     *
+     * Ce champ gouverne l'affichage du formulaire admin :
+     *   - CONTENU   → sections modules et leçons visibles
+     *   - EVENEMENT → section événement (dates, mode, lieu/lien, capacité) visible
+     *
+     * Doctrine stocke la valeur backing string : 'content' ou 'event'.
+     * enumType: CourseType::class indique à Doctrine de reconstruire l'enum à la lecture.
+     */
+    #[ORM\Column(type: 'string', length: 20, enumType: CourseType::class, options: ['default' => 'content'])]
+    private CourseType $type = CourseType::CONTENU;
+
+    /**
+     * Mode de l'événement (uniquement pour type EVENEMENT) : VISIO ou PRESENTIEL.
+     *
+     * nullable: true — ce champ n'a de sens que pour les formations-événements.
+     * Pour les formations de type CONTENU, il restera toujours null.
+     *
+     * La validation métier (CourseEventValidationService) vérifie que ce champ
+     * est renseigné lorsque type = EVENEMENT.
+     */
+    #[ORM\Column(type: 'string', length: 20, enumType: CourseEventMode::class, nullable: true)]
+    private ?CourseEventMode $eventMode = null;
+
+    /**
+     * Date et heure de début de l'événement.
+     *
+     * nullable: true — optionnel pour les formations CONTENU, attendu pour EVENEMENT.
+     * Stocké en UTC en base (DateTime sans timezone) — afficher en heure locale côté Twig.
+     *
+     * Règle de cohérence : eventStartAt doit être avant eventEndAt (vérifié en validation).
+     */
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $eventStartAt = null;
+
+    /**
+     * Date et heure de fin de l'événement.
+     *
+     * nullable: true — même logique que eventStartAt.
+     * Si eventEndAt est renseigné, eventStartAt DOIT l'être aussi.
+     */
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $eventEndAt = null;
+
+    /**
+     * Lieu de l'événement présentiel (adresse complète).
+     *
+     * Utilisé uniquement pour eventMode = PRESENTIEL.
+     * Exemple : "12 rue de la Roquette, 75011 Paris"
+     *
+     * nullable: true — ignoré pour les événements VISIO et les formations CONTENU.
+     * length: 255 = cohérent avec les autres champs adresse du projet.
+     */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $eventLocation = null;
+
+    /**
+     * URL du lien de connexion pour un événement en visio (Zoom, Google Meet, Jitsi…).
+     *
+     * Utilisé uniquement pour eventMode = VISIO.
+     * Exemple : "https://us02web.zoom.us/j/85012345678?pwd=XXX"
+     *
+     * nullable: true — ignoré pour les événements PRESENTIEL et les formations CONTENU.
+     * length: 500 — les URL Zoom avec mot de passe peuvent être longues (cohérent
+     *   avec trailerVideoUrl qui utilise aussi 500 pour les URL Bunny Stream signées).
+     *
+     * IMPORTANT : contrairement à trailerVideoUrl, ce champ n'est PAS soumis à la
+     * liste blanche isAllowedVideoUrl() car ce n'est pas une iframe vidéo — c'est
+     * un lien de redirection externe. La validation se limite à vérifier que l'URL
+     * est syntaxiquement valide (filter_var FILTER_VALIDATE_URL).
+     */
+    #[ORM\Column(type: 'string', length: 500, nullable: true)]
+    private ?string $eventExternalUrl = null;
+
+    /**
+     * Nombre de places disponibles pour cet événement.
+     *
+     * null  → illimité (comportement par défaut pour les formations CONTENU).
+     * int   → nombre de places max (utile pour les événements avec inscription).
+     *
+     * En phase 1, la capacité est informative. En phase 2, le service
+     * d'inscription vérifiera que les places ne sont pas épuisées avant
+     * d'autoriser une nouvelle inscription.
+     *
+     * Voir getSeatsRemaining() pour calculer les places restantes.
+     */
+    #[ORM\Column(type: 'integer', nullable: true)]
+    private ?int $capacity = null;
 
     // ─── Publication ──────────────────────────────────────────────────────────
 
@@ -606,5 +704,183 @@ class Course
     {
         $this->stripePriceId = $stripePriceId;
         return $this;
+    }
+
+    // ─── Getters / Setters — Type et champs événement ─────────────────────────
+
+    /**
+     * Retourne le type de la formation : CONTENU ou EVENEMENT.
+     */
+    public function getType(): CourseType
+    {
+        return $this->type;
+    }
+
+    /**
+     * Définit le type de la formation.
+     * Changer le type d'une formation existante publiée est déconseillé —
+     * l'admin doit dépublier d'abord pour s'assurer de la cohérence des données.
+     */
+    public function setType(CourseType $type): static
+    {
+        $this->type = $type;
+        return $this;
+    }
+
+    /**
+     * Retourne le mode de l'événement (VISIO ou PRESENTIEL), ou null si non applicable.
+     */
+    public function getEventMode(): ?CourseEventMode
+    {
+        return $this->eventMode;
+    }
+
+    /**
+     * Définit le mode de l'événement.
+     * null = non renseigné (formation CONTENU ou événement en cours de saisie).
+     */
+    public function setEventMode(?CourseEventMode $eventMode): static
+    {
+        $this->eventMode = $eventMode;
+        return $this;
+    }
+
+    /**
+     * Retourne la date et heure de début de l'événement, ou null.
+     */
+    public function getEventStartAt(): ?\DateTimeInterface
+    {
+        return $this->eventStartAt;
+    }
+
+    /**
+     * Définit la date et heure de début de l'événement.
+     */
+    public function setEventStartAt(?\DateTimeInterface $eventStartAt): static
+    {
+        $this->eventStartAt = $eventStartAt;
+        return $this;
+    }
+
+    /**
+     * Retourne la date et heure de fin de l'événement, ou null.
+     */
+    public function getEventEndAt(): ?\DateTimeInterface
+    {
+        return $this->eventEndAt;
+    }
+
+    /**
+     * Définit la date et heure de fin de l'événement.
+     */
+    public function setEventEndAt(?\DateTimeInterface $eventEndAt): static
+    {
+        $this->eventEndAt = $eventEndAt;
+        return $this;
+    }
+
+    /**
+     * Retourne l'adresse du lieu de l'événement présentiel, ou null.
+     */
+    public function getEventLocation(): ?string
+    {
+        return $this->eventLocation;
+    }
+
+    /**
+     * Définit l'adresse du lieu de l'événement présentiel.
+     */
+    public function setEventLocation(?string $eventLocation): static
+    {
+        $this->eventLocation = $eventLocation;
+        return $this;
+    }
+
+    /**
+     * Retourne le lien de connexion de l'événement visio, ou null.
+     */
+    public function getEventExternalUrl(): ?string
+    {
+        return $this->eventExternalUrl;
+    }
+
+    /**
+     * Définit le lien de connexion de l'événement visio.
+     */
+    public function setEventExternalUrl(?string $eventExternalUrl): static
+    {
+        $this->eventExternalUrl = $eventExternalUrl;
+        return $this;
+    }
+
+    /**
+     * Retourne la capacité maximale de l'événement (nombre de places), ou null si illimité.
+     */
+    public function getCapacity(): ?int
+    {
+        return $this->capacity;
+    }
+
+    /**
+     * Définit la capacité maximale de l'événement.
+     * null = illimité.
+     */
+    public function setCapacity(?int $capacity): static
+    {
+        $this->capacity = $capacity;
+        return $this;
+    }
+
+    // ─── Méthodes utilitaires — type événement ────────────────────────────────
+
+    /**
+     * Retourne true si cette formation est un événement (visio ou présentiel).
+     *
+     * Méthode utilitaire pour éviter la comparaison de l'enum dans les templates
+     * et les contrôleurs :
+     *
+     *   // Préférer :
+     *   $course->isEvent()
+     *   // Plutôt que :
+     *   $course->getType() === CourseType::EVENEMENT
+     *
+     * Utilisation Twig : {% if course.isEvent() %}
+     */
+    public function isEvent(): bool
+    {
+        return $this->type === CourseType::EVENEMENT;
+    }
+
+    /**
+     * Calcule et retourne le nombre de places restantes pour cet événement.
+     *
+     * Retourne null si :
+     *   - la capacité n'est pas définie (illimité)
+     *   - la formation n'est pas un événement
+     *
+     * Retourne 0 si toutes les places sont prises (enrollment count >= capacity).
+     *
+     * Note phase 1 :
+     *   Cette méthode est implémentée de manière simple ici pour éviter
+     *   une requête SQL supplémentaire — elle se base sur la collection
+     *   en mémoire (enrollments déjà chargés par Doctrine).
+     *   Si les enrollments ne sont pas chargés (lazy loading), Doctrine
+     *   déclenchera automatiquement un SELECT COUNT.
+     *   En phase 2, on créera une requête COUNT dédiée dans CourseRepository
+     *   pour éviter le chargement complet de la collection.
+     */
+    public function getSeatsRemaining(): ?int
+    {
+        // Pas de capacité définie → illimité → null
+        if ($this->capacity === null) {
+            return null;
+        }
+
+        // Nombre d'inscriptions actuelles (peut déclencher un lazy load)
+        $enrolledCount = $this->enrollments->count();
+
+        // max(0, ...) pour éviter les valeurs négatives si des données
+        // incohérentes existent en base (ex : suppression manuelle d'enrollments)
+        return max(0, $this->capacity - $enrolledCount);
     }
 }

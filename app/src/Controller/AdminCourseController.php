@@ -7,9 +7,13 @@ namespace App\Controller;
 use App\Entity\Course;
 use App\Entity\CourseModule;
 use App\Entity\Lesson;
+use App\Enum\CourseEventMode;
 use App\Enum\CourseLevel;
+use App\Enum\CourseType;
+use App\Repository\CourseEnrollmentRepository;
 use App\Repository\CourseModuleRepository;
 use App\Repository\CourseRepository;
+use App\Service\CourseEventValidationService;
 use App\Service\CourseService;
 use App\Service\StripeService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -42,11 +46,13 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class AdminCourseController extends AbstractController
 {
     public function __construct(
-        private readonly CourseService          $courseService,
-        private readonly CourseRepository       $courseRepository,
-        private readonly CourseModuleRepository $moduleRepository,
-        private readonly EntityManagerInterface $em,
-        private readonly StripeService          $stripeService,
+        private readonly CourseService               $courseService,
+        private readonly CourseEventValidationService $eventValidationService,
+        private readonly CourseRepository            $courseRepository,
+        private readonly CourseModuleRepository      $moduleRepository,
+        private readonly CourseEnrollmentRepository  $enrollmentRepository,
+        private readonly EntityManagerInterface      $em,
+        private readonly StripeService               $stripeService,
     ) {}
 
     // ─── Liste admin de toutes les formations ─────────────────────────────────
@@ -69,6 +75,8 @@ class AdminCourseController extends AbstractController
 
         return $this->render('admin/course/index.html.twig', [
             'courses' => $courses,
+            // On passe les types pour afficher les badges CONTENU / ÉVÉNEMENT dans la liste
+            'courseTypes' => CourseType::cases(),
         ]);
     }
 
@@ -110,10 +118,17 @@ class AdminCourseController extends AbstractController
             // tryFrom() retourne null si la valeur n'est pas dans l'enum
             $level = CourseLevel::tryFrom($levelValue) ?? CourseLevel::BEGINNER;
 
+            // ── Validation du type de formation ───────────────────────────────
+            // tryFrom() retourne null si la valeur POST ne correspond pas à l'enum.
+            // On retombe sur CONTENU par défaut (comportement historique préservé).
+            $typeValue = $request->request->getString('type', CourseType::CONTENU->value);
+            $type      = CourseType::tryFrom($typeValue) ?? CourseType::CONTENU;
+
             // ── Création de l'entité Formation ────────────────────────────────
             $course = new Course();
             $course->setTitle($title);
             $course->setLevel($level);
+            $course->setType($type);
 
             // Champs optionnels — on nettoie avec trim() et on ignore les vides
             $subtitle = trim($request->request->getString('subtitle'));
@@ -147,6 +162,24 @@ class AdminCourseController extends AbstractController
                 $course->setDescription($description);
             }
 
+            // ── Champs événement (uniquement si type = EVENEMENT) ────────────
+            // On les hydrate avant la validation pour que le service puisse
+            // lire les valeurs et retourner des messages d'erreur précis.
+            if ($type === CourseType::EVENEMENT) {
+                $this->hydrateEventFields($course, $request);
+
+                // Validation des champs événement via le service dédié
+                $validationErrors = $this->eventValidationService->validate($course);
+                if (!empty($validationErrors)) {
+                    // On affiche toutes les erreurs en une seule passe pour éviter
+                    // que l'admin doive revalider plusieurs fois
+                    foreach ($validationErrors as $error) {
+                        $this->addFlash('error', $error);
+                    }
+                    return $this->redirectToRoute('app_admin_course_new');
+                }
+            }
+
             // ── Génération du slug unique ─────────────────────────────────────
             // CourseService::generateSlug() gère la translittération et l'unicité
             $slug = $this->courseService->generateSlug($title);
@@ -156,7 +189,10 @@ class AdminCourseController extends AbstractController
             $this->em->persist($course);
             $this->em->flush();
 
-            $this->addFlash('success', sprintf('Formation "%s" créée. Ajoutez maintenant les modules et leçons.', $title));
+            $successMessage = $type === CourseType::EVENEMENT
+                ? sprintf('Événement "%s" créé. Vérifiez les informations et publiez quand vous êtes prêt.', $title)
+                : sprintf('Formation "%s" créée. Ajoutez maintenant les modules et leçons.', $title);
+            $this->addFlash('success', $successMessage);
 
             // Redirection vers l'édition pour ajouter les modules immédiatement
             return $this->redirectToRoute('app_admin_course_edit', ['id' => $course->getId()]);
@@ -164,8 +200,12 @@ class AdminCourseController extends AbstractController
 
         // ── Affichage du formulaire vide (GET) ────────────────────────────────
         return $this->render('admin/course/new.html.twig', [
-            // On passe les niveaux disponibles pour le <select>
-            'levels' => CourseLevel::cases(),
+            // Niveaux disponibles pour le <select> de niveau
+            'levels'     => CourseLevel::cases(),
+            // Types disponibles pour le <select> de type (CONTENU / EVENEMENT)
+            'courseTypes' => CourseType::cases(),
+            // Modes événement pour le <select> conditionnel (VISIO / PRESENTIEL)
+            'eventModes' => CourseEventMode::cases(),
         ]);
     }
 
@@ -187,11 +227,29 @@ class AdminCourseController extends AbstractController
             throw $this->createNotFoundException(sprintf('Formation #%d introuvable.', $id));
         }
 
+        // Phase 3 : pour les événements, on charge les inscriptions ACTIVES uniquement
+        // pour les afficher dans la section "Annulation admin" de l'édition.
+        // Seuls les inscrits actifs peuvent être annulés (les CANCELLED sont déjà traités).
+        // En V2, on pourrait étendre à un historique complet avec les CANCELLED visibles
+        // en lecture seule pour l'audit admin.
+        $enrollments = [];
+        if ($course->isEvent()) {
+            // findActiveEnrollmentsByCourse() retourne uniquement les inscriptions ACTIVE.
+            // C'est intentionnel : on ne propose l'annulation qu'aux inscrits qui peuvent encore l'être.
+            $enrollments = $this->enrollmentRepository->findActiveEnrollmentsByCourse($course);
+        }
+
         return $this->render('admin/course/edit.html.twig', [
-            'course'  => $course,
+            'course'      => $course,
             // getModules() retourne la collection triée par orderPosition
-            'modules' => $course->getModules(),
-            'levels'  => CourseLevel::cases(),
+            'modules'     => $course->getModules(),
+            'levels'      => CourseLevel::cases(),
+            // Types pour le sélecteur de type dans le formulaire d'édition
+            'courseTypes' => CourseType::cases(),
+            // Modes événement pour le sélecteur conditionnel (VISIO / PRESENTIEL)
+            'eventModes'  => CourseEventMode::cases(),
+            // Phase 3 : inscriptions actives (uniquement pour les EVENEMENT) pour le panel d'annulation admin
+            'enrollments' => $enrollments,
         ]);
     }
 
@@ -239,6 +297,37 @@ class AdminCourseController extends AbstractController
 
         $levelValue = $request->request->getString('level', CourseLevel::BEGINNER->value);
         $course->setLevel(CourseLevel::tryFrom($levelValue) ?? CourseLevel::BEGINNER);
+
+        // ── Mise à jour du type ───────────────────────────────────────────────
+        // On permet de changer le type en édition (utile pour corriger une erreur).
+        // Attention : passer de CONTENU à EVENEMENT d'une formation publiée avec
+        // des inscrits est déconseillé — l'admin est responsable de la cohérence.
+        $typeValue = $request->request->getString('type', CourseType::CONTENU->value);
+        $type      = CourseType::tryFrom($typeValue) ?? CourseType::CONTENU;
+        $course->setType($type);
+
+        // ── Champs événement ──────────────────────────────────────────────────
+        if ($type === CourseType::EVENEMENT) {
+            // Hydrater les champs avant validation pour obtenir des messages d'erreur précis
+            $this->hydrateEventFields($course, $request);
+
+            $validationErrors = $this->eventValidationService->validate($course);
+            if (!empty($validationErrors)) {
+                foreach ($validationErrors as $error) {
+                    $this->addFlash('error', $error);
+                }
+                return $this->redirectToRoute('app_admin_course_edit', ['id' => $id]);
+            }
+        } else {
+            // Si on repasse en type CONTENU, on efface les champs événement
+            // pour ne pas conserver des données orphelines en base.
+            $course->setEventMode(null);
+            $course->setEventStartAt(null);
+            $course->setEventEndAt(null);
+            $course->setEventLocation(null);
+            $course->setEventExternalUrl(null);
+            $course->setCapacity(null);
+        }
 
         $course->setSubtitle(
             trim($request->request->getString('subtitle')) ?: null
@@ -465,6 +554,103 @@ class AdminCourseController extends AbstractController
         return $this->redirectToRoute('app_admin_course_edit', ['id' => $id]);
     }
 
+    // ─── Méthodes privées utilitaires ────────────────────────────────────────
+
+    /**
+     * Parse une valeur soumise par un <input type="datetime-local"> en DateTime.
+     *
+     * Le format standard est 'Y-m-d\TH:i' (ex : "2026-06-28T14:00").
+     * Certains navigateurs ou outils de test envoient le format avec secondes
+     * 'Y-m-d\TH:i:s' (ex : "2026-06-28T14:00:00"). On essaie les deux.
+     *
+     * Retourne null si aucun format ne correspond — la règle 4 du service
+     * de validation remontera alors "date obligatoire" avec un message clair.
+     *
+     * @param string $raw Valeur brute du champ HTML datetime-local
+     * @return \DateTime|null DateTime en cas de succès, null si format non reconnu
+     */
+    private function parseDatetimeLocal(string $raw): ?\DateTime
+    {
+        // Format standard de <input type="datetime-local"> sans secondes
+        $dt = \DateTime::createFromFormat('Y-m-d\TH:i', $raw);
+        if ($dt !== false) {
+            return $dt;
+        }
+
+        // Certains navigateurs non-standard ou les outils de test (curl, Postman)
+        // peuvent envoyer le format avec secondes — on essaie en repli.
+        $dt = \DateTime::createFromFormat('Y-m-d\TH:i:s', $raw);
+        if ($dt !== false) {
+            return $dt;
+        }
+
+        // Format non reconnu → null (le service de validation signalera l'erreur)
+        return null;
+    }
+
+    /**
+     * Hydrate les champs événement d'un Course depuis la requête HTTP.
+     *
+     * Méthode extraite pour éviter la duplication entre new() et update().
+     * Elle ne fait PAS de validation — c'est le rôle de CourseEventValidationService.
+     *
+     * Champs traités :
+     *   - eventMode      : valeur POST 'eventMode' → CourseEventMode enum (nullable)
+     *   - eventStartAt   : valeur POST 'eventStartAt' → DateTime (nullable)
+     *   - eventEndAt     : valeur POST 'eventEndAt'   → DateTime (nullable)
+     *   - eventLocation  : valeur POST 'eventLocation' → string (nullable)
+     *   - eventExternalUrl : valeur POST 'eventExternalUrl' → string (nullable)
+     *   - capacity       : valeur POST 'capacity' → int positif (nullable)
+     *
+     * Format attendu pour les dates : 'Y-m-d\TH:i' (format natif de l'input HTML datetime-local).
+     * Exemple : "2026-06-28T14:00" → new \DateTime('2026-06-28T14:00').
+     */
+    private function hydrateEventFields(Course $course, Request $request): void
+    {
+        // ── Mode (VISIO / PRESENTIEL) ─────────────────────────────────────────
+        $eventModeValue = $request->request->getString('eventMode');
+        $course->setEventMode(
+            // tryFrom() retourne null si la valeur est vide ou invalide → champ vide autorisé
+            CourseEventMode::tryFrom($eventModeValue)
+        );
+
+        // ── Date de début ─────────────────────────────────────────────────────
+        $startRaw = trim($request->request->getString('eventStartAt'));
+        if ($startRaw !== '') {
+            $course->setEventStartAt($this->parseDatetimeLocal($startRaw));
+        } else {
+            $course->setEventStartAt(null);
+        }
+
+        // ── Date de fin ───────────────────────────────────────────────────────
+        $endRaw = trim($request->request->getString('eventEndAt'));
+        if ($endRaw !== '') {
+            $course->setEventEndAt($this->parseDatetimeLocal($endRaw));
+        } else {
+            $course->setEventEndAt(null);
+        }
+
+        // ── Lieu (présentiel) ─────────────────────────────────────────────────
+        $course->setEventLocation(
+            trim($request->request->getString('eventLocation')) ?: null
+        );
+
+        // ── Lien de connexion (visio) ─────────────────────────────────────────
+        $course->setEventExternalUrl(
+            trim($request->request->getString('eventExternalUrl')) ?: null
+        );
+
+        // ── Capacité ──────────────────────────────────────────────────────────
+        $capacityRaw = trim($request->request->getString('capacity'));
+        if ($capacityRaw !== '') {
+            $capacity = (int) $capacityRaw;
+            // On refuse une capacité nulle ou négative — null = illimité
+            $course->setCapacity($capacity > 0 ? $capacity : null);
+        } else {
+            $course->setCapacity(null);
+        }
+    }
+
     // ─── Publication d'une formation ──────────────────────────────────────────
 
     /**
@@ -496,6 +682,37 @@ class AdminCourseController extends AbstractController
         if ($course->isPublished()) {
             $this->addFlash('info', 'Cette formation est déjà publiée.');
             return $this->redirectToRoute('app_admin_course_index');
+        }
+
+        // ── Validation pré-publication selon le type ───────────────────────
+        // Pour les formations EVENEMENT : validation des champs événement obligatoires
+        if ($course->isEvent()) {
+            $validationErrors = $this->eventValidationService->validate($course);
+            if (!empty($validationErrors)) {
+                foreach ($validationErrors as $error) {
+                    $this->addFlash('error', $error);
+                }
+                return $this->redirectToRoute('app_admin_course_edit', ['id' => $id]);
+            }
+        } else {
+            // Pour les formations CONTENU : au moins 1 module contenant au moins 1 leçon.
+            //
+            // Le template edit.html.twig bloque déjà le bouton "Publier" visuellement,
+            // mais cette guard PHP est indispensable contre un appel HTTP direct
+            // (ex : curl POST avec un token CSRF valide obtenu légitimement).
+            // Sans elle, une formation CONTENU sans contenu serait publiée et
+            // apparaîtrait dans le catalogue avec une page vide côté membre.
+            $hasLesson = false;
+            foreach ($course->getModules() as $module) {
+                if (!$module->getLessons()->isEmpty()) {
+                    $hasLesson = true;
+                    break;
+                }
+            }
+            if (!$hasLesson) {
+                $this->addFlash('error', 'Impossible de publier : ajoutez au moins 1 module avec 1 leçon avant de publier.');
+                return $this->redirectToRoute('app_admin_course_edit', ['id' => $id]);
+            }
         }
 
         // ── Publication ───────────────────────────────────────────────────────

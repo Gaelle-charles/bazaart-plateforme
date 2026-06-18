@@ -136,6 +136,22 @@
     .adc-badge--intermediate { background: var(--bg-alt); }
     .adc-badge--advanced     { background: var(--ink); color: var(--bg); }
 
+    /* ── Badge type CONTENU / ÉVÉNEMENT ─────────────────────────────────── */
+    .adc-type-badge {
+        font-family: var(--mono);
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        padding: 2px 6px;
+        border: 1px solid;
+        white-space: nowrap;
+        display: inline-block;
+    }
+
+    .adc-type-badge--content { color: var(--ink-mute); border-color: var(--line-soft); }
+    .adc-type-badge--event   { color: var(--ink); background: var(--accent); border-color: var(--accent); }
+
     /* ── Badge statut publié/brouillon ───────────────────────────────────── */
     .adc-status {
         font-family: var(--mono);
@@ -247,6 +263,7 @@
         <thead>
             <tr>
                 <th scope="col">Formation</th>
+                <th scope="col">Type</th>
                 <th scope="col">Niveau</th>
                 <th scope="col">Modules / Leçons</th>
                 <th scope="col">Statut</th>
@@ -267,6 +284,17 @@
                         <span class="adc-course-slug">/formations/{{ course.slug|e }}</span>
                     </td>
 
+                    {# ── Type (CONTENU / ÉVÉNEMENT) ─────────────────── #}
+                    <td>
+                        {#
+                         # isEvent() est la méthode utilitaire de l'entité Course.
+                         # Évite la comparaison directe de l'enum dans le template.
+                         #}
+                        <span class="adc-type-badge {% if course.isEvent() %}adc-type-badge--event{% else %}adc-type-badge--content{% endif %}">
+                            {{ course.type.shortLabel() }}
+                        </span>
+                    </td>
+
                     {# ── Niveau ──────────────────────────────────────── #}
                     <td>
                         <span class="adc-badge adc-badge--{{ course.level.value|e }}">
@@ -274,18 +302,35 @@
                         </span>
                     </td>
 
-                    {# ── Compteurs modules/leçons ─────────────────────── #}
+                    {# ── Compteurs modules/leçons (ou résumé événement) ── #}
                     <td>
-                        {# On compte les leçons en itérant les modules (collections Doctrine déjà chargées) #}
-                        {% set lessonCount = 0 %}
-                        {% for module in course.modules %}
-                            {% set lessonCount = lessonCount + module.lessons|length %}
-                        {% endfor %}
-
-                        <span style="font-family: var(--mono); font-size: 11px;">
-                            {{ course.modules|length }} module{{ course.modules|length > 1 ? 's' : '' }}
-                            · {{ lessonCount }} leçon{{ lessonCount > 1 ? 's' : '' }}
-                        </span>
+                        {% if course.isEvent() %}
+                            {#
+                             # Pour un événement, on affiche la date et le mode
+                             # plutôt que des modules/leçons qui n'existent pas.
+                             #}
+                            {% if course.eventStartAt is not null %}
+                                <span style="font-family: var(--mono); font-size: 11px;">
+                                    {{ course.eventStartAt|date('d/m/Y H:i') }}
+                                </span>
+                            {% endif %}
+                            {% if course.eventMode is not null %}
+                                <span style="font-family: var(--mono); font-size: 9px;
+                                             color: var(--ink-mute); display: block;">
+                                    {{ course.eventMode.label() }}
+                                </span>
+                            {% endif %}
+                        {% else %}
+                            {# On compte les leçons en itérant les modules (collections Doctrine déjà chargées) #}
+                            {% set lessonCount = 0 %}
+                            {% for module in course.modules %}
+                                {% set lessonCount = lessonCount + module.lessons|length %}
+                            {% endfor %}
+                            <span style="font-family: var(--mono); font-size: 11px;">
+                                {{ course.modules|length }} module{{ course.modules|length > 1 ? 's' : '' }}
+                                · {{ lessonCount }} leçon{{ lessonCount > 1 ? 's' : '' }}
+                            </span>
+                        {% endif %}
                     </td>
 
                     {# ── Statut publié / brouillon ────────────────────── #}
