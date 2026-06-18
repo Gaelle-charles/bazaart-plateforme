@@ -255,28 +255,62 @@ class AuthController extends AbstractController
             return $this->redirectToRoute('app_register');
         }
 
-        // ── Si l'email est déjà vérifié : on signale et on redirige ──────────
+        // ── Si l'email est déjà vérifié : traitement contextuel ──────────────
         //
-        // Cas typique : l'utilisateur clique deux fois sur le même lien.
-        // Deux sous-cas possibles :
-        //   a) L'utilisateur est déjà authentifié (il a cliqué le lien, s'est connecté,
-        //      puis reclique le lien depuis sa boîte mail) → on le renvoie au dashboard.
-        //   b) L'utilisateur n'est pas authentifié (nouvelle session, navigateur différent)
-        //      → on le renvoie au login pour qu'il se connecte normalement.
+        // Cas typique : l'utilisateur reclique un lien dont le compte a déjà été confirmé.
+        // On distingue 3 sous-cas :
         //
-        // Cette distinction évite une erreur (Security::login() sur un compte déjà connecté
-        // n'est pas un problème per se, mais c'est inutile et potentiellement confus).
+        //   a) L'utilisateur EST DÉJÀ AUTHENTIFIÉ en session
+        //      → on le renvoie au dashboard (le gating onboarding s'occupera du reste).
+        //
+        //   b) L'utilisateur N'EST PAS authentifié ET la signature du lien est ENCORE VALIDE
+        //      → On peut lui faire confiance : le lien prouve qu'il possède la boîte email.
+        //      → On marque isVerified=true (idempotent), on le connecte, et on redirige
+        //        vers le dashboard (le gating le renverra vers l'onboarding si besoin).
+        //      → UX : "j'avais ouvert l'email dans un autre navigateur, je reclique" → ça marche.
+        //
+        //   c) L'utilisateur N'EST PAS authentifié ET la signature est INVALIDE/EXPIRÉE
+        //      → Flash informatif + redirection /login (on ne peut pas le connecter sans preuve).
+        //
+        // SÉCURITÉ : on ne connecte JAMAIS sans avoir validé la signature HMAC.
         if ($user->isVerified()) {
-            $this->addFlash('success', 'Ton adresse email est déjà confirmée.');
-
-            // Si l'utilisateur est déjà connecté, on le renvoie directement au dashboard.
-            // getUser() renvoie null si non connecté, ou l'entité User si connecté.
+            // Sous-cas a) : déjà authentifié → redirection directe
             if ($this->getUser() !== null) {
+                $this->addFlash('success', 'Ton adresse email est déjà confirmée.');
                 return $this->redirectToRoute('app_dashboard');
             }
 
-            // Sinon, on l'envoie au login avec le message positif
-            return $this->redirectToRoute('app_login');
+            // Sous-cas b) et c) : on valide la signature pour décider
+            try {
+                // handleVerification() est idempotent : si isVerified=true,
+                // il repose setIsVerified(true) + flush() sans erreur.
+                // On l'utilise ici pour valider la signature ET garder le code DRY.
+                $this->emailVerificationService->handleVerification($request, $user);
+
+                // Signature valide → connexion automatique (même logique qu'un premier clic)
+                $this->addFlash('success', 'Adresse email confirmée. Bienvenue sur Bazaart !');
+                $request->getSession()->remove('pending_verification_email');
+
+                $loginResponse = $this->security->login(
+                    $user,
+                    'security.authenticator.form_login.main',
+                    'main'
+                );
+
+                if ($loginResponse !== null) {
+                    return $loginResponse;
+                }
+
+                // Le gating renverra l'utilisateur vers l'onboarding si besoin
+                return $this->redirectToRoute('app_dashboard');
+
+            } catch (VerifyEmailExceptionInterface) {
+                // Sous-cas c) : signature invalide ou expirée → pas de connexion
+                // On affiche un message clair plutôt que de renvoyer vers /register
+                // (le compte existe déjà, l'utilisateur doit juste se connecter normalement).
+                $this->addFlash('info', 'Ton compte est déjà confirmé. Connecte-toi pour continuer.');
+                return $this->redirectToRoute('app_login');
+            }
         }
 
         // ── Déléguer la validation de la signature au service ─────────────────
@@ -364,10 +398,23 @@ class AuthController extends AbstractController
         // Format : security.authenticator.form_login.<nom_du_firewall>
         $loginResponse = $this->security->login($user, 'security.authenticator.form_login.main', 'main');
 
-        // Si Security a produit sa propre réponse (cas rare avec des listeners spéciaux),
-        // on la retourne. Sinon, redirection manuelle vers le dashboard.
-        // ── Lot 2 : remplacer app_dashboard par la route d'onboarding si profil non complété.
-        return $loginResponse ?? $this->redirectToRoute('app_dashboard');
+        // ── Lot 2 : Aiguillage post-vérification email ────────────────────────
+        //
+        // Si l'utilisateur n'a pas encore complété l'onboarding (nouveau compte),
+        // on le redirige vers l'étape 1 de l'onboarding.
+        // Sinon, on le redirige vers le dashboard (comportement habituel).
+        //
+        // Note : l'onboardingCompleted est false par défaut (cf. User::$onboardingCompleted).
+        // Les comptes existants ont été mis à true via la migration SQL UPDATE.
+        if ($loginResponse !== null) {
+            // Security a produit sa propre réponse (cas rare avec des listeners spéciaux)
+            return $loginResponse;
+        }
+
+        // Redirige vers l'onboarding si pas encore complété, sinon vers le dashboard
+        return $user->isOnboardingCompleted()
+            ? $this->redirectToRoute('app_dashboard')
+            : $this->redirectToRoute('app_onboarding_step1');
     }
 
     // ─── Route : /verifier-email/renvoyer ─────────────────────────────────────

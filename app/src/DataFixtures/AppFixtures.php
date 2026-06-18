@@ -16,7 +16,10 @@ use App\Entity\OrganizationProfile;
 use App\Entity\Resource;
 use App\Entity\ResourceType;
 use App\Entity\User;
+use App\Entity\ResourceAlert;
+use App\Enum\AlertFrequency;
 use App\Enum\ArticleStatus;
+use App\Enum\ArtistLookingFor;
 use App\Enum\CourseEventMode;
 use App\Enum\CourseLevel;
 use App\Enum\CourseType;
@@ -84,6 +87,12 @@ class AppFixtures extends Fixture
         // car Resource a des FK vers User, ResourceType, etc. qui doivent exister.
         $manager->flush();
 
+        // ── Étape 4b : ResourceAlert pour l'artiste de démo ──────────────────
+        // On crée un profil d'alertes pour artiste@bazaart.fr, cohérent avec
+        // les lookingFor définis ci-dessus (RESSOURCES_APPELS + FORMATIONS).
+        // disciplines et types sont disponibles après le flush.
+        $this->createArtistResourceAlert($manager, $artistUser, $disciplines, $resourceTypes);
+
         // ── Étape 5 : 12 ressources publiées ─────────────────────────────────
         $this->createResources($manager, $adminUser, $structureUser, $structureOrg, $disciplines, $resourceTypes);
 
@@ -122,6 +131,8 @@ class AppFixtures extends Fixture
             // dans User::getRoles()). On ne stocke que les rôles supplémentaires.
             ->setRoles(['ROLE_ADMIN'])
             ->setIsVerified(true)
+            // Onboarding complété = true pour les comptes de démo (ils existaient avant le Lot 2)
+            ->setOnboardingCompleted(true)
             ->setPassword(
                 // hashPassword() hache le mot de passe en clair avec l'algorithme
                 // configuré dans security.yaml (bcrypt par défaut en Symfony 7.x).
@@ -149,6 +160,12 @@ class AppFixtures extends Fixture
             ->setEmail('artiste@bazaart.fr')
             ->setRoles(['ROLE_ARTIST'])
             ->setIsVerified(true)
+            // Onboarding complété avec des données réalistes pour prévisualiser le dashboard
+            ->setOnboardingCompleted(true)
+            ->setLookingFor([
+                ArtistLookingFor::RESSOURCES_APPELS->value,
+                ArtistLookingFor::FORMATIONS->value,
+            ])
             ->setPassword(
                 // Conforme à la politique CDC §9 : min 10 chars, 1 maj, 1 chiffre
                 $this->passwordHasher->hashPassword($artist, 'TestPass12!')
@@ -174,6 +191,8 @@ class AppFixtures extends Fixture
             ->setEmail('structure@bazaart.fr')
             ->setRoles(['ROLE_STRUCTURE'])
             ->setIsVerified(true)
+            // Onboarding complété = true (compte structure = pas le parcours artiste)
+            ->setOnboardingCompleted(true)
             ->setPassword(
                 // Conforme à la politique CDC §9 : min 10 chars, 1 maj, 1 chiffre
                 $this->passwordHasher->hashPassword($structure, 'TestPass12!')
@@ -334,6 +353,58 @@ class AppFixtures extends Fixture
         }
 
         return $types;
+    }
+
+    // =========================================================================
+    // Création du ResourceAlert de démo pour l'artiste
+    // =========================================================================
+
+    /**
+     * Crée un profil d'alertes pour l'artiste de démo (artiste@bazaart.fr).
+     *
+     * Ce profil illustre ce que l'onboarding crée :
+     *   - Fréquence quotidienne
+     *   - Filtre sur les disciplines "Musique" et "Arts visuels"
+     *   - Filtre sur les types "Appel à projets", "Formation", "Prix & Concours"
+     *
+     * @param array<string, Discipline>   $disciplines
+     * @param array<string, ResourceType> $resourceTypes
+     */
+    private function createArtistResourceAlert(
+        ObjectManager $manager,
+        User $artistUser,
+        array $disciplines,
+        array $resourceTypes,
+    ): void {
+        $alert = new ResourceAlert();
+        $alert
+            ->setUser($artistUser)
+            ->setNotifyOnNewResource(true)
+            ->setFrequency(AlertFrequency::Daily);
+
+        // Disciplines d'intérêt : Musique et Arts visuels
+        // (cohérent avec le profil d'Amara Diallo — musicien et plasticien)
+        if (isset($disciplines['Musique'])) {
+            $alert->addFilterDiscipline($disciplines['Musique']);
+        }
+        if (isset($disciplines['Arts visuels'])) {
+            $alert->addFilterDiscipline($disciplines['Arts visuels']);
+        }
+
+        // Types de ressources d'intérêt : appels, formations et prix
+        // (cohérent avec lookingFor = RESSOURCES_APPELS + FORMATIONS)
+        if (isset($resourceTypes['Appel à projets'])) {
+            $alert->addFilterResourceType($resourceTypes['Appel à projets']);
+        }
+        if (isset($resourceTypes['Formation'])) {
+            $alert->addFilterResourceType($resourceTypes['Formation']);
+        }
+        if (isset($resourceTypes['Prix & Concours'])) {
+            $alert->addFilterResourceType($resourceTypes['Prix & Concours']);
+        }
+
+        $manager->persist($alert);
+        // Pas de flush() ici : le flush global dans load() s'en chargera
     }
 
     // =========================================================================

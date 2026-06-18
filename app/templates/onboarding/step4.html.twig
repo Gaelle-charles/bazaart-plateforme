@@ -1,0 +1,291 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # onboarding/step4.html.twig — Étape 4 : Alertes ressources
+ #
+ # Variables transmises par OnboardingController::step4() :
+ #   - disciplines             : Discipline[]   — toutes les disciplines
+ #   - resource_types          : ResourceType[] — tous les types de ressources
+ #   - preselected_type_ids    : int[]          — types pré-cochés (déduits de l'étape 3)
+ #   - preselected_disc_ids    : int[]          — disciplines pré-cochées (depuis le profil)
+ #   - alert_frequency_options : AlertFrequency[] — options de fréquence
+ #   - error                   : string|null    — message d'erreur
+ #
+ # Pré-sélection intelligente :
+ #   - Les disciplines sont pré-cochées depuis le profil artiste (étape 2)
+ #   - Les types de ressources sont pré-cochés depuis les objectifs (étape 3)
+ #   Mapping : RESSOURCES_AIDES → Bourse & Financement
+ #             RESSOURCES_APPELS → Appel à projets + Résidence + Prix & Concours
+ #             FORMATIONS → Formation
+#}
+
+{% block title %}Tes alertes — Étape 4{% endblock %}
+{% block page_title %}Tes alertes{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+.ob-wrap { max-width: 680px; margin: 40px auto; padding: 0 16px; }
+
+/* Progression */
+.ob-progress { display: flex; align-items: center; gap: 6px; margin-bottom: 36px; }
+.ob-step-dot { width: 28px; height: 4px; background: var(--line-soft, #ddd); }
+.ob-step-dot--active { background: var(--accent); }
+.ob-step-dot--done { background: var(--ink); }
+.ob-progress__label {
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    letter-spacing: .10em; text-transform: uppercase; color: var(--ink-mute); margin-left: 8px;
+}
+
+/* Titre */
+.ob-title {
+    font-family: var(--display); font-size: clamp(24px, 4vw, 38px); font-weight: 400;
+    text-transform: uppercase; letter-spacing: -.02em; line-height: .95;
+    color: var(--ink); margin: 0 0 8px;
+}
+.ob-title .it { font-family: var(--serif); font-style: italic; text-transform: none; font-weight: 400; color: var(--accent-2, #FF6B2C); }
+.ob-subtitle { font-size: 14px; color: var(--ink-mute); margin: 0 0 32px; line-height: 1.5; }
+
+/* Section */
+.ob-section {
+    border: 1px solid var(--line-soft);
+    margin-bottom: 20px;
+}
+.ob-section__head {
+    padding: 14px 18px;
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--line-soft);
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+}
+.ob-section__title {
+    font-family: var(--display); font-size: 13px; font-weight: 400;
+    text-transform: uppercase; letter-spacing: .04em; color: var(--ink);
+}
+.ob-section__hint {
+    font-family: var(--mono); font-size: 10px; color: var(--ink-mute);
+    text-transform: uppercase; letter-spacing: .04em;
+}
+.ob-section__body { padding: 16px 18px; }
+
+/* Grille de cases à cocher */
+.ob-check-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px;
+}
+.ob-check-item input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.ob-check-item label {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px; border: 1px solid var(--line-soft); cursor: pointer;
+    font-size: 12px; color: var(--ink); transition: background .10s;
+}
+.ob-check-item label:hover { background: var(--bg-alt); }
+.ob-check-item input:checked + label { background: var(--accent); border-color: var(--ink); font-weight: 600; }
+
+/* Badge "pré-sélectionné" */
+.ob-preselect-note {
+    font-family: var(--mono); font-size: 10px; color: var(--ink-mute);
+    margin-top: 10px; letter-spacing: .04em;
+}
+.ob-preselect-note strong { color: var(--ink); }
+
+/* Options de fréquence */
+.ob-freq-list { display: flex; flex-direction: column; gap: 8px; }
+.ob-freq-item input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.ob-freq-item label {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px 16px; border: 1px solid var(--line-soft); cursor: pointer;
+    font-size: 13px; color: var(--ink); transition: background .10s;
+}
+.ob-freq-item label:hover { background: var(--bg-alt); }
+.ob-freq-item input:checked + label { background: var(--accent); border-color: var(--ink); font-weight: 600; }
+
+/* Radio visuel */
+.ob-radio-visual {
+    width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px;
+    border: 2px solid var(--ink); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+}
+.ob-radio-dot { display: none; width: 8px; height: 8px; background: var(--ink); border-radius: 50%; }
+.ob-freq-item input:checked + label .ob-radio-dot { display: block; }
+.ob-freq-item input:checked + label .ob-radio-visual { background: var(--bg); }
+
+/* Bouton final (style distinct = action de finalisation) */
+.ob-btn-finish {
+    font-family: var(--display); font-size: 14px; font-weight: 400;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 16px 40px; background: var(--accent); color: var(--ink);
+    border: 2px solid var(--ink); cursor: pointer; border-radius: 0;
+    transition: background .12s, color .12s; flex: 1; text-align: center;
+}
+.ob-btn-finish:hover { background: var(--ink); color: var(--accent); }
+
+.ob-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 32px; }
+.ob-btn-back {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase;
+    padding: 12px 20px; background: transparent; color: var(--ink-mute);
+    border: 1px solid var(--line-soft); cursor: pointer; border-radius: 0;
+    text-decoration: none; transition: border-color .12s, color .12s;
+}
+.ob-btn-back:hover { color: var(--ink); border-color: var(--ink); }
+
+.ob-error {
+    background: #fff0f0; border: 1px solid #c00; color: #c00;
+    padding: 10px 14px; font-size: 13px; margin-bottom: 20px; border-radius: 0;
+}
+
+/* Note de bienvenue en bas */
+.ob-welcome-note {
+    text-align: center; margin-top: 24px; padding: 20px;
+    background: var(--bg-alt); border: 1px solid var(--line-soft);
+    font-size: 13px; color: var(--ink-mute); line-height: 1.6;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ob-wrap">
+
+    <div class="ob-progress" aria-label="Étape 4 sur 4 — Dernière étape">
+        <div class="ob-step-dot ob-step-dot--done"></div>
+        <div class="ob-step-dot ob-step-dot--done"></div>
+        <div class="ob-step-dot ob-step-dot--done"></div>
+        <div class="ob-step-dot ob-step-dot--active"></div>
+        <span class="ob-progress__label">Étape 4 / 4</span>
+    </div>
+
+    <h1 class="ob-title">Tes <span class="it">alertes</span></h1>
+    <p class="ob-subtitle">
+        Nous te notifions par email quand de nouvelles ressources correspondent a tes centres d'interet.
+        Tu peux modifier ces preferences a tout moment depuis ton profil.
+    </p>
+
+    {% if error %}
+        <div class="ob-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="{{ path('app_onboarding_step4') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('onboarding_step4') }}">
+
+        {# ── Section : Disciplines filtrées ─────────────────────────────── #}
+        <div class="ob-section">
+            <div class="ob-section__head">
+                <span class="ob-section__title">Disciplines</span>
+                <span class="ob-section__hint">Vide = toutes les disciplines</span>
+            </div>
+            <div class="ob-section__body">
+                <div class="ob-check-grid">
+                    {% for discipline in disciplines %}
+                        {% set isPreselected = discipline.id in preselected_disc_ids %}
+                        <div class="ob-check-item">
+                            <input
+                                type="checkbox"
+                                id="ad_{{ discipline.id }}"
+                                name="alert_disciplines[]"
+                                value="{{ discipline.id }}"
+                                {% if isPreselected %}checked{% endif %}
+                            >
+                            <label for="ad_{{ discipline.id }}">
+                                {% if discipline.icon %}
+                                    <span aria-hidden="true">{{ discipline.icon }}</span>
+                                {% endif %}
+                                {{ discipline.name|e }}
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+                {% if preselected_disc_ids|length > 0 %}
+                    <p class="ob-preselect-note">
+                        <strong>Pre-selectionnees</strong> depuis ton profil artiste (étape 2).
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ── Section : Types de ressources ──────────────────────────────── #}
+        <div class="ob-section">
+            <div class="ob-section__head">
+                <span class="ob-section__title">Types de ressources</span>
+                <span class="ob-section__hint">Vide = tous les types</span>
+            </div>
+            <div class="ob-section__body">
+                <div class="ob-check-grid">
+                    {% for type in resource_types %}
+                        {% set isPreselected = type.id in preselected_type_ids %}
+                        <div class="ob-check-item">
+                            <input
+                                type="checkbox"
+                                id="at_{{ type.id }}"
+                                name="alert_types[]"
+                                value="{{ type.id }}"
+                                {% if isPreselected %}checked{% endif %}
+                            >
+                            <label for="at_{{ type.id }}">
+                                {% if type.icon %}
+                                    <span aria-hidden="true">{{ type.icon }}</span>
+                                {% endif %}
+                                {{ type.name|e }}
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+                {% if preselected_type_ids|length > 0 %}
+                    <p class="ob-preselect-note">
+                        <strong>Pre-selectionnees</strong> selon tes objectifs declares a l'etape 3.
+                        Tu peux les ajuster.
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ── Section : Fréquence d'envoi ────────────────────────────────── #}
+        <div class="ob-section">
+            <div class="ob-section__head">
+                <span class="ob-section__title">Frequence des alertes</span>
+            </div>
+            <div class="ob-section__body">
+                <div class="ob-freq-list" role="group" aria-label="Frequence d'envoi des alertes email">
+                    {% for freq in alert_frequency_options %}
+                        <div class="ob-freq-item">
+                            <input
+                                type="radio"
+                                id="freq_{{ freq.value }}"
+                                name="frequency"
+                                value="{{ freq.value }}"
+                                {#
+                                    Défaut : DAILY est pré-sélectionné car c'est le meilleur
+                                    équilibre entre information et respect de la boîte mail.
+                                    (cf. AlertFrequency::Daily comme valeur par défaut dans l'entité)
+                                #}
+                                {% if freq.value == 'daily' %}checked{% endif %}
+                                required
+                            >
+                            <label for="freq_{{ freq.value }}">
+                                <span class="ob-radio-visual" aria-hidden="true">
+                                    <span class="ob-radio-dot"></span>
+                                </span>
+                                {{ freq.label()|e }}
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# Note de fin d'onboarding #}
+        <div class="ob-welcome-note">
+            C'est la derniere etape. En cliquant sur "Finaliser", ton profil sera
+            cree et tu recevras un email de bienvenue.
+            Tu pourras tout modifier depuis ton espace personnel.
+        </div>
+
+        {# ── Boutons ─────────────────────────────────────────────────────── #}
+        <div class="ob-actions">
+            <a href="{{ path('app_onboarding_step3') }}" class="ob-btn-back">Retour</a>
+            <button type="submit" class="ob-btn-finish">
+                Finaliser mon inscription
+            </button>
+        </div>
+
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,251 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # onboarding/step3.html.twig — Étape 3 : Que recherches-tu ?
+ #
+ # Variables transmises par OnboardingController::step3() :
+ #   - looking_for_options : ArtistLookingFor[]  — tous les cas de l'enum
+ #   - selected_values     : string[]             — valeurs déjà cochées (retour arrière)
+ #   - looking_for_other   : string|null          — texte libre déjà saisi
+ #   - error               : string|null          — message d'erreur
+ #
+ # L'option "Autre" ouvre un champ texte via JavaScript (JS natif, sans framework).
+#}
+
+{% block title %}Que recherches-tu ? — Étape 3{% endblock %}
+{% block page_title %}Tes objectifs{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+.ob-wrap { max-width: 620px; margin: 40px auto; padding: 0 16px; }
+
+/* Progression */
+.ob-progress { display: flex; align-items: center; gap: 6px; margin-bottom: 36px; }
+.ob-step-dot { width: 28px; height: 4px; background: var(--line-soft, #ddd); }
+.ob-step-dot--active { background: var(--accent); }
+.ob-step-dot--done { background: var(--ink); }
+.ob-progress__label {
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    letter-spacing: .10em; text-transform: uppercase; color: var(--ink-mute); margin-left: 8px;
+}
+
+/* Titre */
+.ob-title {
+    font-family: var(--display); font-size: clamp(24px, 4vw, 38px); font-weight: 400;
+    text-transform: uppercase; letter-spacing: -.02em; line-height: .95;
+    color: var(--ink); margin: 0 0 8px;
+}
+.ob-title .it {
+    font-family: var(--serif); font-style: italic;
+    text-transform: none; font-weight: 400; color: var(--accent-2, #FF6B2C);
+}
+.ob-subtitle { font-size: 14px; color: var(--ink-mute); margin: 0 0 32px; line-height: 1.5; }
+
+/* Liste des options */
+.ob-options { display: flex; flex-direction: column; gap: 0; margin-bottom: 24px; }
+
+.ob-option-item input[type="checkbox"] {
+    position: absolute; opacity: 0; width: 0; height: 0;
+}
+.ob-option-item label {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 18px 20px;
+    border: 1px solid var(--line-soft);
+    border-bottom: none;
+    cursor: pointer; font-size: 14px; color: var(--ink); line-height: 1.4;
+    transition: background .10s;
+}
+.ob-option-item:last-child label { border-bottom: 1px solid var(--line-soft); }
+.ob-option-item label:hover { background: var(--bg-alt); }
+
+.ob-option-item input:checked + label {
+    background: var(--accent); border-color: var(--ink); font-weight: 600;
+}
+
+/* Case visuelle à gauche */
+.ob-checkbox-visual {
+    width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px;
+    border: 2px solid var(--ink); background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    transition: background .10s;
+}
+.ob-option-item input:checked + label .ob-checkbox-visual {
+    background: var(--ink);
+}
+.ob-check-icon { display: none; }
+.ob-option-item input:checked + label .ob-check-icon { display: block; }
+
+/* Champ libre "Autre" — caché par défaut, affiché par JS */
+#autre-field {
+    display: none;
+    margin-top: 12px;
+    border-left: 3px solid var(--accent);
+    padding-left: 16px;
+}
+#autre-field.visible { display: block; }
+
+.ob-input {
+    width: 100%; box-sizing: border-box;
+    border: 1px solid var(--ink); background: var(--bg);
+    color: var(--ink); font-family: var(--body); font-size: 14px;
+    padding: 10px 12px; border-radius: 0;
+}
+.ob-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(198,242,78,.3); }
+
+.ob-label {
+    display: block; font-family: var(--mono); font-size: 10px; font-weight: 700;
+    letter-spacing: .10em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: 6px;
+}
+
+/* Actions */
+.ob-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ob-btn-back {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase;
+    padding: 12px 20px; background: transparent; color: var(--ink-mute);
+    border: 1px solid var(--line-soft); cursor: pointer; border-radius: 0;
+    text-decoration: none; transition: border-color .12s, color .12s;
+}
+.ob-btn-back:hover { color: var(--ink); border-color: var(--ink); }
+.ob-btn-next {
+    font-family: var(--display); font-size: 13px; font-weight: 400;
+    text-transform: uppercase; letter-spacing: .04em;
+    padding: 14px 40px; background: var(--ink); color: var(--bg);
+    border: 1px solid var(--ink); cursor: pointer; border-radius: 0;
+    transition: background .12s, color .12s; flex: 1; text-align: center;
+}
+.ob-btn-next:hover { background: var(--accent); color: var(--ink); }
+
+.ob-error {
+    background: #fff0f0; border: 1px solid #c00; color: #c00;
+    padding: 10px 14px; font-size: 13px; margin-bottom: 20px; border-radius: 0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ob-wrap">
+
+    <div class="ob-progress" aria-label="Étape 3 sur 4">
+        <div class="ob-step-dot ob-step-dot--done"></div>
+        <div class="ob-step-dot ob-step-dot--done"></div>
+        <div class="ob-step-dot ob-step-dot--active"></div>
+        <div class="ob-step-dot"></div>
+        <span class="ob-progress__label">Étape 3 / 4</span>
+    </div>
+
+    <h1 class="ob-title">Que <span class="it">recherches-tu</span> ?</h1>
+    <p class="ob-subtitle">
+        Coche tout ce qui correspond a tes besoins.
+        Ces informations nous permettront de personnaliser tes alertes et suggestions.
+    </p>
+
+    {% if error %}
+        <div class="ob-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="{{ path('app_onboarding_step3') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('onboarding_step3') }}">
+
+        {# ── Options de l'enum ArtistLookingFor ─────────────────────────── #}
+        <div class="ob-options" role="group" aria-label="Ce que tu recherches sur Bazaart">
+            {% for option in looking_for_options %}
+                {% set isChecked = option.value in selected_values %}
+                <div class="ob-option-item">
+                    <input
+                        type="checkbox"
+                        id="lf_{{ option.value }}"
+                        name="looking_for[]"
+                        value="{{ option.value }}"
+                        {% if isChecked %}checked{% endif %}
+                        {#
+                          A1-FIX : on supprime le second attribut id="cb_autre" qui créait
+                          un doublon (HTML invalide). On utilise uniquement l'id généré
+                          par la boucle : lf_autre. Le JS ci-dessous a été mis à jour
+                          en conséquence pour cibler getElementById('lf_autre').
+                        #}
+                    >
+                    <label for="lf_{{ option.value }}">
+                        <span class="ob-checkbox-visual" aria-hidden="true">
+                            <svg class="ob-check-icon" width="12" height="12" viewBox="0 0 24 24"
+                                 fill="none" stroke="var(--bg)" stroke-width="3"
+                                 stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m5 12 5 5L20 7"/>
+                            </svg>
+                        </span>
+                        {{ option.label()|e }}
+                    </label>
+                </div>
+            {% endfor %}
+        </div>
+
+        {# ── Champ libre "Autre" — visible uniquement si la case est cochée ─ #}
+        <div id="autre-field" class="{{ 'autre' in selected_values ? 'visible' : '' }}">
+            <label for="looking_for_other" class="ob-label">
+                Précise ce que tu recherches
+            </label>
+            <input
+                type="text"
+                id="looking_for_other"
+                name="looking_for_other"
+                class="ob-input"
+                maxlength="255"
+                placeholder="Ex : des opportunités de résidence au Sénégal, des collectifs d'artistes..."
+                value="{{ looking_for_other ? looking_for_other|e : '' }}"
+            >
+        </div>
+
+        <div class="ob-actions" style="margin-top: 32px;">
+            <a href="{{ path('app_onboarding_step2') }}" class="ob-btn-back">Retour</a>
+            <button type="submit" class="ob-btn-next">Continuer</button>
+        </div>
+
+    </form>
+</div>
+
+{#
+ # Script JS natif : afficher/masquer le champ "Autre" selon la case cochée.
+ # On écoute l'événement 'change' sur la case "autre" et on toggle la classe
+ # 'visible' sur le div #autre-field.
+ # Aucune dépendance externe — JS pur (<script> dans le block, pas dans le <head>).
+#}
+{% block javascripts %}
+{{ parent() }}
+<script>
+(function () {
+    'use strict';
+
+    // On cherche la case "autre" par l'id unifié 'lf_autre' (généré par la boucle Twig).
+    // A1-FIX : l'id 'cb_autre' a été supprimé — il créait un doublon HTML invalide.
+    var cbAutre = document.getElementById('lf_autre');
+    var autreField = document.getElementById('autre-field');
+    var autreInput = document.getElementById('looking_for_other');
+
+    if (!cbAutre || !autreField) {
+        return; // Sécurité : si les éléments n'existent pas, on ne fait rien
+    }
+
+    function toggleAutreField() {
+        if (cbAutre.checked) {
+            autreField.classList.add('visible');
+            // Le champ texte devient requis quand la case est cochée
+            if (autreInput) { autreInput.setAttribute('required', 'required'); }
+        } else {
+            autreField.classList.remove('visible');
+            if (autreInput) {
+                autreInput.removeAttribute('required');
+                autreInput.value = ''; // Efface le texte si la case est décochée
+            }
+        }
+    }
+
+    // Écoute le changement sur la case "autre"
+    cbAutre.addEventListener('change', toggleAutreField);
+
+    // Initialisation au chargement (si la case était déjà cochée — retour arrière)
+    toggleAutreField();
+}());
+</script>
+{% endblock %}
+{% endblock %}

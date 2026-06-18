@@ -1,0 +1,164 @@
+{#
+    Template HTML de l'email de bienvenue envoyé a la fin de l'onboarding.
+
+    Variables disponibles (passées par OnboardingService::sendWelcomeEmail) :
+      - user        : App\Entity\User  -- l'utilisateur qui vient de finir l'onboarding
+      - displayName : string           -- nom d'affichage (depuis ArtistProfile ou email)
+
+    Ce template est AUTONOME : pas de {% extends %} car les emails ne peuvent pas
+    hériter du layout Twig standard (pas de session, pas de JS, client email limité).
+
+    Compatibilité email (Gmail, Outlook, Apple Mail) :
+      - Mise en page par <table> (CSS flexbox/grid non supporté partout)
+      - CSS inline uniquement
+      - Pas de police externe
+      - Pas de tiret cadratin dans le contenu (regle editoriale de Gaelle)
+
+    Charte graphique Bazaart :
+      - Fond header : #1a1f2e
+      - Accent lime  : #C4F53B
+      - Accent orange : #FF6B2C
+#}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenue dans la communaute Bazaart !</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: Arial, Helvetica, sans-serif; font-size: 16px; color: #1a1f2e;">
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f4f4; padding: 20px 0;">
+    <tr>
+        <td align="center">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; background-color: #ffffff; overflow: hidden;">
+
+                {# ── HEADER ────────────────────────────────────────────── #}
+                <tr>
+                    <td style="background-color: #1a1f2e; padding: 28px 32px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                            <tr>
+                                <td>
+                                    <span style="font-family: Georgia, serif; font-size: 22px; font-weight: bold; color: #C4F53B; letter-spacing: -0.5px;">
+                                        BazaArt
+                                    </span>
+                                </td>
+                                <td align="right">
+                                    <span style="background-color: #C4F53B; color: #1a1f2e; font-size: 11px; font-weight: bold; padding: 4px 10px; letter-spacing: 0.08em; text-transform: uppercase; font-family: Arial, sans-serif;">
+                                        Bienvenue
+                                    </span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                {# ── CORPS ─────────────────────────────────────────────── #}
+                <tr>
+                    <td style="padding: 36px 32px 20px;">
+
+                        {# Salutation nominative #}
+                        <p style="font-size: 26px; font-weight: bold; color: #1a1f2e; margin: 0 0 8px; line-height: 1.2;">
+                            Bienvenue, {{ displayName|e }} !
+                        </p>
+
+                        <p style="font-size: 15px; color: #444; margin: 0 0 24px; line-height: 1.6;">
+                            Ton profil Bazaart est maintenant cree. Tu rejoins une communaute
+                            d'artistes et de createurs de la diaspora afro-atlantique.
+                        </p>
+
+                        {# Bloc accent vert — ce que l'utilisateur peut faire #}
+                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+                               style="background-color: #C4F53B; margin-bottom: 28px;">
+                            <tr>
+                                <td style="padding: 20px 24px;">
+                                    <p style="font-size: 13px; font-weight: bold; color: #1a1f2e;
+                                               text-transform: uppercase; letter-spacing: 0.08em;
+                                               margin: 0 0 10px; font-family: Arial, sans-serif;">
+                                        Tu as acces a
+                                    </p>
+                                    <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                                        <tr>
+                                            <td style="padding: 4px 0; font-size: 14px; color: #1a1f2e;">
+                                                La Ressourcerie (bourses, residences, appels a projets)
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 4px 0; font-size: 14px; color: #1a1f2e;">
+                                                Le Forum et la messagerie de la communaute
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 4px 0; font-size: 14px; color: #1a1f2e;">
+                                                Les formations et evenements du Pole Studio Bazaart
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 4px 0; font-size: 14px; color: #1a1f2e;">
+                                                Des alertes personnalisees selon tes interets
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+
+                        {# CTA principal #}
+                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+                               style="margin-bottom: 28px;">
+                            <tr>
+                                <td align="center">
+                                    {#
+                                      A4-FIX : l'URL est maintenant passée en contexte via OnboardingService::sendWelcomeEmail().
+                                      Variable {{ dashboardUrl }} = URL absolue générée par le routeur Symfony.
+                                      Cela évite le hardcode 'https://bazaart.fr/dashboard' qui était incorrect en dev/staging.
+                                    #}
+                                    <a href="{{ dashboardUrl }}"
+                                       style="display: inline-block; background-color: #1a1f2e; color: #C4F53B;
+                                              font-size: 14px; font-weight: bold; padding: 14px 32px;
+                                              text-decoration: none; letter-spacing: 0.06em;
+                                              text-transform: uppercase; font-family: Arial, sans-serif;">
+                                        Acceder a mon tableau de bord
+                                    </a>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p style="font-size: 14px; color: #666; margin: 0 0 8px; line-height: 1.6;">
+                            Tu peux completer ou modifier ton profil a tout moment depuis
+                            ton tableau de bord. N'hesites pas a explorer le forum pour te
+                            presenter a la communaute !
+                        </p>
+
+                        <p style="font-size: 14px; color: #666; margin: 0 0 24px; line-height: 1.6;">
+                            A tres bientot sur Bazaart,
+                        </p>
+
+                        <p style="font-size: 14px; font-weight: bold; color: #1a1f2e; margin: 0;">
+                            L'equipe Bazaart
+                        </p>
+                        <p style="font-size: 12px; color: #999; margin: 4px 0 0;">
+                            Le Pole Lab, Pôle Studio, Pôle Events
+                        </p>
+
+                    </td>
+                </tr>
+
+                {# ── FOOTER ────────────────────────────────────────────── #}
+                <tr>
+                    <td style="background-color: #f8f8f8; border-top: 1px solid #e8e8e8; padding: 20px 32px;">
+                        <p style="font-size: 11px; color: #999; margin: 0; line-height: 1.5; text-align: center;">
+                            Tu recois cet email car tu viens de finaliser ton inscription sur Bazaart.
+                            Pour modifier tes preferences d'alertes, rendez-vous dans ton profil.
+                            Contact : <a href="mailto:bonjourbazaart@gmail.com" style="color: #999;">bonjourbazaart@gmail.com</a>
+                        </p>
+                    </td>
+                </tr>
+
+            </table>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

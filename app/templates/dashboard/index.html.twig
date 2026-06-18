@@ -1797,6 +1797,45 @@
             </div>
         {% endif %}
 
+        {#
+         # ┄┄ Widget F : Récap des alertes activées ┄┄
+         #
+         # Affiche un résumé des préférences d'alertes configurées durant l'onboarding.
+         # Visible uniquement si l'utilisateur a un ArtistProfile (onboarding complété).
+         # Si pas d'ArtistProfile → on ne l'affiche pas (structure, admin...).
+         #
+         # Note : on n'a pas accès à ResourceAlert ici sans le passer depuis le controller.
+         # On affiche plutôt le résumé de "que recherches-tu" (lookingFor) qui est
+         # accessible directement via user.lookingFor.
+        #}
+        {% if user.lookingFor is not null and user.lookingFor|length > 0 %}
+            <div style="padding: 14px 18px; border-top: 1px solid var(--line-soft); background: var(--bg);">
+                <p style="font-family: var(--mono); font-size: 10px; font-weight: 700;
+                           letter-spacing: .10em; text-transform: uppercase; color: var(--ink-mute);
+                           margin: 0 0 8px;">
+                    Tes alertes actives
+                </p>
+                <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                    {% set lookingForLabels = {
+                        'formations':        'Formations',
+                        'ressources_aides':  'Aides financieres',
+                        'ressources_appels': 'Appels a projets',
+                        'autre':             'Autre'
+                    } %}
+                    {% for val in user.lookingFor %}
+                        <li style="font-size: 12px; color: var(--ink); display: flex; align-items: center; gap: 6px;">
+                            {# Puce vert acide #}
+                            <span style="width: 6px; height: 6px; background: var(--accent); display: inline-block; flex-shrink: 0;"></span>
+                            {{ lookingForLabels[val] ?? val }}
+                            {% if val == 'autre' and user.lookingForOther is not null %}
+                                : {{ user.lookingForOther|e }}
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
 
         {# ┄┄ Widget E : Complétude du profil ┄┄
            Checklist semi-statique : vérifie si les champs clés sont remplis.
