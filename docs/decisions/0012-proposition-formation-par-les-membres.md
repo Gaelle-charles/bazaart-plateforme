@@ -1,7 +1,7 @@
 # ADR-0012 — Proposition de formation par les membres
 
 - **Date** : 2026-06-15
-- **Statut** : arbitré
+- **Statut** : remplacé par ADR-0013 (2026-06-18)
 - **Décidé par** : Gaëlle
 
 ## Contexte
