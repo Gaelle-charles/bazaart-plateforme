@@ -87,6 +87,12 @@ class EmailVerificationService
             'app_verify_email',
             (string) $user->getId(),
             $user->getEmail(),
+            // 4e paramètre : paramètres ajoutés EN CLAIR dans l'URL (et inclus dans la signature).
+            // Indispensable ici : au moment du clic, l'utilisateur n'est PAS connecté, donc le
+            // contrôleur a besoin de l'id présent dans l'URL (?id=...) pour charger le bon User
+            // AVANT de valider la signature. Sans ce paramètre, l'URL n'avait pas de ?id= et la
+            // vérification échouait systématiquement (redirection vers /register).
+            ['id' => (string) $user->getId()],
         );
 
         // L'URL complète avec signature, valide pour 1 heure
@@ -161,8 +167,11 @@ class EmailVerificationService
         //
         // Ces exceptions implémentent toutes VerifyEmailExceptionInterface,
         // ce qui permet au contrôleur de les attraper en un seul catch.
-        $this->verifyEmailHelper->validateEmailConfirmation(
-            $request->getUri(),          // L'URL complète de la requête (avec la signature)
+        // validateEmailConfirmationFromRequest() remplace validateEmailConfirmation()
+        // (dépréciée depuis verify-email-bundle v1.17). On lui passe directement la Request :
+        // le bundle en extrait l'URI signée. Mêmes contrôles (signature HMAC, expiration, email).
+        $this->verifyEmailHelper->validateEmailConfirmationFromRequest(
+            $request,
             (string) $user->getId(),     // L'id attendu (doit correspondre à celui dans l'URL)
             $user->getEmail(),           // L'email attendu (doit correspondre à celui dans l'URL)
         );

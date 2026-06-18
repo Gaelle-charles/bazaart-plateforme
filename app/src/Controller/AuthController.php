@@ -10,6 +10,7 @@ use App\Service\AuthService;
 use App\Service\EmailVerificationService;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
@@ -41,6 +42,7 @@ class AuthController extends AbstractController
      *   - UserRepository            : retrouver l'utilisateur pour la vérification
      *   - RateLimiterFactory $registerLimiter : limite les créations de comptes (5/15min/IP)
      *   - RateLimiterFactory $verifyEmailLimiter : limite les renvois d'email (3/10min/email)
+     *   - Security                  : connexion programmatique après vérification email (Lot 1)
      *
      * Note : le rate limiting de /login est géré automatiquement par Symfony Security
      * via login_throttling dans security.yaml — aucun code nécessaire ici.
@@ -55,6 +57,11 @@ class AuthController extends AbstractController
         // (détection d'un attaquant qui tenterait de spammer la boîte d'un utilisateur).
         // Symfony autorise LoggerInterface dans les contrôleurs via autowiring.
         private readonly LoggerInterface          $logger,
+        // Security (Symfony\Bundle\SecurityBundle\Security) est le service central
+        // de Symfony Security. Sa méthode login() permet de connecter un utilisateur
+        // par programmation, sans passer par le formulaire de login.
+        // C'est l'API recommandée depuis Symfony 6.2 (remplace LoginContext + TokenStorage).
+        private readonly Security                 $security,
     ) {}
 
     // ─── Route : /login ───────────────────────────────────────────────────────
@@ -210,11 +217,18 @@ class AuthController extends AbstractController
      * Fonctionnement :
      *   1. On charge l'utilisateur par son id (passé dans l'URL signée)
      *   2. On délègue la validation de la signature au service
-     *   3. En cas de succès : isVerified=true, flash succès, redirection vers /login
+     *   3. En cas de succès : isVerified=true persisted, connexion automatique via
+     *      Security::login(), redirection vers app_dashboard
      *   4. En cas d'échec  : message d'erreur clair avec possibilité de renvoyer
      *
      * L'URL signée contient les paramètres : ?id=X&expires=Y&token=Z
      * Le bundle les parse automatiquement depuis Request::getUri().
+     *
+     * ── Lot 2 (à venir) ───────────────────────────────────────────────────────
+     * Quand le module Onboarding sera implémenté (Lot 2), la redirection finale
+     * devra pointer vers la route d'onboarding si l'utilisateur n'a pas encore
+     * complété son profil. Le gating se fera probablement dans un EventListener
+     * sur KernelEvents::REQUEST (ou dans le dashboard lui-même), pas ici.
      */
     #[Route('/verifier-email', name: 'app_verify_email')]
     public function verifyEmail(Request $request): Response
@@ -241,16 +255,40 @@ class AuthController extends AbstractController
             return $this->redirectToRoute('app_register');
         }
 
-        // ── Si l'email est déjà vérifié : on le signale et on redirige ────────
-        // Cas typique : l'utilisateur clique deux fois sur le lien.
-        // On redirige vers /login avec un message positif plutôt que d'afficher une erreur.
+        // ── Si l'email est déjà vérifié : on signale et on redirige ──────────
+        //
+        // Cas typique : l'utilisateur clique deux fois sur le même lien.
+        // Deux sous-cas possibles :
+        //   a) L'utilisateur est déjà authentifié (il a cliqué le lien, s'est connecté,
+        //      puis reclique le lien depuis sa boîte mail) → on le renvoie au dashboard.
+        //   b) L'utilisateur n'est pas authentifié (nouvelle session, navigateur différent)
+        //      → on le renvoie au login pour qu'il se connecte normalement.
+        //
+        // Cette distinction évite une erreur (Security::login() sur un compte déjà connecté
+        // n'est pas un problème per se, mais c'est inutile et potentiellement confus).
         if ($user->isVerified()) {
-            $this->addFlash('success', 'Ton adresse email est déjà confirmée. Tu peux te connecter.');
+            $this->addFlash('success', 'Ton adresse email est déjà confirmée.');
+
+            // Si l'utilisateur est déjà connecté, on le renvoie directement au dashboard.
+            // getUser() renvoie null si non connecté, ou l'entité User si connecté.
+            if ($this->getUser() !== null) {
+                return $this->redirectToRoute('app_dashboard');
+            }
+
+            // Sinon, on l'envoie au login avec le message positif
             return $this->redirectToRoute('app_login');
         }
 
         // ── Déléguer la validation de la signature au service ─────────────────
         try {
+            // handleVerification() fait deux choses atomiquement :
+            //   1. Valide la signature HMAC (lève une exception si invalide/expiré)
+            //   2. Persiste user.isVerified = true via EntityManager::flush()
+            //
+            // IMPORTANT : le flush() est fait AVANT qu'on appelle Security::login()
+            // ci-dessous. C'est indispensable car UserChecker::checkPreAuth() vérifie
+            // isVerified en base — si on appelait login() avant le flush(), le checker
+            // lirait encore isVerified=false et bloquerait la connexion.
             $this->emailVerificationService->handleVerification($request, $user);
 
         } catch (VerifyEmailExceptionInterface $e) {
@@ -271,17 +309,65 @@ class AuthController extends AbstractController
             // Stocke l'email en session pour le formulaire de renvoi
             $request->getSession()->set('pending_verification_email', $user->getEmail());
 
-            // Redirige vers la page "vérifie ta boîte mail" pour proposer le renvoi
+            // Redirige vers la page "vérifie ta boîte mail" pour proposer le renvoi.
+            // NE PAS connecter l'utilisateur ici : la signature est invalide.
             return $this->redirectToRoute('app_check_email');
         }
 
-        // ── Succès : email confirmé ────────────────────────────────────────────
-        $this->addFlash('success', 'Adresse email confirmée. Tu peux maintenant te connecter.');
+        // ── Succès : email confirmé → connexion automatique ───────────────────
+        //
+        // À ce point :
+        //   - La signature est valide (aucune exception levée)
+        //   - user.isVerified = true est persisté en base (flush() fait dans handleVerification)
+        //   - UserChecker::checkPreAuth() laissera passer cet utilisateur
+        //
+        // Security::login() est l'API officielle Symfony 6.2+ pour l'authentification
+        // programmatique. Elle :
+        //   1. Crée un UsernamePasswordToken pour le firewall spécifié
+        //   2. Stocke le token dans la session (TokenStorage)
+        //   3. Déclenche l'événement SecurityEvents::INTERACTIVE_LOGIN
+        //   4. Régénère l'id de session (protection contre la fixation de session)
+        //
+        // Le deuxième paramètre est le nom du firewall déclaré dans security.yaml.
+        // Ici 'main' — c'est le firewall qui couvre toutes les URLs de l'application.
+        //
+        // Note : login() retourne une Response|null. Si le firewall a des listeners
+        // qui veulent rediriger (ex: remember_me, _target_path), ils peuvent renvoyer
+        // une Response. On l'utilise si elle existe, sinon on redirige vers le dashboard.
+        $this->addFlash('success', 'Adresse email confirmée. Bienvenue sur Bazaart !');
 
-        // On vide la session : le compte est maintenant actif
+        // On vide la session de confirmation : le compte est maintenant actif
         $request->getSession()->remove('pending_verification_email');
 
-        return $this->redirectToRoute('app_login');
+        // Connexion programmatique sur le firewall 'main'.
+        //
+        // Signature complète de Security::login() :
+        //   login(UserInterface $user, ?string $authenticatorName, ?string $firewallName, ...)
+        //
+        // Pourquoi on passe 'security.authenticator.form_login.main' ?
+        //
+        // Notre firewall 'main' déclare DEUX authenticators :
+        //   - form_login     (formulaire email/mot de passe)
+        //   - GoogleAuthenticator (custom_authenticators)
+        //
+        // Si $authenticatorName = null, Symfony lève une LogicException car il ne sait
+        // pas lequel choisir ("Too many authenticators were found for the firewall").
+        // On doit donc lui indiquer lequel utiliser.
+        //
+        // On choisit 'security.authenticator.form_login.main' car :
+        //   1. C'est l'authenticator "natif" pour les connexions par email/mot de passe.
+        //   2. Security::login() ne re-vérifie PAS les credentials quand on lui passe
+        //      directement un UserInterface — il crée juste le token de session.
+        //   3. GoogleAuthenticator serait incorrect sémantiquement (pas de token OAuth ici).
+        //
+        // C'est le service ID auto-généré par Symfony pour le form_login du firewall 'main'.
+        // Format : security.authenticator.form_login.<nom_du_firewall>
+        $loginResponse = $this->security->login($user, 'security.authenticator.form_login.main', 'main');
+
+        // Si Security a produit sa propre réponse (cas rare avec des listeners spéciaux),
+        // on la retourne. Sinon, redirection manuelle vers le dashboard.
+        // ── Lot 2 : remplacer app_dashboard par la route d'onboarding si profil non complété.
+        return $loginResponse ?? $this->redirectToRoute('app_dashboard');
     }
 
     // ─── Route : /verifier-email/renvoyer ─────────────────────────────────────
