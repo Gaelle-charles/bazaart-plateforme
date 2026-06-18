@@ -11,4 +11,7 @@
 - [Pas de tiret cadratin](feedback_no_em_dash.md) — ne JAMAIS utiliser « — » dans les titres et le contenu du site (préférence éditoriale Gaëlle)
 - [SEO technique à faire (19-20 juin)](project_seo_todo.md) — sitemap.xml, robots.txt, JSON-LD Article planifiés ; blog déjà public + meta + articles réécrits (15 juin)
 - [Intégration Stripe (15 juin)](project_stripe.md) — IDs produits/prix LIVE+TEST, webhook créé, architecture Option B (pas de Connect), entités Subscription+CoursePayment, vars env prod à configurer
-- [⚠️ Docker local éteint](feedback_docker_local.md) — ne pas lancer d'agents avec docker compose en local ; service prod = `platform_app` dans `docker-compose.prod.yml`
+- [⚠️ Docker local éteint](feedback_docker_local.md) — état Docker local variable, vérifier `docker ps` ; service prod = `platform_app` dans `docker-compose.prod.yml`
+- [Design prototype Street](reference_design_prototype.md) — standalone.html = appli React (JS externes absents) ; design system dans le CSS, écrans précis → demander une capture
+- [⚠️ Site « down » côté Gaëlle](feedback_site_down_client_side.md) — vérifier d'ABORD son Mac/réseau (NAT64 `64:ff9b::`, iCloud Private Relay) avant de toucher au serveur (incident 16 juin)
+- [⚠️ Incident réseau Mac en cours](project_mac_network_incident.md) — stack réseau incohérent après cmds diagnostic ; prochaine étape = redémarrer le Mac et retester

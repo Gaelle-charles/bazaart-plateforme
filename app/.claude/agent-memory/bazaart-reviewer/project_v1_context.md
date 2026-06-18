@@ -16,7 +16,9 @@ Stack imposée par le CDC V3 :
 
 Rôles en jeu : ROLE_USER, ROLE_ARTIST, ROLE_STRUCTURE, ROLE_MODERATOR, ROLE_ADMIN.
 
-Container Docker monté sur `/Users/belamour/Downloads/bazaart-plateforme-demo/app` (différent du workspace courant `/Users/belamour/bazaart-plateforme/app`). PHPStan dans le container ne peut pas analyser les fichiers non commités du workspace courant.
+Container Docker **éteint en dehors des sessions de dev actives** — lors des relectures, vérifier si le daemon Docker est disponible avant de lancer PHPStan. Si Docker est éteint, faire une revue statique manuelle + greps ciblés.
+
+**Anti-pattern retrait de fonctionnalité (ADR-0013, juin 2026)** : après un retrait non destructif, le cache Twig (`var/cache/dev/`) peut conserver des fichiers compilés avec des références aux anciennes routes. Ces caches stale ne cassent rien en production (Symfony régénère à la demande ou après `cache:clear`) mais peuvent induire en erreur lors d'une relecture. Toujours distinguer les hits dans `var/cache/` des hits dans `src/` et `templates/`.
 
 **Why:** Informations stables nécessaires pour calibrer les recommandations de relecture.
 **How to apply:** Toujours vérifier bcrypt (pas argon2id), PHPStan niveau 6, pas de JWT en V1.
