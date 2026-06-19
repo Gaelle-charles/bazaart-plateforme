@@ -339,14 +339,21 @@ class EnrichOpportunitiesCommand extends Command
                     }
                 }
 
-                // ── Mise à jour du titre ────────────────────────────────────────
-                // On ne remplace le titre que si on vient aussi de mettre a jour la description
-                // (enrichissement complet) OU si --force. Evite de remplacer un titre correct
-                // par un titre LLM sans description associee.
-                if ($enrichment->title !== null && $enrichment->title !== '' && $enrichment->description !== null) {
-                    if (!$hadDescription || $isForce) {
-                        $item->setTitle($enrichment->title);
-                    }
+                // ── ADR-0020 : mise à jour du titre optimisé ───────────────────
+                // Le titre optimisé est appliqué SYSTÉMATIQUEMENT si le LLM en fournit un.
+                // Garde-fou : on n'écrase JAMAIS par une valeur vide.
+                //
+                // Différence par rapport à l'ancien comportement :
+                //   AVANT (ADR-0018) : le titre n'était remplacé que si !$hadDescription || $isForce
+                //     (on évitait de toucher au titre si la description existait déjà).
+                //   MAINTENANT (ADR-0020) : le titre est TOUJOURS remplacé par la version
+                //     optimisée (française, concise, factuelle) — indépendamment de la description.
+                //   RAISON : les titres bruts sont souvent en anglais ou très longs. L'objectif
+                //     de l'ADR-0020 est précisément de corriger le stock existant.
+                //   SÉCURITÉ : le garde-fou "valeur non vide" protège contre un écrasement
+                //     accidentel par une chaîne vide ou null du LLM.
+                if ($enrichment->title !== null && $enrichment->title !== '') {
+                    $item->setTitle($enrichment->title);
                 }
 
                 // ── Mise à jour des disciplines ─────────────────────────────────
@@ -474,7 +481,12 @@ class EnrichOpportunitiesCommand extends Command
                     $item->setDescription($enrichment->description);
                 }
 
-                if ($enrichment->title !== null && $enrichment->title !== '' && $enrichment->description !== null) {
+                // ADR-0020 : titre optimisé appliqué SYSTÉMATIQUEMENT si non vide.
+                // Même logique que processScrapedResources() : on ne restreint plus à
+                // "seulement si description aussi enrichie". Le titre et la description
+                // sont maintenant mis à jour indépendamment l'un de l'autre.
+                // Garde-fou : on ne touche pas au titre si le LLM retourne null ou "".
+                if ($enrichment->title !== null && $enrichment->title !== '') {
                     $item->setTitle($enrichment->title);
                 }
 

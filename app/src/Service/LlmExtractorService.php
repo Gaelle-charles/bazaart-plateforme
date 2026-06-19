@@ -542,6 +542,50 @@ PROMPT;
     }
 
     /**
+     * Supprime les tirets cadratins (—, U+2014) et demi-cadratins (–, U+2013) d'un texte généré par LLM.
+     *
+     * RÈGLE ÉDITORIALE DE GAËLLE : ces caractères sont interdits dans tous les titres
+     * et contenus du site (ils viennent systématiquement du LLM malgré les consignes).
+     * Cette méthode est le "filet de sécurité" PHP : même si le LLM ignore la consigne,
+     * aucun cadratin ne passe en BDD.
+     *
+     * LOGIQUE DE REMPLACEMENT :
+     *   1. "A — B" ou "A – B" (entourés d'espaces) → "A : B" (deux-points)
+     *      Raison : dans les titres ("Résidence de création — Institut français"),
+     *      le cadratin sépare deux parties — le deux-points est plus naturel en français.
+     *   2. Tout cadratin résiduel (sans espaces autour) → "-" (tiret simple ASCII)
+     *      Ex: "A—B" → "A-B"
+     *   3. Collapse des espaces multiples éventuels (ex: deux espaces consécutifs après remplacement)
+     *
+     * Champs concernés : title, description, howToApply, fundingAmount, fundingType
+     * (tous les champs texte produits par le LLM).
+     *
+     * @param string $text Texte à nettoyer (peut être vide)
+     * @return string Texte nettoyé de tout tiret cadratin/demi-cadratin
+     */
+    private function stripEmDashes(string $text): string
+    {
+        if ($text === '') {
+            return $text;
+        }
+
+        // Étape 1 : remplacement des cadratins ENTOURÉS D'ESPACES par " : "
+        // Pattern : espace + (— ou –) + espace → deux-points
+        // On utilise \x{2014} (cadratin) et \x{2013} (demi-cadratin) en notation Unicode.
+        $text = (string) preg_replace('/\s[—–]\s/u', ' : ', $text);
+
+        // Étape 2 : remplacement des cadratins RÉSIDUELS (sans espaces) par un tiret simple
+        // Ex: "A—B" → "A-B", "Résidence—Paris" → "Résidence-Paris"
+        $text = str_replace(['—', '–'], '-', $text);
+
+        // Étape 3 : normaliser les espaces multiples qui auraient pu apparaître
+        // (ex: " : " produit parfois " :  " si le texte original avait des espaces doubles)
+        $text = (string) preg_replace('/  +/', ' ', $text);
+
+        return trim($text);
+    }
+
+    /**
      * Extrait les opportunités artistiques d'un contenu HTML.
      *
      * Retourne un tableau de ScrapedOpportunity[] (peut être vide en cas d'erreur).
@@ -916,21 +960,23 @@ PROMPT;
 Tu es un extracteur d'opportunités artistiques et culturelles. Analyse le contenu fourni et extrait TOUTES les opportunités (appels à projets, résidences, bourses, financements, prix, concours) présentes.
 
 Pour chaque opportunité, retourne un objet JSON avec exactement ces champs :
-- titre (string) : titre de l'opportunité
+- titre (string) : titre OPTIMISÉ en FRANÇAIS, CONCIS (maximum 90 caractères). Reformule pour être clair et compréhensible d'un coup d'oeil. Garde le nom propre de l'organisme ou du dispositif s'il est pertinent. Ne traduis pas les noms propres. N'invente rien : base-toi uniquement sur le contenu de la page. Exemple : "Résidence de création (Institut français)" ou "Bourse Duo, SACD".
 - type (string) : "Résidence" | "Bourse" | "Appel à projets" | "Appel à candidatures" | "Prix" | "Financement" | "Concours" | "Mentorat" | "Tutorat" | "Accompagnement" | "Formation" | "Autre"
 - organisme (string) : nom de l'organisme qui propose l'opportunité
 - country (string) : pays de l'organisme en toutes lettres (ex: "France", "Belgique", "Suisse") sinon ""
 - city (string) : ville principale où se déroule l'opportunité (ex: "Paris", "Lyon", "Bruxelles") sinon ""
 - disciplines (array) : tableau des disciplines artistiques parmi la liste suivante UNIQUEMENT : [$disciplinesList]. Retourne [] si aucune ne correspond.
-- experienceLevel (string) : niveau d'expérience requis — "beginner" (débutant), "intermediate" (intermédiaire), "experienced" (expérimenté) — ou "" si non précisé / tous niveaux
+- experienceLevel (string) : niveau d'expérience requis, "beginner" (débutant), "intermediate" (intermédiaire), "experienced" (expérimenté), ou "" si non précisé / tous niveaux
 - fundingAmount (string) : montant exact si mentionné (ex: "5 000 €", "jusqu'à 10 000 €", "non précisé"), sinon ""
 - fundingType (string) : nature du financement (ex: "Bourse en argent", "Prise en charge des frais", "Prix non monétaire"), sinon ""
-- howToApply (string) : modalités de candidature complètes — comment postuler, quoi envoyer, contact ou lien, dates clés. Si absent : "". Max 800 caractères.
+- howToApply (string) : modalités de candidature complètes, comment postuler, quoi envoyer, contact ou lien, dates clés. Si absent : "". Max 800 caractères.
 - applicationUrl (string) : ADR-0019 — URL du bouton "Candidater / Postuler / Apply / Submit / Déposer / Register" si elle se trouve dans la liste de liens fournie. IMPORTANT : tu dois UNIQUEMENT retourner une URL présente dans la liste de liens — si aucun lien ne correspond à une action de candidature, retourne "". Ne pas inventer d'URL.
 - publicEligible (string) : public éligible si mentionné sinon ""
 - deadline (string) : date limite au format ISO 8601 (AAAA-MM-JJ) si trouvée sinon ""
 - description (string) : OBLIGATOIRE — description COMPLÈTE et STRUCTURÉE de l'opportunité en sections claires. Inclus TOUJOURS : présentation générale, objectifs/bénéfices, critères d'éligibilité, financement/dotation si précisé. Format : sections séparées par des sauts de ligne. Ne te contente PAS d'une phrase : produis une description détaillée à partir des informations de la page. Si une information manque, indique "non précisé" plutôt que de l'inventer. Max 1000 caractères.
 - url (string) : URL de l'opportunité si trouvée sinon celle de la page source
+
+TYPOGRAPHIE OBLIGATOIRE : n'utilise JAMAIS le tiret cadratin « — » (U+2014) ni le tiret demi-cadratin « – » (U+2013) dans aucun champ. Pour séparer deux parties dans un titre, utilise un deux-points (":") ou des parenthèses. Pour les autres champs, utilise une virgule ou une parenthèse. Un tiret simple ("-") est autorisé pour les plages de dates ou les traits d'union.
 
 Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour. Si aucune opportunité trouvée, réponds [].
 PROMPT;
@@ -1097,21 +1143,23 @@ PROMPT;
 Tu es un extracteur d'opportunités artistiques et culturelles. Analyse le contenu fourni et extrait TOUTES les opportunités (appels à projets, résidences, bourses, financements, prix, concours).
 
 Retourne un objet JSON avec une clé "opportunites" contenant un tableau. Chaque élément a exactement ces champs :
-- titre (string) : titre de l'opportunité
+- titre (string) : titre OPTIMISÉ en FRANÇAIS, CONCIS (maximum 90 caractères). Reformule pour être clair et compréhensible d'un coup d'oeil. Garde le nom propre de l'organisme ou du dispositif s'il est pertinent. Ne traduis pas les noms propres. N'invente rien : base-toi uniquement sur le contenu de la page. Exemple : "Résidence de création (Institut français)" ou "Bourse Duo, SACD".
 - type (string) : "Résidence" | "Bourse" | "Appel à projets" | "Appel à candidatures" | "Prix" | "Financement" | "Concours" | "Mentorat" | "Tutorat" | "Accompagnement" | "Formation" | "Autre"
 - organisme (string) : organisme proposant l'opportunité
 - country (string) : pays de l'organisme en toutes lettres (ex: "France", "Belgique") sinon ""
 - city (string) : ville où se déroule l'opportunité (ex: "Paris", "Lyon") sinon ""
 - disciplines (array) : tableau des disciplines artistiques parmi cette liste UNIQUEMENT : [$disciplinesList]. Retourne [] si aucune ne correspond.
-- experienceLevel (string) : niveau requis — "beginner", "intermediate", "experienced" — ou "" si non précisé / tous niveaux
+- experienceLevel (string) : niveau requis, "beginner", "intermediate", "experienced", ou "" si non précisé / tous niveaux
 - fundingAmount (string) : montant exact si mentionné (ex: "5 000 €", "jusqu'à 10 000 €"), sinon ""
 - fundingType (string) : nature du financement (ex: "Bourse en argent", "Prise en charge des frais"), sinon ""
-- howToApply (string) : modalités de candidature complètes — comment postuler, quoi envoyer, contact ou lien, dates clés. Si absent : "". Max 800 caractères.
+- howToApply (string) : modalités de candidature complètes, comment postuler, quoi envoyer, contact ou lien, dates clés. Si absent : "". Max 800 caractères.
 - applicationUrl (string) : ADR-0019 — URL du bouton "Candidater / Postuler / Apply / Submit / Déposer / Register" si elle se trouve dans la liste de liens fournie en début de message. IMPORTANT : retourne UNIQUEMENT une URL présente dans cette liste. Ne pas inventer d'URL. Retourne "" si aucun lien ne correspond.
 - publicEligible (string) : public éligible si mentionné, sinon ""
 - deadline (string) : date limite ISO 8601 (AAAA-MM-JJ) si trouvée, sinon ""
 - description (string) : OBLIGATOIRE — description COMPLÈTE et STRUCTURÉE en sections claires (présentation, objectifs/bénéfices, éligibilité, financement). Sections séparées par des sauts de ligne. Ne te contente PAS d'une phrase : produis une description détaillée à partir du contenu de la page. Si une info manque, indique "non précisé" sans inventer. Max 1000 caractères.
 - url (string) : URL de l'opportunité ou URL de la page source si introuvable
+
+TYPOGRAPHIE OBLIGATOIRE : n'utilise JAMAIS le tiret cadratin « — » (U+2014) ni le tiret demi-cadratin « – » (U+2013) dans aucun champ. Pour séparer deux parties dans un titre, utilise un deux-points (":") ou des parenthèses. Pour les autres champs, utilise une virgule ou une parenthèse. Un tiret simple ("-") est autorisé pour les plages de dates ou les traits d'union.
 
 Si aucune opportunité trouvée, retourne {"opportunites": []}.
 PROMPT;
@@ -1333,10 +1381,17 @@ PROMPT;
 
         foreach ($items as $item) {
             // Validation minimale : un titre est obligatoire
-            $title = trim((string) ($item['titre'] ?? ''));
-            if (empty($title)) {
+            // ADR-0020 : troncature défensive à 120 chars (le prompt demande ≤90 chars,
+            // on accepte jusqu'à 120 en garde-fou côté PHP sans tronquer agressivement).
+            // La colonne title fait 255 chars en BDD — on reste bien en dessous.
+            $rawTitleLlm = trim((string) ($item['titre'] ?? ''));
+            if (empty($rawTitleLlm)) {
                 continue;
             }
+            // Filet anti-cadratin : on supprime les « — » et « – » AVANT de tronquer.
+            // Même si le LLM ignore la consigne typographique du prompt, aucun cadratin
+            // ne passera en BDD. Voir stripEmDashes() pour la logique de remplacement.
+            $title = mb_substr($this->stripEmDashes($rawTitleLlm), 0, 120);
 
             // Récupération de l'URL — fallback sur sourceUrl si le LLM n'en a pas trouvé
             $url = trim((string) ($item['url'] ?? ''));
@@ -1356,12 +1411,13 @@ PROMPT;
             // On prend la description brute du LLM et on la tronque à 1 500 chars
             // (garde-fou défensif : le prompt dit 1 000 chars, on prend 1 500 pour
             // la marge et pour l'affichage en page détail qui peut montrer plus).
+            // Filet anti-cadratin appliqué avant le tronquage.
             $description = trim((string) ($item['description'] ?? ''));
             // Tronquage défensif : le prompt dit 1 000 chars mais le LLM peut déborder.
             // 1 500 chars est notre limite PHP interne pour ce point d'entrée (scraping liste).
             // OpportunityEnrichmentService a sa propre limite plus haute (3 000 chars)
             // car il lit la page COMPLÈTE — plus de contenu disponible.
-            $description = mb_substr($description, 0, 1500);
+            $description = mb_substr($this->stripEmDashes($description), 0, 1500);
 
             // ── ADR-0016 Lot 1 : extraction des nouveaux champs ───────────────
 
@@ -1423,15 +1479,18 @@ PROMPT;
 
             // Montant du financement — tronqué à 255 chars (limite colonne BDD).
             // Le LLM peut retourner une chaîne verbose — on la garde courte.
-            $fundingAmount = mb_substr(trim((string) ($item['fundingAmount'] ?? '')), 0, 255);
+            // Filet anti-cadratin : on remplace — et – avant de stocker.
+            $fundingAmount = mb_substr($this->stripEmDashes(trim((string) ($item['fundingAmount'] ?? ''))), 0, 255);
 
             // Nature du financement — tronqué à 255 chars.
-            $fundingType = mb_substr(trim((string) ($item['fundingType'] ?? '')), 0, 255);
+            // Filet anti-cadratin appliqué.
+            $fundingType = mb_substr($this->stripEmDashes(trim((string) ($item['fundingType'] ?? ''))), 0, 255);
 
             // Modalités de candidature — TEXT en BDD, pas de limite serrée,
             // mais on borne défensivement à 8 000 chars pour éviter un débordement
             // en cas de réponse LLM anormalement longue.
-            $howToApply = mb_substr(trim((string) ($item['howToApply'] ?? '')), 0, 8000);
+            // Filet anti-cadratin appliqué.
+            $howToApply = mb_substr($this->stripEmDashes(trim((string) ($item['howToApply'] ?? ''))), 0, 8000);
 
             // ── ADR-0019 : extraction et validation de applicationUrl ──────────
             //

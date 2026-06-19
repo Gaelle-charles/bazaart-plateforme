@@ -97,7 +97,9 @@ class OpportunityEnrichmentService
 
     /**
      * Longueur maximale du titre produit par le LLM (en caractères).
-     * Le prompt indique ~80 chars ; on tronque ici en garde-fou côté PHP.
+     * ADR-0020 : le prompt demande ≤90 chars ; on garde 120 en garde-fou PHP
+     * pour ne pas tronquer agressivement quand le LLM dépasse légèrement.
+     * La colonne title fait 255 chars en BDD — aucun risque de violation.
      */
     private const MAX_TITLE_LENGTH = 120;
 
@@ -482,8 +484,14 @@ FORMAT DE SORTIE — tu dois retourner UNIQUEMENT un objet JSON avec exactement 
 }
 
 RÈGLES STRICTES :
-- "titre" : reformulation claire, concise et compréhensible en un coup d'oeil, en FRANÇAIS.
-  Maximum 80 caractères. Résume l'essentiel : type d'opportunité + organisme si possible.
+- "titre" : reformulation OBLIGATOIRE en FRANÇAIS, CONCISE (maximum 90 caractères).
+  Objectifs : clair, factuel, compréhensible d'un coup d'oeil.
+  Inclus le nom propre de l'organisme ou du dispositif si pertinent (ex: "Bourse Duo, SACD").
+  Ne traduis PAS les noms propres (ex: "Institut français", "Fonds de Dotation du Patrimoine").
+  N'invente RIEN : formule uniquement à partir du contenu réel de la page.
+  Si le titre brut existant est déjà en français et concis, tu peux le reformuler légèrement.
+  Le titre doit toujours être une string non vide.
+  Exemple : "Résidence de création (Institut français)" ou "Appel à projets audiovisuels (CNC)".
 - "description" : OBLIGATOIRE — description COMPLÈTE et STRUCTURÉE en FRANÇAIS, au format HTML.
   Basée UNIQUEMENT sur le texte fourni. N'invente RIEN. N'inclus que les informations présentes.
   Produis TOUJOURS une description détaillée à partir des informations de la page ;
@@ -526,8 +534,11 @@ RÈGLES STRICTES :
   "submit", "déposer", "register", "inscription", "s'inscrire".
   Si aucun lien ne correspond clairement à une action de candidature, retourne "".
   NE PAS inventer d'URL — retourner "" plutôt que d'inventer.
-- TYPOGRAPHIE : n'utilise JAMAIS de tiret cadratin (—) ni de tiret demi-cadratin (–).
-  Pour une incise, utilise une virgule ou des parenthèses ; pour une plage de dates, un tiret simple (-).
+- TYPOGRAPHIE OBLIGATOIRE : n'utilise JAMAIS le tiret cadratin « — » (U+2014) ni le tiret demi-cadratin « – » (U+2013) dans AUCUN champ, y compris le titre, la description, howToApply, fundingAmount et fundingType.
+  Pour séparer deux parties dans un titre : utilise un deux-points (":") ou des parenthèses.
+  Pour une incise dans le texte : utilise une virgule ou des parenthèses.
+  Pour une plage de dates : utilise un tiret simple ASCII ("-").
+  Un tiret simple ("-") est autorisé partout où il remplace un trait d'union ou une plage.
 - Réponds UNIQUEMENT avec le JSON. Aucun texte avant ou après.
 
 IMPORTANT — SÉCURITÉ :
@@ -700,6 +711,10 @@ MSG;
         if (is_string($rawTitle)) {
             $rawTitle = trim($rawTitle);
             if (!empty($rawTitle)) {
+                // Filet anti-cadratin : on nettoie avant de tronquer.
+                // Même si Mistral ignore la consigne typographique, aucun « — » ou « – »
+                // ne passera en BDD. Voir stripEmDashes() pour la logique de remplacement.
+                $rawTitle = $this->stripEmDashes($rawTitle);
                 // Tronquage garde-fou côté PHP (le prompt demande 80 chars, on accepte jusqu'à 120)
                 $title = mb_substr($rawTitle, 0, self::MAX_TITLE_LENGTH);
             }
@@ -718,6 +733,10 @@ MSG;
         if (is_string($rawDesc)) {
             $rawDesc = trim($rawDesc);
             if (!empty($rawDesc)) {
+                // Filet anti-cadratin : on nettoie AVANT le tronquage.
+                // La description peut contenir des cadratins insérés par le LLM malgré
+                // la consigne (ex: "Présentation — objectifs — critères").
+                $rawDesc = $this->stripEmDashes($rawDesc);
                 // Tronquage garde-fou côté PHP.
                 // Le prompt demande 2 500 chars HTML ; MAX_DESCRIPTION_LENGTH est à 3 000 chars
                 // pour laisser une marge confortable (les balises HTML s'ajoutent au contenu visible).
@@ -888,6 +907,8 @@ MSG;
         if (is_string($rawHowToApply)) {
             $rawHowToApply = trim($rawHowToApply);
             if (!empty($rawHowToApply)) {
+                // Filet anti-cadratin sur les modalités de candidature.
+                $rawHowToApply = $this->stripEmDashes($rawHowToApply);
                 if (mb_strlen($rawHowToApply) > self::MAX_HOW_TO_APPLY_LENGTH) {
                     $this->logger->warning('[EnrichmentService] howToApply trop long, troncature.', [
                         'url'    => $url,
@@ -911,7 +932,8 @@ MSG;
         if (is_string($rawFundingAmount)) {
             $rawFundingAmount = trim($rawFundingAmount);
             if (!empty($rawFundingAmount)) {
-                $fundingAmount = mb_substr($rawFundingAmount, 0, self::MAX_FUNDING_AMOUNT_LENGTH);
+                // Filet anti-cadratin sur le montant du financement.
+                $fundingAmount = mb_substr($this->stripEmDashes($rawFundingAmount), 0, self::MAX_FUNDING_AMOUNT_LENGTH);
             }
         } elseif ($rawFundingAmount !== null) {
             $this->logger->warning('[EnrichmentService] Le champ "fundingAmount" n\'est pas une string.', [
@@ -927,7 +949,8 @@ MSG;
         if (is_string($rawFundingType)) {
             $rawFundingType = trim($rawFundingType);
             if (!empty($rawFundingType)) {
-                $fundingType = mb_substr($rawFundingType, 0, self::MAX_FUNDING_TYPE_LENGTH);
+                // Filet anti-cadratin sur la nature du financement.
+                $fundingType = mb_substr($this->stripEmDashes($rawFundingType), 0, self::MAX_FUNDING_TYPE_LENGTH);
             }
         } elseif ($rawFundingType !== null) {
             $this->logger->warning('[EnrichmentService] Le champ "fundingType" n\'est pas une string.', [
@@ -1036,6 +1059,45 @@ MSG;
             applicationUrl: $applicationUrl,
             logoUrl: null, // Rempli par LogoFetcherService dans la méthode enrich()
         );
+    }
+
+    /**
+     * Supprime les tirets cadratins (—, U+2014) et demi-cadratins (–, U+2013) d'un texte généré par LLM.
+     *
+     * RÈGLE ÉDITORIALE : ces caractères sont interdits dans tous les contenus du site.
+     * Cette méthode est le "filet de sécurité" PHP appliqué après le parsing LLM :
+     * même si Mistral ignore la consigne typographique du prompt, aucun cadratin ne
+     * passe en BDD.
+     *
+     * LOGIQUE DE REMPLACEMENT :
+     *   1. Cadratin entouré d'espaces (ex: "A — B") → " : B" (deux-points, style français)
+     *   2. Cadratin résiduel sans espaces (ex: "A—B") → tiret simple "-"
+     *   3. Collapse des espaces multiples éventuels après remplacement
+     *
+     * Dupliquée de LlmExtractorService::stripEmDashes() pour garder les services
+     * indépendants (pas d'héritage — principe de responsabilité unique).
+     *
+     * @param string $text Texte à nettoyer (peut être vide)
+     * @return string Texte sans tiret cadratin ni demi-cadratin
+     */
+    private function stripEmDashes(string $text): string
+    {
+        if ($text === '') {
+            return $text;
+        }
+
+        // Étape 1 : cadratin/demi-cadratin ENTOURÉS D'ESPACES → " : "
+        // Ex: "Résidence — Institut français" → "Résidence : Institut français"
+        $text = (string) preg_replace('/\s[—–]\s/u', ' : ', $text);
+
+        // Étape 2 : cadratins RÉSIDUELS (sans espaces) → tiret simple
+        // Ex: "A—B" → "A-B"
+        $text = str_replace(['—', '–'], '-', $text);
+
+        // Étape 3 : normaliser les espaces multiples éventuels
+        $text = (string) preg_replace('/  +/', ' ', $text);
+
+        return trim($text);
     }
 
     /**
