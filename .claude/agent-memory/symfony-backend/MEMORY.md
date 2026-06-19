@@ -12,3 +12,5 @@
 - [ADR-0019 Lien candidature & logo](project_adr0019_lien_candidature_logo.md) — applicationUrl (LLM+anti-hallucination) + logoUrl (HTML parsing SSRF-safe), LogoFetcherService, badge "B" fallback, CTA split show.html.twig
 - [Interdiction cadratins](feedback_no_em_dashes.md) — RÈGLE FERME : jamais — ni – dans titres/contenus ; prompts + filet stripEmDashes() dans LlmExtractorService et OpportunityEnrichmentService
 - [Repli API scraping](project_scraper_api_fallback.md) — ScraperApiClient + fetchHtmlRobust() dans trait, 3 settings BDD, provider-agnostique, SSRF-safe, quota économisé (direct en premier)
+- [Animation titres et hero sans vidéo](project_title_reveal_hero.md) — title-reveal.js/css site-wide (progressive enhancement, IntersectionObserver), hero photo fixe + parallaxe CSS, double classe js-hero-armed/is-loaded
+- [Matching Lot B](project_matching_lot_b.md) — ADR-0021 Lot B : MatchingService (4 composantes, 100pts), MatchResult DTO, voter, controller JSON /api/matching/my-matches, 21 tests unitaires
