@@ -9,12 +9,15 @@
  * -------------------
  * Chaque lettre est enveloppée par le JS dans cette structure :
  *
- *   <span class="tr-char">                       ← conteneur lettre (overflow:hidden)
- *     <span class="tr-char__main">A</span>       ← lettre principale (fondu+flou)
- *     <span class="tr-char__slice tr-char__slice--top">A</span>    ← bande haute
- *     <span class="tr-char__slice tr-char__slice--mid">A</span>    ← bande milieu
- *     <span class="tr-char__slice tr-char__slice--bot">A</span>    ← bande basse
+ *   <span class="tr-char">                          ← conteneur lettre (overflow:hidden)
+ *     <span class="tr-char__main">A</span>          ← lettre principale (fondu+flou)
+ *     <span class="tr-char__slice tr-char__slice--top"></span>    ← bande haute (vide)
+ *     <span class="tr-char__slice tr-char__slice--mid"></span>    ← bande milieu (vide)
+ *     <span class="tr-char__slice tr-char__slice--bot"></span>    ← bande basse (vide)
  *   </span>
+ *
+ * Les slices sont des éléments VIDES (pas de texte). Leur fond coloré
+ * (var(--accent) via CSS) crée l'effet de balayage décoratif.
  *
  * La lettre principale fait un fondu + blur (opacity 0->1, blur 10px->0).
  * Les 3 bandes "balaient" horizontalement via translateX et opacity,
@@ -324,12 +327,14 @@
 @media (prefers-reduced-motion: reduce) {
     /*
      * Force la visibilité totale des lettres et supprime toute animation.
-     * Couvre aussi .tr-block et .tr-fade (anciens systèmes) par sécurité.
+     * Seuls les sélecteurs actifs du système actuel sont listés :
+     *   - .tr-char__main : lettre principale (fondu + blur)
+     *   - .tr-char__slice : bandes de balayage (translateX + opacity)
+     * Les anciens sélecteurs .tr-block et .tr-fade (systèmes précédents,
+     * supprimés) ont été retirés pour éviter des sélecteurs morts.
      */
     .tr-char__main,
-    .tr-char__slice,
-    .tr-block,
-    .tr-fade {
+    .tr-char__slice {
         opacity:    1     !important;
         filter:     none  !important;
         transform:  none  !important;

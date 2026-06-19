@@ -394,7 +394,9 @@
     /* Voile sombre superposé via ::after pour la lisibilité du titre blanc */
     background:  url('/images/hero-bazaart.jpg') center/cover no-repeat;
     z-index:     0;
-    will-change: opacity;
+    /* will-change: opacity retiré — le fond est statique depuis la suppression
+       du scroll-expand qui animait l'opacité. Un will-change orphelin
+       consomme des ressources GPU sans apporter aucun bénéfice. */
     opacity:     1;
 }
 
@@ -1905,8 +1907,6 @@
                         "metadata" ne charge que les informations legeres (duree, dimensions,
                         premiere image) — suffisant pour l'autoplay au moment ou l'element
                         entre dans le viewport. Economie notable sur mobile (2G/3G).
-                        A ne pas confondre avec la video hero (hero-clap.mp4, au-dessus de la ligne
-                        de flottaison) qui doit rester en preload="auto" pour un demarrage immediat.
                     #}
                         <source src="{{ asset('uploads/video/video-artiste-bazaart.mp4') }}" type="video/mp4">
                         {#

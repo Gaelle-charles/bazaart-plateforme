@@ -17,7 +17,7 @@ framework:
     # dans public/ (ex. v20260619 -> v20260620). Volontairement manuel et committé
     # avec le code, donc déployé automatiquement avec le reste.
     assets:
-        version: 'v20260624'
+        version: 'v20260625'
 
     # Note that the session will be started ONLY if you read or write from it.
     session: true

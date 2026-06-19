@@ -216,10 +216,14 @@
        Crée la structure complète d'une lettre animée :
          <span class="tr-char" style="--i: N">
            <span class="tr-char__main">A</span>
-           <span class="tr-char__slice tr-char__slice--top" aria-hidden="true">A</span>
-           <span class="tr-char__slice tr-char__slice--mid" aria-hidden="true">A</span>
-           <span class="tr-char__slice tr-char__slice--bot" aria-hidden="true">A</span>
+           <span class="tr-char__slice tr-char__slice--top" aria-hidden="true"></span>
+           <span class="tr-char__slice tr-char__slice--mid" aria-hidden="true"></span>
+           <span class="tr-char__slice tr-char__slice--bot" aria-hidden="true"></span>
          </span>
+
+       Les slices sont des éléments VIDES (aucun texte) — purement décoratifs.
+       Leur fond coloré (var(--accent) via CSS) crée l'effet de balayage.
+       Seul .tr-char__main contient le texte lisible de la lettre.
 
        @param {string} char  - Le caractère à afficher.
        @param {number} index - L'index de cette lettre dans le titre (pour --i).
@@ -240,10 +244,11 @@
         main.textContent = char;
         wrap.appendChild(main);
 
-        /* Les 3 bandes de balayage.
-           Elles contiennent le MÊME caractère que la lettre principale
-           mais ne sont visibles que pendant leur animation (opacity 0 -> 1 -> 0).
-           aria-hidden="true" : les lecteurs d'écran ne lisent pas les doublons. */
+        /* Les 3 bandes de balayage (éléments vides, purement décoratifs).
+           Leur fond coloré (var(--accent) via CSS) crée l'effet de balayage.
+           Elles n'ont aucun contenu textuel — le texte lisible est dans
+           .tr-char__main uniquement.
+           aria-hidden="true" : les lecteurs d'écran les ignorent. */
         var slices = ['tr-char__slice--top', 'tr-char__slice--mid', 'tr-char__slice--bot'];
         for (var s = 0; s < slices.length; s++) {
             var slice = document.createElement('span');
@@ -338,6 +343,33 @@
 
         /* ÉTAPE D : armer chaque titre (découpage par caractère). */
         collected.forEach(function (el) {
+
+            /* ── ACCESSIBILITÉ : aria-label avant découpe ─────────────────────
+               Certains lecteurs d'écran (NVDA+Firefox notamment) peuvent épeler
+               un titre lettre par lettre quand son contenu est fragmenté en spans.
+               Solution : on capture le TEXTE COMPLET du titre AVANT de modifier
+               le DOM, et on le pose en aria-label sur l'élément racine.
+               Ainsi le lecteur d'écran lit le label de l'élément en entier et
+               ignore complètement la structure interne (les spans .tr-char).
+
+               Règles appliquées :
+               - On normalise le texte : trim() + remplacement des suites
+                 d'espaces/retours à la ligne (whitespace Twig) par un espace unique.
+               - On ne pose l'aria-label QUE si l'élément n'en a pas déjà un
+                 (on respecte une décision éditoriale manuelle).
+               - On ne l'applique QU'ICI (l'élément titre racine), jamais
+                 sur les enfants ou les lettres individuelles.
+
+               Note : el.textContent récupère bien le texte de TOUS les descendants
+               (y compris les <span> de couleur internes comme .lp-hero__h1-orange).
+               C'est exactement ce que l'on veut pour un aria-label complet. */
+            if (!el.getAttribute('aria-label')) {
+                var fullText = el.textContent.replace(/\s+/g, ' ').trim();
+                if (fullText) {
+                    el.setAttribute('aria-label', fullText);
+                }
+            }
+
             /* Compteur de lettres partagé par la récursion (objet passé par référence) */
             var state = { charIndex: 0 };
             armElement(el, state);
