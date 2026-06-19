@@ -312,11 +312,15 @@ class ImportGrantCsvCommand extends Command
         $persistResult = $this->persister->persistBatch($importResult->opportunities);
 
         $io->text(sprintf(
-            '  → <info>%d</info> créées  |  <comment>%d</comment> mises à jour  |  <comment>%d</comment> réactivées  |  %d ignorées (déjà en BDD)',
+            // A2 : contentDedup ajouté au résumé d'import CSV.
+            // Utile quand un CSV contient des lignes avec des URLs différentes mais le même
+            // titre+deadline (ex : copier-coller d'une fiche sur deux plateformes).
+            '  → <info>%d</info> créées  |  <comment>%d</comment> mises à jour  |  <comment>%d</comment> réactivées  |  %d ignorées (déjà en BDD)  |  %d doublon(s) contenu',
             $persistResult->inserted,
             $persistResult->updated,
             $persistResult->reactivated,
             $persistResult->skipped,
+            $persistResult->contentDedup,
         ));
 
         // ── Enrichissement LLM (--enrich) ─────────────────────────────────────

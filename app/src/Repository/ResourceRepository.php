@@ -8,6 +8,7 @@ use App\Entity\OrganizationProfile;
 use App\Entity\Resource;
 use App\Entity\User;
 use App\Enum\ResourceStatus;
+use App\Service\TitleNormalizerService;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\Tools\Pagination\Paginator;
 use Doctrine\Persistence\ManagerRegistry;
@@ -17,8 +18,13 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class ResourceRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
+    public function __construct(
+        ManagerRegistry $registry,
+        // TitleNormalizerService : remplace la méthode normalizeTitle() privée locale (S1).
+        // Injecté ici pour que findPublishedByContentKey() utilise le même algorithme
+        // que ScrapedResourcePersister et ScrapedResourceRepository.
+        private readonly TitleNormalizerService $titleNormalizer,
+    ) {
         parent::__construct($registry, Resource::class);
     }
 
@@ -43,16 +49,77 @@ class ResourceRepository extends ServiceEntityRepository
      *     PostgreSQL (contrairement à MySQL) rejette un ORDER BY sur une colonne non agrégée
      *     dans une requête COUNT sans GROUP BY → erreur "must appear in GROUP BY clause".
      *     Le tri est donc appliqué UNIQUEMENT dans findPublished(), qui en a réellement besoin.
+     *
+     * @param bool $hideExpired Si true, masque les ressources dont la deadline est passée.
+     *                          À passer true UNIQUEMENT pour le catalogue public — l'admin
+     *                          doit toujours voir toutes les ressources publiées, y compris
+     *                          celles dont la deadline est dépassée.
+     *
+     *                          Règle de masquage :
+     *                            - r.deadline IS NULL           → visible (pas de date limite)
+     *                            - r.deadline >= aujourd'hui    → visible (deadline présente ou future)
+     *                            - r.deadline <  aujourd'hui    → MASQUÉE (deadline passée)
+     *
+     *                          On compare au DÉBUT de la journée courante (minuit) :
+     *                          une ressource dont la deadline EST aujourd'hui reste visible
+     *                          (dernier jour pour candidater).
+     *
+     *                          ⚠️ Le paramètre :today est de type 'date' (DateTimeInterface),
+     *                          compatible avec la colonne r.deadline (type 'date' Doctrine / DATE PostgreSQL).
      */
     private function buildPublishedQueryBuilder(
         ?int $typeId = null,
         ?int $disciplineId = null,
-        ?string $search = null
+        ?string $search = null,
+        bool $hideExpired = false,
     ): \Doctrine\ORM\QueryBuilder {
         $qb = $this->createQueryBuilder('r')
             // Filtre principal : seulement les ressources avec le statut "publié"
             ->where('r.status = :status')
             ->setParameter('status', ResourceStatus::Published);
+
+        // ── Filtre deadline (catalogue public uniquement) ────────────────────
+        // On n'applique ce filtre que si $hideExpired = true.
+        // Cela préserve le comportement existant de toutes les pages admin/dashboard
+        // qui appellent findPublished() sans ce paramètre.
+        //
+        // DQL : "r.deadline IS NULL OR r.deadline >= :today"
+        //   - IS NULL : pas de date limite → toujours visible
+        //   - >= :today : deadline aujourd'hui ou future → visible
+        //   La négation implicite (deadline passée = deadline < today) est masquée.
+        //
+        // expr()->orX() construit un OR entre plusieurs conditions DQL.
+        // On utilise expr()->isNull() et expr()->gte() pour rester en DQL pur
+        // (portable entre BDD, compatibles avec PHPStan).
+        if ($hideExpired) {
+            // "Aujourd'hui" = minuit du jour courant EN HEURE DE PARIS (correction C1).
+            //
+            // PROBLÈME SANS CE CORRECTIF :
+            //   Le container Docker tourne en UTC. Sans timezone explicite,
+            //   new \DateTimeImmutable('today') retourne minuit UTC.
+            //   Or minuit UTC = 2h du matin à Paris : une deadline "aujourd'hui"
+            //   serait considérée PASSÉE entre minuit et 2h du matin heure de Paris,
+            //   masquant des opportunités encore valides le dernier jour.
+            //
+            // SOLUTION :
+            //   On passe explicitement Europe/Paris comme timezone.
+            //   'today' avec cette timezone donne minuit heure de Paris → correct.
+            //   La décision de ne PAS modifier la timezone globale du container
+            //   (Dockerfile / php.ini) est réservée à l'infra — on corrige localement.
+            //
+            //   Note : la colonne r.deadline est de type DATE (pas DATETIME).
+            //   Doctrine convertit le DateTimeImmutable en Y-m-d pour la comparaison SQL.
+            //   La timezone n'affecte que le calcul de "quel jour est aujourd'hui",
+            //   pas le stockage en BDD (qui reste un DATE sans notion d'heure).
+            $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris'));
+            $qb->andWhere(
+                $qb->expr()->orX(
+                    $qb->expr()->isNull('r.deadline'),
+                    $qb->expr()->gte('r.deadline', ':today')
+                )
+            )
+            ->setParameter('today', $today);
+        }
 
         // Filtre par type de ressource.
         //
@@ -138,6 +205,9 @@ class ResourceRepository extends ServiceEntityRepository
      * @param string|null $search       Recherche textuelle dans le titre et la description
      * @param int|null    $page         Page courante (1-based). null = pas de pagination.
      * @param int         $limit        Nombre de résultats par page (défaut : 12)
+     * @param bool        $hideExpired  Si true, masque les ressources à deadline passée.
+     *                                  À passer true UNIQUEMENT depuis ResourceController
+     *                                  (catalogue public). L'admin voit tout.
      * @return Resource[]
      */
     public function findPublished(
@@ -146,9 +216,13 @@ class ResourceRepository extends ServiceEntityRepository
         ?string $search = null,
         ?int $page = null,
         int $limit = 12,
+        bool $hideExpired = false,
     ): array {
-        // On part du QueryBuilder commun (filtres partagés avec countPublished)
-        $qb = $this->buildPublishedQueryBuilder($typeId, $disciplineId, $search);
+        // On part du QueryBuilder commun (filtres partagés avec countPublished).
+        // Le paramètre $hideExpired est transmis : le filtre deadline est géré dans
+        // buildPublishedQueryBuilder() pour garantir que findPublished et countPublished
+        // appliquent TOUJOURS exactement les mêmes conditions (cohérence liste/pagination).
+        $qb = $this->buildPublishedQueryBuilder($typeId, $disciplineId, $search, $hideExpired);
 
         // Tri par date de création décroissante (les plus récentes en premier).
         // Ce tri est ici — et non dans buildPublishedQueryBuilder() — parce que
@@ -213,15 +287,20 @@ class ResourceRepository extends ServiceEntityRepository
      * @param int|null    $typeId       Même filtre que findPublished()
      * @param int|null    $disciplineId Même filtre que findPublished()
      * @param string|null $search       Même filtre que findPublished()
+     * @param bool        $hideExpired  Même filtre que findPublished() — DOIT être identique
+     *                                  pour que le compteur soit cohérent avec la liste affichée.
      */
     public function countPublished(
         ?int $typeId = null,
         ?int $disciplineId = null,
         ?string $search = null,
+        bool $hideExpired = false,
     ): int {
         // On réutilise exactement le même QueryBuilder que findPublished() (sans les JOINs de chargement)
         // pour garantir que les filtres appliqués sont identiques.
-        $qb = $this->buildPublishedQueryBuilder($typeId, $disciplineId, $search);
+        // ⚠️ IMPORTANT : $hideExpired doit être passé ici aussi — sinon le COUNT inclut les
+        // ressources expirées alors que la liste les masque → pagination incohérente.
+        $qb = $this->buildPublishedQueryBuilder($typeId, $disciplineId, $search, $hideExpired);
 
         // On remplace le SELECT * par un SELECT COUNT(r.id)
         // getSingleScalarResult() retourne directement la valeur scalaire (un entier en string)
@@ -229,6 +308,73 @@ class ResourceRepository extends ServiceEntityRepository
         return (int) $qb->select('COUNT(r.id)')
             ->getQuery()
             ->getSingleScalarResult();
+    }
+
+    /**
+     * Cherche une Resource PUBLIÉE par clé de contenu (titre normalisé + deadline).
+     *
+     * Complète findByContentKey() de ScrapedResourceRepository pour couvrir le cas où
+     * une ScrapedResource est sur le point d'être insérée alors qu'elle a DÉJÀ été
+     * vérifiée et convertie en Resource publiée (cycle complet : scraped → verified → published).
+     *
+     * Sans cette vérification, on créerait une ScrapedResource "pending" doublonnant
+     * une Resource déjà publiée — l'admin la verrait en attente de validation alors
+     * qu'elle est déjà en ligne.
+     *
+     * ── CHAMP deadline dans Resource ──────────────────────────────────────────
+     * Resource::$deadline est de type \DateTimeInterface (colonne 'date' Doctrine),
+     * pas \DateTimeImmutable comme ScrapedResource::$deadlineDate.
+     * On accepte donc ?\DateTimeImmutable en paramètre et on compare en PHP.
+     *
+     * @param string                  $titleNormalized Titre normalisé (même algorithme que ScrapedResourceRepository)
+     * @param \DateTimeImmutable|null $deadlineDate    Deadline parsée (peut être null)
+     * @return Resource|null          Le premier doublon publié trouvé, ou null
+     */
+    public function findPublishedByContentKey(
+        string $titleNormalized,
+        ?\DateTimeImmutable $deadlineDate,
+    ): ?Resource {
+        // On filtre d'abord par statut Published et par deadlineDate pour réduire
+        // le nombre de candidats avant la comparaison PHP du titre.
+        $qb = $this->createQueryBuilder('r')
+            ->where('r.status = :status')
+            ->setParameter('status', ResourceStatus::Published);
+
+        if ($deadlineDate !== null) {
+            // Resource::$deadline est de type 'date' Doctrine (colonne SQL DATE, pas DATETIME).
+            // On peut donc comparer directement avec une date au format Y-m-d.
+            // Doctrine mappe automatiquement un DateTimeInterface vers une DATE SQL.
+            //
+            // On passe le début du jour (minuit) : Doctrine convertit en Y-m-d pour les colonnes 'date',
+            // ce qui correspond exactement à la valeur stockée.
+            $dayStart = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $deadlineDate->format('Y-m-d') . ' 00:00:00');
+
+            if ($dayStart !== false) {
+                $qb->andWhere('r.deadline IS NOT NULL')
+                   ->andWhere('r.deadline = :deadlineDate')
+                   ->setParameter('deadlineDate', $dayStart);
+            } else {
+                // Fallback si parsing échoue : pas de filtre date → PHP compare tout
+                $qb->andWhere('r.deadline IS NOT NULL');
+            }
+        } else {
+            // Même clé "sans deadline" : on cherche parmi les publiées sans deadline non plus.
+            $qb->andWhere('r.deadline IS NULL');
+        }
+
+        /** @var Resource[] $candidates */
+        $candidates = $qb->getQuery()->getResult();
+
+        // Filtrage PHP par titre normalisé via le service centralisé (S1).
+        // TitleNormalizerService garantit le même algorithme que ScrapedResourcePersister
+        // et ScrapedResourceRepository — cohérence indispensable pour la déduplication.
+        foreach ($candidates as $candidate) {
+            if ($this->titleNormalizer->normalize($candidate->getTitle()) === $titleNormalized) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**

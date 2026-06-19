@@ -40,7 +40,7 @@ final readonly class PersistResult
         // URLs connues (pending ou rejected) → données rafraîchies, statut inchangé
         public int $updated,
 
-        // URLs ignorées : déjà vérifiées par un admin, ou doublons intra-lot
+        // URLs ignorées : déjà vérifiées par un admin, ou doublons intra-lot (URL)
         public int $skipped,
 
         /**
@@ -51,16 +51,50 @@ final readonly class PersistResult
          * @var string[]
          */
         public array $insertedUrls = [],
+
+        /**
+         * Nombre d'opportunités ignorées parce qu'un doublon DE CONTENU existait déjà
+         * (même titre normalisé + même deadline) dans scraped_resources OU dans resources.
+         *
+         * C'est le compteur de la DÉDUPLICATION PAR CONTENU, ajoutée en ADR-0016 Lot 2.
+         * Elle complète la déduplication par URL (comptabilisée dans $skipped).
+         *
+         * Exposé séparément de $skipped pour faciliter le diagnostic :
+         *   - $skipped      → doublons URL (même lien) + déjà vérifiés par admin
+         *   - $contentDedup → doublons contenu (même titre+deadline, URLs différentes)
+         *
+         * Exemple d'affichage dans les logs de commande :
+         *   "3 doublons contenu ignorés (même titre+deadline, URLs différentes)"
+         */
+        public int $contentDedup = 0,
     ) {
     }
 
     /**
-     * Nombre total d'opportunités traitées (hors doublons intra-lot).
+     * Nombre total d'opportunités traitées (toutes décisions confondues).
+     *
+     * ── INCLUT contentDedup (S2) ──────────────────────────────────────────────
+     * contentDedup représente des opportunités reçues par le pipeline (chaque
+     * ScrapedOpportunity passe dans la boucle persistBatch et est comptée comme
+     * "traitée") mais ignorées pour doublon de contenu.
+     * Les inclure dans total() donne le chiffre cohérent avec le nombre d'entrées
+     * reçues par le pipeline — utile pour valider que le batch a bien été traité en entier.
+     *
+     * Avant S2 : total() = inserted + reactivated + updated + skipped
+     *   → Ne comptait PAS les doublons contenu → total() < nombre d'opportunités reçues
+     *   → Incohérence silencieuse dans les logs de commande.
+     *
+     * Après S2 : total() = inserted + reactivated + updated + skipped + contentDedup
+     *   → Cohérent avec le nombre d'entrées reçues par le pipeline.
+     *
+     * Note : les doublons URL intra-lot (incrémentés dans $skipped) sont déjà inclus
+     * via $skipped. Les doublons de contenu intra-lot (incrémentés dans $contentDedup)
+     * sont maintenant également comptés.
      *
      * Utile pour les logs : "X opportunités traitées" sans détailler les cas.
      */
     public function total(): int
     {
-        return $this->inserted + $this->reactivated + $this->updated + $this->skipped;
+        return $this->inserted + $this->reactivated + $this->updated + $this->skipped + $this->contentDedup;
     }
 }

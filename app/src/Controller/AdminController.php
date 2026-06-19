@@ -75,7 +75,13 @@ class AdminController extends AbstractController
     {
         // Compteurs pour les statistiques
         $pendingCount      = count($this->resourceRepository->findPending());
-        $publishedCount    = count($this->resourceRepository->findPublished());
+        // A3 : countPublished() à la place de count(findPublished()).
+        // findPublished() sans pagination charge TOUTES les entités Resource en mémoire
+        // juste pour compter — O(n) objets Doctrine hydratés inutilement.
+        // countPublished() fait un SELECT COUNT(r.id) SQL → un seul scalaire, O(1).
+        // hideExpired: false → l'admin voit TOUTES les publiées, même celles expirées
+        // (seul le catalogue public masque les deadlines passées via hideExpired: true).
+        $publishedCount    = $this->resourceRepository->countPublished(hideExpired: false);
         $totalUsers        = count($this->userRepository->findAll());
         $totalOrgs         = count($this->orgRepository->findAll());
         $verifiedOrgs      = count($this->orgRepository->findVerified());
