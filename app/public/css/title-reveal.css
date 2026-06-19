@@ -1,165 +1,339 @@
 /*
- * title-reveal.css — Animation des titres pilotée par le scroll (site-wide)
- * ==========================================================================
- * Ce fichier ne contient QUE les styles structurels des titres animés.
- * Il est chargé dans base.html.twig pour s'appliquer à toutes les
- * pages publiques qui étendent ce template.
+ * title-reveal.css — Animation "shutter/slice" par caractère (site-wide)
+ * ========================================================================
+ * Ce fichier contient UNIQUEMENT les styles et keyframes de l'animation
+ * de titres par lettre. Chargé dans base.html.twig pour toutes les pages.
  *
- * FONCTIONNEMENT UNIFIÉ SUR LE MODÈLE DU HERO
- * ---------------------------------------------
- * Tous les titres ciblés utilisent désormais la même mécanique que le
- * hero de la page d'accueil : deux blocs (premier mot / reste du titre)
- * qui s'écartent via translateX opposés.
  *
- * Le JS (title-reveal.js) calcule une progression p (0..1) à chaque
- * frame de scroll et applique DIRECTEMENT des valeurs inline :
- *   block.el.style.transform = 'translateX(...)';
- *   block.el.style.opacity   = ...;
- * Il n'y a donc PAS de transitions CSS — le JS est seul maître de l'état
- * visuel, ce qui rend l'animation totalement réversible (scroll up = envers).
+ * PRINCIPE DE L'EFFET
+ * -------------------
+ * Chaque lettre est enveloppée par le JS dans cette structure :
  *
- * STRUCTURE DOM PRODUITE PAR LE JS
- * ----------------------------------
- * Pour chaque titre :
+ *   <span class="tr-char">                       ← conteneur lettre (overflow:hidden)
+ *     <span class="tr-char__main">A</span>       ← lettre principale (fondu+flou)
+ *     <span class="tr-char__slice tr-char__slice--top">A</span>    ← bande haute
+ *     <span class="tr-char__slice tr-char__slice--mid">A</span>    ← bande milieu
+ *     <span class="tr-char__slice tr-char__slice--bot">A</span>    ← bande basse
+ *   </span>
  *
- *   <h2 class="le-titre-animé">
- *     <span class="tr-block-wrap tr-block-wrap--left">
- *       <span class="tr-block" data-tr-side="-1">PREMIER</span>
- *     </span>
- *     [espace texte]
- *     <span class="tr-block-wrap tr-block-wrap--right">
- *       <span class="tr-block" data-tr-side="1">reste du titre...</span>
- *     </span>
- *   </h2>
+ * La lettre principale fait un fondu + blur (opacity 0->1, blur 10px->0).
+ * Les 3 bandes "balaient" horizontalement via translateX et opacity,
+ * chacune clippée sur une tranche de la hauteur de la lettre.
  *
- *   - .tr-block-wrap : conteneur overflow:hidden (évite le scroll horizontal)
- *   - .tr-block      : élément animé (transform + opacity via JS inline)
+ * Le stagger (délai croissant par lettre) est piloté par la custom
+ * property CSS --i posée en inline style par le JS sur chaque .tr-char.
  *
- * PREVENTION DU SCROLL HORIZONTAL
- * --------------------------------
- * Les translateX peuvent atteindre 160px (desktop) ou 70px (mobile).
- * overflow:hidden sur .tr-block-wrap contient les débordements.
- * IMPORTANT : le titre parent (h1, h2...) doit lui aussi avoir
- * overflow:hidden si nécessaire — ou la page doit avoir overflow-x:hidden.
  *
- * PRINCIPE DE PROGRESSIVE ENHANCEMENT
- * ------------------------------------
- * Par défaut (sans JS), les titres sont visibles normalement.
- * Le JS (title-reveal.js) ajoute la classe .js-title-reveal-ready
- * sur <html> AVANT de modifier le DOM des titres.
- * Tant que cette classe n'est pas là, aucune règle CSS ici n'est
- * activée => titres toujours lisibles même si le JS plante.
+ * PROGRESSIVE ENHANCEMENT
+ * -----------------------
+ * Principe fondamental : sans JS, les titres sont visibles normalement.
+ *
+ * Le JS ajoute la classe .js-title-reveal-ready sur <html> AVANT de
+ * modifier le DOM des titres. Toutes les règles CSS qui cachent ou
+ * transforment les éléments sont préfixées par .js-title-reveal-ready
+ * => sans JS, aucune règle de cache n'est active => titres lisibles.
+ *
+ *
+ * DÉCLENCHEMENT DE L'ANIMATION
+ * -----------------------------
+ * L'animation est pilotée par CSS (keyframes + animation-delay).
+ * Le JS se contente d'ajouter/retirer la classe .is-revealing sur
+ * chaque titre quand il entre dans le viewport (IntersectionObserver).
+ *
+ * Pour REJOUER l'animation à la ré-entrée (scroll down ET scroll up) :
+ *   1. Le JS retire .is-revealing quand le titre sort du viewport.
+ *   2. Un forçage de reflow (lecture de offsetWidth) réinitialise
+ *      l'état de l'animation CSS avant de re-poser .is-revealing.
+ *
+ * Le titre hero (above the fold) reçoit .is-revealing immédiatement
+ * au chargement, sans attendre le scroll.
+ *
  *
  * PERFORMANCE
  * -----------
- * On n'anime QUE transform et opacity :
- * - transform : géré par le GPU (zéro reflow, zéro repaint du layout)
- * - opacity   : composited layer, très peu coûteux
- * will-change est posé uniquement sur les éléments actifs (via
- * .js-title-reveal-ready), jamais globalement.
+ * Les animations CSS sont exécutées sur le GPU (transform + opacity).
+ * filter:blur() a un coût : on le limite à la lettre principale uniquement.
+ * Les bandes utilisent translateX + opacity (zéro reflow).
+ *
+ * will-change est posé uniquement sous .js-title-reveal-ready pour ne
+ * pas gaspiller des ressources GPU sur des éléments non animés.
+ *
+ * overflow:hidden sur .tr-char empêche les bandes translateX de créer
+ * un scroll horizontal.
+ *
+ *
+ * PREFERS-REDUCED-MOTION
+ * ----------------------
+ * Si l'OS demande une réduction des animations, le JS sort immédiatement
+ * sans modifier le DOM. Le bloc @media ci-dessous force la visibilité
+ * totale comme filet de sécurité (cas où la classe aurait quand même
+ * été posée, par ex. si le media query change après l'init).
+ *
+ *
+ * TOKEN CSS UTILISÉ
+ * -----------------
+ * Les bandes utilisent var(--accent) = #C6F24E (vert acide, thème Street).
+ * Ce token est déclaré dans design-tokens.css et disponible partout.
  */
 
 
-/* ──────────────────────────────────────────────────────────────────────
-   STRUCTURE : .tr-block-wrap et .tr-block
-   ------------------------------------------------------------------
-   Le JS découpe chaque titre en deux blocs (premier mot / reste)
-   et enveloppe chacun dans un .tr-block-wrap (overflow:hidden)
-   + un .tr-block (l'élément animé par JS).
-
-   Modèle du hero : .lp-hero__title-row (overflow:hidden)
-                    .lp-hero__title-left / .lp-hero__title-right (inline-block, transform)
-────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════
+   KEYFRAMES DE L'ANIMATION
+   Déclarées en dehors de tout sélecteur => disponibles globalement.
+   Nommage préfixé tr- (title-reveal) pour éviter toute collision.
+══════════════════════════════════════════════════════════════════════════ */
 
 /*
- * Wrapper de chaque bloc : masque le débordement pendant l'animation
- * translateX pour éviter l'apparition de barres de défilement horizontales.
+ * tr-char-main : animation de la lettre principale
+ *   - opacity  : 0 -> 1 (fondu d'entrée)
+ *   - blur     : 10px -> 0px (la lettre devient nette progressivement)
+ *   Durée : 0.8s, déclenchée par le stagger --i sur chaque .tr-char.
  *
- * display:inline-block est nécessaire pour que overflow:hidden fonctionne
- * sur des éléments inline (dans un titre h1/h2 qui est un block container,
- * les enfants span sont inline par défaut).
- *
- * vertical-align:bottom évite le "saut" de baseline lié au inline-block
- * (les inline-block s'alignent sur leur baseline par défaut, ce qui peut
- * créer un décalage vertical visible entre le bloc gauche et le bloc droit).
+ * Note : on évite de cacher complètement au-delà de 0 car certains
+ * navigateurs peuvent avoir un "flicker" sur les animations de blur.
  */
-.tr-block-wrap {
+@keyframes tr-char-main {
+    0%   { opacity: 0; filter: blur(10px); }
+    100% { opacity: 1; filter: blur(0px); }
+}
+
+/*
+ * tr-slice-top : bande haute (clip-path = 0% à 35% de hauteur)
+ *   translateX -100% -> 100% : entre depuis la gauche, part vers la droite.
+ *   opacity 0 -> 1 -> 0 : flash d'apparition au passage.
+ *   Durée : 0.7s.
+ */
+@keyframes tr-slice-top {
+    0%   { transform: translateX(-100%); opacity: 0; }
+    30%  { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { transform: translateX(100%);  opacity: 0; }
+}
+
+/*
+ * tr-slice-mid : bande milieu (clip-path = 35% à 65% de hauteur)
+ *   Sens OPPOSÉ à la bande haute : 100% -> -100% (entre depuis la droite).
+ *   Même courbe opacity.
+ *   Ce sens alterné crée l'effet "shutter" (volets qui se ferment/ouvrent
+ *   dans des directions alternées, inspiré des shutters d'impression).
+ */
+@keyframes tr-slice-mid {
+    0%   { transform: translateX(100%);  opacity: 0; }
+    30%  { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { transform: translateX(-100%); opacity: 0; }
+}
+
+/*
+ * tr-slice-bot : bande basse (clip-path = 65% à 100% de hauteur)
+ *   Même sens que la bande haute : -100% -> 100%.
+ *   Alternance haute/milieu/basse = effet dynamique à trois couches.
+ */
+@keyframes tr-slice-bot {
+    0%   { transform: translateX(-100%); opacity: 0; }
+    30%  { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { transform: translateX(100%);  opacity: 0; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   STRUCTURE : .tr-char et ses enfants
+   ─────────────────────────────────────────────────────────────────────────
+   Ces règles structurelles ne cachent rien par défaut.
+   Le CSS d'armement (qui cache les lettres avant l'animation) est
+   placé sous .js-title-reveal-ready pour garantir le progressive enhancement.
+══════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * Conteneur d'une lettre unique.
+ * display:inline-block : permet à overflow:hidden de fonctionner sur
+ * un élément inline (les <span> enfants sont inline par défaut).
+ * overflow:hidden : contient les bandes translateX dans les limites
+ * de la boîte de la lettre => PAS de scroll horizontal.
+ * position:relative : référence pour les bandes en position:absolute.
+ * vertical-align:bottom : aligne les inline-blocks sur leur bord bas
+ * (évite le décalage de baseline entre les lettres).
+ *
+ * line-height:inherit : sans ça, passer de inline à inline-block
+ * réinitialise le line-height au "normal" du navigateur (~1.2).
+ * Les titres utilisent des line-heights serrés (.88, .92…) — inherit
+ * garantit que chaque .tr-char adopte le line-height de son parent h1/h2.
+ */
+.tr-char {
     display:        inline-block;
     overflow:       hidden;
     vertical-align: bottom;
+    position:       relative;
+    line-height:    inherit;
 }
 
 /*
- * Espace entre les deux blocs.
- * Le JS insère un nœud texte " " (un espace simple) entre les deux .tr-block-wrap.
- * Cette règle n'est pas nécessaire dans ce cas car l'espace est un nœud texte,
- * mais on la conserve comme documentation.
- * (margin-left n'est PAS posé ici car l'espace texte suffit)
+ * Lettre principale : hérite de la couleur de son parent (couleur naturelle
+ * du titre — blanc sur fond sombre pour le hero, --ink ailleurs).
+ * display:block : s'assure que la lettre occupe toute la largeur du .tr-char
+ * (important pour les bandes en position:absolute qui utilisent width:100%).
  */
-
-/*
- * L'élément animé — le bloc proprement dit.
- * Le JS applique transform et opacity en inline style.
- * display:inline-block est nécessaire pour que transform fonctionne
- * sur un élément inline.
- *
- * Note : on n'initialise PAS opacity:0 ici en CSS.
- * C'est le JS qui pose la valeur initiale au premier updateAll().
- * Sans JS : .tr-block n'existe pas => les titres sont lisibles normalement.
- *
- * line-height:inherit — sans cette règle, le passage de display:inline à
- * display:inline-block réinitialise le line-height au "normal" du navigateur
- * (~1.2). Or les titres utilisent des line-height serrés (0.88, etc.) définis
- * sur l'élément parent (h1, h2...). Sans inherit, chaque bloc aurait un
- * line-height différent de celui du titre, ce qui crée un espacement vertical
- * inattendu sur les titres multi-lignes et rompt le rendu compact voulu.
- */
-.tr-block {
-    display:     inline-block;
-    line-height: inherit; /* hérite du line-height du titre parent (ex: 0.88) */
+.tr-char__main {
+    display: block;
 }
 
 /*
- * will-change pré-alloue les layers GPU uniquement quand le JS est actif.
- * On l'active uniquement sous .js-title-reveal-ready pour ne pas gaspiller
- * des ressources GPU sur des pages où le JS n'est pas chargé.
+ * Bandes de balayage (slice) communes.
+ * position:absolute : se superposent à la lettre principale.
+ * inset:0 : couvrent exactement la boîte du .tr-char (haut/bas/gauche/droite).
+ * clip-path : limite l'affichage à une tranche de la hauteur de la lettre.
+ * pointer-events:none : les bandes ne captent pas les clics.
  *
- * IMPORTANT : will-change doit être posé sur l'élément qui reçoit la
- * transformation (le .tr-block, pas le wrapper). Même logique que le hero
- * qui pose will-change sur .lp-hero__title-left / .lp-hero__title-right.
+ * Couleur : var(--accent) = #C6F24E (vert acide Bazaart, thème Street).
+ * La bande est colorée pour créer l'effet de "peinture qui passe".
+ * Elle ne CONTIENT PAS le texte de la lettre (seul .tr-char__main le fait) —
+ * les slices sont de purs éléments décoratifs colorés.
  */
-.js-title-reveal-ready .tr-block {
-    will-change: transform, opacity;
+.tr-char__slice {
+    position:       absolute;
+    inset:          0;
+    background:     var(--accent, #C6F24E); /* fallback si token non chargé */
+    pointer-events: none;
+    /* par défaut invisible : l'animation est déclenchée par .is-revealing */
+    opacity:        0;
+}
+
+/*
+ * Bande haute : zone 0% → 35% de la hauteur.
+ * clip-path polygon : (x1 y1, x2 y2, x3 y3, x4 y4) dans le sens horaire.
+ *   (0 0) : coin haut-gauche
+ *   (100% 0) : coin haut-droite
+ *   (100% 35%) : bas-droite à 35%
+ *   (0 35%) : bas-gauche à 35%
+ */
+.tr-char__slice--top {
+    clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%);
+}
+
+/*
+ * Bande milieu : zone 35% → 65% de la hauteur.
+ */
+.tr-char__slice--mid {
+    clip-path: polygon(0 35%, 100% 35%, 100% 65%, 0 65%);
+}
+
+/*
+ * Bande basse : zone 65% → 100% de la hauteur.
+ */
+.tr-char__slice--bot {
+    clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%);
+}
+
+/*
+ * Espace visuel pour les espaces inter-mots.
+ * Le JS insère un <span class="tr-space"> pour chaque espace dans le texte.
+ * min-width:0.3em est une valeur typique pour un espace em (dépend de la fonte).
+ * inline-block : permet de définir une largeur sur un span.
+ */
+.tr-space {
+    display: inline-block;
+    width:   0.3em;
 }
 
 
-/* ──────────────────────────────────────────────────────────────────────
-   PREFERS-REDUCED-MOTION
-   ------------------------------------------------------------------
-   Si l'OS de l'utilisateur a activé "Réduire les animations",
-   le JS sort immédiatement (sans modifier le DOM des titres).
-   Les titres restent donc dans leur état HTML naturel (visibles).
+/* ══════════════════════════════════════════════════════════════════════════
+   ARMEMENT : actif UNIQUEMENT quand .js-title-reveal-ready est sur <html>
+   ─────────────────────────────────────────────────────────────────────────
+   Ce bloc cache la lettre principale AVANT l'animation (opacity:0).
+   Sans .js-title-reveal-ready (pas de JS ou erreur), les titres sont
+   visibles normalement (aucune règle de cache active).
+══════════════════════════════════════════════════════════════════════════ */
 
-   On ajoute quand même des règles CSS de sécurité pour le cas où
-   .js-title-reveal-ready aurait quand même été posée (cas théorique,
-   par exemple si le media query change après l'initialisation) :
-   on force la visibilité complète et on annule tout inline style.
+/*
+ * Lettre principale masquée par défaut une fois le JS armé.
+ * L'animation tr-char-main la fera apparaître avec fondu+blur.
+ *
+ * opacity:0 SANS animation : état stable invisible, en attente de
+ * .is-revealing sur l'élément parent titre.
+ */
+.js-title-reveal-ready .tr-char__main {
+    opacity:    0;
+    filter:     blur(10px);
+    will-change: opacity, filter;
+}
 
-   IMPORTANT : on utilise !important ici car les valeurs inline posées
-   par le JS ont une spécificité plus haute que les règles de classe.
-   Sans !important, ces surcharges seraient inefficaces.
-────────────────────────────────────────────────────────────────────── */
+/*
+ * Quand le titre reçoit .is-revealing (titre entrant dans le viewport),
+ * on lance les animations CSS sur les enfants .tr-char.
+ *
+ * animation-delay : calculé par le JS en inline style sur chaque .tr-char :
+ *   style="--i: 3" signifie que c'est la 4e lettre (index 3).
+ *   animation-delay = calc(var(--i, 0) * 0.04s + 0.05s)
+ *     => lettre 0 : delay 0.05s
+ *     => lettre 10 : delay 0.45s
+ *   Le +0.05s de base laisse un "silence" avant que la première lettre parte.
+ *
+ * animation-fill-mode:forwards : conserve l'état final (opacity:1, blur:0)
+ * après la fin de l'animation. Sans ça, la lettre reviendrait à opacity:0.
+ */
+.js-title-reveal-ready .is-revealing .tr-char__main {
+    animation:
+        tr-char-main 0.8s cubic-bezier(0.22, 0.61, 0.36, 1)
+        calc(var(--i, 0) * 0.04s + 0.05s)
+        forwards;
+}
+
+/*
+ * Bandes : lancées avec la même durée et le même stagger que la lettre principale.
+ * Durée 0.7s (légèrement moins que 0.8s de la lettre) pour que les bandes
+ * finissent de balayer AVANT que la lettre soit complètement nette.
+ */
+.js-title-reveal-ready .is-revealing .tr-char__slice--top {
+    animation:
+        tr-slice-top 0.7s cubic-bezier(0.65, 0, 0.35, 1)
+        calc(var(--i, 0) * 0.04s + 0.05s)
+        forwards;
+}
+.js-title-reveal-ready .is-revealing .tr-char__slice--mid {
+    animation:
+        tr-slice-mid 0.7s cubic-bezier(0.65, 0, 0.35, 1)
+        calc(var(--i, 0) * 0.04s + 0.05s)
+        forwards;
+}
+.js-title-reveal-ready .is-revealing .tr-char__slice--bot {
+    animation:
+        tr-slice-bot 0.7s cubic-bezier(0.65, 0, 0.35, 1)
+        calc(var(--i, 0) * 0.04s + 0.05s)
+        forwards;
+}
+
+/*
+ * Quand l'animation est terminée et que la classe .is-done est posée sur le titre,
+ * on retire will-change pour libérer les ressources GPU.
+ * Le JS ajoute .is-done à la fin du dernier délai + durée d'animation.
+ */
+.js-title-reveal-ready .is-done .tr-char__main {
+    will-change: auto;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PREFERS-REDUCED-MOTION : filet de sécurité
+   ─────────────────────────────────────────────────────────────────────────
+   Le JS détecte ce media query et sort IMMÉDIATEMENT sans modifier le DOM.
+   Ces règles CSS sont donc un garde-fou pour le cas (théorique) où le JS
+   aurait quand même posé .js-title-reveal-ready.
+   !important nécessaire pour surcharger les éventuelles valeurs inline.
+══════════════════════════════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
     /*
-     * Force la visibilité totale des blocs animés.
-     * !important est nécessaire pour surcharger les valeurs inline du JS.
-     * Couvre aussi bien le nouveau .tr-block que l'ancienne .tr-fade
-     * (au cas où une page cacherait encore l'ancienne classe).
+     * Force la visibilité totale des lettres et supprime toute animation.
+     * Couvre aussi .tr-block et .tr-fade (anciens systèmes) par sécurité.
      */
+    .tr-char__main,
+    .tr-char__slice,
     .tr-block,
     .tr-fade {
-        transform:   none !important;
-        opacity:     1    !important;
+        opacity:    1     !important;
+        filter:     none  !important;
+        transform:  none  !important;
+        animation:  none  !important;
         will-change: auto !important;
     }
 }
