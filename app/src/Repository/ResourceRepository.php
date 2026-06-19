@@ -50,28 +50,38 @@ class ResourceRepository extends ServiceEntityRepository
      *     dans une requête COUNT sans GROUP BY → erreur "must appear in GROUP BY clause".
      *     Le tri est donc appliqué UNIQUEMENT dans findPublished(), qui en a réellement besoin.
      *
-     * @param bool $hideExpired Si true, masque les ressources dont la deadline est passée.
-     *                          À passer true UNIQUEMENT pour le catalogue public — l'admin
-     *                          doit toujours voir toutes les ressources publiées, y compris
-     *                          celles dont la deadline est dépassée.
+     * @param bool        $hideExpired  Si true, masque les ressources dont la deadline est passée.
+     *                                  À passer true UNIQUEMENT pour le catalogue public — l'admin
+     *                                  doit toujours voir toutes les ressources publiées, y compris
+     *                                  celles dont la deadline est dépassée.
      *
-     *                          Règle de masquage :
-     *                            - r.deadline IS NULL           → visible (pas de date limite)
-     *                            - r.deadline >= aujourd'hui    → visible (deadline présente ou future)
-     *                            - r.deadline <  aujourd'hui    → MASQUÉE (deadline passée)
+     *                                  Règle de masquage :
+     *                                    - r.deadline IS NULL           → visible (pas de date limite)
+     *                                    - r.deadline >= aujourd'hui    → visible (deadline présente ou future)
+     *                                    - r.deadline <  aujourd'hui    → MASQUÉE (deadline passée)
      *
-     *                          On compare au DÉBUT de la journée courante (minuit) :
-     *                          une ressource dont la deadline EST aujourd'hui reste visible
-     *                          (dernier jour pour candidater).
+     *                                  On compare au DÉBUT de la journée courante (minuit) :
+     *                                  une ressource dont la deadline EST aujourd'hui reste visible
+     *                                  (dernier jour pour candidater).
      *
-     *                          ⚠️ Le paramètre :today est de type 'date' (DateTimeInterface),
-     *                          compatible avec la colonne r.deadline (type 'date' Doctrine / DATE PostgreSQL).
+     *                                  ⚠️ Le paramètre :today est de type 'date' (DateTimeInterface),
+     *                                  compatible avec la colonne r.deadline (type 'date' Doctrine / DATE PostgreSQL).
+     *
+     * @param int|null    $year         Filtre sur l'ANNÉE de la deadline (ex: 2026).
+     *                                  Seules les ressources dont YEAR(deadline) = $year sont retournées.
+     *                                  Les ressources sans deadline sont exclues quand ce filtre est actif.
+     *                                  Null = pas de filtre d'année.
+     *
+     * @param string|null $country      Filtre sur le pays (comparaison exacte, insensible à la casse).
+     *                                  Null = pas de filtre pays.
      */
     private function buildPublishedQueryBuilder(
         ?int $typeId = null,
         ?int $disciplineId = null,
         ?string $search = null,
         bool $hideExpired = false,
+        ?int $year = null,
+        ?string $country = null,
     ): \Doctrine\ORM\QueryBuilder {
         $qb = $this->createQueryBuilder('r')
             // Filtre principal : seulement les ressources avec le statut "publié"
@@ -154,7 +164,115 @@ class ResourceRepository extends ServiceEntityRepository
                ->setParameter('search', '%' . $search . '%');
         }
 
+        // ── Filtre par année de deadline ─────────────────────────────────────
+        // On filtre sur YEAR(r.deadline) grâce à la fonction DQL YEAR().
+        // Doctrine 3.x supporte YEAR() nativement via la DoctrineExtensions de gedmo
+        // mais pas en DQL pur. On utilise une comparaison de plage de dates pour
+        // éviter une dépendance supplémentaire :
+        //   - r.deadline >= 01/01/$year
+        //   - r.deadline <  01/01/($year+1)
+        // Avantage : 100% DQL standard, compatible PostgreSQL, pas de fonction spéciale.
+        // Remarque : si $year est actif, les ressources SANS deadline sont exclues
+        // (la condition r.deadline >= :yearStart force une valeur non-nulle).
+        if ($year !== null) {
+            $yearStart = new \DateTimeImmutable(sprintf('%d-01-01', $year));
+            $yearEnd   = new \DateTimeImmutable(sprintf('%d-01-01', $year + 1));
+            $qb->andWhere('r.deadline >= :yearStart')
+               ->andWhere('r.deadline < :yearEnd')
+               ->setParameter('yearStart', $yearStart)
+               ->setParameter('yearEnd', $yearEnd);
+        }
+
+        // ── Filtre par pays ──────────────────────────────────────────────────
+        // Comparaison insensible à la casse via LOWER() des deux côtés.
+        // Le pays est stocké en clair ("France", "Sénégal"...) sans normalisation
+        // stricte, donc on ne peut pas faire une comparaison exacte sans LOWER.
+        if ($country !== null && $country !== '') {
+            $qb->andWhere('LOWER(r.country) = LOWER(:country)')
+               ->setParameter('country', $country);
+        }
+
         return $qb;
+    }
+
+    /**
+     * Retourne les années de deadline disponibles dans le catalogue public.
+     *
+     * Utilisé par le contrôleur pour peupler le menu déroulant "Année".
+     * On ne retourne que les années des ressources PUBLIÉES (statut Published),
+     * et uniquement des deadlines non-nulles.
+     *
+     * Si hideExpired = true, on exclut également les années dont toutes les
+     * ressources ont une deadline passée — mais ici on veut TOUTES les années
+     * disponibles pour le filtre (même les passées si on veut consulter l'historique).
+     * C'est intentionnel : l'utilisateur peut filtrer sur 2025 pour voir les
+     * opportunités passées de l'année dernière.
+     *
+     * Tri : années décroissantes (l'année la plus récente en premier dans la liste).
+     *
+     * Implémentation PostgreSQL : EXTRACT(YEAR FROM deadline) retourne un NUMERIC
+     * côté SQL, qu'on convertit en int en PHP.
+     * On utilise une requête native car DQL ne supporte pas EXTRACT nativement
+     * sans extension. On passe par le createQueryBuilder + getSingleColumnResult
+     * n'est pas disponible en DQL pour EXTRACT.
+     * Solution : requête DBAL native directe sur la connexion.
+     *
+     * @return int[] Tableau d'années distinctes, ex: [2027, 2026, 2025]
+     */
+    public function findAvailableDeadlineYears(): array
+    {
+        // On utilise la connexion DBAL pour une requête native PostgreSQL.
+        // EXTRACT(YEAR FROM deadline) retourne un float/numeric côté DBAL ;
+        // on cast en INTEGER dans la requête pour récupérer directement des entiers.
+        $conn = $this->getEntityManager()->getConnection();
+        $sql  = "
+            SELECT DISTINCT EXTRACT(YEAR FROM deadline)::INTEGER AS year
+            FROM resources
+            WHERE status = 'published'
+              AND deadline IS NOT NULL
+            ORDER BY year DESC
+        ";
+
+        /** @var array<array{year: int}> $rows */
+        $rows = $conn->fetchAllAssociative($sql);
+
+        // array_column() extrait la colonne 'year' de chaque ligne et retourne
+        // un tableau plat d'entiers.
+        return array_map('intval', array_column($rows, 'year'));
+    }
+
+    /**
+     * Retourne les pays disponibles dans le catalogue public (non vides, distincts).
+     *
+     * Utilisé par le contrôleur pour peupler le menu déroulant "Pays/Territoire".
+     * On ne retourne que les pays des ressources PUBLIÉES, en filtrant les nulls
+     * et les chaînes vides, et en dédoublonnant.
+     *
+     * Tri : alphabétique ASC (la plus lisible pour un menu déroulant à choix humain).
+     *
+     * Note : les pays sont stockés en clair sans normalisation ISO ("France",
+     * "Sénégal", "Belgique"...). Ce menu reflétera exactement les valeurs en base,
+     * y compris les variations orthographiques. En V2 on pourrait normaliser
+     * via un enum ou une table de référence.
+     *
+     * @return string[] Tableau de pays distincts, ex: ['Belgique', 'France', 'Sénégal']
+     */
+    public function findAvailableCountries(): array
+    {
+        $conn = $this->getEntityManager()->getConnection();
+        $sql  = "
+            SELECT DISTINCT country
+            FROM resources
+            WHERE status = 'published'
+              AND country IS NOT NULL
+              AND country != ''
+            ORDER BY country ASC
+        ";
+
+        /** @var array<array{country: string}> $rows */
+        $rows = $conn->fetchAllAssociative($sql);
+
+        return array_column($rows, 'country');
     }
 
     /**
@@ -208,6 +326,12 @@ class ResourceRepository extends ServiceEntityRepository
      * @param bool        $hideExpired  Si true, masque les ressources à deadline passée.
      *                                  À passer true UNIQUEMENT depuis ResourceController
      *                                  (catalogue public). L'admin voit tout.
+     * @param int|null    $year         Filtre sur l'année de la deadline (null = toutes les années)
+     * @param string|null $country      Filtre sur le pays (null = tous les pays)
+     * @param string      $sortBy       Critère de tri : 'recent' (publishedAt DESC, défaut)
+     *                                  ou 'deadline' (deadline ASC, les plus urgentes en premier).
+     *                                  Les ressources sans deadline passent en fin de liste
+     *                                  quand on trie par deadline.
      * @return Resource[]
      */
     public function findPublished(
@@ -217,20 +341,50 @@ class ResourceRepository extends ServiceEntityRepository
         ?int $page = null,
         int $limit = 12,
         bool $hideExpired = false,
+        ?int $year = null,
+        ?string $country = null,
+        string $sortBy = 'recent',
     ): array {
         // On part du QueryBuilder commun (filtres partagés avec countPublished).
-        // Le paramètre $hideExpired est transmis : le filtre deadline est géré dans
-        // buildPublishedQueryBuilder() pour garantir que findPublished et countPublished
-        // appliquent TOUJOURS exactement les mêmes conditions (cohérence liste/pagination).
-        $qb = $this->buildPublishedQueryBuilder($typeId, $disciplineId, $search, $hideExpired);
+        // Les nouveaux paramètres $year et $country sont transmis pour que
+        // findPublished et countPublished appliquent exactement les mêmes conditions.
+        $qb = $this->buildPublishedQueryBuilder($typeId, $disciplineId, $search, $hideExpired, $year, $country);
 
-        // Tri par date de création décroissante (les plus récentes en premier).
+        // ── Choix du tri ────────────────────────────────────────────────────
+        // 'recent'   : publishedAt DESC — les ressources récemment publiées en tête.
+        //              Fallback sur createdAt DESC si publishedAt est null (cas rare).
+        // 'deadline' : deadline ASC — les plus urgentes (deadline proche) en tête,
+        //              les ressources sans deadline en dernier.
+        //
         // Ce tri est ici — et non dans buildPublishedQueryBuilder() — parce que
         // countPublished() réutilise le même QB pour un COUNT : PostgreSQL refuse
         // un ORDER BY sur une colonne non agrégée dans une requête COUNT sans GROUP BY.
-        // En plaçant le tri ici, après l'appel commun, les deux chemins (avec et sans
-        // pagination) bénéficient du tri, tandis que countPublished() reste propre.
-        $qb->orderBy('r.createdAt', 'DESC');
+        //
+        // ⚠️ NULLS LAST en DQL :
+        //   Le DQL de Doctrine ORM ne supporte PAS la syntaxe "ORDER BY x ASC NULLS LAST"
+        //   (PHPStan avec le plugin Doctrine rejette cette syntaxe comme invalide).
+        //   On simule "NULLS LAST" via une expression CASE WHEN :
+        //     CASE WHEN r.deadline IS NULL THEN 1 ELSE 0 END ASC
+        //   Cette expression retourne 0 pour les deadlines non-nulles (donc passent en premier)
+        //   et 1 pour les nulles (passent en dernier). On trie d'abord sur ce critère booléen,
+        //   puis sur la valeur de la deadline elle-même.
+        //
+        //   Même logique pour publishedAt : CASE WHEN r.publishedAt IS NULL THEN 1 ELSE 0 END
+        //   pour mettre les ressources sans publishedAt en dernier, puis fallback createdAt.
+        if ($sortBy === 'deadline') {
+            // Tri par deadline croissant, ressources sans deadline en dernier (simulé par CASE)
+            $qb->addSelect('CASE WHEN r.deadline IS NULL THEN 1 ELSE 0 END AS HIDDEN deadlineNull')
+               ->orderBy('deadlineNull', 'ASC')
+               ->addOrderBy('r.deadline', 'ASC');
+        } else {
+            // Tri par défaut : publication récente en premier
+            // publishedAt peut être null pour les ressources très anciennes → fallback createdAt
+            // CASE simule NULLS LAST sans syntaxe DQL non supportée
+            $qb->addSelect('CASE WHEN r.publishedAt IS NULL THEN 1 ELSE 0 END AS HIDDEN publishedAtNull')
+               ->orderBy('publishedAtNull', 'ASC')
+               ->addOrderBy('r.publishedAt', 'DESC')
+               ->addOrderBy('r.createdAt', 'DESC');
+        }
 
         // On charge les relations en une seule requête pour éviter le problème N+1.
         // Ces JOINs sont ici (et pas dans buildPublishedQueryBuilder) car ils sont
@@ -289,18 +443,22 @@ class ResourceRepository extends ServiceEntityRepository
      * @param string|null $search       Même filtre que findPublished()
      * @param bool        $hideExpired  Même filtre que findPublished() — DOIT être identique
      *                                  pour que le compteur soit cohérent avec la liste affichée.
+     * @param int|null    $year         Même filtre que findPublished()
+     * @param string|null $country      Même filtre que findPublished()
      */
     public function countPublished(
         ?int $typeId = null,
         ?int $disciplineId = null,
         ?string $search = null,
         bool $hideExpired = false,
+        ?int $year = null,
+        ?string $country = null,
     ): int {
         // On réutilise exactement le même QueryBuilder que findPublished() (sans les JOINs de chargement)
         // pour garantir que les filtres appliqués sont identiques.
-        // ⚠️ IMPORTANT : $hideExpired doit être passé ici aussi — sinon le COUNT inclut les
-        // ressources expirées alors que la liste les masque → pagination incohérente.
-        $qb = $this->buildPublishedQueryBuilder($typeId, $disciplineId, $search, $hideExpired);
+        // ⚠️ IMPORTANT : tous les filtres doivent être passés ici aussi — sinon le COUNT et
+        // la liste divergent → pagination incohérente.
+        $qb = $this->buildPublishedQueryBuilder($typeId, $disciplineId, $search, $hideExpired, $year, $country);
 
         // On remplace le SELECT * par un SELECT COUNT(r.id)
         // getSingleScalarResult() retourne directement la valeur scalaire (un entier en string)

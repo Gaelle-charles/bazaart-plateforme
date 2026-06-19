@@ -41,11 +41,19 @@ class ResourceController extends AbstractController
     ) {}
 
     /**
-     * Page principale : liste de toutes les ressources publiées, avec pagination.
+     * Page principale : catalogue des ressources publiées, vue grille uniquement.
      * Accessible à tous les utilisateurs connectés.
-     * Supporte les filtres par type, discipline et recherche textuelle.
      *
-     * URL exemple : /resources?type=2&discipline=4&q=musique&page=3
+     * Filtres supportés :
+     *   ?type=ID        — filtre par type de ressource
+     *   ?discipline=ID  — filtre par discipline artistique
+     *   ?q=texte        — recherche plein texte (titre + description)
+     *   ?year=2026      — filtre sur l'année de la deadline
+     *   ?country=France — filtre sur le pays
+     *   ?sort=deadline  — tri par deadline croissant (défaut : récemment publiées)
+     *   ?page=N         — pagination
+     *
+     * URL exemple : /resources?type=2&discipline=4&q=musique&year=2026&sort=deadline&page=3
      *
      * Logique de pagination :
      *   1. On lit ?page= depuis la query string (défaut : 1)
@@ -58,10 +66,29 @@ class ResourceController extends AbstractController
     #[Route('', name: 'index')]
     public function index(Request $request): Response
     {
-        // ── Récupération des filtres depuis l'URL (?type=1&discipline=2&q=musique) ──
+        // ── Récupération des filtres depuis l'URL ─────────────────────────────────
+        // On valide chaque paramètre avant de l'utiliser pour éviter les injections
+        // de valeurs arbitraires dans les requêtes Doctrine.
         $typeId       = $request->query->get('type') ? (int) $request->query->get('type') : null;
         $disciplineId = $request->query->get('discipline') ? (int) $request->query->get('discipline') : null;
         $search       = $request->query->get('q');
+
+        // Filtre année : on accepte uniquement une année entière à 4 chiffres valide.
+        // Si la valeur ne correspond pas (ex: "abc", "99"), on l'ignore silencieusement.
+        $rawYear = $request->query->get('year');
+        $year    = ($rawYear !== null && ctype_digit($rawYear) && strlen($rawYear) === 4)
+            ? (int) $rawYear
+            : null;
+
+        // Filtre pays : on lit la valeur brute (les noms de pays contiennent des lettres,
+        // accents, espaces). On la nettoie avec trim() pour éviter les espaces parasites.
+        $country = $request->query->get('country');
+        $country = ($country !== null && trim($country) !== '') ? trim($country) : null;
+
+        // Tri : 'recent' (défaut) ou 'deadline'. Toute valeur inconnue → tri par défaut.
+        // On blanchit les valeurs autorisées pour éviter toute injection dans l'ORDER BY.
+        $rawSort = $request->query->get('sort', 'recent');
+        $sortBy  = in_array($rawSort, ['recent', 'deadline'], strict: true) ? $rawSort : 'recent';
 
         // ── Nombre de ressources par page (constante métier) ──────────────────────
         // 12 = 4 lignes × 3 colonnes sur desktop, joliment divisible pour mobile (6 × 2 ou 12 × 1)
@@ -76,47 +103,70 @@ class ResourceController extends AbstractController
         // On compte AVANT de charger la page pour calculer totalPages.
         // countPublished() fait un SELECT COUNT — pas de chargement d'entités en mémoire.
         //
-        // hideExpired: true → on masque les ressources dont la deadline est passée.
-        // Ce paramètre doit être identique dans countPublished() ET findPublished() ci-dessous,
-        // sinon le compteur et la liste seraient incohérents (pagination cassée).
-        $total = $this->resourceRepository->countPublished($typeId, $disciplineId, $search, hideExpired: true);
+        // ⚠️ TOUS les filtres (y compris year et country) doivent être identiques
+        // dans countPublished() ET findPublished() — sinon la pagination sera incohérente
+        // (le compteur et la liste ne couvriraient pas le même périmètre).
+        $total = $this->resourceRepository->countPublished(
+            $typeId,
+            $disciplineId,
+            $search,
+            hideExpired: true,
+            year: $year,
+            country: $country,
+        );
 
         // ── Calcul du nombre total de pages ───────────────────────────────────────
         // ceil() arrondit au supérieur : 13 résultats / 12 par page = ceil(1.08) = 2 pages.
-        // max(1, ...) garantit au moins 1 page même si le catalogue est vide (total = 0),
-        // ce qui évite d'afficher "page 1 sur 0" dans l'interface.
+        // max(1, ...) garantit au moins 1 page même si le catalogue est vide (total = 0).
         $totalPages = max(1, (int) ceil($total / $limit));
 
         // ── Sécurité : borne la page courante entre 1 et totalPages ──────────────
-        // Si l'utilisateur arrive sur ?page=99 alors qu'il n'y a que 3 pages,
-        // on le redirige silencieusement vers la dernière page.
-        // Note : on corrige ici plutôt que de lancer une 404 pour ne pas pénaliser
-        // les anciens liens bookmarkés dont le contenu a diminué.
         if ($page > $totalPages) {
             $page = $totalPages;
         }
 
         // ── Chargement de la page courante uniquement ─────────────────────────────
-        // findPublished() avec $page != null applique LIMIT + OFFSET → charge 12 entités max.
-        //
-        // hideExpired: true → catalogue public → on masque les ressources à deadline passée.
-        // Les ressources restent en BDD et visibles dans /admin/resources.
-        $resources   = $this->resourceRepository->findPublished($typeId, $disciplineId, $search, $page, $limit, hideExpired: true);
+        $resources = $this->resourceRepository->findPublished(
+            $typeId,
+            $disciplineId,
+            $search,
+            $page,
+            $limit,
+            hideExpired: true,
+            year: $year,
+            country: $country,
+            sortBy: $sortBy,
+        );
+
+        // ── Listes pour les menus déroulants ─────────────────────────────────────
         $types       = $this->typeRepository->findAllOrdered();
         $disciplines = $this->disciplineRepository->findAllOrdered();
+
+        // Années disponibles : requête DISTINCT sur la colonne deadline des ressources publiées.
+        // Sert à peupler le select "Année" avec uniquement les années réellement présentes en BDD.
+        $availableYears = $this->resourceRepository->findAvailableDeadlineYears();
+
+        // Pays disponibles : requête DISTINCT sur la colonne country (non nulle, non vide).
+        // Sert à peupler le select "Pays/Territoire".
+        $availableCountries = $this->resourceRepository->findAvailableCountries();
 
         return $this->render('resource/index.html.twig', [
             'resources'           => $resources,
             'types'               => $types,
             'disciplines'         => $disciplines,
+            'availableYears'      => $availableYears,
+            'availableCountries'  => $availableCountries,
             // ── Filtres actifs (renvoyés au template pour pré-sélectionner les champs) ──
             'currentTypeId'       => $typeId,
             'currentDisciplineId' => $disciplineId,
             'currentSearch'       => $search ?? '',
+            'currentYear'         => $year,
+            'currentCountry'      => $country ?? '',
+            'currentSort'         => $sortBy,
             // ── Données de pagination ──────────────────────────────────────────────
-            'currentPage'         => $page,        // Page actuellement affichée (1-based)
-            'totalPages'          => $totalPages,  // Nombre total de pages calculé
-            'total'               => $total,        // Nombre total de résultats (pour l'eyebrow)
+            'currentPage'         => $page,
+            'totalPages'          => $totalPages,
+            'total'               => $total,
         ]);
     }
 
@@ -365,6 +415,47 @@ class ResourceController extends AbstractController
             'disciplines' => $disciplines,
             'types'       => $types,
         ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ROUTE /mes-alertes — alias URL propre vers la page de gestion des alertes
+    //
+    // La logique métier vit dans alerts() ci-dessus (/resources/alerts).
+    // Cette route fournit une URL plus courte et plus mémorisable pour l'accès
+    // depuis le bouton "Créer une alerte" du catalogue public.
+    //
+    // On s'appuie sur le même nom de route (app_resource_alerts) pour que le
+    // bouton du header et la navigation utilisent toujours la même destination.
+    // Alternativement, on peut créer une route distincte qui rend le même template.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Page "Mes alertes" — URL mémorisable vers les préférences d'alertes.
+     *
+     * Route : GET/POST /mes-alertes (name: app_resource_alert_edit)
+     *
+     * Cette route est un point d'entrée secondaire vers la fonctionnalité d'alertes.
+     * Elle utilise la même logique que /resources/alerts (app_resource_alerts)
+     * et rend le même template, mais depuis un chemin plus court et plus parlant.
+     *
+     * Pourquoi une route distincte plutôt qu'une redirection ?
+     *   - On évite une requête HTTP supplémentaire (301 → nouvelle requête)
+     *   - L'URL /mes-alertes est persistante dans la barre d'adresse du navigateur
+     *   - Le bouton "Créer une alerte" peut pointer directement ici sans rebond
+     *
+     * ⚠️ IMPORTANT : ce chemin est HORS du préfixe /resources (défini par #[Route('/resources')]
+     * au niveau de la classe). La définition explicite de 'path' ici écrase le préfixe.
+     * Symfony applique le préfixe de classe UNIQUEMENT si le chemin de la méthode est relatif.
+     * Avec un chemin absolu commençant par '/', le préfixe est ignoré.
+     */
+    #[IsGranted('ROLE_USER')]
+    #[Route('/mes-alertes', name: 'alert_edit', methods: ['GET', 'POST'])]
+    public function alertEdit(Request $request): Response
+    {
+        // On réutilise exactement la même logique que alerts().
+        // En appelant $this->alerts($request), on évite toute duplication de code.
+        // Une seule source de vérité = plus facile à maintenir.
+        return $this->alerts($request);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

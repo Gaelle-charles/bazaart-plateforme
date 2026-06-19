@@ -4,18 +4,19 @@
  # resource/index.html.twig — Catalogue des ressources / opportunités
  #
  # Thème : Street (app connectée)
- # Refonte : double vue Liste + Grille, switcher JS, header géant, filtres inline
+ # Refonte : vue GRILLE UNIQUEMENT (suppression vue liste + switcher), filtres enrichis
+ #           (ajout année deadline et pays), tri au choix, cartes enrichies.
  #
  # Polices :
  #   var(--display) = Archivo Black  → titres, eyebrow, grands formats
  #   var(--body)    = Space Grotesk  → texte courant
- #   var(--mono)    = JetBrains Mono → labels, badges, méta
+ #   var(--mono)    = JetBrains Mono → labels, badges, meta
  #
  # Palette :
  #   var(--bg)      = #F2EFE6  fond sable
  #   var(--ink)     = #0D0D0D  quasi-noir principal
- #   var(--accent)  = #C6F24E  lime
- #   var(--accent-2)= #FF6B2C  orange (urgence)
+ #   var(--accent)  = #C6F24E  lime (badge Type)
+ #   var(--accent-2)= #FF6B2C  orange (badge Discipline + urgence)
  #
  # Design : border-radius 0 partout, pas d'ombres, bordures 1px solid var(--ink)
  #
@@ -23,17 +24,25 @@
  #   resources           — tableau de Resource (uniquement la page courante, 12 max)
  #   types               — tableau de ResourceType pour le select
  #   disciplines         — tableau de Discipline pour le select
- #   currentSearch       — string (filtre texte actif, paramètre URL "q")
+ #   availableYears      — int[]  années de deadline distinctes en base (ordre DESC)
+ #   availableCountries  — string[] pays distincts en base (ordre ABC)
+ #   currentSearch       — string (filtre texte actif, parametre URL "q")
  #   currentTypeId       — int|null (filtre type actif)
  #   currentDisciplineId — int|null (filtre discipline actif)
+ #   currentYear         — int|null (filtre annee actif)
+ #   currentCountry      — string (filtre pays actif, '' si absent)
+ #   currentSort         — string 'recent'|'deadline'
  #   currentPage         — int (page courante, 1-based)
  #   totalPages          — int (nombre total de pages)
- #   total               — int (nombre total de résultats tous filtres confondus)
+ #   total               — int (nombre total de resultats tous filtres confondus)
  #
  # Chaque resource expose :
- #   .id, .title, .deadline (DateTimeInterface|null — utilisé avec |date('d M Y'))
- #   .resourceType (nullable, .name), .disciplines (Collection, .name)
- #   .organization (nullable, .name), .location (string|null)
+ #   .id, .title, .publishedAt (DateTimeInterface|null)
+ #   .deadline (DateTimeInterface|null), .resourceType (nullable, .name)
+ #   .disciplines (Collection, .name), .organization (nullable, .name)
+ #   .country (string|null), .city (string|null), .location (string|null)
+ #   .fundingAmount (string|null), .fundingType (string|null)
+ #   .logoUrl (string|null)
  #}
 
 {% block title %}Opportunites — Bazaart{% endblock %}
@@ -43,22 +52,20 @@
 {{ parent() }}
 <style>
     /* =====================================================================
-       CATALOGUE OPPORTUNITES — styles thème Street
+       CATALOGUE OPPORTUNITES — styles theme Street
+       Vue GRILLE uniquement (la vue liste et le switcher ont ete supprimes).
        Toutes les valeurs passent par les variables CSS du design-tokens.css.
-       Aucune couleur ni police en dur : on utilise var(--...) pour que le
-       design system puisse évoluer sans toucher aux templates.
     ===================================================================== */
 
-    /* ── En-tête de section ──────────────────────────────────────────── */
+    /* ── En-tete de section ──────────────────────────────────────────── */
 
-    /* Zone d'en-tête principale : titre géant + compteur + contrôles vue */
     .opp-header {
         padding-top: 32px;
         padding-bottom: 24px;
         border-bottom: 1px solid var(--ink);
     }
 
-    /* Ligne flex : gauche = eyebrow + titre géant, droite = bouton alerte + switcher */
+    /* Ligne flex : gauche = eyebrow + titre geant, droite = bouton alerte */
     .opp-header__row {
         display: flex;
         align-items: flex-end;
@@ -67,15 +74,7 @@
         flex-wrap: wrap;
     }
 
-    /* Colonne droite : regroupe le bouton alerte et le switcher de vue */
-    .opp-header__controls {
-        display: flex;
-        align-items: center;
-        gap: var(--space-md);
-        flex-shrink: 0;
-    }
-
-    /* Sur-titre eyebrow : ■ mono uppercase, compteur intégré */
+    /* Sur-titre eyebrow : carre mono uppercase + compteur */
     .opp-eyebrow {
         font-family: var(--mono);
         font-size: 11px;
@@ -86,8 +85,7 @@
         margin-bottom: 8px;
     }
 
-    /* Titre principal : clamp fluid typography
-       Valeurs demandées dans le prototype : 64px min, 9vw idéal, 132px max */
+    /* Titre principal : clamp fluid typography */
     .opp-title {
         font-family: var(--display);
         font-size: clamp(64px, 9vw, 132px);
@@ -97,61 +95,35 @@
         margin: 8px 0 0;
     }
 
-    /* ── Switcher vue Liste / Grille ─────────────────────────────────── */
-
-    /* Les deux boutons collés côte à côte, bordure commune */
-    .view-switcher {
-        display: inline-flex;
-        border: 1px solid var(--ink);
-    }
-
-    /* Chaque bouton du switcher : fond transparent par défaut */
-    .view-switcher__btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 8px 14px;
-        background: transparent;
-        color: var(--ink);
-        border: none;
-        border-right: 1px solid var(--ink);
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: .08em;
-        text-transform: uppercase;
-        cursor: pointer;
-        transition: background var(--transition-fast), color var(--transition-fast);
-    }
-
-    /* Supprime la bordure droite du dernier bouton (sinon double bordure) */
-    .view-switcher__btn:last-child {
-        border-right: none;
-    }
-
-    /* Survol : fond lime = signal interactif Street */
-    .view-switcher__btn:hover {
-        background: var(--accent);
-        color: var(--ink);
-    }
-
     /* ── Barre de filtres ────────────────────────────────────────────── */
 
-    /* Fond légèrement différent + bordure basse = zone fonctionnelle distincte de la page */
+    /* Fond legèrement different + bordure basse = zone fonctionnelle distincte */
     .filter-bar {
         background: var(--bg-alt);
         border-bottom: 1px solid var(--ink);
+    }
+
+    /* Premiere ligne : recherche + type + discipline + bouton */
+    .filter-bar__row {
         display: flex;
         align-items: stretch;
         flex-wrap: wrap;
         gap: 0;
-        margin-bottom: 0;
+    }
+
+    /* Deuxième ligne : filtres secondaires (annee, pays, tri) */
+    .filter-bar__row2 {
+        display: flex;
+        align-items: stretch;
+        flex-wrap: wrap;
+        gap: 0;
+        border-top: 1px solid var(--line-soft);
     }
 
     /* Champ recherche : flex:1 pour prendre le maximum d'espace */
     .filter-bar__search {
         flex: 1;
-        min-width: 200px;
+        min-width: 180px;
         padding: 12px 16px;
         background: transparent;
         border: none;
@@ -166,7 +138,7 @@
         color: var(--ink-mute);
     }
 
-    /* Selects disciplines et types : même padding que le champ recherche, fond transparent */
+    /* Selects : meme padding que le champ recherche, fond transparent */
     .filter-bar__select {
         padding: 12px 16px;
         background: transparent;
@@ -177,9 +149,10 @@
         color: var(--ink);
         outline: none;
         cursor: pointer;
+        min-width: 130px;
     }
 
-    /* Bouton FILTRER : fond encre, texte accent = style CTA primaire Street */
+    /* Bouton FILTRER : fond encre, texte accent = CTA primaire Street */
     .filter-bar__submit {
         padding: 12px 24px;
         background: var(--ink);
@@ -200,9 +173,51 @@
         color: var(--ink);
     }
 
-    /* ── Compteur de résultats ───────────────────────────────────────── */
+    /* Label "TRIER PAR" dans la barre secondaire */
+    .filter-bar__label {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        border-right: 1px solid var(--line-soft);
+        white-space: nowrap;
+    }
 
-    .results-count {
+    /* Bouton de reinitialisation des filtres : discret, lien mono */
+    .filter-bar__reset {
+        display: flex;
+        align-items: center;
+        padding: 8px 16px;
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        text-decoration: none;
+        border-left: 1px solid var(--line-soft);
+        white-space: nowrap;
+        transition: color var(--transition-fast);
+    }
+
+    .filter-bar__reset:hover {
+        color: var(--ink);
+    }
+
+    /* ── Compteur de resultats ───────────────────────────────────────── */
+
+    .results-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-md);
+        flex-wrap: wrap;
         font-family: var(--mono);
         font-size: 11px;
         letter-spacing: .08em;
@@ -213,142 +228,11 @@
         margin-bottom: var(--space-md);
     }
 
-    /* ── VUE LISTE ───────────────────────────────────────────────────── */
-
-    /* Conteneur liste : sans fond propre, bordure top = démarcation avec les filtres */
-    .view-list {
-        border-top: 1px solid var(--ink);
-    }
-
-    /* Chaque ligne de liste : lien cliquable sur toute la surface */
-    .list-card {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 20px 24px;
-        border-bottom: 1px solid var(--ink);
-        background: transparent;
-        color: var(--ink);
-        text-decoration: none;
-        transition: background var(--transition-fast);
-        gap: var(--space-lg);
-    }
-
-    /* Survol : fond bg-alt (gris sable léger) = feedback interactif discret */
-    .list-card:hover {
-        background: var(--bg-alt);
-    }
-
-    /* Colonne gauche : contient badges + titre + méta organisateur/lieu */
-    .list-card__left {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        flex: 1;
-        min-width: 0; /* nécessaire pour que l'ellipse de titre fonctionne */
-    }
-
-    /* Ligne de badges (type + disciplines) */
-    .list-card__badges {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        align-items: center;
-    }
-
-    /* Badge type : fond accent lime + texte encre = chip principal visible */
-    .badge-type {
-        display: inline-block;
-        padding: 3px 8px;
-        background: var(--accent);
-        color: var(--ink);
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: .08em;
-        text-transform: uppercase;
-    }
-
-    /* Badge discipline : bordure légère, transparent */
-    .badge-disc {
-        display: inline-block;
-        padding: 3px 8px;
-        background: transparent;
-        border: 1px solid var(--ink-mute);
-        color: var(--ink-mute);
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: .04em;
-    }
-
-    /* Titre de la card liste : display, taille h2 réduite pour la vue compacte */
-    .list-card__title {
-        font-family: var(--display);
-        font-size: 22px;
-        line-height: 1.1;
-        color: var(--ink);
-        /* Ellipse sur 2 lignes max pour les titres très longs */
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        margin: 0;
-    }
-
-    /* Méta : organisation + lieu séparés par un point médian */
-    .list-card__meta {
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--ink-mute);
-        letter-spacing: .04em;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    /* Colonne droite : deadline (badge urgent ou texte simple) */
-    .list-card__right {
-        text-align: right;
-        flex-shrink: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 6px;
-    }
-
-    /* Badge URGENT : fond orange, texte encre = alerte visuelle forte */
-    .badge-urgent {
-        display: inline-block;
-        padding: 3px 8px;
-        background: var(--accent-2);
-        color: var(--ink);
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: .08em;
-        text-transform: uppercase;
-    }
-
-    /* Texte deadline en mono discret */
-    .deadline-text {
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--ink-mute);
-        white-space: nowrap;
-    }
-
-    /* Deadline sur une card urgente passe en orange pour cohérence */
-    .deadline-text--urgent {
-        color: var(--accent-2);
-        font-weight: 700;
-    }
-
     /* ── VUE GRILLE ──────────────────────────────────────────────────── */
 
-    /* Grille 3 colonnes, bordures partagées = style tableau éditorial */
+    /* Grille 3 colonnes, bordures partagees = style tableau editorial */
     .view-grid {
-        display: none; /* masquée par défaut, activée par JS */
+        display: grid;
         grid-template-columns: 1fr 1fr 1fr;
         border: 1px solid var(--ink);
     }
@@ -367,12 +251,12 @@
         }
     }
 
-    /* Card grille : flex colonne, bordures droite + bas partagées */
+    /* Card grille : flex colonne, bordures droite + bas partagees */
     .grid-card {
         display: flex;
         flex-direction: column;
-        gap: 10px;
-        padding: 24px 20px;
+        gap: 0;
+        padding: 20px 18px;
         border-right: 1px solid var(--ink);
         border-bottom: 1px solid var(--ink);
         background: transparent;
@@ -381,36 +265,205 @@
         transition: background var(--transition-fast);
     }
 
-    /* Survol grille : lime = signal fort, cohérent avec la grille de la page vitrine */
+    /* Survol : lime = signal fort */
     .grid-card:hover {
         background: var(--accent);
     }
 
-    /* Titre dans la grille : taille réduite vs header mais toujours display */
+    /* Ligne superieure : logo + badges type/discipline */
+    .grid-card__top {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    /* Colonne droite de la ligne sup : badges empiles */
+    .grid-card__badges {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+        min-width: 0;
+    }
+
+    /* Badge Type : fond lime --accent (vert acide), texte encre */
+    .badge-type {
+        display: inline-block;
+        padding: 3px 8px;
+        background: var(--accent);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        align-self: flex-start;
+    }
+
+    /* Badge Discipline : fond orange --accent-2 distinct du badge Type */
+    .badge-disc {
+        display: inline-block;
+        padding: 3px 8px;
+        background: var(--accent-2);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .04em;
+        align-self: flex-start;
+    }
+
+    /* Badge discipline surplus (+N) : meme style que badge-disc */
+    .badge-disc-more {
+        display: inline-block;
+        padding: 3px 8px;
+        border: 1px solid var(--ink-mute);
+        color: var(--ink-mute);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .04em;
+        align-self: flex-start;
+    }
+
+    /* Titre dans la grille : display Archivo Black, 3 lignes max */
     .grid-card__title {
         font-family: var(--display);
-        font-size: 20px;
+        font-size: 18px;
         line-height: 1.1;
         color: var(--ink);
         display: -webkit-box;
         -webkit-line-clamp: 3;
         -webkit-box-orient: vertical;
         overflow: hidden;
-        margin: 0;
+        margin: 0 0 12px;
         flex: 1;
     }
 
-    /* Deadline dans la card grille */
-    .grid-card__deadline {
+    /* Zone meta : date de publication + deadline */
+    .grid-card__dates {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        margin-bottom: 10px;
+    }
+
+    /* Ligne de date individuelle */
+    .grid-card__date-line {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        letter-spacing: .03em;
+    }
+
+    /* Label de la date (ex: "PUBLIE" ou "LIMITE") */
+    .grid-card__date-label {
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        font-size: 9px;
+        color: var(--ink-mute);
+        flex-shrink: 0;
+    }
+
+    /* Valeur de date */
+    .grid-card__date-val {
+        color: var(--ink);
+    }
+
+    /* Deadline urgente (moins de 7 jours) : orange */
+    .grid-card__date-val--urgent {
+        color: var(--accent-2);
+        font-weight: 700;
+    }
+
+    /* Badge URGENT : fond orange, texte encre */
+    .badge-urgent {
+        display: inline-block;
+        padding: 2px 6px;
+        background: var(--accent-2);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    /* Zone montant : affichee si fundingAmount ou fundingType renseignes */
+    .grid-card__funding {
         font-family: var(--mono);
         font-size: 11px;
+        color: var(--ink);
+        font-weight: 700;
+        letter-spacing: .03em;
+        margin-bottom: 6px;
+    }
+
+    .grid-card__funding-sub {
+        font-family: var(--mono);
+        font-size: 10px;
         color: var(--ink-mute);
+        font-weight: 400;
+        letter-spacing: .02em;
+    }
+
+    /* Zone territoire/pays en bas de card */
+    .grid-card__territory {
+        display: flex;
+        align-items: center;
+        gap: 6px;
         margin-top: auto;
+        padding-top: 8px;
+    }
+
+    /* Chip pays : contour leger, texte gris */
+    .badge-country {
+        display: inline-block;
+        padding: 2px 7px;
+        background: transparent;
+        border: 1px solid var(--line-soft);
+        color: var(--ink-mute);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    /* Logo miniature */
+    .card-logo {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        background: #ffffff;
+        border: 1px solid var(--line-soft);
+        overflow: hidden;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .card-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+    }
+
+    /* Repli Bazaart quand logoUrl est absent ou cassé */
+    .card-logo--bazaart {
+        background: var(--bg-alt, #E8E5DC);
+        border-color: var(--line-soft);
     }
 
     /* ── Etat vide ───────────────────────────────────────────────────── */
 
-    /* Zone vide encadrée style éditorial : encre, fond sable, centré */
     .empty-state {
         border: 1px solid var(--ink);
         padding: var(--space-3xl) var(--space-2xl);
@@ -418,7 +471,6 @@
         background: var(--bg);
     }
 
-    /* Grand numéro décoratif grisé = esthétique caractéristique du thème Street */
     .empty-state__icon {
         font-family: var(--display);
         font-size: 80px;
@@ -444,7 +496,6 @@
         margin-bottom: var(--space-lg);
     }
 
-    /* CTA état vide : bouton accent plein */
     .empty-state__cta {
         display: inline-flex;
         align-items: center;
@@ -469,14 +520,12 @@
 
     /* ── Pagination ──────────────────────────────────────────────────── */
 
-    /* Centrage et espacement vertical du bloc de pagination */
     .pagination-wrap {
         margin-top: var(--space-xl);
         display: flex;
         justify-content: center;
     }
 
-    /* Ligne de boutons sans gap (bordures partagées = style Street) */
     .pagination-wrap .pagination {
         display: inline-flex;
         border: 1px solid var(--ink);
@@ -503,113 +552,34 @@
         transition: background var(--transition-fast), color var(--transition-fast);
     }
 
-    /* Supprime la bordure droite en double sur le dernier élément */
     .pagination-wrap .page-item:last-child .page-link {
         border-right: none;
     }
 
-    /* Page active : fond encre + texte accent = item sélectionné */
     .pagination-wrap .page-item.active .page-link {
         background: var(--ink);
         color: var(--accent);
     }
 
-    /* Survol pagination : fond lime */
     .pagination-wrap .page-item .page-link:hover {
         background: var(--accent);
         color: var(--ink);
     }
 
-    /* Page désactivée (prev sur page 1, next sur dernière page) */
     .pagination-wrap .page-item.disabled .page-link {
         opacity: .35;
         pointer-events: none;
-    }
-
-    /* ── Logo miniature dans les cartes (liste et grille) ──────────────────
-       .card-logo         : conteneur carré à taille FIXE — l'image source peut
-                           avoir n'importe quel ratio, elle sera contenue dedans
-                           (object-fit: contain) sans jamais être déformée.
-       .card-logo img     : règle de rendu de l'image à l'intérieur.
-       .card-logo--bazaart: variante utilisée quand logoUrl est absent ou cassé —
-                           on affiche le favicon Bazaart avec un fond légèrement
-                           différent pour signaler le repli. */
-
-    /* Conteneur logo : 48×48 px, fond blanc neutre, bordure douce, coins francs
-       (border-radius: 0 → cohérence thème Street "zéro radius") */
-    .card-logo {
-        width: 48px;
-        height: 48px;
-        min-width: 48px; /* évite que flexbox rétrécisse le carré */
-        background: #ffffff;
-        border: 1px solid var(--line-soft);
-        overflow: hidden;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    /* Image à l'intérieur : object-fit: contain = l'image est réduite pour
-       tenir dans le carré, jamais rognée, jamais étirée. display:block élimine
-       le gap de ligne induit par inline-block. */
-    .card-logo img {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-        display: block;
-    }
-
-    /* Variante "repli Bazaart" : fond légèrement plus sombre pour distinguer
-       visuellement le logo Bazaart d'un logo d'organisme réel */
-    .card-logo--bazaart {
-        background: var(--bg-alt, #E8E5DC);
-        border-color: var(--line-soft);
-    }
-
-    /* ── Chips compacts (ADR-0016 Lot 3 — pays et niveau) ───────────────────
-       Utilisés dans les cartes liste ET grille pour afficher des métadonnées
-       supplémentaires sans surcharger visuellement.
-       Taille légèrement plus petite que les chips hero (.hero-badge-disc)
-       pour rester discrets en contexte catalogue. */
-
-    /* Chip pays : fond sable, bordure encre douce, texte gris */
-    .badge-country {
-        display: inline-block;
-        padding: 2px 7px;
-        background: transparent;
-        border: 1px solid var(--line-soft);
-        color: var(--ink-mute);
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: .04em;
-        text-transform: uppercase;
-    }
-
-    /* Chip niveau : variante subtile — fond lime très atténué = info positive */
-    .badge-level {
-        display: inline-block;
-        padding: 2px 7px;
-        background: transparent;
-        border: 1px solid var(--line-soft);
-        color: var(--ink-mute);
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: .04em;
-        text-transform: uppercase;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# ── En-tête de section ───────────────────────────────────────────────────── #}
+{# ── En-tete de section ───────────────────────────────────────────────────── #}
 {#
    Header style prototype Street :
-   - Gauche  : eyebrow "■ OPPORTUNITES · N ACTIVES" + titre géant fluide
-   - Droite  : bouton alerte + switcher vue liste/grille
+   - Gauche  : eyebrow "OPPORTUNITES + compteur" + titre geant fluide
+   - Droite  : bouton "Creer une alerte" bien visible
 #}
 <div class="opp-header">
     <div class="opp-header__row">
@@ -617,10 +587,8 @@
         {# ── Colonne gauche : eyebrow + titre ── #}
         <div>
             {#
-                Eyebrow : le caractère "■" est un carré Unicode standard (U+25A0).
-                On affiche le compteur total GLOBAL (variable `total`),
-                pas le nombre d'items sur la page courante.
-                Exemple pagination : "■ OPPORTUNITES · 47 ACTIVES" même si on n'en affiche que 12.
+                Eyebrow : carre Unicode U+25A0 + nombre d'opportunites actives.
+                `total` est le nombre de resultats tous filtres actifs confondus.
             #}
             <div class="opp-eyebrow">
                 &#9632; OPPORTUNITES
@@ -628,9 +596,8 @@
             </div>
 
             {#
-                Titre géant en deux lignes, uppercase, Archivo Black.
+                Titre geant en deux lignes, uppercase, Archivo Black.
                 clamp(64px, 9vw, 132px) : typographie fluide selon le CDC.
-                line-height 0.88 = serré, style affiche / poster.
             #}
             <h1 class="opp-title">
                 CE QUI EST<br>
@@ -638,53 +605,38 @@
             </h1>
         </div>
 
-        {# ── Colonne droite : bouton alerte + switcher ── #}
-        <div class="opp-header__controls">
+        {# ── Colonne droite : bouton alerte ── #}
+        {#
+            Bouton "Creer une alerte" bien visible pour tout utilisateur connecte.
+            Mène vers /mes-alertes (route app_resource_alert_edit) = page de gestion
+            des preferences d'alertes email (disciplines, types, frequence).
+        #}
+        {% if is_granted('ROLE_USER') %}
+            <a href="{{ path('app_resource_alert_edit') }}"
+               class="btn btn-primary"
+               style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;">
+                {# Icone cloche SVG accessible (aria-hidden car le texte suffit) #}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                     aria-hidden="true">
+                    <path d="M6 8a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/>
+                    <path d="M10 18a2 2 0 0 0 4 0"/>
+                </svg>
+                Creer une alerte
+            </a>
+        {% endif %}
 
-            {#
-                Bouton "Creer une alerte" : visible pour tout utilisateur connecté.
-                Les alertes permettent de recevoir des notifs email quand une
-                nouvelle opportunité matche ses préférences (discipline, type…).
-                Route : app_resource_alerts
-            #}
-            {% if is_granted('ROLE_USER') %}
-                <a href="{{ path('app_resource_alerts') }}"
-                   class="btn btn-ghost btn-sm">
-                    &#128276; Creer une alerte
-                </a>
-            {% endif %}
-
-            {#
-                Switcher vue : deux boutons côte à côte avec border 1px solid var(--ink).
-                Identifiants id="btn-list" et id="btn-grid" utilisés par le JS ci-dessous.
-                L'état actif est géré dynamiquement par setView() — pas de classe CSS statique.
-            #}
-            <div class="view-switcher" role="group" aria-label="Choisir le mode d'affichage">
-                <button id="btn-list"
-                        class="view-switcher__btn"
-                        type="button"
-                        aria-pressed="true"
-                        title="Vue liste">
-                    &#9632; Liste
-                </button>
-                <button id="btn-grid"
-                        class="view-switcher__btn"
-                        type="button"
-                        aria-pressed="false"
-                        title="Vue grille">
-                    &#8862; Grille
-                </button>
-            </div>
-
-        </div>
     </div>
 </div>
 
 {# ── Barre de filtres ─────────────────────────────────────────────────────── #}
 {#
-   Formulaire GET (pas POST) : les filtres vivent dans l'URL → partage de lien,
-   bouton retour navigateur, et pas besoin de token CSRF (lecture seule).
-   Champ caché page=1 : force un retour à la page 1 à chaque nouveau filtrage.
+   Formulaire GET (pas POST) : les filtres vivent dans l'URL pour partage de lien
+   et navigation arriere navigateur. Pas de token CSRF (lecture seule).
+
+   Organisation en deux lignes :
+     Ligne 1 : recherche + type + discipline + bouton FILTRER
+     Ligne 2 : annee deadline + pays/territoire + tri + (reset si filtres actifs)
 #}
 <form method="get"
       action="{{ path('app_resource_index') }}"
@@ -692,81 +644,152 @@
       role="search"
       aria-label="Filtrer les opportunites">
 
-    {# Retour systématique à la page 1 quand les filtres changent #}
+    {# Retour systematique a la page 1 quand les filtres changent #}
     <input type="hidden" name="page" value="1">
 
+    {# ── Ligne 1 : filtres principaux ── #}
+    <div class="filter-bar__row">
+
+        {#
+            Champ de recherche textuelle.
+            name="q" : ResourceController::index() lit $request->query->get('q').
+        #}
+        <input class="filter-bar__search"
+               type="text"
+               name="q"
+               value="{{ currentSearch }}"
+               placeholder="Rechercher une opportunite..."
+               autocomplete="off"
+               aria-label="Rechercher par mot-cle">
+
+        {# Select type de ressource (appel d'offres, residence, bourse...) #}
+        <select class="filter-bar__select" name="type" aria-label="Filtrer par type">
+            <option value="">Tous les types</option>
+            {% for type in types %}
+                <option value="{{ type.id }}"
+                        {% if currentTypeId == type.id %}selected{% endif %}>
+                    {{ type.name }}
+                </option>
+            {% endfor %}
+        </select>
+
+        {# Select discipline artistique #}
+        <select class="filter-bar__select" name="discipline" aria-label="Filtrer par discipline">
+            <option value="">Toutes les disciplines</option>
+            {% for disc in disciplines %}
+                <option value="{{ disc.id }}"
+                        {% if currentDisciplineId == disc.id %}selected{% endif %}>
+                    {{ disc.name }}
+                </option>
+            {% endfor %}
+        </select>
+
+        {# Bouton de soumission : fond encre + texte accent lime #}
+        <button type="submit" class="filter-bar__submit">
+            FILTRER
+        </button>
+
+    </div>
+
+    {# ── Ligne 2 : filtres secondaires (annee, pays, tri) ── #}
     {#
-        Champ de recherche textuelle — flex:1 pour prendre le maximum d'espace.
-        name="q" : le contrôleur ResourceController::index() lit $request->query->get('q').
-        La variable Twig currentSearch reflète la valeur lue (initialisée à '' si absente).
+       On affiche cette ligne seulement si des donnees de filtrage sont disponibles
+       (des annees OU des pays en base) ou si un tri non-defaut est actif.
+       Cela evite une barre vide sur un catalogue neuf sans ressources.
     #}
-    <input class="filter-bar__search"
-           type="text"
-           name="q"
-           value="{{ currentSearch }}"
-           placeholder="Rechercher une opportunite..."
-           autocomplete="off"
-           aria-label="Rechercher par mot-cle">
+    {% if availableYears is not empty or availableCountries is not empty or currentSort != 'recent' %}
+    <div class="filter-bar__row2">
 
-    {# Select discipline artistique #}
-    <select class="filter-bar__select" name="discipline" aria-label="Filtrer par discipline">
-        <option value="">Toutes les disciplines</option>
-        {% for disc in disciplines %}
-            <option value="{{ disc.id }}"
-                    {% if currentDisciplineId == disc.id %}selected{% endif %}>
-                {{ disc.name }}
+        {# Label visuel pour la serie de filtres secondaires #}
+        <span class="filter-bar__label">Affiner</span>
+
+        {# Select annee de deadline #}
+        {#
+            Affiche uniquement les annees pour lesquelles des ressources publiees
+            ont une deadline — peuples par ResourceRepository::findAvailableDeadlineYears().
+            Si aucune annee disponible, le select est masque.
+        #}
+        {% if availableYears is not empty %}
+            <select class="filter-bar__select" name="year" aria-label="Filtrer par annee de deadline">
+                <option value="">Toutes les annees</option>
+                {% for yr in availableYears %}
+                    <option value="{{ yr }}"
+                            {% if currentYear == yr %}selected{% endif %}>
+                        {{ yr }}
+                    </option>
+                {% endfor %}
+            </select>
+        {% endif %}
+
+        {# Select pays / territoire #}
+        {#
+            Affiche uniquement les pays reellement presents dans le catalogue
+            (via ResourceRepository::findAvailableCountries()).
+        #}
+        {% if availableCountries is not empty %}
+            <select class="filter-bar__select" name="country" aria-label="Filtrer par pays ou territoire">
+                <option value="">Tous les pays</option>
+                {% for c in availableCountries %}
+                    <option value="{{ c }}"
+                            {% if currentCountry == c %}selected{% endif %}>
+                        {{ c }}
+                    </option>
+                {% endfor %}
+            </select>
+        {% endif %}
+
+        {# Select tri : recemment publiees (defaut) ou par deadline #}
+        <select class="filter-bar__select" name="sort" aria-label="Trier les resultats">
+            <option value="recent"   {% if currentSort == 'recent' %}selected{% endif %}>
+                Recemment publiees
             </option>
-        {% endfor %}
-    </select>
-
-    {# Select type de ressource (appel d'offres, résidence, bourse...) #}
-    <select class="filter-bar__select" name="type" aria-label="Filtrer par type">
-        <option value="">Tous les types</option>
-        {% for type in types %}
-            <option value="{{ type.id }}"
-                    {% if currentTypeId == type.id %}selected{% endif %}>
-                {{ type.name }}
+            <option value="deadline" {% if currentSort == 'deadline' %}selected{% endif %}>
+                Par date limite
             </option>
-        {% endfor %}
-    </select>
+        </select>
 
-    {# Bouton de soumission : fond encre + texte accent lime #}
-    <button type="submit" class="filter-bar__submit">
-        FILTRER
-    </button>
+        {# Lien de reinitialisation si au moins un filtre est actif #}
+        {#
+            On verifie l'ensemble des filtres actifs.
+            currentSearch est '' (chaine vide) quand absent, les autres sont null.
+        #}
+        {% if currentSearch or currentTypeId or currentDisciplineId or currentYear or currentCountry or currentSort != 'recent' %}
+            <a href="{{ path('app_resource_index') }}"
+               class="filter-bar__reset"
+               aria-label="Reinitialiser tous les filtres">
+                &#215; Reinitialiser
+            </a>
+        {% endif %}
+
+    </div>
+    {% endif %}
 
 </form>
 
-{# ── Contenu principal : résultats ou état vide ───────────────────────────── #}
+{# ── Contenu principal : resultats ou etat vide ───────────────────────────── #}
 {% if resources is empty %}
 
     {# ── Etat vide ── #}
-    {# Deux cas distincts : filtre sans résultat, ou catalogue vraiment vide #}
+    {# Deux cas : filtre sans resultat, ou catalogue vraiment vide #}
     <div class="empty-state">
 
-        {# Numéro décoratif style éditorial = esthétique caractéristique du thème Street #}
         <div class="empty-state__icon">00</div>
 
-        {% if currentSearch or currentTypeId or currentDisciplineId %}
-            <div class="empty-state__title">Aucun résultat</div>
+        {% if currentSearch or currentTypeId or currentDisciplineId or currentYear or currentCountry %}
+            <div class="empty-state__title">Aucun resultat</div>
             <p class="empty-state__text">
-                Aucune ressource ne correspond a vos critères de recherche.<br>
-                Essayez avec des mots-clés différents ou élargissez les filtres.
+                Aucune opportunite ne correspond a vos criteres de recherche.<br>
+                Essayez avec des mots-cles differents ou elargissez les filtres.
             </p>
             <a href="{{ path('app_resource_index') }}" class="empty-state__cta">
-                Voir toutes les ressources
+                Voir toutes les opportunites
             </a>
         {% else %}
-            <div class="empty-state__title">Pas encore de ressources</div>
-            {#
-                Les structures voient un CTA pour soumettre la première ressource.
-                Les artistes et visiteurs voient un message d'attente.
-                Décision produit V1 : seules les structures soumettent des opportunités.
-            #}
+            <div class="empty-state__title">Pas encore d'opportunites</div>
             {% if is_granted('ROLE_STRUCTURE') %}
                 <p class="empty-state__text">
                     Le catalogue est vide pour l'instant.<br>
-                    Soyez la première structure a partager une opportunité avec la communauté.
+                    Soyez la premiere structure a partager une opportunite avec la communaute.
                 </p>
                 <a href="{{ path('app_resource_submit') }}" class="empty-state__cta">
                     Soumettre une ressource
@@ -774,7 +797,7 @@
             {% else %}
                 <p class="empty-state__text">
                     Le catalogue est vide pour l'instant.<br>
-                    Les opportunités proposées par les structures partenaires apparaîtront ici.
+                    Les opportunites proposees par les structures partenaires apparaitront ici.
                 </p>
             {% endif %}
         {% endif %}
@@ -782,194 +805,50 @@
 
 {% else %}
 
-    {#
-        Compteur de résultats actifs.
-        On affiche le total global, pas juste les items de la page courante.
-        Indication de pagination si on est au-dela de la page 1.
-    #}
-    <p class="results-count">
-        &#8594; {{ total }} résultat{{ total > 1 ? 's' : '' }}
-        {% if currentSearch %} · "{{ currentSearch }}"{% endif %}
-        {% if totalPages > 1 %} · page {{ currentPage }}/{{ totalPages }}{% endif %}
+    {# ── Meta : compteur de resultats + tri actif ─────────────────────────── #}
+    <p class="results-meta">
+        <span>
+            &#8594; {{ total }} resultat{{ total > 1 ? 's' : '' }}
+            {% if currentSearch %} &middot; "{{ currentSearch|e }}"{% endif %}
+            {% if currentYear %} &middot; {{ currentYear }}{% endif %}
+            {% if currentCountry %} &middot; {{ currentCountry|e }}{% endif %}
+            {% if totalPages > 1 %} &middot; page {{ currentPage }}/{{ totalPages }}{% endif %}
+        </span>
+        <span>
+            {% if currentSort == 'deadline' %}
+                Triees par date limite
+            {% else %}
+                Recemment publiees
+            {% endif %}
+        </span>
     </p>
 
     {# ──────────────────────────────────────────────────────────────────────── #}
-    {# VUE LISTE (id="view-list") — affichée par défaut                        #}
+    {# VUE GRILLE — seule vue disponible (la vue liste a ete supprimee)         #}
     {#                                                                          #}
-    {# Chaque ligne = lien cliquable sur toute la surface, avec :              #}
-    {#   - Gauche : badges (type + disciplines) + titre + méta (org · lieu)    #}
-    {#   - Droite : badge URGENT + deadline, ou juste la deadline              #}
+    {# Grille 3 colonnes desktop / 2 tablette / 1 mobile.                      #}
+    {# Cartes enrichies avec : logo, tags Type (lime) + Discipline (orange),   #}
+    {# date de publication, deadline, montant financement, territoire/pays.     #}
     {# ──────────────────────────────────────────────────────────────────────── #}
-    <div id="view-list" class="view-list">
-        {% for resource in resources %}
-            <a href="{{ path('app_resource_show', {id: resource.id}) }}"
-               class="list-card"
-               aria-label="Voir l'opportunité : {{ resource.title }}">
-
-                {# ── Colonne gauche ── #}
-                <div class="list-card__left">
-
-                    {# Ligne de badges : type (accent lime) + disciplines (bordure légère) #}
-                    <div class="list-card__badges">
-
-                        {# Badge type seulement si renseigné (champ nullable) #}
-                        {% if resource.resourceType %}
-                            <span class="badge-type">{{ resource.resourceType.name }}</span>
-                        {% endif %}
-
-                        {#
-                            On affiche au max 2 disciplines pour ne pas surcharger la ligne.
-                            Si plus de 2, on affiche "+N" pour signaler qu'il y en a davantage.
-                        #}
-                        {% for discipline in resource.disciplines|slice(0, 2) %}
-                            <span class="badge-disc">{{ discipline.name }}</span>
-                        {% endfor %}
-                        {% if resource.disciplines|length > 2 %}
-                            <span class="badge-disc">+{{ resource.disciplines|length - 2 }}</span>
-                        {% endif %}
-                    </div>
-
-                    {# Titre de l'opportunité : display Archivo Black, 22px, 2 lignes max #}
-                    <h2 class="list-card__title">{{ resource.title }}</h2>
-
-                    {#
-                        Méta : organisation + localisation (ADR-0016 Lot 3).
-                        Priorité localisation : city+country > city > country > location.
-                        On construit `listLocLabel` pour factoriser la logique.
-                    #}
-                    {% set listLocLabel = '' %}
-                    {% if resource.city and resource.country %}
-                        {% set listLocLabel = resource.city ~ ', ' ~ resource.country %}
-                    {% elseif resource.city %}
-                        {% set listLocLabel = resource.city %}
-                    {% elseif resource.country %}
-                        {% set listLocLabel = resource.country %}
-                    {% elseif resource.location %}
-                        {% set listLocLabel = resource.location %}
-                    {% endif %}
-
-                    {% if resource.organization or listLocLabel %}
-                        <div class="list-card__meta">
-                            {{ resource.organization ? resource.organization.name : '' }}
-                            {%- if resource.organization and listLocLabel %} &middot; {% endif -%}
-                            {{ listLocLabel }}
-                        </div>
-                    {% endif %}
-
-                    {#
-                        Chips compacts pays + niveau (ADR-0016 Lot 3).
-                        Affichés sur une ligne séparée, sous la méta organisation/lieu,
-                        pour ne pas surcharger le texte de la méta existante.
-                        On affiche le pays (plus compact que "Ville, Pays") et le niveau.
-                        Le pays seul suffit dans un contexte catalogue — la ville s'affiche
-                        sur la page de détail où l'espace est plus généreux.
-                        Condition : au moins l'un des deux doit exister pour afficher la ligne.
-                    #}
-                    {% if resource.country or resource.experienceLevel %}
-                        <div class="list-card__badges" style="margin-top:2px;">
-                            {% if resource.country %}
-                                <span class="badge-country">{{ resource.country }}</span>
-                            {% endif %}
-                            {% if resource.experienceLevel %}
-                                <span class="badge-level">{{ resource.experienceLevel.label() }}</span>
-                            {% endif %}
-                        </div>
-                    {% endif %}
-
-                </div>
-
-                {# ── Colonne droite : logo + deadline ── #}
-                <div class="list-card__right">
-
-                    {#
-                        ADR-0019 : miniature logo de l'organisme.
-                        Affiché en haut de la colonne droite pour identifier visuellement
-                        l'émetteur de l'opportunité.
-
-                        Comportement :
-                          - logoUrl renseigné  → image distante (lazy loading)
-                          - logoUrl vide/null  → favicon/logo Bazaart en repli
-                          - onerror            → si l'image distante est cassée, on bascule
-                                                 vers le favicon Bazaart (this.onerror=null
-                                                 évite une boucle infinie si le favicon lui-même
-                                                 venait à être inaccessible)
-
-                        Accessibilité :
-                          - alt="Logo {{ resource.title }}" pour le logo réel
-                          - alt="Bazaart" pour le repli
-                          - aria-hidden="true" car l'information est portée par le titre
-
-                        Sécurité : logoUrl est auto-escaped par Twig dans src="{{ }}"
-                        (jamais de |raw sur une URL externe).
-                    #}
-                    {% if resource.logoUrl %}
-                        {# Logo réel de l'organisme — chargé depuis l'URL distante #}
-                        <div class="card-logo">
-                            <img src="{{ resource.logoUrl|e }}"
-                                 alt="Logo {{ resource.title|e }}"
-                                 loading="lazy"
-                                 onerror="this.onerror=null; this.src='{{ asset('images/favicon.png') }}'; this.alt='Bazaart';">
-                        </div>
-                    {% else %}
-                        {# Pas de logo : on affiche le favicon/logo Bazaart en repli #}
-                        <div class="card-logo card-logo--bazaart">
-                            <img src="{{ asset('images/favicon.png') }}"
-                                 alt="Bazaart"
-                                 loading="lazy">
-                        </div>
-                    {% endif %}
-
-                    {#
-                        Logique deadline :
-                        - Resource.deadline est un ?DateTimeInterface dans l'entité.
-                        - On calcule les secondes restantes avec le filtre |date("U")
-                          (timestamp Unix) qui accepte nativement les objets DateTime.
-                        - Si la deadline est dans moins de 7 jours (604 800 s) : badge URGENT.
-                        - Sinon : date sobre en mono gris.
-                    #}
-                    {% if resource.deadline %}
-                        {# Calcul des secondes restantes jusqu'à la deadline #}
-                        {% set secondsLeft = resource.deadline|date("U") - "now"|date("U") %}
-
-                        {% if secondsLeft >= 0 and secondsLeft < 604800 %}
-                            {# Moins de 7 jours : badge URGENT + date en orange #}
-                            <span class="badge-urgent">URGENT</span>
-                            <span class="deadline-text deadline-text--urgent">{{ resource.deadline|date('d M Y') }}</span>
-                        {% elseif secondsLeft >= 0 %}
-                            {# Plus de 7 jours : date simple #}
-                            <span class="deadline-text">{{ resource.deadline|date('d M Y') }}</span>
-                        {% endif %}
-                    {% endif %}
-                </div>
-
-            </a>
-        {% endfor %}
-    </div>
-    {# ── Fin vue liste ── #}
-
-    {# ──────────────────────────────────────────────────────────────────────── #}
-    {# VUE GRILLE (id="view-grid") — masquée par défaut (display:none)         #}
-    {#                                                                          #}
-    {# Grille 3 colonnes, bordures partagées = style tableau éditorial.        #}
-    {# Le JS ci-dessous switche entre display:none et display:grid.            #}
-    {# ──────────────────────────────────────────────────────────────────────── #}
-    <div id="view-grid" class="view-grid">
+    <div class="view-grid">
         {% for resource in resources %}
             <a href="{{ path('app_resource_show', {id: resource.id}) }}"
                class="grid-card"
-               aria-label="Voir l'opportunité : {{ resource.title }}">
+               aria-label="Voir l'opportunite : {{ resource.title|e }}">
 
+                {# ── Ligne superieure : logo + badges ── #}
                 {#
-                    ADR-0019 : logo de l'organisme dans la card grille.
-                    Affiché en ligne avec les badges (flex row), ce qui donne
-                    un effet "logo + type" sur la même ligne.
-                    Même logique que la vue liste : image si logoUrl, favicon Bazaart sinon.
-                    Les dimensions sont identiques à la vue liste (48×48 px via .card-logo).
+                    Affichage cote a cote du logo et des badges type/discipline.
+                    Les badges sont empiles verticalement a cote du logo.
+                    Type → fond lime --accent (vert) = classification principale
+                    Disciplines → fond orange --accent-2 = categories artistiques
+                    (couleurs intentionnellement distinctes pour identifier rapidement
+                    le type d'opportunite vs le domaine artistique cible)
                 #}
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-                    {# Miniature logo grille — même comportement que la vue liste #}
+                <div class="grid-card__top">
+
+                    {# Logo de l'organisme : image distante ou repli Bazaart #}
                     {% if resource.logoUrl %}
-                        {# Logo réel de l'organisme #}
                         <div class="card-logo">
                             <img src="{{ resource.logoUrl|e }}"
                                  alt="Logo {{ resource.title|e }}"
@@ -977,7 +856,6 @@
                                  onerror="this.onerror=null; this.src='{{ asset('images/favicon.png') }}'; this.alt='Bazaart';">
                         </div>
                     {% else %}
-                        {# Repli favicon Bazaart #}
                         <div class="card-logo card-logo--bazaart">
                             <img src="{{ asset('images/favicon.png') }}"
                                  alt="Bazaart"
@@ -985,43 +863,126 @@
                         </div>
                     {% endif %}
 
-                    {# Badges type + disciplines sur la même ligne que le logo #}
-                    <div class="list-card__badges" style="flex:1; margin-bottom:0;">
+                    {# Badges : Type (lime) puis Disciplines (orange) #}
+                    <div class="grid-card__badges">
+
+                        {# Badge type : fond lime --accent, texte encre #}
+                        {# Affiche uniquement si le type est renseigne (champ nullable) #}
                         {% if resource.resourceType %}
-                            <span class="badge-type">{{ resource.resourceType.name }}</span>
+                            <span class="badge-type">{{ resource.resourceType.name|e }}</span>
                         {% endif %}
+
+                        {#
+                            Disciplines : fond orange --accent-2 pour les distinguer visuellement du Type.
+                            On affiche max 2 disciplines, puis "+N" si d'autres.
+                            Cela evite de surcharger la carte dans les cas multi-disciplines.
+                        #}
                         {% for discipline in resource.disciplines|slice(0, 2) %}
-                            <span class="badge-disc">{{ discipline.name }}</span>
+                            <span class="badge-disc">{{ discipline.name|e }}</span>
                         {% endfor %}
                         {% if resource.disciplines|length > 2 %}
-                            <span class="badge-disc">+{{ resource.disciplines|length - 2 }}</span>
+                            <span class="badge-disc-more">+{{ resource.disciplines|length - 2 }}</span>
                         {% endif %}
+
                     </div>
                 </div>
 
-                {# Titre : display Archivo Black, 3 lignes max, prend l'espace disponible #}
-                <h2 class="grid-card__title">{{ resource.title }}</h2>
+                {# ── Titre de l'opportunite ── #}
+                <h2 class="grid-card__title">{{ resource.title|e }}</h2>
 
+                {# ── Dates : publication + deadline ── #}
                 {#
-                    Chips compacts pays + niveau (ADR-0016 Lot 3) dans la vue grille.
-                    Mêmes chips que dans la vue liste mais sans la méta organisation
-                    (pas assez de place en grille pour tout afficher).
-                    Condition : au moins l'un des deux doit être renseigné.
+                    On affiche deux lignes si les deux informations sont presentes :
+                      - PUBLIE le xx/xx/xxxx (publishedAt)
+                      - LIMITE le xx/xx/xxxx (deadline)
+                    Pour la deadline, on calcule si elle est urgente (moins de 7 jours).
+                    Une deadline urgente s'affiche en orange avec badge "URGENT".
                 #}
-                {% if resource.country or resource.experienceLevel %}
-                    <div class="list-card__badges" style="margin-top:auto; padding-top:4px;">
-                        {% if resource.country %}
-                            <span class="badge-country">{{ resource.country }}</span>
+                <div class="grid-card__dates">
+
+                    {# Date de publication (publishedAt) #}
+                    {% if resource.publishedAt %}
+                        <div class="grid-card__date-line">
+                            <span class="grid-card__date-label">Publie</span>
+                            <span class="grid-card__date-val">
+                                {{ resource.publishedAt|date('d M Y') }}
+                            </span>
+                        </div>
+                    {% endif %}
+
+                    {# Deadline avec detection d'urgence #}
+                    {% if resource.deadline %}
+                        {#
+                            Calcul du nombre de secondes entre maintenant et la deadline.
+                            |date("U") retourne le timestamp Unix d'un DateTimeInterface.
+                            604800 = 7 * 24 * 3600 = nombre de secondes dans 7 jours.
+                        #}
+                        {% set secondsLeft = resource.deadline|date("U") - "now"|date("U") %}
+
+                        <div class="grid-card__date-line">
+                            <span class="grid-card__date-label">Limite</span>
+                            {% if secondsLeft >= 0 and secondsLeft < 604800 %}
+                                {# Deadline dans moins de 7 jours : urgence visuelle #}
+                                <span class="grid-card__date-val grid-card__date-val--urgent">
+                                    {{ resource.deadline|date('d M Y') }}
+                                </span>
+                                <span class="badge-urgent">URGENT</span>
+                            {% elseif secondsLeft >= 0 %}
+                                {# Deadline future non urgente #}
+                                <span class="grid-card__date-val">
+                                    {{ resource.deadline|date('d M Y') }}
+                                </span>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+
+                </div>
+
+                {# ── Montant de financement ── #}
+                {#
+                    Affiche si fundingAmount OU fundingType est renseigne.
+                    fundingAmount : valeur lisible (ex: "5 000 EUR", "jusqu'a 10 000 EUR")
+                    fundingType   : nature du financement (ex: "Bourse en argent", "Prise en charge")
+                    Ces deux champs sont independants : l'un peut etre renseigne sans l'autre.
+                #}
+                {% if resource.fundingAmount or resource.fundingType %}
+                    <div class="grid-card__funding">
+                        {% if resource.fundingAmount %}
+                            {{ resource.fundingAmount|e }}
                         {% endif %}
-                        {% if resource.experienceLevel %}
-                            <span class="badge-level">{{ resource.experienceLevel.label() }}</span>
+                        {% if resource.fundingType %}
+                            <span class="grid-card__funding-sub">
+                                {{ resource.fundingType|e }}
+                            </span>
                         {% endif %}
                     </div>
                 {% endif %}
 
-                {# Deadline en bas de card, mono discret. |date() formate le DateTimeInterface. #}
-                {% if resource.deadline %}
-                    <div class="grid-card__deadline">{{ resource.deadline|date('d M Y') }}</div>
+                {# ── Territoire / Pays ── #}
+                {#
+                    Priorite d'affichage : city + country > city > country > location.
+                    On construit un libelle de localisation en Twig, puis on l'affiche
+                    comme chip de pays pour coherence visuelle avec les filtres.
+
+                    Pourquoi un seul chip et pas deux ?
+                    En contexte catalogue (vue grille), l'espace est reduit.
+                    La page de detail (show.html.twig) peut afficher les deux.
+                #}
+                {% set locLabel = '' %}
+                {% if resource.city and resource.country %}
+                    {% set locLabel = resource.city ~ ', ' ~ resource.country %}
+                {% elseif resource.city %}
+                    {% set locLabel = resource.city %}
+                {% elseif resource.country %}
+                    {% set locLabel = resource.country %}
+                {% elseif resource.location %}
+                    {% set locLabel = resource.location %}
+                {% endif %}
+
+                {% if locLabel %}
+                    <div class="grid-card__territory">
+                        <span class="badge-country">{{ locLabel|e }}</span>
+                    </div>
                 {% endif %}
 
             </a>
@@ -1029,30 +990,24 @@
     </div>
     {# ── Fin vue grille ── #}
 
+    {# ── Pagination ──────────────────────────────────────────────────────── #}
     {#
-        ── Pagination ──────────────────────────────────────────────────────────
-        Affichée uniquement quand il y a plus d'une page (totalPages > 1).
-        Chaque lien PRESERVE les filtres actifs (type, discipline, search) pour
-        que naviguer entre les pages ne réinitialise pas la recherche.
+       Affichee uniquement quand il y a plus d'une page.
+       Chaque lien PRESERVE les filtres actifs (type, discipline, search, year,
+       country, sort) pour que la navigation entre pages ne reinitialise pas
+       la recherche.
 
-        Architecture des URLs générées (exemple avec filtres) :
-          /resources?type=2&discipline=4&search=musique&page=3
-
-        Fenetre de 5 pages max autour de la page courante (2 avant + 2 après).
-        Algorithme borné entre 1 et totalPages.
+       Fenetre de 5 pages max autour de la page courante (2 avant + 2 apres).
     #}
     {% if totalPages > 1 %}
 
-        {#
-            Calcul de la fenêtre de pagination.
-            max() et min() sont des filtres Twig natifs — pas de dépendance supplémentaire.
-        #}
+        {# Calcul de la fenetre de pagination #}
         {% set windowStart = max(1, currentPage - 2) %}
         {% set windowEnd   = min(totalPages, currentPage + 2) %}
 
         {#
-            Construction des paramètres de base (filtres actifs).
-            On n'inclut un paramètre que s'il a une valeur non-vide → URLs propres.
+            Parametres de base : on n'inclut un parametre que s'il a une valeur
+            non-vide pour garder des URLs propres.
         #}
         {% set baseParams = {} %}
         {% if currentTypeId %}
@@ -1064,16 +1019,25 @@
         {% if currentSearch %}
             {% set baseParams = baseParams|merge({ q: currentSearch }) %}
         {% endif %}
+        {% if currentYear %}
+            {% set baseParams = baseParams|merge({ year: currentYear }) %}
+        {% endif %}
+        {% if currentCountry %}
+            {% set baseParams = baseParams|merge({ country: currentCountry }) %}
+        {% endif %}
+        {% if currentSort != 'recent' %}
+            {% set baseParams = baseParams|merge({ sort: currentSort }) %}
+        {% endif %}
 
         <nav class="pagination-wrap" aria-label="Navigation entre les pages de ressources">
             <ul class="pagination">
 
-                {# Lien "Precedent" : désactivé sur la page 1 #}
+                {# Lien "Precedent" : desactive sur la page 1 #}
                 <li class="page-item {% if currentPage <= 1 %}disabled{% endif %}">
                     {% if currentPage > 1 %}
                         <a class="page-link"
                            href="{{ path('app_resource_index', baseParams|merge({ page: currentPage - 1 })) }}"
-                           aria-label="Page précédente">
+                           aria-label="Page precedente">
                             &larr; Prec.
                         </a>
                     {% else %}
@@ -1081,7 +1045,7 @@
                     {% endif %}
                 </li>
 
-                {# Points de suspension au début si la fenêtre ne commence pas à 1 #}
+                {# Points de suspension au debut si la fenetre ne commence pas a 1 #}
                 {% if windowStart > 1 %}
                     <li class="page-item">
                         <a class="page-link"
@@ -1095,11 +1059,10 @@
                     {% endif %}
                 {% endif %}
 
-                {# Numéros de page dans la fenêtre #}
+                {# Numeros de page dans la fenetre #}
                 {% for p in windowStart..windowEnd %}
                     <li class="page-item {% if p == currentPage %}active{% endif %}">
                         {% if p == currentPage %}
-                            {# Page courante : non-cliquable, aria-current pour l'accessibilité #}
                             <span class="page-link" aria-current="page">{{ p }}</span>
                         {% else %}
                             <a class="page-link"
@@ -1109,7 +1072,7 @@
                     </li>
                 {% endfor %}
 
-                {# Points de suspension à la fin si la fenêtre ne finit pas à totalPages #}
+                {# Points de suspension a la fin #}
                 {% if windowEnd < totalPages %}
                     {% if windowEnd < totalPages - 1 %}
                         <li class="page-item disabled" aria-hidden="true">
@@ -1123,7 +1086,7 @@
                     </li>
                 {% endif %}
 
-                {# Lien "Suivant" : désactivé sur la dernière page #}
+                {# Lien "Suivant" : desactive sur la derniere page #}
                 <li class="page-item {% if currentPage >= totalPages %}disabled{% endif %}">
                     {% if currentPage < totalPages %}
                         <a class="page-link"
@@ -1143,67 +1106,6 @@
     {# ── Fin pagination ── #}
 
 {% endif %}
-{# ── Fin bloc résultats ── #}
+{# ── Fin bloc resultats ── #}
 
-{% endblock %}
-
-{% block javascripts %}
-{{ parent() }}
-<script>
-/**
- * Switcher vue Liste / Grille — JS vanilla, sans dépendance externe
- *
- * Principe :
- * - Deux conteneurs avec id="view-list" et id="view-grid" sont dans le DOM
- * - La fonction setView(v) affiche l'un et masque l'autre
- * - Les boutons #btn-list et #btn-grid déclenchent le changement
- * - setView('list') est appelé immédiatement au chargement pour initialiser
- *
- * L'état actif du bouton est signalé visuellement par background/color
- * (fond encre + texte accent lime = identité graphique Street).
- */
-(function () {
-    // Récupération des éléments du DOM
-    var btnList  = document.getElementById('btn-list');
-    var btnGrid  = document.getElementById('btn-grid');
-    var viewList = document.getElementById('view-list');
-    var viewGrid = document.getElementById('view-grid');
-
-    // Sécurité : on ne fait rien si un des éléments est absent
-    // (ex : état vide où les conteneurs de vue ne sont pas rendus)
-    if (!btnList || !btnGrid || !viewList || !viewGrid) {
-        return;
-    }
-
-    /**
-     * setView(v) — affiche la vue demandée, masque l'autre, met à jour les boutons
-     * @param {string} v — 'list' ou 'grid'
-     */
-    function setView(v) {
-        // Affichage des conteneurs
-        // La vue grille doit être display:grid (pas display:block) pour que la grille CSS fonctionne
-        viewList.style.display = v === 'list' ? 'block' : 'none';
-        viewGrid.style.display = v === 'grid'  ? 'grid'  : 'none';
-
-        // Etat actif du bouton Liste : fond encre + texte accent lime
-        btnList.style.background = v === 'list' ? 'var(--ink)'    : '';
-        btnList.style.color      = v === 'list' ? 'var(--accent)' : '';
-
-        // Etat actif du bouton Grille
-        btnGrid.style.background = v === 'grid' ? 'var(--ink)'    : '';
-        btnGrid.style.color      = v === 'grid' ? 'var(--accent)' : '';
-
-        // Accessibilité : mise à jour de aria-pressed sur les boutons
-        btnList.setAttribute('aria-pressed', v === 'list' ? 'true' : 'false');
-        btnGrid.setAttribute('aria-pressed', v === 'grid' ? 'true' : 'false');
-    }
-
-    // Ecouteurs de clic sur les boutons du switcher
-    btnList.addEventListener('click', function () { setView('list'); });
-    btnGrid.addEventListener('click', function () { setView('grid'); });
-
-    // Initialisation : vue liste par défaut au chargement de la page
-    setView('list');
-}());
-</script>
 {% endblock %}
