@@ -2204,56 +2204,125 @@
                          loading="lazy" decoding="async">
                 </div>
 
-                {# ── Colonne droite : fils de discussion fictifs ── #}
+                {# ── Colonne droite : fils de discussion réels tirés de la base ── #}
                 <div class="lp-threads" aria-label="Fils de discussion récents">
 
-                    {# Thread 1 #}
-                    <div class="lp-thread">
-                        <div class="lp-thread__votes" aria-label="142 votes">142</div>
-                        <div class="lp-thread__body">
-                            <span class="lp-thread__tag">fiscalité</span>
-                            <div class="lp-thread__title">
-                                Comment déclarer ses droits d'auteur en micro-entrepreneur ?
-                            </div>
-                            <div class="lp-thread__meta">Aïcha M. · 18 réponses · il y a 2h</div>
-                        </div>
-                    </div>
+                    {#
+                        On itère sur recentThreads (tableau de ForumThread[]) passé par HomeController.
+                        Si le tableau est vide (forum vide ou base vide), on affiche un état de repli
+                        avec un lien vers le forum plutôt qu'une colonne blanche.
+                    #}
+                    {% if recentThreads is not empty %}
 
-                    {# Thread 2 #}
-                    <div class="lp-thread">
-                        <div class="lp-thread__votes" aria-label="98 votes">098</div>
-                        <div class="lp-thread__body">
-                            <span class="lp-thread__tag">résidences</span>
-                            <div class="lp-thread__title">
-                                Retours sur la Villa Médicis — candidature 2026 ?
-                            </div>
-                            <div class="lp-thread__meta">Kader B. · 31 réponses · il y a 5h</div>
-                        </div>
-                    </div>
+                        {% for thread in recentThreads %}
 
-                    {# Thread 3 #}
-                    <div class="lp-thread">
-                        <div class="lp-thread__votes" aria-label="67 votes">067</div>
-                        <div class="lp-thread__body">
-                            <span class="lp-thread__tag">technique</span>
-                            <div class="lp-thread__title">
-                                Comparatif outils IA pour musiciens — 2026 edition
-                            </div>
-                            <div class="lp-thread__meta">Nneka O. · 12 réponses · il y a 1j</div>
-                        </div>
-                    </div>
+                            {#
+                                Calcul du temps relatif depuis la date d'activité du thread.
+                                On utilise lastReplyAt si dispo (dernière réponse), sinon createdAt.
+                                C'est la date d'activité la plus pertinente pour un visiteur.
 
-                    {# Thread 4 #}
-                    <div class="lp-thread">
-                        <div class="lp-thread__votes" aria-label="54 votes">054</div>
-                        <div class="lp-thread__body">
-                            <span class="lp-thread__tag">collectif</span>
-                            <div class="lp-thread__title">
-                                On lance un collectif photo afro-caribéen — qui est in ?
+                                Convention reprise de templates/post/feed.html.twig :
+                                - diff en secondes = maintenant - timestamp de la date
+                                - Affichage : "À l'instant", "il y a Xmin", "il y a Xh", "il y a Xj", ou date courte
+                                - Limite à 7 jours (604800 s) : au-delà, on affiche d/m/Y
+                            #}
+                            {% set activityDate = thread.lastReplyAt ?? thread.createdAt %}
+                            {% set diff = ("now"|date('U')) - activityDate.timestamp %}
+                            {% if diff < 60 %}
+                                {% set timeAgo = "à l'instant" %}
+                            {% elseif diff < 3600 %}
+                                {% set timeAgo = "il y a " ~ (diff // 60) ~ "min" %}
+                            {% elseif diff < 86400 %}
+                                {% set timeAgo = "il y a " ~ (diff // 3600) ~ "h" %}
+                            {% elseif diff < 604800 %}
+                                {% set timeAgo = "il y a " ~ (diff // 86400) ~ "j" %}
+                            {% else %}
+                                {% set timeAgo = activityDate|date('d/m/Y') %}
+                            {% endif %}
+
+                            {#
+                                Nom d'affichage de l'auteur.
+                                Convention identique aux autres templates du forum (category.html.twig) :
+                                on prend la partie locale de l'email (avant le @).
+                                Ex : "aiche.m@example.com" → "aiche.m"
+                                On tronque à 20 caractères pour ne pas déborder du widget.
+                            #}
+                            {% set authorName = thread.author.email|split('@')|first|slice(0, 20) %}
+
+                            {#
+                                Pluriel de "réponse" selon le compteur dénormalisé repliesCount.
+                                repliesCount est maintenu à jour par ForumService (evite un COUNT(*)).
+                            #}
+                            {% set replyCount = thread.repliesCount %}
+                            {% set replyLabel = replyCount == 1 ? "réponse" : "réponses" %}
+
+                            <div class="lp-thread">
+                                {#
+                                    .lp-thread__votes affiche originellement le nombre de votes.
+                                    Comme le forum n'a pas de votes en V1, on affiche le nombre
+                                    de réponses — c'est l'indicateur d'activité le plus pertinent.
+                                    L'aria-label est mis à jour pour refléter la sémantique réelle.
+                                #}
+                                <div class="lp-thread__votes" aria-label="{{ replyCount }} {{ replyLabel }}">
+                                    {{- replyCount -}}
+                                </div>
+                                <div class="lp-thread__body">
+                                    {#
+                                        Tag = nom de la catégorie du thread.
+                                        category.name est chargé en FETCH JOIN (pas de requête N+1).
+                                        On laisse Twig auto-échapper (mode escape: html par défaut).
+                                    #}
+                                    <span class="lp-thread__tag">{{ thread.category.name }}</span>
+
+                                    {#
+                                        Titre cliquable vers la page du thread.
+                                        Route : app_forum_thread (préfixe app_forum_ + suffixe thread)
+                                        Paramètres : categorySlug (slug de la catégorie) + threadSlug (slug du thread).
+                                        Les deux sont chargés via FETCH JOIN — pas de requête supplémentaire.
+                                        title= pour l'accessibilité (plein titre en survol même si tronqué par CSS).
+                                    #}
+                                    <div class="lp-thread__title">
+                                        <a href="{{ path('app_forum_thread', {
+                                            categorySlug: thread.category.slug,
+                                            threadSlug:   thread.slug
+                                        }) }}"
+                                           title="{{ thread.title }}">
+                                            {{- thread.title -}}
+                                        </a>
+                                    </div>
+
+                                    {#
+                                        Meta : auteur · nombre de réponses · temps relatif.
+                                        Format intentionnellement compact pour la colonne étroite.
+                                    #}
+                                    <div class="lp-thread__meta">
+                                        {{- authorName }} · {{ replyCount }} {{ replyLabel }} · {{ timeAgo -}}
+                                    </div>
+                                </div>
                             </div>
-                            <div class="lp-thread__meta">Marcus D. · 47 réponses · il y a 2j</div>
+
+                        {% endfor %}
+
+                    {% else %}
+
+                        {#
+                            Etat de repli : aucun thread en base (forum vide ou BDD vide en dev).
+                            On affiche un message neutre et un lien vers le forum
+                            plutot qu'une colonne vide sans explication.
+                        #}
+                        <div class="lp-thread lp-thread--empty">
+                            <div class="lp-thread__body" style="padding: 1.5rem 0; text-align: center; color: var(--ink-muted, #666);">
+                                <p style="margin: 0 0 0.75rem; font-size: 0.9rem;">
+                                    Les premiers sujets arrivent bientôt.
+                                </p>
+                                <a href="{{ path('app_forum_index') }}"
+                                   style="font-size: 0.85rem; text-decoration: underline; color: inherit;">
+                                    Aller au forum
+                                </a>
+                            </div>
                         </div>
-                    </div>
+
+                    {% endif %}
 
                 </div>{# /.lp-threads #}
 

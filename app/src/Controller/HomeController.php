@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Repository\ForumThreadRepository;
 use App\Repository\ResourceRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -31,16 +32,23 @@ class HomeController extends AbstractController
     private const OPPORTUNITIES_COUNT = 3;
 
     /**
-     * Injection du repository Resource via le constructeur.
+     * Nombre de fils de discussion affichés dans la section "Communauté".
+     * Correspond au nombre de .lp-thread codés en dur remplacés par la boucle Twig.
+     */
+    private const THREADS_COUNT = 3;
+
+    /**
+     * Injection des repositories via le constructeur.
      *
-     * Symfony résout automatiquement ResourceRepository grâce à l'autowiring :
+     * Symfony résout automatiquement les dépendances grâce à l'autowiring :
      * le type-hint suffit, pas besoin de configuration dans services.yaml.
      *
      * On utilise readonly pour respecter les bonnes pratiques PHP 8.1+ :
-     * une fois injecté, le repository ne doit pas être réaffecté.
+     * une fois injectés, les repositories ne doivent pas être réaffectés.
      */
     public function __construct(
-        private readonly ResourceRepository $resourceRepository,
+        private readonly ResourceRepository    $resourceRepository,
+        private readonly ForumThreadRepository $forumThreadRepository,
     ) {}
 
     /**
@@ -80,10 +88,18 @@ class HomeController extends AbstractController
             hideExpired:  true,
         );
 
+        // Charge les N derniers fils de discussion visibles pour le widget "Communauté".
+        // findRecentForHome() fait un FETCH JOIN sur category + author en une seule requête
+        // (pas de problème N+1 lors du rendu Twig).
+        $recentThreads = $this->forumThreadRepository->findRecentForHome(self::THREADS_COUNT);
+
         return $this->render('vitrine/index.html.twig', [
             // Variable disponible dans le template sous {{ opportunities }}
             // C'est un tableau de Resource[] (peut être vide si aucune ressource publiée).
-            'opportunities' => $opportunities,
+            'opportunities'  => $opportunities,
+            // Tableau de ForumThread[] pour le widget "Communauté" (colonne droite).
+            // Peut être vide si aucun thread n'existe encore — le template gère l'état vide.
+            'recentThreads'  => $recentThreads,
         ]);
     }
 }

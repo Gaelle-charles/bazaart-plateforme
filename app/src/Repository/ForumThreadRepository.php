@@ -159,6 +159,54 @@ class ForumThreadRepository extends ServiceEntityRepository
     }
 
     /**
+     * Retourne les N threads les plus récents pour le widget "Communauté" de la home.
+     *
+     * Critères de sélection :
+     *   - Tous les threads (pas de filtre de visibilité : pas de champ isHidden en V1).
+     *   - Catégorie active uniquement (isActive = true) — on évite les fils de catégories
+     *     désactivées qui seraient des liens morts pour les visiteurs de la vitrine.
+     *
+     * Tri appliqué (même logique que findByCategory) :
+     *   1. CASE WHEN lastReplyAt IS NULL → 0 si réponses, 1 si aucune (NULLS LAST manuel).
+     *      Raison : PostgreSQL place les NULL en tête avec ORDER BY DESC implicitement.
+     *   2. lastReplyAt DESC  → les threads avec activité récente remontent.
+     *   3. createdAt DESC    → parmi les threads sans réponse, les plus récents d'abord.
+     *
+     * Jointures FETCH (addSelect) :
+     *   - 'c' (category) : pour accéder à category.name et category.slug sans N+1.
+     *   - 'u' (author)   : pour accéder à author.email sans N+1.
+     *   On utilise LEFT JOIN et non INNER JOIN pour rester défensif (pas de cascade imprévue),
+     *   même si author/category sont NOT NULL en base.
+     *
+     * Pas de jointure sur les replies : on utilise le compteur dénormalisé repliesCount
+     * (maintenu à jour par ForumService) pour éviter une agrégation COUNT côteuse.
+     *
+     * @return ForumThread[]
+     */
+    public function findRecentForHome(int $limit = 3): array
+    {
+        return $this->createQueryBuilder('t')
+            // FETCH JOIN catégorie : on a besoin de category.name et category.slug dans Twig
+            ->leftJoin('t.category', 'c')
+            ->addSelect('c')
+            // FETCH JOIN auteur : on a besoin de author.email dans Twig
+            ->leftJoin('t.author', 'u')
+            ->addSelect('u')
+            // Filtre : uniquement les threads des catégories actives
+            // (les catégories désactivées sont des "brouillons" admin, pas pour la vitrine)
+            ->where('c.isActive = true')
+            // Tri 1 : NULLS LAST manuel — threads avec activité (lastReplyAt non-NULL) d'abord
+            ->orderBy('CASE WHEN t.lastReplyAt IS NULL THEN 1 ELSE 0 END', 'ASC')
+            // Tri 2 : parmi les threads avec activité, le plus récent en tête
+            ->addOrderBy('t.lastReplyAt', 'DESC')
+            // Tri 3 : pour les threads sans réponse, les plus récemment créés en premier
+            ->addOrderBy('t.createdAt', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Retourne les N derniers threads d'une catégorie (pour les aperçus sur la page d'accueil).
      *
      * Utilisé dans ForumController::index() pour afficher un aperçu de chaque catégorie
