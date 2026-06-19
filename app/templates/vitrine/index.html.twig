@@ -217,6 +217,59 @@
     color:          var(--ink-mute);
 }
 
+/* ── Surcharge couleurs dans le hero sur fond photo ────────────────────
+   Le hero a maintenant un fond sombre (photo + overlay noir).
+   Les textes sable/ink classiques deviennent illisibles — on les passe
+   en blanc / blanc semi-transparent. Seules les classes DANS .lp-hero
+   sont affectées : les autres sections restent inchangées. */
+
+/* Eyebrow dans le hero : blanc cassé semi-transparent */
+.lp-hero .lp-eyebrow {
+    color: rgba(255, 255, 255, 0.75);
+}
+/* Le carré lime ::before reste lime — il est déjà contrasté sur fond sombre */
+
+/* Coordonnées géographiques : blanc semi-transparent */
+.lp-hero .lp-hero__coords {
+    color: rgba(255, 255, 255, 0.65);
+}
+
+/* H1 : blanc pur (Archivo Black blanc sur fond sombre = très lisible) */
+.lp-hero .lp-hero__h1 {
+    color: #ffffff;
+}
+
+/* Le mot "ART" en orange-tangerine reste tel quel — très lisible sur sombre */
+/* .lp-hero .lp-hero__h1-orange : pas de changement nécessaire */
+
+/* "SANS" sur fond lime : le fond lime est opaque, le texte ink reste ink.
+   Pas de changement — le fond lime assure le contraste. */
+/* .lp-hero .lp-hero__h1-lime : pas de changement nécessaire */
+
+/* Description (Instrument Serif) : blanc légèrement atténué pour ne pas
+   rivaliser avec le H1, tout en restant très lisible */
+.lp-hero .lp-hero__desc {
+    color: rgba(255, 255, 255, 0.92);
+}
+
+/* CTA "Explorer les opportunités" (lp-btn--dark : fond ink, texte sable)
+   Sur fond sombre, le fond noir du bouton se noie un peu.
+   On ajoute une fine bordure blanche pour le détacher. */
+.lp-hero .lp-btn--dark {
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* CTA "Rejoindre gratuitement" (lp-btn--ghost : transparent, bordure douce)
+   La bordure douce est invisible sur fond sombre — on la renforce en blanc. */
+.lp-hero .lp-btn--ghost {
+    color:        #ffffff;
+    border-color: rgba(255, 255, 255, 0.5);
+}
+.lp-hero .lp-btn--ghost:hover {
+    border-color: #ffffff;
+    background:   rgba(255, 255, 255, 0.1);
+}
+
 /* Petit carré lime avant le texte — marque visuelle Street */
 .lp-eyebrow::before {
     content:      '';
@@ -295,6 +348,19 @@
    2. HERO — Cœur du design
    Titre géant en Archivo Black, sous-titre en Instrument Serif,
    deux CTAs empilés, bandeau de coordonnées géographiques.
+
+   PHOTO DE FOND + PARALLAXE (ajout)
+   Architecture à trois couches (de bas en haut) :
+     1. ::before  — photo hero-bazaart.jpg, débordante (110% hauteur)
+                    manipulée par JS pour la parallaxe (transform translateY)
+     2. ::after   — overlay noir semi-transparent (lisibilité du texte)
+     3. contenu   — .lp-container (z-index: 1, position: relative)
+
+   On utilise des pseudo-éléments plutôt qu'un background-image direct car :
+     a) on peut appliquer transform: translateY sur UNIQUEMENT la photo
+        sans que le contenu suive (parallaxe propre)
+     b) on évite background-attachment:fixed (buggé/saccadé sur iOS)
+     c) overlay séparé = opacité réglable indépendamment de l'image
 ────────────────────────────────────────────────────────────────────── */
 
 .lp-hero {
@@ -304,6 +370,73 @@
     /* Pas de min-height sur la section : le hero grandit de son contenu
        (container + marquee). C'est le container intérieur qui gère
        la hauteur visible — voir .lp-hero > .lp-container ci-dessous. */
+}
+
+/* ── Couche 1 : photo de fond (::before) ──────────────────────────────
+   On positionne l'image en débordant légèrement (top: -10%, height: 120%)
+   pour avoir de la marge en haut ET en bas lors du déplacement parallaxe.
+   Sans ce débordement, l'image laisserait apparaître le fond sable quand
+   on défile vers le bas (translateY négatif révèle le bord du bas). */
+.lp-hero::before {
+    content:             '';
+    position:            absolute;
+    /* Débordement vertical : -10% haut, 120% hauteur totale.
+       A 100dvh de hauteur hero : 10% = ~70px de marge de chaque côté.
+       facteur parallaxe JS ≈ 0.35 × scrollY ≤ ~200px max -> 70px suffit. */
+    top:                 -10%;
+    left:                0;
+    width:               100%;
+    height:              120%;
+    /* URL statique de l'image de fond du hero */
+    background-image:    url('/images/hero-bazaart.jpg');
+    background-size:     cover;
+    background-position: center center;
+    background-repeat:   no-repeat;
+    /* La couche photo est en z-index 0 : au-dessus du fond de section
+       mais sous l'overlay (::after, z-index 1) et le contenu (z-index 2). */
+    z-index:             0;
+    /* will-change: transform informe le navigateur qu'on va animer transform.
+       Il peut créer un layer GPU a l'avance -> pas de jank au premier scroll. */
+    will-change:         transform;
+    /* Technique "CSS variable pilotée par JS" :
+       Le JS ne peut pas cibler un pseudo-élément directement (::before n'est
+       pas dans le DOM). A la place, le JS définit une custom property
+       --hero-parallax-y sur la SECTION .lp-hero, et le ::before la consomme
+       via var(). C'est la technique standard pour animer des pseudo-éléments
+       avec du JS (sans dupliquer un vrai élément DOM). */
+    transform:           translate3d(0, var(--hero-parallax-y, 0px), 0);
+}
+
+/* ── Couche 2 : overlay sombre (::after) ─────────────────────────────
+   Gradient léger du haut vers le bas : légèrement plus dense en bas
+   pour améliorer la lisibilité du sous-titre + CTAs sans trop assombrir
+   le titre. Valeurs finales : 45% haut -> 55% bas (filtre "léger").
+   Ajuster si la photo est très claire (monter à 55%/65%) ou très sombre
+   (descendre à 30%/40%). */
+.lp-hero::after {
+    content:    '';
+    position:   absolute;
+    inset:      0; /* shorthand pour top:0;right:0;bottom:0;left:0 */
+    background: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.45),
+        rgba(0, 0, 0, 0.58)
+    );
+    /* z-index 1 : au-dessus de la photo (::before z-index 0)
+       mais SOUS le contenu (.lp-container z-index 2). */
+    z-index:    1;
+    /* pointer-events: none : l'overlay ne capture pas les clics/hover —
+       les boutons CTA restent cliquables. */
+    pointer-events: none;
+}
+
+/* ── Couche 3 : contenu (position relative + z-index) ────────────────
+   Tout enfant direct de .lp-hero doit être au-dessus des deux couches.
+   On élève .lp-container et .lp-marquee via z-index. */
+.lp-hero > .lp-container,
+.lp-hero > .lp-marquee {
+    position: relative;
+    z-index:  2; /* au-dessus de ::before (0) et ::after (1) */
 }
 
 /* ── HAUTEUR PLEIN ÉCRAN DU HERO (sans min-height sur la section) ──────────
@@ -2543,4 +2676,136 @@
 #}
 {% block javascripts %}
 {{ parent() }}
+{#
+    SCRIPT PARALLAXE DU HERO
+    ========================
+    Technique : custom property CSS --hero-parallax-y définie sur .lp-hero
+    Le pseudo-élément ::before consomme cette variable via var() dans son
+    transform: translate3d(). JS ne peut pas cibler ::before directement
+    (ce n'est pas un vrai noeud DOM) — cette indirection via CSS variable
+    est la solution idiomatique.
+
+    Performances :
+    - requestAnimationFrame (rAF) : l'update visuel est toujours synchronisé
+      avec le refresh du navigateur (60fps max, jamais de frames perdues).
+    - On ne calcule qu'une seule fois par frame : si plusieurs événements
+      "scroll" arrivent dans la même frame, seul le dernier est traité.
+    - will-change: transform sur ::before -> le navigateur l'a déjà promu
+      en layer GPU, pas de repaint couteux.
+
+    Accessibilité :
+    - prefers-reduced-motion: reduce -> on ne définit jamais la variable,
+      l'image reste fixe (transform: translate3d(0, 0px, 0) par défaut).
+
+    Mobile :
+    - Sur mobile (< 768px), la parallaxe est désactivée : l'effet peut
+      scintiller sur iOS Safari et consomme de l'énergie pour un gain
+      visuel minimal sur petit écran.
+    - L'image de fond reste cover + center, donc belle et lisible.
+#}
+<script>
+(function () {
+    'use strict';
+
+    /* 1. Vérifier l'accessibilité : si l'utilisateur préfère les mouvements
+          réduits, on ne fait rien du tout (l'image reste statique). */
+    var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+        return; /* sortir du script immédiatement */
+    }
+
+    /* 2. Récupérer la section hero — si elle n'existe pas (page sans hero),
+          on sort proprement sans erreur. */
+    var heroSection = document.querySelector('.lp-hero');
+    if (!heroSection) {
+        return;
+    }
+
+    /* 3. Facteur parallaxe : valeur entre 0 (pas de mouvement) et 1 (suit le scroll).
+          0.35 signifie que pour 100px de scroll, l'image se déplace de 35px.
+          L'image semble donc défiler plus lentement que le contenu -> illusion de profondeur.
+          Valeurs raisonnables : 0.25 (discret) à 0.45 (prononcé).
+          On utilise 0.35 pour un effet équilibré. */
+    var PARALLAX_FACTOR = 0.35;
+
+    /* 4. Seuil mobile : désactiver sur petits écrans (performance + iOS).
+          768px correspond au breakpoint "tablette" du design. */
+    var MOBILE_BREAKPOINT = 768;
+
+    /* 5. Variables d'état pour la boucle rAF.
+          rafId : identifiant de la requête rAF en cours (pour annulation éventuelle).
+          lastScrollY : position du dernier scroll traité (évite les calculs inutiles). */
+    var rafId = null;
+    var lastScrollY = -1;
+
+    /* 6. Fonction de mise à jour de la parallaxe.
+          Appelée par rAF — toujours dans le "bon" moment du rendu. */
+    function updateParallax() {
+        rafId = null; /* remettre à null : la prochaine requête pourra être planifiée */
+
+        /* Désactiver sur mobile pour éviter les scintillements iOS */
+        if (window.innerWidth < MOBILE_BREAKPOINT) {
+            /* Remettre l'image à 0 si on vient de passer du desktop au mobile */
+            heroSection.style.setProperty('--hero-parallax-y', '0px');
+            return;
+        }
+
+        var scrollY = window.scrollY || window.pageYOffset;
+
+        /* Optimisation : si le scroll n'a pas changé depuis la dernière frame, inutile
+           de recalculer et de toucher au DOM. On sort immédiatement. */
+        if (scrollY === lastScrollY) {
+            return;
+        }
+        lastScrollY = scrollY;
+
+        /* Calcul du déplacement vertical de la photo :
+           - scrollY positif (on défile vers le bas) -> translateY négatif (image remonte)
+             L'image se déplace vers le HAUT moins vite que le contenu -> effet de profondeur.
+           - Le débordement de 10% top + 120% height absorbe ce déplacement sans bords visibles.
+
+           Exemple concret a scrollY = 300px, facteur 0.35 :
+             déplacement = -(300 * 0.35) = -105px
+             L'image remonte de 105px alors que la section a quitté l'écran de 300px -> lent. */
+        var displacement = -(scrollY * PARALLAX_FACTOR);
+
+        /* Écrire la valeur sur la section (l'::before la consomme via var()) */
+        heroSection.style.setProperty('--hero-parallax-y', displacement + 'px');
+    }
+
+    /* 7. Gestionnaire d'événement scroll.
+          On ne calcule PAS directement dans le listener scroll car celui-ci peut
+          se déclencher des dizaines de fois par seconde. On planifie un rAF à la place :
+          - si un rAF est déjà en attente (rafId !== null), on ignore -> une seule MAJ/frame.
+          - sinon, on planifie updateParallax pour la prochaine frame. */
+    function onScroll() {
+        if (rafId === null) {
+            rafId = window.requestAnimationFrame(updateParallax);
+        }
+    }
+
+    /* 8. Initialisation :
+          - Calculer la position initiale (scrollY peut déjà être > 0 si la page
+            est rechargée avec un ancre ou via Turbo).
+          - Brancher le listener scroll. */
+    window.addEventListener('scroll', onScroll, { passive: true });
+    /* passive: true -> indique au navigateur que le listener ne appellera JAMAIS
+       preventDefault() sur l'événement scroll. Il peut donc déclencher le défilement
+       natif en parallèle sans attendre le retour du JS -> défilement plus fluide. */
+
+    /* Appel initial pour positionner l'image au chargement de la page */
+    onScroll();
+
+    /* 9. Optionnel : nettoyer si Turbo (SPA-like navigation) recharge la page.
+          Si Turbo est actif, les scripts ne se ré-exécutent pas mais le DOM change.
+          On écoute l'événement de navigation Turbo pour retirer le listener. */
+    document.addEventListener('turbo:before-visit', function () {
+        window.removeEventListener('scroll', onScroll);
+        if (rafId !== null) {
+            window.cancelAnimationFrame(rafId);
+        }
+    }, { once: true }); /* once: true -> auto-retire après le premier appel */
+
+}()); /* IIFE : encapsule tout dans une portée locale, pas de pollution globale */
+</script>
 {% endblock %}
