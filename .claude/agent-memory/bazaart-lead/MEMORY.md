@@ -9,6 +9,7 @@
 - [⚠️ Infra plateforme & cohabitation vitrine](project_plateforme_infra.md) — app.bazaart.fr (bazaart_platform_app) cohabite avec la vitrine sur le même droplet ; règles non négociables + pièges nginx (incident 11 juin) ; ancienne vitrine Next.js supprimée 15 juin ; swap 1Go configuré
 - [Mise en service manuelle](project_mise_en_service_manuelle.md) — code déployé ≠ en service : seeds, clés en BDD, cron à lancer à la main ; checklist + récup accès admin + bug Resartis SSL
 - [Validation Twig](feedback_twig_validation.md) — lint:twig ≠ test de rendu : vérifier code HTTP + taille après déploiement d'un template dynamique (incident timezone 'fr' 14 juin)
+- [Animations = scroll-linked réversible](feedback_animations_scroll.md) — animations pilotées par le scroll (up/down), pas reveal-once ; « retirer X » ≠ retirer l'animation autour (incident hero 19 juin)
 - [Pas de tiret cadratin](feedback_no_em_dash.md) — ne JAMAIS utiliser « — » dans les titres et le contenu du site (préférence éditoriale Gaëlle)
 - [SEO technique à faire (19-20 juin)](project_seo_todo.md) — sitemap.xml, robots.txt, JSON-LD Article planifiés ; blog déjà public + meta + articles réécrits (15 juin)
 - [Intégration Stripe (15 juin)](project_stripe.md) — IDs produits/prix LIVE+TEST, webhook créé, architecture Option B (pas de Connect), entités Subscription+CoursePayment, vars env prod à configurer
