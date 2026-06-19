@@ -44,6 +44,14 @@ l'onboarding obligatoire** (ADR-0015) tout en réutilisant une partie de ses que
 3. **Swipe droite = ajouter en favori** ; gauche = passer.
 4. Le point d'accès « 3 consultations gratuites sinon tarifs » relève du **modèle freemium**
    (cf. ADR-0022) : le matching est l'entrée gratuite ; le reste est payant.
+5. **Mapping `lookingFor` → type de ressource (composante de score)** : les 3 choix artiste se
+   relient aux types comme suit : *Formations* → « Formation » ; *Aides financières* →
+   « Financement » ; *Appels/résidences/concours* → « Appel à projets », « Résidence artistique »,
+   « Prix & concours » (le mot « Prix » est rangé côté **appels/concours**, pas aides). Les types
+   **« Diffusion & exposition », « Documentation », « Emploi & stage »** ne sont rattachés à **aucun**
+   choix (Option A retenue par Gaëlle, 2026-06-19) : ils remontent via **discipline + lieu**, sans
+   bonus « ce que je recherche ». Pas de nouvelle case d'onboarding en V1.
+6. **Seuil de match** : par défaut, une ressource compte comme match dès que **score > 0** (ajustable).
 
 ## Découpage proposé
 
