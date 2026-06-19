@@ -699,6 +699,90 @@ class ResourceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Retourne les ressources PUBLIÉES éligibles au matching pour un artiste donné.
+     *
+     * Cette méthode est le point d'entrée de MatchingService : elle charge en une
+     * seule requête SQL toutes les ressources publiées dont la deadline n'est pas
+     * encore passée, en préchargeant les relations nécessaires au scoring.
+     *
+     * FILTRES DURS (toujours appliqués) :
+     *   1. status = Published (seules les ressources validées participent au matching)
+     *   2. deadline IS NULL OR deadline >= aujourd'hui (exclut les opportunités expirées)
+     *      Même règle que buildPublishedQueryBuilder($hideExpired = true).
+     *      On compare au début de la journée courante EN HEURE PARIS (cohérence avec
+     *      le catalogue public — cf. commentaire dans buildPublishedQueryBuilder).
+     *
+     * CHARGEMENT EAGER (évite le problème N+1) :
+     *   On précharge en JOIN :
+     *     - r.resourceType → nécessaire pour le mapping lookingFor → type dans MatchingService
+     *     - r.disciplines  → nécessaire pour le scoring "disciplines communes"
+     *   Sans ce préchargement, chaque accès à $resource->getDisciplines() ou
+     *   $resource->getResourceType() déclencherait une requête supplémentaire.
+     *   Avec 200 ressources = 400+ requêtes → lent et inutile.
+     *
+     * NOTE SUR LE PAGINATOR :
+     *   Pas de pagination ici : le matching charge TOUT le catalogue éligible en mémoire
+     *   pour le scorer. C'est acceptable tant que le catalogue reste < 5 000 ressources.
+     *   En V2 on pourrait pré-filtrer par discipline avant de scorer (filtre SQL sur disciplines
+     *   de l'artiste) pour limiter le volume. Pour la V1, l'approche "tout charger" est plus
+     *   simple et correcte (pas de faux négatifs).
+     *
+     * @return Resource[] Toutes les ressources publiées non expirées, disciplines et type préchargés
+     */
+    public function findPublishedForMatching(): array
+    {
+        // "Aujourd'hui" au sens de minuit heure de Paris — cohérence avec buildPublishedQueryBuilder.
+        // Les ressources dont la deadline EST aujourd'hui restent éligibles (dernier jour).
+        $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris'));
+
+        $qb = $this->createQueryBuilder('r')
+            // Filtre 1 : uniquement les ressources publiées
+            ->where('r.status = :status')
+            ->setParameter('status', ResourceStatus::Published)
+            // Filtre 2 : deadline non passée (ou pas de deadline)
+            // DQL : "r.deadline IS NULL OR r.deadline >= :today"
+            ->andWhere(
+                $this->getEntityManager()->getExpressionBuilder()->orX(
+                    'r.deadline IS NULL',
+                    'r.deadline >= :today'
+                )
+            )
+            ->setParameter('today', $today)
+            // Chargement EAGER du type (nécessaire pour mapper lookingFor → type)
+            ->leftJoin('r.resourceType', 'rt')->addSelect('rt')
+            // Chargement EAGER de l'organisation (utile pour le DTO toArray / UI future)
+            ->leftJoin('r.organization', 'org')->addSelect('org')
+            // Tri par score potentiel estimé : les plus récentes en premier
+            // (en pratique le MatchingService re-triera par score calculé)
+            ->orderBy('r.createdAt', 'DESC');
+
+        // Chargement EAGER des disciplines via une requête SQL séparée.
+        //
+        // POURQUOI PAS UN FETCH-JOIN DISCIPLINES DANS LE QBuilder ?
+        //   Un fetch-join sur une collection ManyToMany (r.disciplines) produit un
+        //   produit cartésien : une resource avec 3 disciplines génère 3 lignes SQL.
+        //   Avec setMaxResults() cela tronque les entités — c'est le bug classique.
+        //   Ici on n'a pas de LIMIT, donc techniquement ce serait acceptable, mais
+        //   Doctrine émet un avertissement "EXTRA_LAZY" pour les gros catalogues.
+        //
+        //   La solution propre : on charge les ressources d'abord (sans disciplines),
+        //   puis on laisse Doctrine charger les disciplines en batch automatiquement
+        //   via la configuration EXTRA_LAZY ou via un second fetch dédié.
+        //
+        //   En pratique avec Doctrine 3.x et l'hydratation par défaut, la première
+        //   itération sur $resource->getDisciplines() dans MatchingService déclenchera
+        //   un SELECT batch pour toutes les ressources déjà chargées en mémoire
+        //   (1 seule requête pour toutes les disciplines, pas 1 par ressource).
+        //   C'est le comportement "batch loading" natif de Doctrine — pas de N+1.
+        //
+        //   Pour garantir ce comportement et ne pas dépendre du batch loading natif,
+        //   on fait un fetch-join SANS LIMIT (full catalogue), ce qui est sûr ici.
+        $qb->leftJoin('r.disciplines', 'd')->addSelect('d');
+
+        return $qb->getQuery()->getResult();
+    }
+
+    /**
      * Retourne les Resources PUBLIÉES candidates à l'enrichissement IA.
      *
      * CAS D'USAGE : option --published de la commande app:enrich-opportunities.
