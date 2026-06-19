@@ -1,9 +1,24 @@
 /*
- * title-reveal.css — Animation d'apparition des titres (site-wide)
- * =================================================================
- * Ce fichier ne contient QUE les styles d'animation des titres.
+ * title-reveal.css — Animation des titres pilotée par le scroll (site-wide)
+ * ==========================================================================
+ * Ce fichier ne contient QUE les styles structurels des titres animés.
  * Il est chargé dans base.html.twig pour s'appliquer à toutes les
  * pages publiques qui étendent ce template.
+ *
+ * NOUVEAU FONCTIONNEMENT (scroll-driven, réversible)
+ * ---------------------------------------------------
+ * Le JS (title-reveal.js) calcule une progression p (0..1) à chaque
+ * frame de scroll et applique DIRECTEMENT des valeurs inline :
+ *   el.style.transform = 'translateX(...)';
+ *   el.style.opacity   = ...;
+ * Il n'y a donc PLUS de transitions CSS pour les animations principales.
+ * Le JS est seul maître de l'état visuel, ce qui rend l'animation
+ * totalement réversible (scroll up = animation à l'envers).
+ *
+ * CE QUE CE CSS FAIT :
+ * 1. Structure les .tr-word-wrap et .tr-word (layout des mots découpés).
+ * 2. Pose will-change uniquement quand le JS est actif (.js-title-reveal-ready).
+ * 3. Gère prefers-reduced-motion (retire tout, titres visibles normalement).
  *
  * PRINCIPE DE PROGRESSIVE ENHANCEMENT
  * ------------------------------------
@@ -16,21 +31,15 @@
  * PERFORMANCE
  * -----------
  * On n'anime QUE transform et opacity :
- * - transform : géré par le GPU (zero reflow, zero repaint du layout)
+ * - transform : géré par le GPU (zéro reflow, zéro repaint du layout)
  * - opacity   : composited layer, très peu coûteux
- * will-change est posé uniquement sur les éléments qui vont bouger,
- * retiré juste après l'animation via JS (unobserve + suppression).
- *
- * ACCESSIBILITE
- * -------------
- * @media (prefers-reduced-motion: reduce) : aucune animation, les
- * titres sont simplement visibles dans leur état final.
+ * will-change est posé uniquement sur les éléments actifs (via
+ * .js-title-reveal-ready), jamais globalement.
  *
  * PREVENTION DU SCROLL HORIZONTAL
  * --------------------------------
- * Les translateX sont bornés à des valeurs raisonnables (30px max).
- * On n'applique overflow:hidden que sur les wrappers internes générés
- * par JS (les .tr-word-wrap), jamais sur la page entière.
+ * Les translateX sont bornés à des valeurs raisonnables (28px max).
+ * L'overflow:hidden sur .tr-word-wrap contient les débordements.
  */
 
 
@@ -40,11 +49,8 @@
    Le JS découpe le titre en mots, enveloppe chaque mot dans un
    .tr-word-wrap (overflow:hidden) + un .tr-word (l'élément animé).
 
-   Avant déclenchement (.tr-word) : position décalée + opacity 0.
-   Après déclenchement (.tr-word.is-revealed) : position 0 + opacity 1.
-
-   Chaque mot a un délai croissant (--tr-delay posé par JS en inline
-   style) pour un effet de cascade naturel.
+   Le JS applique directement les valeurs de transform et opacity
+   en inline style. Le CSS ne pose que la structure de layout.
 ────────────────────────────────────────────────────────────────────── */
 
 /* Wrapper de chaque mot : masque le débordement pendant l'animation
@@ -63,64 +69,36 @@
     margin-left: 0.28em;
 }
 
-/* L'élément animé — chaque mot individuel */
+/* L'élément animé — chaque mot individuel.
+   Le JS applique transform et opacity en inline style.
+   Le CSS ne pose que display:inline-block (nécessaire pour transform). */
 .tr-word {
-    display:    inline-block;
-    will-change: transform, opacity;
+    display: inline-block;
 }
 
-/*
- * Armement de l'animation (état initial avant déclenchement).
- *
- * IMPORTANT : on ne pose ces styles QUE si .js-title-reveal-ready est
- * présent sur <html>. Ainsi, sans JS, les titres sont visibles normalement.
- * Le JS ajoute .js-title-reveal-ready EN PREMIER, puis arme les titres.
- *
- * --tr-dir-x : valeur de translateX initiale (positif ou négatif selon
- * la position du mot dans le titre). Posée en inline style par JS.
- * Valeur par défaut : 0 (sécurité si la variable n'est pas définie).
- */
+/* will-change pré-alloue les layers GPU seulement quand le JS est actif.
+   On l'active uniquement sous .js-title-reveal-ready pour ne pas gaspiller
+   des ressources GPU sur des pages où le JS n'est pas chargé. */
 .js-title-reveal-ready .tr-word {
-    transform: translateX(var(--tr-dir-x, 0px));
-    opacity:   0;
-    /* Transition sur l'état "armé" -> "révélé".
-       cubic-bezier(0.22, 1, 0.36, 1) = easing "spring" : départ vif, arrivée douce.
-       C'est l'easing du prototype hero original. */
-    transition:
-        transform 0.65s cubic-bezier(0.22, 1, 0.36, 1) var(--tr-delay, 0s),
-        opacity   0.50s ease                            var(--tr-delay, 0s);
-}
-
-/* État final : le mot est à sa position naturelle, pleinement visible */
-.js-title-reveal-ready .tr-word.is-revealed {
-    transform: translateX(0);
-    opacity:   1;
+    will-change: transform, opacity;
 }
 
 
 /* ──────────────────────────────────────────────────────────────────────
-   VARIANTE COMPLEXE : simple fondu + léger glissement vertical
+   VARIANTE COMPLEXE : fondu + glissement vertical
    ------------------------------------------------------------------
    Utilisée pour les titres longs, multi-lignes, ou contenant du
    markup interne (icônes, <br>, <span> colorés, etc.).
    Le JS ajoute la classe .tr-fade directement sur l'élément titre.
    Pas de découpe en mots => le markup HTML interne est préservé intact.
+
+   Le JS applique directement transform (translateY) et opacity.
+   Le CSS ne pose que will-change.
 ────────────────────────────────────────────────────────────────────── */
 
-/* Armement : titre décalé vers le bas + invisible */
+/* will-change pré-alloue les layers GPU pour cette variante */
 .js-title-reveal-ready .tr-fade {
-    transform:  translateY(18px);
-    opacity:    0;
     will-change: transform, opacity;
-    transition:
-        transform 0.70s cubic-bezier(0.22, 1, 0.36, 1),
-        opacity   0.55s ease;
-}
-
-/* Déclenchement : titre à sa position naturelle + visible */
-.js-title-reveal-ready .tr-fade.is-revealed {
-    transform: translateY(0);
-    opacity:   1;
 }
 
 
@@ -128,21 +106,25 @@
    PREFERS-REDUCED-MOTION
    ------------------------------------------------------------------
    Si l'OS de l'utilisateur a activé "Réduire les animations",
-   on désactive toutes les transitions et on affiche les titres
-   directement dans leur état final (visibles, pas d'animation).
-   Cette règle est prioritaire sur tout ce qui précède.
+   le JS sort immédiatement (sans rien armer) et les titres restent
+   dans leur état HTML naturel (visibles, pas d'animation).
+
+   On ajoute quand même des règles CSS de sécurité pour le cas où
+   .js-title-reveal-ready aurait quand même été posée (cas théorique,
+   par exemple si le media query change après l'initialisation) :
+   on force la visibilité complète et on annule tout inline style.
+
+   IMPORTANT : on utilise !important ici car les valeurs inline posées
+   par le JS ont une spécificité plus haute que les règles de classe.
+   Sans !important, ces surcharges seraient inefficaces.
 ────────────────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-    /* Annule les transitions sur les deux variantes */
-    .js-title-reveal-ready .tr-word,
-    .js-title-reveal-ready .tr-fade {
-        transition: none;
-    }
-
-    /* Force l'état final immédiatement (comme si is-revealed était déjà là) */
-    .js-title-reveal-ready .tr-word,
-    .js-title-reveal-ready .tr-fade {
-        transform: none;
-        opacity:   1;
+    /* Force la visibilité totale des deux variantes.
+       !important est nécessaire pour surcharger les valeurs inline du JS. */
+    .tr-word,
+    .tr-fade {
+        transform:  none !important;
+        opacity:    1    !important;
+        will-change: auto !important;
     }
 }

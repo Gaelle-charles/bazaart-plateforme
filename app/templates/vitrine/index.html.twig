@@ -345,75 +345,86 @@
 
 
 /* ──────────────────────────────────────────────────────────────────────
-   2. HERO — PHOTO FIXE (sans vidéo)
+   2. HERO — SCROLL-EXPAND (non-bloquant, sans vidéo)
 
-   ARCHITECTURE SIMPLIFIÉE (vidéo retirée) :
-   Le hero est maintenant une section 100vh classique avec :
-     1. .lp-hero__bg         — photo hero-bazaart.jpg : fond fixe avec overlay
-     2. .lp-hero__text       — titre + sous-titre + CTAs
-     3. .lp-hero__meta       — eyebrow + coordonnées géographiques
+   ARCHITECTURE :
+   La section .lp-hero fait intentionnellement 200vh pour créer une
+   "piste de scroll" pendant laquelle l'effet se produit.
+   L'utilisateur scrolle normalement — aucun hijacking de la molette.
 
-   EFFET D'ANIMATION DU TITRE :
-   Au chargement, les deux parties du titre (.lp-hero__title-left et
-   .lp-hero__title-right) partent de positions décalées vers l'extérieur
-   et convergent vers leur position naturelle en fondu.
-   Cet effet est purement CSS (transition + classe .is-loaded ajoutée
-   par JS au DOMContentLoaded) — aucun scroll listener nécessaire.
+   A l'intérieur, .lp-hero__sticky est en position:sticky; top:0;
+   height:100vh. Ce conteneur reste visible pendant toute la descente
+   dans la section, puis disparaît normalement quand la section se termine.
 
-   PARALLAXE LÉGER :
-   Un léger effet de parallaxe (background-attachment:fixed) est appliqué
-   sur la photo de fond. Si l'OS demande des animations réduites, on
-   utilise background-attachment:scroll à la place.
+   PROGRESSION (calculée par JS) :
+     progress = (scrollY - sectionTop) / (sectionHeight - viewportHeight)
+     0 = on vient d'entrer dans la section (état repos : titre rassemblé)
+     1 = on a traversé toute la section (mots écartés, fond estompé)
+
+   RÉVERSIBLE : en remontant, progress diminue et tout se rejoue à l'envers.
+
+   COUCHES (du bas vers le haut) :
+     1. .lp-hero__bg         — image hero-bazaart.jpg : s'estompe (opacity 1->0)
+     2. .lp-hero__text       — titre dont les mots s'écartent au scroll
+     3. .lp-hero__ctas-reveal — CTAs : apparaissent quand progress ~ 1
 
    PERFORMANCE :
-   - Fond : background-attachment:fixed (géré par le GPU sur la plupart
-     des navigateurs modernes). Sur iOS, le fallback scroll est utilisé
-     car iOS ne supporte pas background-attachment:fixed correctement.
-   - Titre : transform + opacity uniquement (zero reflow).
+   - requestAnimationFrame cale les mises à jour sur le refresh navigateur
+   - scroll listener passive:true : scroll natif fluide (pas de blocage)
+   - On n'anime QUE transform et opacity (zero reflow)
+   - will-change pré-alloue les layers GPU
 ────────────────────────────────────────────────────────────────────── */
 
 /* ── Section conteneur principal ────────────────────────────────────── */
 .lp-hero {
-    /* 100vh : la section occupe exactement une hauteur d'écran */
-    height:        100vh;
-    min-height:    600px; /* plancher : évite un hero trop écrasé sur les écrans bas */
+    /* 200vh = deux hauteurs d'écran : la zone de scroll de l'effet.
+       Quand l'utilisateur a scrollé 100vh dans cette section, progress=1
+       et les animations sont terminées. Le reste de la page suit normalement. */
+    height:        200vh;
     position:      relative;
     border-bottom: 1px solid var(--ink);
-    /* Fond noir visible si l'image n'est pas encore chargée */
-    background:    #0D0D0D;
-    overflow:      hidden;
+}
+
+/* ── Conteneur sticky : reste ancré en haut pendant toute la descente ── */
+.lp-hero__sticky {
+    /* sticky : colle au haut du viewport tant qu'on est dans la section */
+    position: sticky;
+    top:      0;
+    /* 100vh : occupe exactement la hauteur du viewport */
+    height:   100vh;
+    /* overflow:hidden empêche les éléments animés de dépasser les bords */
+    overflow: hidden;
+    /* Fond noir derrière tout — visible quand l'image s'estompe */
+    background: #0D0D0D;
 }
 
 /* ── Couche 1 : image de fond (hero-bazaart.jpg) ────────────────────── */
 .lp-hero__bg {
     position:    absolute;
     inset:       0;
-    /* Léger parallaxe : la photo défile plus lentement que la page.
-       background-attachment:fixed = la photo reste ancrée au viewport
-       pendant que le reste de la page scrolle par-dessus. */
+    /* Voile sombre superposé via ::after pour la lisibilité du titre blanc */
     background:  url('/images/hero-bazaart.jpg') center/cover no-repeat;
-    background-attachment: fixed;
-    /* Voile sombre superposé pour la lisibilité du titre blanc :
-       gradient du haut (léger) vers le bas (plus dense) */
     z-index:     0;
+    will-change: opacity;
+    opacity:     1;
 }
 
-/* ─── Couverture sombre : voile gradient sur la photo de fond ──────────
-   Position absolute, couvre toute la section.
-   Gradient : transparent en haut -> opaque en bas (titre dans le bas). */
+/* Voile gradient sombre sur la photo (lisibilité du titre blanc) */
 .lp-hero__bg::after {
     content:  '';
     position: absolute;
     inset:    0;
     background: linear-gradient(
         to bottom,
-        rgba(0, 0, 0, 0.22) 0%,
-        rgba(0, 0, 0, 0.58) 55%,
-        rgba(0, 0, 0, 0.75) 100%
+        rgba(0, 0, 0, 0.20) 0%,
+        rgba(0, 0, 0, 0.55) 60%,
+        rgba(0, 0, 0, 0.70) 100%
     );
 }
 
-/* ── Zone de texte : titre + sous-titre + CTAs ─────────────────────── */
+/* ── Couche 2 : texte du hero (titre + sous-titre) ─────────────────────
+   Ancré en bas du conteneur sticky. Le JS anime translateX des parties
+   du titre (elles s'écartent vers la gauche et la droite au scroll). */
 .lp-hero__text {
     position:       absolute;
     bottom:         15%;
@@ -423,22 +434,21 @@
     padding-inline: var(--container-px, 32px);
 }
 
-/* Ligne du titre : overflow:hidden cache les parties du titre encore
-   hors-position pendant l'animation d'entrée */
+/* Ligne du titre : overflow:hidden évite le scrollbar pendant le translateX */
 .lp-hero__title-row {
     overflow: hidden;
 }
 
-/* Les deux parties du titre — état par défaut : VISIBLES.
-   C'est le JS qui arme l'animation en ajoutant la classe .js-hero-armed
-   sur .lp-hero__sticky (après avoir vérifié que prefers-reduced-motion
-   n'est pas actif). Sans JS => titres et CTAs visibles normalement. */
+/* Les deux parties du titre s'écartent dans des directions opposées.
+   État par défaut : visibles (translateX:0). Le JS pose will-change
+   seulement au moment de l'initialisation. Sans JS : titres visibles. */
 .lp-hero__title-left,
 .lp-hero__title-right {
-    display:    inline-block;
+    display:     inline-block;
+    will-change: transform;
 }
 
-/* Sous-titre en Instrument Serif — état par défaut : VISIBLE */
+/* Sous-titre en Instrument Serif */
 .lp-hero__desc {
     font-family:  var(--serif);
     font-size:    clamp(16px, 1.8vw, 22px);
@@ -446,13 +456,19 @@
     margin:       0;
     color:        rgba(255, 255, 255, 0.88);
     max-width:    600px;
+    will-change:  transform;
 }
 
 .lp-hero__desc em {
     font-style: italic;
 }
 
-/* CTAs — état par défaut : VISIBLES et cliquables */
+/* ── Couche 3 : CTAs apparus en fin d'animation ────────────────────────
+   Par défaut (sans JS) : visibles et cliquables.
+   Le JS pose la classe .js-hero-scroll-active sur <html> AVANT d'armer
+   l'animation. Seulement alors, les CTAs passent à opacity:0 et sont
+   cachés jusqu'à ce que progress atteigne CTA_FADE_START.
+   Sans JS => .js-hero-scroll-active n'existe pas => CTAs visibles. */
 .lp-hero__ctas-reveal {
     position:       absolute;
     bottom:         7%;
@@ -462,68 +478,15 @@
     padding-inline: var(--container-px, 32px);
     display:        flex;
     gap:            12px;
+    will-change:    opacity;
 }
 
-/* ────────────────────────────────────────────────────────────────────
-   ARMEMENT DE L'ANIMATION (seulement si JS a ajouté .js-hero-armed)
-   ------------------------------------------------------------------
-   Quand .js-hero-armed est présent sur .lp-hero__sticky, on passe les
-   éléments en état initial (invisible + décalé) puis on les anime
-   vers leur position finale via les règles .is-loaded ci-dessous.
-   Cette séparation garantit que sans JS => rien n'est armé => tout
-   reste visible. C'est le même principe que js-title-reveal-ready.
-─────────────────────────────────────────────────────────────────────- */
-
-/* Armement — état initial (avant déclenchement) */
-.lp-hero__sticky.js-hero-armed .lp-hero__title-left {
-    transform:   translateX(-80px);
-    opacity:     0;
-    will-change: transform, opacity;
-    transition:
-        transform 0.80s cubic-bezier(0.22, 1, 0.36, 1) 0.10s,
-        opacity   0.60s ease                            0.10s;
-}
-
-.lp-hero__sticky.js-hero-armed .lp-hero__title-right {
-    transform:   translateX(80px);
-    opacity:     0;
-    will-change: transform, opacity;
-    transition:
-        transform 0.80s cubic-bezier(0.22, 1, 0.36, 1) 0.20s,
-        opacity   0.60s ease                            0.20s;
-}
-
-.lp-hero__sticky.js-hero-armed .lp-hero__desc {
-    transform:   translateY(12px);
-    opacity:     0;
-    will-change: transform, opacity;
-    transition:
-        transform 0.70s cubic-bezier(0.22, 1, 0.36, 1) 0.35s,
-        opacity   0.55s ease                            0.35s;
-}
-
-.lp-hero__sticky.js-hero-armed .lp-hero__ctas-reveal {
+/* Armement (seulement si le JS de scroll est actif) :
+   .js-hero-scroll-active est posée sur <html> par le JS du hero
+   AVANT d'armer l'animation. */
+.js-hero-scroll-active .lp-hero__ctas-reveal {
     opacity:        0;
     pointer-events: none;
-    will-change:    opacity;
-    transition:     opacity 0.55s ease 0.65s;
-}
-
-/* État final : déclenché quand .lp-hero__sticky reçoit la classe .is-loaded */
-.lp-hero__sticky.is-loaded .lp-hero__title-left,
-.lp-hero__sticky.is-loaded .lp-hero__title-right {
-    transform: translateX(0);
-    opacity:   1;
-}
-
-.lp-hero__sticky.is-loaded .lp-hero__desc {
-    transform: translateY(0);
-    opacity:   1;
-}
-
-.lp-hero__sticky.is-loaded .lp-hero__ctas-reveal {
-    opacity:        1;
-    pointer-events: auto;
 }
 
 /* ── Bandeau métadonnées (eyebrow + coordonnées) ────────────────────── */
@@ -550,7 +513,8 @@
     color:          rgba(255, 255, 255, 0.65);
 }
 
-/* ── Typographie du H1 ──────────────────────────────────────────────── */
+/* ── Typographie du H1 ─────────────────────────────────────────────── */
+
 .lp-hero__h1 {
     font-family:    var(--display);
     font-size:      clamp(3rem, 7vw, 7rem);
@@ -577,50 +541,46 @@
     display: none;
 }
 
-/* ── Conteneur sticky (ici = le conteneur principal du hero) ──────────
-   height:100% hérite les 100vh de .lp-hero.
-   overflow:hidden empêche tout débordement lors de l'animation. */
-.lp-hero__sticky {
-    position: relative;
-    height:   100%;
-    overflow: hidden;
-}
-
-/* ─── ACCESSIBILITÉ : prefers-reduced-motion ────────────────────────
-   Sans JS (ou avec prefers-reduced-motion actif), les éléments n'ont
-   jamais reçu .js-hero-armed, donc ils sont déjà visibles normalement
-   (opacity:1, transform:none = valeurs par défaut CSS).
-   On neutralise quand même les transitions pour le cas où .js-hero-armed
-   aurait quand même été posé avant que le media query soit vérifié
-   (cas théorique). Et on retire le parallaxe (mouvement perturbateur). */
+/* ─── ACCESSIBILITÉ : prefers-reduced-motion ──────────────────────────
+   Affiche directement l'état final sans animation si l'OS demande
+   les mouvements réduits (ou si JS sort avant d'armer).
+   La section perd son 200vh pour redevenir une section 100vh normale.
+   On surcharge aussi le cas où .js-hero-scroll-active aurait quand même
+   été posée (cas théorique : le media query est vérifié en premier dans le JS). */
 @media (prefers-reduced-motion: reduce) {
-    /* Annule les transitions d'armement et de déclenchement */
-    .lp-hero__sticky.js-hero-armed .lp-hero__title-left,
-    .lp-hero__sticky.js-hero-armed .lp-hero__title-right,
-    .lp-hero__sticky.js-hero-armed .lp-hero__desc,
-    .lp-hero__sticky.js-hero-armed .lp-hero__ctas-reveal {
-        transition:     none;
-        opacity:        1;
-        transform:      none;
-        pointer-events: auto;
+    .lp-hero {
+        height:     auto;
+        min-height: 100vh;
     }
-    /* Pas de parallaxe (mouvement perturbateur pour les utilisateurs sensibles) */
+    .lp-hero__sticky {
+        position:   relative;
+        height:     auto;
+        min-height: 100vh;
+    }
+    /* Fond photo visible (opacity maximale) */
     .lp-hero__bg {
-        background-attachment: scroll;
+        opacity: 1 !important;
+    }
+    /* Titre à sa position naturelle */
+    .lp-hero__title-left,
+    .lp-hero__title-right,
+    .lp-hero__desc {
+        transform: none !important;
+    }
+    /* CTAs visibles et cliquables, même si .js-hero-scroll-active est là */
+    .js-hero-scroll-active .lp-hero__ctas-reveal,
+    .lp-hero__ctas-reveal {
+        opacity:        1 !important;
+        pointer-events: auto !important;
     }
 }
 
-/* ─── iOS : background-attachment:fixed bugué sur Safari/iOS ──────────
-   Sur iOS, fixed attachment crée un artefact (photo figée, pas de rendu).
-   On utilise scroll comme fallback pour tous les écrans tactiles mobiles. */
-@media (hover: none) and (pointer: coarse) {
-    .lp-hero__bg {
-        background-attachment: scroll;
-    }
-}
-
-/* ─── MOBILE : hero plus compact ────────────────────────────────────── */
+/* ─── MOBILE : hero plus court, amplitudes réduites ─────────────────── */
 @media (max-width: 768px) {
+    .lp-hero {
+        /* 180vh sur mobile : animation plus courte, plus fluide sur iOS */
+        height: 180vh;
+    }
     .lp-hero__h1 {
         overflow-wrap: break-word;
     }
@@ -646,7 +606,7 @@
     }
 }
 
-/* ─── FIN DES STYLES HERO PHOTO FIXE ────────────────────────────────── */
+/* ─── FIN DES STYLES HERO SCROLL-EXPAND (sans vidéo) ────────────────── */
 
 /* ──────────────────────────────────────────────────────────────────────
    3. MARQUEE — Bande defilante (suit la section hero dans le flux normal)
@@ -1681,29 +1641,27 @@
     <main id="main-content">
 
         {# ════════════════════════════════════════════════════════════════
-           2. HERO — PHOTO FIXE (vidéo supprimée)
+           2. HERO — SCROLL-EXPAND (sans vidéo)
 
-           Architecture simplifiée :
-           - .lp-hero          : section 100vh, photo de fond + overlay
-           - .lp-hero__sticky  : conteneur interne (position:relative)
-           - .lp-hero__bg      : photo hero-bazaart.jpg + voile sombre via ::after
-           - .lp-hero__text    : titre + sous-titre (animation CSS au chargement)
-           - .lp-hero__ctas-reveal : CTAs (apparaissent avec le titre)
+           Architecture scroll-driven :
+           - .lp-hero          : section 200vh (piste de scroll)
+           - .lp-hero__sticky  : position:sticky; height:100vh (fenêtre visible)
+           - .lp-hero__bg      : photo hero-bazaart.jpg, opacity interpolée par JS
+           - .lp-hero__text    : titre dont les mots s'écartent au scroll
+           - .lp-hero__ctas-reveal : CTAs, apparaissent en fin de progression
            - .lp-hero__meta    : eyebrow + coordonnées (toujours visible)
 
-           ANIMATION :
-           Le JS ajoute la classe .is-loaded sur .lp-hero__sticky au
-           DOMContentLoaded. Le CSS prend le relais pour les transitions.
-           Sans JS : les titres et CTAs sont visibles d'emblée (progressive
-           enhancement — voir @media prefers-reduced-motion dans le CSS).
+           Le JS calcule progress = scroll relatif dans la section (0 à 1) et
+           interpole opacity du fond + translateX du titre en conséquence.
+           RÉVERSIBLE : en remontant, l'animation se rejoue à l'envers.
+           SANS HIJACK : l'utilisateur scrolle normalement, aucune interception.
 
-           NOTE : le fichier hero-clap.mp4 est conservé sur le disque mais
-           n'est plus référencé ici. Le déréférencer suffit : pas besoin
-           de le supprimer pour que le site fonctionne.
+           Sans JS / prefers-reduced-motion : section redevient 100vh normal,
+           fond visible, titre lisible, CTAs accessibles (CSS @media).
         ════════════════════════════════════════════════════════════════ #}
         <section class="lp-hero" aria-labelledby="lp-hero-title">
-            {# Conteneur interne — la classe .is-loaded est ajoutée par JS
-               au DOMContentLoaded pour déclencher les animations CSS. #}
+            {# Conteneur sticky : reste ancré en haut du viewport pendant
+               toute la descente dans la section (position:sticky; top:0). #}
             <div class="lp-hero__sticky" id="lp-hero-sticky">
 
                 {# Couche 1 : photo de fond hero-bazaart.jpg (parallaxe léger CSS).
@@ -1749,7 +1707,8 @@
                     </div>
 
                     {# Sous-titre en Instrument Serif.
-                       Animation d'entrée CSS (translateY + opacity) déclenchée par .is-loaded. #}
+                       Le JS applique le même translateX que .lp-hero__title-right
+                       pour un effet de séparation uniforme, réversible au scroll. #}
                     <p class="lp-hero__desc">
                         BazaArt rassemble en un seul endroit ce qui &eacute;tait dispers&eacute;
                         sur 200 sites, 30 newsletters et trois groupes Facebook fatigu&eacute;s&nbsp;:
@@ -2572,93 +2531,239 @@
 {% block javascripts %}
 {{ parent() }}
 {#
-    SCRIPT HERO — ANIMATION CSS D'ENTRÉE
-    =====================================
-    Le hero n'a plus de vidéo ni de scroll-expand (200vh supprimés).
-    L'animation d'entrée du titre est désormais purement CSS :
-    .lp-hero__sticky reçoit la classe .is-loaded au DOMContentLoaded,
-    ce qui déclenche les transitions CSS définies dans les styles ci-dessus.
+    SCRIPT SCROLL-EXPAND DU HERO (sans vidéo)
+    ==========================================
+    Technique non-bloquante : la section .lp-hero fait 200vh.
+    A l'intérieur, .lp-hero__sticky est en position:sticky; top:0; height:100vh.
+    Le JS calcule progress = scroll relatif dans la section (0 -> 1) et
+    interpole opacity (fond photo) et translateX (titre) en conséquence.
+    L'utilisateur scrolle NORMALEMENT — aucun hijacking de la molette.
+    RÉVERSIBLE : en remontant, progress diminue et tout se rejoue à l'envers.
 
-    Le JS fait deux choses seulement :
-    1. Ajout de .is-loaded pour déclencher les animations d'entrée.
-    2. Calcul de --hero-meta-top (hauteur réelle de la navbar) pour
-       que l'eyebrow se positionne exactement sous la barre de navigation.
+    Performances :
+    - requestAnimationFrame : calculs calés sur le refresh navigateur (60fps max)
+    - scroll listener passive:true : scroll natif non bloqué
+    - On n'anime QUE transform et opacity (zero reflow, couches GPU pré-allouées)
 
-    Progressive enhancement :
-    - Sans JS : les titres et CTAs restent visibles (prefers-reduced-motion
-      reset via @media ou fallback CSS opacity:1).
-    - Avec JS + prefers-reduced-motion:reduce : on ne pose pas .is-loaded
-      car les transitions sont désactivées par le CSS — rien à déclencher.
-      Les éléments sont déjà visibles grâce aux règles @media.
+    Accessibilité :
+    - prefers-reduced-motion : on sort immédiatement, le CSS @media gère l'état fixe
+    - Sans JS : les CTAs sont masqués par opacity:0 (CSS) mais le hero
+      a une règle @media prefers-reduced-motion qui les rend visibles.
+      On ajoute aussi un fallback JS : si on détecte que le scroll ne
+      peut pas être utilisé, on affiche les CTAs directement.
+
+    Mobile :
+    - Amplitudes réduites sur mobile (< 768px) pour éviter saccades iOS
+    - La section hero fait 180vh sur mobile (vs 200vh desktop)
 #}
 <script>
 (function () {
     'use strict';
 
-    /* Éléments DOM du hero */
-    var section = document.querySelector('.lp-hero');
-    var sticky  = document.getElementById('lp-hero-sticky');
+    /* ── 1. ACCESSIBILITE : prefers-reduced-motion ──────────────────────────
+       Si l'utilisateur a activé "Réduire les animations" dans son OS,
+       on sort immédiatement. Le CSS @media (prefers-reduced-motion) gère
+       l'affichage statique (fond photo visible, titre immobile, CTAs accessibles). */
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        return;
+    }
 
-    /* Si le hero est absent de cette page (futur usage multi-pages), on sort proprement */
-    if (!section || !sticky) { return; }
+    /* ── 2. RÉFÉRENCES DOM ──────────────────────────────────────────────────
+       On récupère une seule fois tous les éléments qu'on va animer.
+       Si l'un d'eux est absent (page sans hero), on sort proprement. */
+    var section    = document.querySelector('.lp-hero');
+    var bg         = document.querySelector('.lp-hero__bg');
+    var titleLeft  = document.querySelector('.lp-hero__title-left');
+    var titleRight = document.querySelector('.lp-hero__title-right');
+    var desc       = document.querySelector('.lp-hero__desc');
+    var ctasReveal = document.querySelector('.lp-hero__ctas-reveal');
 
-    /* ── Calcul de la hauteur de la navbar ─────────────────────────────────
-       La custom property --hero-meta-top est utilisée par .lp-hero__meta
-       pour un padding-top exactement égal à la hauteur de la navbar.
-       Résultat : l'eyebrow se place juste sous la barre de nav, quelle
-       que soit sa hauteur réelle (zoom, futur changement de hauteur, etc.). */
+    /* Sortie propre si un élément essentiel est manquant */
+    if (!section || !bg || !titleLeft || !titleRight) { return; }
+
+    /* ── ARMEMENT (progressive enhancement) ────────────────────────────────
+       On pose .js-hero-scroll-active sur <html> AVANT d'armer les CTAs.
+       Sans cette classe, les CTAs restent visibles par défaut (CSS fallback).
+       Avec cette classe, le CSS les masque en opacity:0 jusqu'au scroll. */
+    document.documentElement.classList.add('js-hero-scroll-active');
+
+    /* ── 3. PARAMÈTRES DE L'ANIMATION ──────────────────────────────────────
+       Tous les paramètres sont centralisés ici pour faciliter les réglages.
+
+       ÉCARTEMENT DU TITRE (pixels) :
+       - TITLE_SPREAD_DESKTOP : de combien de pixels chaque partie du titre
+         s'écarte (gauche vers la gauche, droite vers la droite) à progress=1.
+         On inverse la convention par rapport au composant ScrollExpandMedia :
+         progress=0 = titre rassemblé (lisible), progress=1 = mots écartés.
+         Cela signifie qu'au repos (en haut de la section) le titre est lisible,
+         et il s'écarte quand on scrolle vers le bas (l'effet se rejoue à l'envers
+         en remontant).
+       - Sur mobile (<= 768px), amplitude réduite de moitié pour éviter
+         que le titre sorte de l'écran sur les petits viewports. */
+    var TITLE_SPREAD_DESKTOP = 160; /* pixels, desktop */
+    var TITLE_SPREAD_MOBILE  = 70;  /* pixels, mobile */
+
+    /* SEUIL D'APPARITION DES CTAS :
+       Les CTAs commencent à apparaître quand progress atteint ce seuil
+       et sont complètement visibles à progress = 1. */
+    var CTA_FADE_START = 0.75;
+
+    /* ── 4. UTILITAIRES ─────────────────────────────────────────────────────
+
+       clamp(val, min, max) : borne une valeur entre min et max. */
+    function clamp(val, min, max) {
+        return val < min ? min : (val > max ? max : val);
+    }
+
+    /* lerp(a, b, t) : interpolation linéaire entre a et b pour t dans [0,1].
+       A t=0 retourne a, à t=1 retourne b. */
+    function lerp(a, b, t) {
+        return a + (b - a) * t;
+    }
+
+    /* ── 5. VARIABLES D'ÉTAT (boucle rAF) ──────────────────────────────────
+       rafId : identifiant rAF en cours (null = pas de requête en attente).
+       lastScrollY : dernière position traitée (optimisation : évite les
+       recalculs si le scroll n'a pas changé depuis la dernière frame). */
+    var rafId    = null;
+    var lastY    = -1;
+    var isMobile = window.innerWidth <= 768;
+
+    /* ── 6. FONCTION DE MISE À JOUR ─────────────────────────────────────────
+       Calcule la progression (0 -> 1) et applique les transformations.
+       Appelée via requestAnimationFrame -> toujours synchronisée avec
+       le refresh du navigateur (jamais entre deux frames).
+
+       Convention : progress=0 = état repos (titre rassemblé, fond visible)
+                    progress=1 = fin d'animation (mots écartés, fond estompé, CTAs visibles)
+       Réversible : en remontant, progress diminue et tout se rejoue à l'envers. */
+    function update() {
+        rafId = null; /* libère le slot rAF pour la prochaine requête */
+
+        var scrollY = window.scrollY || window.pageYOffset;
+
+        /* Optimisation : si la position n'a pas changé, rien à faire */
+        if (scrollY === lastY) { return; }
+        lastY = scrollY;
+
+        /* CALCUL DE LA PROGRESSION ─────────────────────────────────────────
+           La section fait 200vh (180vh sur mobile).
+           sectionTop    : position Y du haut de la section dans la page
+           trackLength   : distance de scroll utile = sectionHeight - viewportHeight
+                           (quand on a scrollé de trackLength pixels depuis sectionTop,
+                            on est à la fin de la piste, progress = 1)
+
+           progress = (scrollY - sectionTop) / trackLength
+           clampée entre 0 et 1 pour éviter les valeurs négatives ou > 1.
+
+           Réversibilité naturelle : si l'utilisateur remonte (scrollY diminue),
+           progress diminue aussi, et toutes les interpolations ci-dessous
+           rejoignent leur état de départ. Aucun code supplémentaire nécessaire. */
+        var rect        = section.getBoundingClientRect();
+        /* getBoundingClientRect().top est relatif au viewport.
+           Pour avoir la position absolue dans la page, on ajoute scrollY. */
+        var sectionTop  = rect.top + scrollY;
+        var trackLength = section.offsetHeight - window.innerHeight;
+
+        /* Protection contre une hauteur de section incorrecte */
+        if (trackLength <= 0) { return; }
+
+        var raw      = (scrollY - sectionTop) / trackLength;
+        var progress = clamp(raw, 0, 1);
+
+        /* AMPLITUDE DU TITRE selon la taille d'écran */
+        var spread = isMobile ? TITLE_SPREAD_MOBILE : TITLE_SPREAD_DESKTOP;
+
+        /* ── APPLICATION DES TRANSFORMATIONS ──────────────────────────────
+
+           1. Image de fond : opacity 1 -> 0 (disparaît progressivement)
+              On accélère la disparition en multipliant progress par 2 :
+              la photo disparaît complètement sur la première moitié du scroll. */
+        var bgOpacity = clamp(1 - progress * 2, 0, 1);
+        bg.style.opacity = bgOpacity;
+
+        /* 2. Titre gauche : translateX(0) -> translateX(-spread px)
+              Au repos (progress=0) : position naturelle (lisible).
+              Au scroll (progress=1) : part vers la GAUCHE.
+              En remontant : revient naturellement à sa place. */
+        var txLeft = lerp(0, -spread, progress);
+        titleLeft.style.transform = 'translateX(' + txLeft + 'px)';
+
+        /* 3. Titre droit + sous-titre : translateX(0) -> translateX(+spread px)
+              Même logique, mais part vers la DROITE. */
+        var txRight = lerp(0, spread, progress);
+        titleRight.style.transform = 'translateX(' + txRight + 'px)';
+        if (desc) { desc.style.transform = 'translateX(' + txRight + 'px)'; }
+
+        /* 4. CTAs : opacity 0 -> 1 quand progress > CTA_FADE_START
+              On normalise progress sur la plage [CTA_FADE_START, 1].
+              Réversible : quand on remonte sous CTA_FADE_START, ils redeviennent invisibles. */
+        if (ctasReveal) {
+            var ctaProgress = clamp((progress - CTA_FADE_START) / (1 - CTA_FADE_START), 0, 1);
+            ctasReveal.style.opacity = ctaProgress;
+            /* pointer-events : active les clics uniquement quand partiellement visible */
+            ctasReveal.style.pointerEvents = ctaProgress > 0.1 ? 'auto' : 'none';
+        }
+    }
+
+    /* ── 7. LISTENER SCROLL ─────────────────────────────────────────────────
+       On ne calcule PAS directement dans le listener scroll (peut se déclencher
+       des dizaines de fois par seconde). On planifie un rAF à la place :
+       - Si un rAF est déjà en attente (rafId !== null), on l'ignore
+         (une seule mise à jour par frame de rendu).
+       - passive:true -> le navigateur sait qu'on ne bloquera jamais le scroll. */
+    function onScroll() {
+        if (rafId === null) {
+            rafId = window.requestAnimationFrame(update);
+        }
+    }
+
+    /* Mise à jour de isMobile et de la hauteur navbar si la fenêtre est redimensionnée. */
+    function onResize() {
+        isMobile = window.innerWidth <= 768;
+        setNavHeight(); /* recalcule --hero-meta-top si la navbar a changé de hauteur */
+        onScroll();     /* recalcule les transformations du hero */
+    }
+
+    /* ── 8. MESURE DE LA HAUTEUR DE LA NAVBAR ──────────────────────────────
+       AV-1 : la navbar est sticky en haut du viewport. Le bandeau .lp-hero__meta
+       doit se positionner JUSTE EN DESSOUS pour ne pas être chevauché.
+       On lit offsetHeight de header.nav et on l'écrit dans --hero-meta-top
+       sur la section .lp-hero (pas sur :root : portée limitée au composant).
+       Fallback 80px si la nav est introuvable. */
     function setNavHeight() {
         var nav  = document.querySelector('header.nav');
-        var navH = nav ? nav.offsetHeight : 80; /* fallback 80px si nav absente */
-        /* On pose la variable sur la section .lp-hero (pas sur :root)
-           pour limiter la portée à ce seul composant. */
+        var navH = nav ? nav.offsetHeight : 80;
         section.style.setProperty('--hero-meta-top', navH + 'px');
     }
 
-    /* Recalcul au resize (changement de viewport ou zoom navigateur) */
-    window.addEventListener('resize', setNavHeight, { passive: true });
+    /* ── 9. INITIALISATION ──────────────────────────────────────────────────
+       On branche les listeners et on calcule l'état initial.
+       (scrollY peut déjà être > 0 si la page est rechargée avec une ancre
+        ou via Turbo — on doit appliquer l'animation immédiatement). */
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
 
-    /* ── Déclenchement de l'animation d'entrée ─────────────────────────────
-       Séquence en deux temps :
-       1. On pose .js-hero-armed : le CSS arme les éléments (opacity:0, décalés).
-       2. On pose .is-loaded (via double rAF) : le CSS déclenche les transitions
-          vers l'état final (opacity:1, position normale).
+    /* Mesure initiale — doit être faite AVANT onScroll() pour que le
+       premier calcul d'animation parte avec le bon padding-top. */
+    setNavHeight();
 
-       Le double rAF garantit que le navigateur a eu le temps de peindre l'état
-       armé (opacity:0) avant de commencer la transition vers opacity:1.
-       Sans ce délai, Safari et parfois Chrome fusionnent les deux états et
-       l'animation ne joue pas. */
-    function triggerEntrance() {
-        setNavHeight(); /* mesure avant l'animation pour éviter un saut de layout */
+    /* Calcul initial (couvre le cas rechargement avec scrollY > 0) */
+    onScroll();
 
-        /* prefers-reduced-motion : on ne joue pas d'animation.
-           Les éléments sont déjà visibles (pas de .js-hero-armed posé).
-           On sort directement. */
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            return;
-        }
+    /* ── 10. NETTOYAGE TURBO ─────────────────────────────────────────────────
+       Si Symfony UX Turbo est actif (navigation SPA-like), les scripts ne
+       se re-exécutent pas mais le DOM change. On retire les listeners
+       avant chaque navigation pour éviter les fuites mémoire. */
+    document.addEventListener('turbo:before-visit', function () {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onResize);
+        if (rafId !== null) { window.cancelAnimationFrame(rafId); rafId = null; }
+        /* On retire la classe d'armement pour ne pas polluer les pages suivantes
+           (Turbo réutilise le même <html> entre les navigations). */
+        document.documentElement.classList.remove('js-hero-scroll-active');
+    }, { once: true });
 
-        /* Étape 1 : armer l'animation (passe les éléments en opacity:0) */
-        sticky.classList.add('js-hero-armed');
-
-        /* Étape 2 : déclencher la transition vers l'état final.
-           Double requestAnimationFrame = attente de deux frames de rendu,
-           ce qui garantit que le style .js-hero-armed a été appliqué et
-           peint par le navigateur avant de lancer la transition. */
-        window.requestAnimationFrame(function () {
-            window.requestAnimationFrame(function () {
-                sticky.classList.add('is-loaded');
-            });
-        });
-    }
-
-    /* Lancement au DOMContentLoaded ou immédiatement si DOM déjà prêt */
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', triggerEntrance);
-    } else {
-        triggerEntrance();
-    }
-
-}());
+}()); /* IIFE : portée locale -> pas de variable globale */
 </script>
 {% endblock %}
