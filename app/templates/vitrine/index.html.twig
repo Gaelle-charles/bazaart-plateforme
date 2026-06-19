@@ -366,7 +366,7 @@
    COUCHES (du bas vers le haut) :
      1. .lp-hero__bg         — image hero-bazaart.jpg : s'estompe (opacity 1->0)
      2. .lp-hero__text       — titre dont les mots s'écartent au scroll
-     3. .lp-hero__ctas-reveal — CTAs : apparaissent quand progress ~ 1
+     3. .lp-hero__ctas-reveal — CTAs : toujours visibles (Option 1 — pas d'animation opacity)
 
    PERFORMANCE :
    - requestAnimationFrame cale les mises à jour sur le refresh navigateur
@@ -456,19 +456,25 @@
     margin:       0;
     color:        rgba(255, 255, 255, 0.88);
     max-width:    600px;
-    will-change:  transform;
+    /* will-change:transform est déplacé sous .js-hero-scroll-active (S3) :
+       on n'alloue une couche GPU que quand le JS d'animation est effectivement actif.
+       Sans JS, la couche resterait allouée inutilement pour tous les visiteurs. */
+}
+
+/* S3 : couche GPU uniquement quand l'animation scroll est armée par le JS.
+   .js-hero-scroll-active est posée sur <html> dès que le JS hero s'initialise. */
+.js-hero-scroll-active .lp-hero__desc {
+    will-change: transform;
 }
 
 .lp-hero__desc em {
     font-style: italic;
 }
 
-/* ── Couche 3 : CTAs apparus en fin d'animation ────────────────────────
-   Par défaut (sans JS) : visibles et cliquables.
-   Le JS pose la classe .js-hero-scroll-active sur <html> AVANT d'armer
-   l'animation. Seulement alors, les CTAs passent à opacity:0 et sont
-   cachés jusqu'à ce que progress atteigne CTA_FADE_START.
-   Sans JS => .js-hero-scroll-active n'existe pas => CTAs visibles. */
+/* Couche 3 : CTAs du hero.
+   Toujours visibles et cliquables, dès le chargement et pendant tout
+   le scroll (Option 1 validée : pas de masquage progressif).
+   will-change:opacity supprimé : aucune animation sur l'opacité des CTAs. */
 .lp-hero__ctas-reveal {
     position:       absolute;
     bottom:         7%;
@@ -478,16 +484,10 @@
     padding-inline: var(--container-px, 32px);
     display:        flex;
     gap:            12px;
-    will-change:    opacity;
 }
 
-/* Armement (seulement si le JS de scroll est actif) :
-   .js-hero-scroll-active est posée sur <html> par le JS du hero
-   AVANT d'armer l'animation. */
-.js-hero-scroll-active .lp-hero__ctas-reveal {
-    opacity:        0;
-    pointer-events: none;
-}
+/* NOTE : la règle .js-hero-scroll-active .lp-hero__ctas-reveal (opacity:0)
+   a été supprimée. Les CTAs ne sont plus jamais masqués par le JS. */
 
 /* ── Bandeau métadonnées (eyebrow + coordonnées) ────────────────────── */
 .lp-hero__meta {
@@ -567,8 +567,9 @@
     .lp-hero__desc {
         transform: none !important;
     }
-    /* CTAs visibles et cliquables, même si .js-hero-scroll-active est là */
-    .js-hero-scroll-active .lp-hero__ctas-reveal,
+    /* CTAs : toujours visibles par défaut (Option 1 — aucun masquage CSS/JS).
+       Cette surcharge n'est plus nécessaire techniquement, mais on la conserve
+       comme garde-fou explicite si une future règle venait les masquer. */
     .lp-hero__ctas-reveal {
         opacity:        1 !important;
         pointer-events: auto !important;
@@ -1648,7 +1649,7 @@
            - .lp-hero__sticky  : position:sticky; height:100vh (fenêtre visible)
            - .lp-hero__bg      : photo hero-bazaart.jpg, opacity interpolée par JS
            - .lp-hero__text    : titre dont les mots s'écartent au scroll
-           - .lp-hero__ctas-reveal : CTAs, apparaissent en fin de progression
+           - .lp-hero__ctas-reveal : CTAs, toujours visibles (Option 1)
            - .lp-hero__meta    : eyebrow + coordonnées (toujours visible)
 
            Le JS calcule progress = scroll relatif dans la section (0 à 1) et
@@ -1657,7 +1658,7 @@
            SANS HIJACK : l'utilisateur scrolle normalement, aucune interception.
 
            Sans JS / prefers-reduced-motion : section redevient 100vh normal,
-           fond visible, titre lisible, CTAs accessibles (CSS @media).
+           fond visible, titre lisible, CTAs visibles et cliquables.
         ════════════════════════════════════════════════════════════════ #}
         <section class="lp-hero" aria-labelledby="lp-hero-title">
             {# Conteneur sticky : reste ancré en haut du viewport pendant
@@ -1719,9 +1720,9 @@
 
                 </div>{# /.lp-hero__text #}
 
-                {# CTAs — apparaissent avec un léger délai après le titre.
-                   Accessibles par défaut si JS désactivé (transition:none, opacity:1
-                   via la règle @media prefers-reduced-motion couvre aussi JS off). #}
+                {# CTAs du hero — toujours visibles et cliquables dès le chargement
+                   (Option 1 validée). Aucune animation d'opacité : ni CSS ni JS
+                   ne les masque. Avec ou sans JS, avec ou sans scroll. #}
                 <div class="lp-hero__ctas-reveal">
                     <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--dark">
                         Explorer les opportunit&eacute;s
@@ -1729,7 +1730,10 @@
                             <path d="M5 12h14M13 5l7 7-7 7"/>
                         </svg>
                     </a>
-                    <a href="{{ path('app_register') }}" class="lp-btn lp-btn--ghost" style="color:#fff;border-color:rgba(255,255,255,0.5);">
+                    {# S4 : style inline supprimé — les règles .lp-hero .lp-btn--ghost
+                       définissent déjà color:#fff et border-color:rgba(255,255,255,0.5).
+                       Le style inline était redondant et moins maintenable. #}
+                    <a href="{{ path('app_register') }}" class="lp-btn lp-btn--ghost">
                         Rejoindre gratuitement
                     </a>
                 </div>{# /.lp-hero__ctas-reveal #}
@@ -1906,7 +1910,10 @@
                         - muted : OBLIGATOIRE — les navigateurs bloquent l'autoplay AVEC son.
                           Donc la vidéo est forcément muette (pas de bande-son).
                         - playsinline : évite le passage en plein écran forcé sur iOS.
-                        - preload="auto" : pré-charge les données pour un démarrage immédiat.
+                        - preload="metadata" : ne charge que les métadonnées légères (durée,
+                          dimensions) au chargement initial. La vidéo étant sous la ligne de
+                          flottaison, le chargement complet est différé jusqu'à l'autoplay.
+                          Economie notable sur mobile (2G/3G). Voir commentaire S-5 ci-dessous.
                     #}
                     <video
                         class="lp-video__player"
@@ -2547,10 +2554,10 @@
 
     Accessibilité :
     - prefers-reduced-motion : on sort immédiatement, le CSS @media gère l'état fixe
-    - Sans JS : les CTAs sont masqués par opacity:0 (CSS) mais le hero
-      a une règle @media prefers-reduced-motion qui les rend visibles.
-      On ajoute aussi un fallback JS : si on détecte que le scroll ne
-      peut pas être utilisé, on affiche les CTAs directement.
+    - Sans JS : titre et fond restent visibles (pas de masquage CSS par défaut).
+      Les CTAs sont toujours visibles et cliquables (Option 1 : aucun masquage).
+    - Bug A2 corrigé : si trackLength <= 0 (très grande fenêtre / zoom),
+      on réinitialise proprement les éléments animés au lieu de sortir abruptement.
 
     Mobile :
     - Amplitudes réduites sur mobile (< 768px) pour éviter saccades iOS
@@ -2576,15 +2583,18 @@
     var titleLeft  = document.querySelector('.lp-hero__title-left');
     var titleRight = document.querySelector('.lp-hero__title-right');
     var desc       = document.querySelector('.lp-hero__desc');
-    var ctasReveal = document.querySelector('.lp-hero__ctas-reveal');
+    /* ctasReveal supprimé : les CTAs ne sont plus animés en opacity (Option 1). */
 
     /* Sortie propre si un élément essentiel est manquant */
     if (!section || !bg || !titleLeft || !titleRight) { return; }
 
-    /* ── ARMEMENT (progressive enhancement) ────────────────────────────────
-       On pose .js-hero-scroll-active sur <html> AVANT d'armer les CTAs.
-       Sans cette classe, les CTAs restent visibles par défaut (CSS fallback).
-       Avec cette classe, le CSS les masque en opacity:0 jusqu'au scroll. */
+    /* ARMEMENT (progressive enhancement)
+       .js-hero-scroll-active est posée sur <html> pour deux raisons :
+         1. CSS S3 : active will-change:transform sur .lp-hero__desc uniquement
+            quand l'animation JS est active (couche GPU conditionnelle).
+         2. Nettoyage Turbo (section 10) : sert de marqueur pour savoir si le
+            hero est armé dans la page courante.
+       Note : cette classe ne masque PLUS les CTAs (Option 1 = CTAs toujours visibles). */
     document.documentElement.classList.add('js-hero-scroll-active');
 
     /* ── 3. PARAMÈTRES DE L'ANIMATION ──────────────────────────────────────
@@ -2602,11 +2612,7 @@
          que le titre sorte de l'écran sur les petits viewports. */
     var TITLE_SPREAD_DESKTOP = 160; /* pixels, desktop */
     var TITLE_SPREAD_MOBILE  = 70;  /* pixels, mobile */
-
-    /* SEUIL D'APPARITION DES CTAS :
-       Les CTAs commencent à apparaître quand progress atteint ce seuil
-       et sont complètement visibles à progress = 1. */
-    var CTA_FADE_START = 0.75;
+    /* CTA_FADE_START supprimé : les CTAs ne sont plus pilotés par le JS (Option 1). */
 
     /* ── 4. UTILITAIRES ─────────────────────────────────────────────────────
 
@@ -2665,8 +2671,18 @@
         var sectionTop  = rect.top + scrollY;
         var trackLength = section.offsetHeight - window.innerHeight;
 
-        /* Protection contre une hauteur de section incorrecte */
-        if (trackLength <= 0) { return; }
+        /* A2 — protection contre une section trop petite (très grande fenêtre ou zoom
+           minimum) : si trackLength <= 0, l'animation n'est pas possible.
+           Au lieu de return (qui laisserait le titre/fond dans un état intermédiaire),
+           on réinitialise proprement tous les éléments animés à leur état repos,
+           puis on sort. Les CTAs ne sont pas touchés (toujours visibles, Option 1). */
+        if (trackLength <= 0) {
+            bg.style.opacity = '';                   /* fond photo : opacité CSS naturelle */
+            titleLeft.style.transform  = '';         /* titre gauche : position naturelle */
+            titleRight.style.transform = '';         /* titre droit : position naturelle */
+            if (desc) { desc.style.transform = ''; } /* sous-titre : position naturelle */
+            return;
+        }
 
         var raw      = (scrollY - sectionTop) / trackLength;
         var progress = clamp(raw, 0, 1);
@@ -2674,7 +2690,7 @@
         /* AMPLITUDE DU TITRE selon la taille d'écran */
         var spread = isMobile ? TITLE_SPREAD_MOBILE : TITLE_SPREAD_DESKTOP;
 
-        /* ── APPLICATION DES TRANSFORMATIONS ──────────────────────────────
+        /* APPLICATION DES TRANSFORMATIONS
 
            1. Image de fond : opacity 1 -> 0 (disparaît progressivement)
               On accélère la disparition en multipliant progress par 2 :
@@ -2695,15 +2711,8 @@
         titleRight.style.transform = 'translateX(' + txRight + 'px)';
         if (desc) { desc.style.transform = 'translateX(' + txRight + 'px)'; }
 
-        /* 4. CTAs : opacity 0 -> 1 quand progress > CTA_FADE_START
-              On normalise progress sur la plage [CTA_FADE_START, 1].
-              Réversible : quand on remonte sous CTA_FADE_START, ils redeviennent invisibles. */
-        if (ctasReveal) {
-            var ctaProgress = clamp((progress - CTA_FADE_START) / (1 - CTA_FADE_START), 0, 1);
-            ctasReveal.style.opacity = ctaProgress;
-            /* pointer-events : active les clics uniquement quand partiellement visible */
-            ctasReveal.style.pointerEvents = ctaProgress > 0.1 ? 'auto' : 'none';
-        }
+        /* Note : plus de bloc CTA ici. Les CTAs sont toujours visibles (Option 1).
+           Leur opacity et pointer-events ne sont plus pilotés par le JS. */
     }
 
     /* ── 7. LISTENER SCROLL ─────────────────────────────────────────────────
