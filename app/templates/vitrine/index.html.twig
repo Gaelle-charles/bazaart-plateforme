@@ -1091,7 +1091,27 @@
     border-bottom:         1px solid var(--ink);
 }
 
-/* Colonne live — fond noir */
+/* ── Carte gauche de la communauté : photo plein cadre ──────────────────
+   Remplace l'ancien live fictif. L'image est en position:absolute pour
+   remplir la cellule de grille étirée (même hauteur que la colonne des
+   fils de discussion à droite). object-fit:cover -> pas de déformation. */
+.lp-community__photo {
+    position:     relative;
+    overflow:     hidden;
+    border-right: 1px solid var(--ink);
+    background:   var(--ink);
+    min-height:   clamp(280px, 38vw, 480px);
+}
+.lp-community__photo-img {
+    position:   absolute;
+    inset:      0;
+    width:      100%;
+    height:     100%;
+    object-fit: cover;
+    display:    block;
+}
+
+/* Colonne live — fond noir (ancien live fictif, conservé pour référence) */
 .lp-live {
     background:  var(--ink);
     color:       var(--bg);
@@ -2176,108 +2196,13 @@
 
             <div class="lp-community__grid">
 
-                {# ── Colonne gauche : preview live fictif ── #}
-                <div class="lp-live" aria-label="Live en cours — exemple fictif">
-
-                    <div class="lp-live__header">
-                        {# Badge "● EN DIRECT" avec point pulsant #}
-                        <div class="lp-live__badge">
-                            <span class="lp-live__dot" aria-hidden="true"></span>
-                            EN DIRECT · 312 SPECTATEURS
-                        </div>
-                        {# Bouton "Rejoindre" — pointe vers l'inscription en V1 #}
-                        <a href="{{ path('app_register') }}" class="lp-btn lp-btn--accent" style="font-size:11px;padding:7px 11px;">
-                            Rejoindre
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                <polygon points="5 3 19 12 5 21 5 3"/>
-                            </svg>
-                        </a>
-                    </div>
-
-                    {# Zone vidéo 16:9 — SVG de barres de fréquences fictives #}
-                    <div class="lp-live__video" aria-hidden="true">
-                        {#
-                            SVG de barres de fréquences — reproduit le style du prototype.
-                            Les barres ont des hauteurs calculées via sin/cos dans le proto React ;
-                            ici on code des valeurs représentatives à la main.
-                            Les valeurs h= correspondent à : 30 + |sin(i×0.6)|×80 + |cos(i×0.2)|×30
-                        #}
-                        <svg class="lp-live__waveform" viewBox="0 0 600 200" preserveAspectRatio="none" role="img" aria-label="Visualisation audio fictive">
-                            {# Série de rectangles représentant des barres audio #}
-                            <rect x="2"   y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
-                            <rect x="12"  y="60"  width="6" height="80" fill="#C6F24E" opacity=".64"/>
-                            <rect x="22"  y="50"  width="6" height="100" fill="#C6F24E" opacity=".76"/>
-                            <rect x="32"  y="68"  width="6" height="64" fill="#C6F24E" opacity=".52"/>
-                            <rect x="42"  y="40"  width="6" height="120" fill="#C6F24E" opacity=".88"/>
-                            <rect x="52"  y="74"  width="6" height="52" fill="#C6F24E" opacity=".52"/>
-                            <rect x="62"  y="55"  width="6" height="90" fill="#C6F24E" opacity=".64"/>
-                            <rect x="72"  y="65"  width="6" height="70" fill="#C6F24E" opacity=".52"/>
-                            <rect x="82"  y="45"  width="6" height="110" fill="#C6F24E" opacity=".76"/>
-                            <rect x="92"  y="70"  width="6" height="60" fill="#C6F24E" opacity=".52"/>
-                            <rect x="102" y="35"  width="6" height="130" fill="#C6F24E" opacity=".88"/>
-                            <rect x="112" y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
-                            <rect x="122" y="58"  width="6" height="84" fill="#C6F24E" opacity=".64"/>
-                            <rect x="132" y="48"  width="6" height="104" fill="#C6F24E" opacity=".76"/>
-                            <rect x="142" y="66"  width="6" height="68" fill="#C6F24E" opacity=".52"/>
-                            <rect x="152" y="42"  width="6" height="116" fill="#C6F24E" opacity=".88"/>
-                            <rect x="162" y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
-                            <rect x="172" y="52"  width="6" height="96" fill="#C6F24E" opacity=".64"/>
-                            <rect x="182" y="62"  width="6" height="76" fill="#C6F24E" opacity=".52"/>
-                            <rect x="192" y="44"  width="6" height="112" fill="#C6F24E" opacity=".76"/>
-                            <rect x="202" y="74"  width="6" height="52" fill="#C6F24E" opacity=".52"/>
-                            <rect x="212" y="38"  width="6" height="124" fill="#C6F24E" opacity=".88"/>
-                            <rect x="222" y="68"  width="6" height="64" fill="#C6F24E" opacity=".52"/>
-                            <rect x="232" y="56"  width="6" height="88" fill="#C6F24E" opacity=".64"/>
-                            <rect x="242" y="46"  width="6" height="108" fill="#C6F24E" opacity=".76"/>
-                            <rect x="252" y="70"  width="6" height="60" fill="#C6F24E" opacity=".52"/>
-                            <rect x="262" y="36"  width="6" height="128" fill="#C6F24E" opacity=".88"/>
-                            <rect x="272" y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
-                            <rect x="282" y="54"  width="6" height="92" fill="#C6F24E" opacity=".64"/>
-                            <rect x="292" y="64"  width="6" height="72" fill="#C6F24E" opacity=".52"/>
-                            <rect x="302" y="40"  width="6" height="120" fill="#C6F24E" opacity=".76"/>
-                            <rect x="312" y="76"  width="6" height="48" fill="#C6F24E" opacity=".52"/>
-                            <rect x="322" y="34"  width="6" height="132" fill="#C6F24E" opacity=".88"/>
-                            <rect x="332" y="66"  width="6" height="68" fill="#C6F24E" opacity=".52"/>
-                            <rect x="342" y="50"  width="6" height="100" fill="#C6F24E" opacity=".64"/>
-                            <rect x="352" y="60"  width="6" height="80" fill="#C6F24E" opacity=".76"/>
-                            <rect x="362" y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
-                            <rect x="372" y="42"  width="6" height="116" fill="#C6F24E" opacity=".88"/>
-                            <rect x="382" y="68"  width="6" height="64" fill="#C6F24E" opacity=".52"/>
-                            <rect x="392" y="52"  width="6" height="96" fill="#C6F24E" opacity=".64"/>
-                            <rect x="402" y="62"  width="6" height="76" fill="#C6F24E" opacity=".52"/>
-                            <rect x="412" y="38"  width="6" height="124" fill="#C6F24E" opacity=".76"/>
-                            <rect x="422" y="74"  width="6" height="52" fill="#C6F24E" opacity=".52"/>
-                            <rect x="432" y="46"  width="6" height="108" fill="#C6F24E" opacity=".88"/>
-                            <rect x="442" y="70"  width="6" height="60" fill="#C6F24E" opacity=".52"/>
-                            <rect x="452" y="56"  width="6" height="88" fill="#C6F24E" opacity=".64"/>
-                            <rect x="462" y="44"  width="6" height="112" fill="#C6F24E" opacity=".76"/>
-                            <rect x="472" y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
-                            <rect x="482" y="36"  width="6" height="128" fill="#C6F24E" opacity=".88"/>
-                            <rect x="492" y="64"  width="6" height="72" fill="#C6F24E" opacity=".52"/>
-                            <rect x="502" y="48"  width="6" height="104" fill="#C6F24E" opacity=".64"/>
-                            <rect x="512" y="58"  width="6" height="84" fill="#C6F24E" opacity=".76"/>
-                            <rect x="522" y="74"  width="6" height="52" fill="#C6F24E" opacity=".52"/>
-                            <rect x="532" y="40"  width="6" height="120" fill="#C6F24E" opacity=".88"/>
-                            <rect x="542" y="66"  width="6" height="68" fill="#C6F24E" opacity=".52"/>
-                            <rect x="552" y="54"  width="6" height="92" fill="#C6F24E" opacity=".64"/>
-                            <rect x="562" y="62"  width="6" height="76" fill="#C6F24E" opacity=".76"/>
-                            <rect x="572" y="72"  width="6" height="56" fill="#C6F24E" opacity=".52"/>
-                            <rect x="582" y="44"  width="6" height="112" fill="#C6F24E" opacity=".88"/>
-                            <rect x="592" y="68"  width="6" height="64" fill="#C6F24E" opacity=".52"/>
-                        </svg>
-
-                        {# Artiste fictif en bas du live #}
-                        <div class="lp-live__artist">
-                            <div class="lp-live__avatar" aria-hidden="true">ST</div>
-                            <div>
-                                <div class="lp-live__artist-name">Sékou Traoré</div>
-                                <div class="lp-live__artist-tag">SET MODULAIRE — AMBIENT / DRONE</div>
-                            </div>
-                        </div>
-
-                    </div>{# /.lp-live__video #}
-
-                </div>{# /.lp-live #}
+                {# ── Colonne gauche : photo de la communauté Bazaart ── #}
+                <div class="lp-community__photo">
+                    <img src="{{ asset('images/communaute-bazaart.jpg') }}"
+                         alt="Des artistes de la communauté Bazaart"
+                         class="lp-community__photo-img"
+                         loading="lazy" decoding="async">
+                </div>
 
                 {# ── Colonne droite : fils de discussion fictifs ── #}
                 <div class="lp-threads" aria-label="Fils de discussion récents">
