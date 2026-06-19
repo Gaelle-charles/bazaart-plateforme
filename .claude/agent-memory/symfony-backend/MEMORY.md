@@ -9,3 +9,4 @@
 - [ADR-0017 ListingUrlDiscoverer](project_listing_url_discoverer.md) — Découverte URL-liste par heuristique (30 chemins FR/EN) + fallback LLM Mistral, commande app:discover-listing-urls
 - [ADR-0018 Candidature & Financement](project_adr0018_candidature_financement.md) — howToApply/fundingAmount/fundingType sur Resource+ScrapedResource, prompts enrichis, bloc "En un coup d'oeil" page détail
 - [ADR-0019 Lien candidature & logo](project_adr0019_lien_candidature_logo.md) — applicationUrl (LLM+anti-hallucination) + logoUrl (HTML parsing SSRF-safe), LogoFetcherService, badge "B" fallback, CTA split show.html.twig
+- [Interdiction cadratins](feedback_no_em_dashes.md) — RÈGLE FERME : jamais — ni – dans titres/contenus ; prompts + filet stripEmDashes() dans LlmExtractorService et OpportunityEnrichmentService
