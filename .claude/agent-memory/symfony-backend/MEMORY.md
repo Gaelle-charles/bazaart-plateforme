@@ -5,6 +5,7 @@
 - [Conventions de code](feedback_conventions.md) — PSR-12, PHPStan niveau 6, commentaires français, voters Symfony, pas de logique dans controllers
 - [Module Formation — architecture événements](project_formations_events.md) — Phase 1 livrée : CourseType/CourseEventMode enums, 7 champs Course, service validation, back-office adapté
 - [Onboarding artiste Lot 2](project_onboarding_artiste.md) — ADR-0015 Lot 2 livré : gating listener, parcours 4 étapes, migration non-destructive, email bienvenue
+- [Onboarding Lot A matching](project_onboarding_lot_a_matching.md) — ADR-0021/0022 : gating désactivé, LegalStatus enum, étape 4 = statut juridique (alertes sorties de l'onboarding)
 - [Ressourcerie ADR-0016 Lot 1](project_ressourcerie_adr0016_lot1.md) — ExperienceLevel enum, city/country sur Resource+ScrapedResource, LLM prompt enrichi, DisciplineMapperService
 - [ADR-0017 ListingUrlDiscoverer](project_listing_url_discoverer.md) — Découverte URL-liste par heuristique (30 chemins FR/EN) + fallback LLM Mistral, commande app:discover-listing-urls
 - [ADR-0018 Candidature & Financement](project_adr0018_candidature_financement.md) — howToApply/fundingAmount/fundingType sur Resource+ScrapedResource, prompts enrichis, bloc "En un coup d'oeil" page détail
