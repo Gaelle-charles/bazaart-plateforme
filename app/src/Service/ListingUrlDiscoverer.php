@@ -60,6 +60,15 @@ class ListingUrlDiscoverer
     // Évite de charger plusieurs Mo pour juste regarder si "deadline" y apparaît.
     private const BODY_INSPECT_BYTES = 30000;
 
+    // ── Taille maximale du body pour le fetch de la page d'accueil (fallback LLM) ──
+    // La page d'accueil peut peser 180 Ko+ avec sa navigation complète, ses menus
+    // multi-niveaux et ses blocs de mise en avant. 30 Ko (BODY_INSPECT_BYTES) était
+    // prévu pour le scoring heuristique (mots-clés courts) — pas pour extraire ~100
+    // liens. Une nav amputée = des liens manquants = le LLM ne voit pas la bonne page.
+    // On monte à 400 Ko pour couvrir les sites culturels les plus denses en markup.
+    // Garde : le stream est toujours borné — on ne charge jamais en mémoire illimitée.
+    private const HOMEPAGE_FETCH_BYTES = 400000;
+
     // ── Nombre maximum de redirections HTTP suivies ────────────────────────────
     // Réduit à 3 (était 5) pour limiter la surface d'attaque SSRF :
     // un domaine public pourrait rediriger vers une IP interne via une chaîne longue.
@@ -174,15 +183,16 @@ class ListingUrlDiscoverer
         private readonly HttpClientInterface $httpClient,
         // Repository des sources — pour la déduplication avant création
         private readonly ScrapingSourceRepository $scrapingSourceRepository,
-        // Service LLM — pour le fallback si l'heuristique échoue (Mistral ou Anthropic).
-        // On réutilise cleanHtml() (méthode publique) pour nettoyer le HTML avant LLM.
-        private readonly LlmExtractorService $llmExtractorService,
         // EntityManager — pour persister les nouvelles ScrapingSource
         private readonly EntityManagerInterface $em,
         // Logger PSR-3 — pour tracer sans interrompre
         private readonly LoggerInterface $logger,
         // SettingService — pour lire les clés API LLM depuis la BDD (même config que LlmExtractorService)
         private readonly SettingService $settingService,
+        // LinkExtractorService — pour extraire les liens internes de la page d'accueil
+        // (correctif ADR-0017 : le LLM reçoit une liste de liens, pas du texte nettoyé ;
+        //  on utilise extractInternalLinks() et normalizeUrl())
+        private readonly LinkExtractorService $linkExtractorService,
     ) {
     }
 
@@ -258,7 +268,13 @@ class ListingUrlDiscoverer
             'site' => $siteUrl,
         ]);
 
-        $listingUrl = $this->runLlmFallback($baseUrl);
+        // $llmDebugSteps collecte les étapes-clés du chemin LLM pour le diagnostic verbeux.
+        // Ce tableau est passé par référence à runLlmFallback() qui l'enrichit au fil
+        // du traitement. Il est ensuite transmis au DiscoveryResult pour affichage en -v.
+        /** @var string[] $llmDebugSteps */
+        $llmDebugSteps = [];
+
+        $listingUrl = $this->runLlmFallback($baseUrl, $llmDebugSteps);
 
         if ($listingUrl !== null) {
             // ── AV-1 : valider l'URL LLM par une vraie requête HTTP ───────────
@@ -275,6 +291,8 @@ class ListingUrlDiscoverer
                     'site'       => $siteUrl,
                     'listingUrl' => $listingUrl,
                 ]);
+                // Ajout d'une étape de diagnostic : rejet HTTP de l'URL LLM
+                $llmDebugSteps[] = sprintf('URL LLM rejetée : injoignable, non sûre ou non-HTML (%s)', $listingUrl);
                 // On traite ce cas comme "aucune URL trouvée" — pas de persistance
                 $listingUrl = null;
             } else {
@@ -283,6 +301,7 @@ class ListingUrlDiscoverer
                     'listingUrl' => $listingUrl,
                     'score'      => $llmScore,
                 ]);
+                $llmDebugSteps[] = sprintf('URL LLM validée HTTP (score listing : %d) : %s', $llmScore, $listingUrl);
                 $sourceId = $this->persistIfNew($listingUrl, $nomSite, $paysZone, $dryRun);
                 return new DiscoveryResult(
                     siteUrl: $siteUrl,
@@ -291,6 +310,7 @@ class ListingUrlDiscoverer
                     sourceId: $sourceId,
                     nom: $nomSite,
                     reason: $sourceId === -1 ? 'doublon (URL déjà en BDD)' : 'créé',
+                    debugSteps: $llmDebugSteps,
                 );
             }
         }
@@ -312,6 +332,7 @@ class ListingUrlDiscoverer
             sourceId: null,
             nom: $nomSite,
             reason: 'aucune URL-liste détectée (heuristique + LLM)',
+            debugSteps: $llmDebugSteps,
         );
     }
 
@@ -492,10 +513,19 @@ class ListingUrlDiscoverer
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
+     * Nombre maximum de liens internes à envoyer au LLM dans le prompt.
+     *
+     * 120 liens × ~60 chars en moyenne ≈ 7200 chars — raisonnable pour un prompt Mistral.
+     * On plafonne pour maîtriser le coût en tokens sur des sites avec des menus très denses.
+     */
+    private const LLM_MAX_INTERNAL_LINKS = 120;
+
+    /**
      * Télécharge la page d'accueil et demande au LLM l'URL de la page-liste.
      *
-     * On passe au LLM le HTML nettoyé de la page d'accueil et on lui demande
-     * d'identifier l'URL qui liste les appels à candidatures/bourses/résidences.
+     * CORRECTIF ADR-0017 — Nouvelle approche (au lieu de cleanHtml()) :
+     *   On extrait les liens INTERNES de la page d'accueil via LinkExtractorService
+     *   et on donne au LLM une liste "texte ancre -> URL" à choisir.
      *
      * POURQUOI la page d'accueil (et non le sitemap) ?
      *   - Le sitemap peut être très volumineux (milliers d'URLs → coûteux en tokens)
@@ -503,15 +533,25 @@ class ListingUrlDiscoverer
      *     importantes, dont la page-liste des opportunités
      *   - La page d'accueil est toujours disponible (pas de sitemap sur tous les sites)
      *
-     * On réutilise LlmExtractorService::cleanHtml() (méthode publique depuis ADR-0016 Lot 1)
-     * pour nettoyer le HTML AVANT de l'envoyer au LLM (supprime scripts, styles, nav, etc.)
+     * FIX DIAGNOSTIC (ADR-0017 améliorations) :
+     *   $debugSteps est passé par référence et enrichi à chaque étape-clé du chemin LLM.
+     *   Cela permet à discoverForSite() de transmettre ces étapes au DiscoveryResult,
+     *   et à DiscoverListingUrlsCommand de les afficher en mode --verbose (-v).
+     *   Exemple de sortie :
+     *     [VERBOSE] Page d'accueil récupérée (42 300 octets)
+     *     [VERBOSE] 45 liens internes extraits
+     *     [VERBOSE] LLM a renvoyé : https://example.com/appels
+     *     [VERBOSE] URL LLM rejetée : hors-liste (hallucination)
      *
-     * @param string $baseUrl Base URL (ex: "https://institutfrancais.com")
+     * @param string   $baseUrl     Base URL (ex: "https://institutfrancais.com")
+     * @param string[] $debugSteps  Tableau collectant les étapes de diagnostic (passé par référence)
      * @return string|null URL de la page-liste si trouvée, null sinon
      */
-    private function runLlmFallback(string $baseUrl): ?string
+    private function runLlmFallback(string $baseUrl, array &$debugSteps): ?string
     {
         // ── Étape A : télécharger la page d'accueil ───────────────────────────
+        // fetchHomepage() utilise HOMEPAGE_FETCH_BYTES (400 Ko) pour avoir la navigation
+        // complète — voir commentaire dans fetchHomepage() pour le détail.
         $html = $this->fetchHomepage($baseUrl);
 
         if ($html === null) {
@@ -519,41 +559,96 @@ class ListingUrlDiscoverer
             $this->logger->warning('[ListingDiscoverer] Page d\'accueil inaccessible, LLM ignoré.', [
                 'baseUrl' => $baseUrl,
             ]);
+            // Étape de diagnostic : le fetch a échoué
+            $debugSteps[] = 'Page d\'accueil inaccessible (HTTP non-200, SSRF bloqué, ou timeout)';
             return null;
         }
 
-        // ── Étape B : nettoyer le HTML via LlmExtractorService::cleanHtml() ──
-        // On réutilise la méthode publique de LlmExtractorService (ADR-0016 Lot 1).
-        // Cette méthode supprime scripts/styles/nav/footer et normalise les espaces.
-        // On passe une limite de 8000 chars (moins que l'extraction d'opps car on
-        // cherche juste un lien de navigation, pas du contenu détaillé).
-        $cleanText = $this->llmExtractorService->cleanHtml($html, maxLength: 8000);
+        // Étape de diagnostic : on note la taille du HTML récupéré
+        // Cela permet de vérifier que la navigation complète est bien présente (> 30 Ko)
+        $htmlBytes = strlen($html);
+        $debugSteps[] = sprintf('Page d\'accueil récupérée (%s octets)', number_format($htmlBytes, 0, ',', ' '));
 
-        if (empty($cleanText)) {
-            $this->logger->warning('[ListingDiscoverer] HTML vide après nettoyage, LLM ignoré.', [
+        $this->logger->info('[ListingDiscoverer] Page d\'accueil récupérée.', [
+            'baseUrl'  => $baseUrl,
+            'octets'   => $htmlBytes,
+        ]);
+
+        // ── Étape B : extraire les liens INTERNES de la page d'accueil ────────
+        //
+        // CORRECTIF ADR-0017 — Ancienne approche (bug) :
+        //   On passait LlmExtractorService::cleanHtml() au LLM.
+        //   cleanHtml() supprime tous les <a href> via strip_tags() → le LLM ne voyait
+        //   aucune URL et ne pouvait pas désigner la page-liste → retournait null.
+        //
+        // Nouvelle approche :
+        //   On extrait la LISTE DES LIENS INTERNES (texte ancre + href absolu) via
+        //   LinkExtractorService::extractInternalLinks(). Le LLM reçoit une liste
+        //   "texte ancre -> https://..." et CHOISIT parmi les URLs fournies.
+        //   L'URL retournée DOIT figurer dans la liste — anti-hallucination garanti.
+        //
+        // On filtre : même domaine, pas d'assets (.jpg/.pdf/.css/.js), dédup par URL.
+        $internalLinks = $this->linkExtractorService->extractInternalLinks(
+            $html,
+            $baseUrl,
+            self::LLM_MAX_INTERNAL_LINKS
+        );
+
+        // Étape de diagnostic : nombre de liens internes trouvés
+        // Si 0 → SPA JS sans <a href> statiques, ou page très légère
+        // Si > 0 → le LLM a des candidats à analyser
+        $nbLinks = count($internalLinks);
+        $debugSteps[] = sprintf('%d lien(s) interne(s) extrait(s) de la page d\'accueil', $nbLinks);
+
+        if (empty($internalLinks)) {
+            // Aucun lien interne exploitable — le site utilise peut-être du JS pur
+            // (SPA React/Vue) sans <a href> dans le HTML statique.
+            $this->logger->warning('[ListingDiscoverer] Aucun lien interne trouvé, LLM ignoré.', [
                 'baseUrl' => $baseUrl,
             ]);
             return null;
         }
 
+        $this->logger->info('[ListingDiscoverer] Liens internes extraits pour le LLM.', [
+            'baseUrl'  => $baseUrl,
+            'nb_liens' => $nbLinks,
+        ]);
+
         // ── Étape C : interroger le LLM pour trouver l'URL-liste ─────────────
-        // On délègue à une méthode dédiée qui gère Mistral (principal) + Anthropic (fallback)
-        return $this->askLlmForListingUrl($baseUrl, $cleanText);
+        // On délègue à une méthode dédiée qui gère Mistral (principal) + Anthropic (fallback).
+        // On passe $internalLinks séparément pour que askLlmForListingUrl() construise
+        // la liste "texte -> URL" dans le prompt ET effectue la validation anti-hallucination.
+        // $debugSteps est transmis pour que askLlmForListingUrl() y ajoute ses propres étapes.
+        return $this->askLlmForListingUrl($baseUrl, $internalLinks, $debugSteps);
     }
 
     /**
-     * Télécharge la page d'accueil d'un site.
+     * Télécharge la page d'accueil d'un site avec une limite élargie (HOMEPAGE_FETCH_BYTES).
+     *
+     * POURQUOI une limite différente de BODY_INSPECT_BYTES ?
+     *   BODY_INSPECT_BYTES (30 Ko) est dimensionné pour le scoring heuristique
+     *   (détecter une poignée de mots-clés dans le texte). La page d'accueil utilisée
+     *   par le fallback LLM a un tout autre rôle : fournir les liens de navigation
+     *   complets à extractInternalLinks(). Une page culturelle peut avoir 180 Ko de
+     *   markup pour sa navigation (menus multi-niveaux, blocs "nos actions", etc.).
+     *   Avec 30 Ko, la navigation est amputée → le LLM ne voit pas le bon lien.
+     *   HOMEPAGE_FETCH_BYTES (400 Ko) garantit qu'on capture la navigation entière
+     *   tout en restant borné (pas de chargement mémoire illimité).
      *
      * Essaie d'abord l'URL de base (ex: "https://institutfrancais.com"),
      * puis avec "/fr" (variante fréquente des sites multilingues).
      *
+     * Toutes les gardes SSRF de doFetch() s'appliquent normalement.
+     *
      * @param string $baseUrl URL de base du site
-     * @return string|null HTML de la page d'accueil, ou null si inaccessible
+     * @return string|null HTML de la page d'accueil (jusqu'à HOMEPAGE_FETCH_BYTES octets), ou null si inaccessible
      */
     private function fetchHomepage(string $baseUrl): ?string
     {
         // ── Tentative principale : URL de base ────────────────────────────────
-        $html = $this->doFetch($baseUrl);
+        // On passe HOMEPAGE_FETCH_BYTES (400 Ko) au lieu de la valeur par défaut
+        // (BODY_INSPECT_BYTES = 30 Ko) pour avoir la navigation complète.
+        $html = $this->doFetch($baseUrl, self::HOMEPAGE_FETCH_BYTES);
 
         if ($html !== null) {
             return $html;
@@ -562,23 +657,29 @@ class ListingUrlDiscoverer
         // ── Tentative alternative : sous-dossier /fr (sites multilingues) ─────
         // Certains sites redirigent la racine vers /fr ou /en — on teste /fr
         // car Bazaart cible principalement les sites francophones.
-        return $this->doFetch($baseUrl . '/fr');
+        return $this->doFetch($baseUrl . '/fr', self::HOMEPAGE_FETCH_BYTES);
     }
 
     /**
-     * Effectue une requête HTTP GET simple et retourne les premiers BODY_INSPECT_BYTES
+     * Effectue une requête HTTP GET simple et retourne les premiers $maxBytes
      * octets du HTML, ou null si la page est inaccessible / non sûre.
      *
-     * Changements de sécurité (ADR-0017 correctifs) :
+     * Le paramètre $maxBytes permet d'ajuster la limite de lecture selon le contexte :
+     *   - BODY_INSPECT_BYTES (30 000)  pour le scoring heuristique (mots-clés courts)
+     *   - HOMEPAGE_FETCH_BYTES (400 000) pour le fetch de la page d'accueil du LLM,
+     *     où on a besoin de la navigation complète pour extraire tous les liens internes.
+     *
+     * Toutes les gardes SSRF sont maintenues indépendamment du $maxBytes :
      *   - Garde SSRF avant la requête (isSafeHost sur l'URL cible)
      *   - Vérification de l'URL effective après redirections (SSRF via redirect)
-     *   - Lecture partielle via stream (fread BODY_INSPECT_BYTES) pour limiter la mémoire
+     *   - Lecture via stream borné (pas de téléchargement illimité)
      *   - max_redirects réduit à MAX_REDIRECTS (3)
      *
-     * @param string $url URL à télécharger
+     * @param string $url      URL à télécharger
+     * @param int    $maxBytes Nombre maximum d'octets à lire (défaut : BODY_INSPECT_BYTES)
      * @return string|null HTML partiel retourné, ou null si HTTP non-200 / hôte non sûr / exception
      */
-    private function doFetch(string $url): ?string
+    private function doFetch(string $url, int $maxBytes = self::BODY_INSPECT_BYTES): ?string
     {
         // ── Garde SSRF : vérifier l'hôte AVANT toute requête ─────────────────
         if (!$this->isSafeHost($url)) {
@@ -618,20 +719,21 @@ class ListingUrlDiscoverer
                 return null;
             }
 
-            // ── Lecture partielle via stream (AV-3) ───────────────────────────
-            // On lit seulement les premiers BODY_INSPECT_BYTES octets.
-            // Raison : la page d'accueil peut peser plusieurs Mo (images inline, scripts)
-            // mais le LLM n'a besoin que du texte de navigation — cleanHtml() tronquera
-            // de toute façon à 8000 chars. On évite de charger tout le body en mémoire.
+            // ── Lecture partielle via stream ───────────────────────────────────
+            // On lit jusqu'à $maxBytes octets maximum.
+            // stream() lit chunk par chunk → la mémoire consommée est bornée même
+            // si la page fait plusieurs Mo (images inline, scripts).
+            // cancel() stoppe le téléchargement réseau dès qu'on a assez.
             $html = '';
             foreach ($this->httpClient->stream($response) as $chunk) {
                 $html .= $chunk->getContent();
-                if (strlen($html) >= self::BODY_INSPECT_BYTES) {
+                if (strlen($html) >= $maxBytes) {
                     $response->cancel();
                     break;
                 }
             }
-            $html = substr($html, 0, self::BODY_INSPECT_BYTES);
+            // Tronquer au cas où le dernier chunk dépasserait légèrement $maxBytes
+            $html = substr($html, 0, $maxBytes);
 
             return empty(trim($html)) ? null : $html;
 
@@ -643,53 +745,100 @@ class ListingUrlDiscoverer
     /**
      * Interroge le LLM (Mistral principal, Anthropic fallback) pour trouver l'URL-liste.
      *
-     * PROMPT DÉDIÉ :
-     *   Différent du prompt discoverSources (qui cherche des organismes dans une LISTE DE LIENS)
-     *   et de extractFromHtml (qui cherche des opportunités dans une page).
-     *   Ici : on donne le texte d'une page d'accueil et on demande UNE SEULE URL
-     *   — la page qui liste les appels à candidatures/bourses/résidences.
+     * PROMPT DÉDIÉ (correctif ADR-0017) :
+     *   On fournit au LLM une LISTE DE LIENS internes (texte ancre -> URL) extraite de
+     *   la page d'accueil, et on lui demande de CHOISIR l'URL qui mène à la page-liste
+     *   des opportunités. Le LLM ne doit PAS inventer une URL — il DOIT choisir parmi
+     *   les URLs fournies.
      *
      * FORMAT DE RÉPONSE :
      *   On demande {"listing_url": "https://..."} pour un parsing simple et robuste.
-     *   Si le LLM ne trouve pas, il retourne {"listing_url": null}.
+     *   Si le LLM ne trouve pas de lien adapté dans la liste, il retourne {"listing_url": null}.
      *
-     * @param string $baseUrl   URL de base (pour logger et mettre en contexte le LLM)
-     * @param string $cleanText Texte nettoyé de la page d'accueil
-     * @return string|null URL-liste si trouvée, null sinon
+     * ANTI-HALLUCINATION :
+     *   L'URL retournée par le LLM est vérifiée en PHP contre la liste $internalLinks.
+     *   Si elle n'y figure pas (URL inventée hors-liste), elle est rejetée.
+     *   Voir extractListingUrlFromJson() pour la validation.
+     *
+     * @param string                                         $baseUrl       URL de base du site
+     * @param array<int, array{text: string, url: string}>  $internalLinks Liens internes extraits de la homepage
+     * @param string[]                                       $debugSteps    Étapes de diagnostic (passées par référence)
+     * @return string|null URL-liste si trouvée et validée, null sinon
      */
-    private function askLlmForListingUrl(string $baseUrl, string $cleanText): ?string
+    private function askLlmForListingUrl(string $baseUrl, array $internalLinks, array &$debugSteps): ?string
     {
+        // ── Construire la liste "texte ancre -> URL" à envoyer au LLM ──────────
+        // On formate chaque lien sur une ligne : "Texte ancre -> https://..."
+        // Le LLM doit retourner UNE des URLs exactes de cette liste.
+        $linkLines = [];
+        foreach ($internalLinks as $link) {
+            // Tronquer le texte ancre à 80 chars pour limiter la taille du prompt
+            // (les ancres trop longues sont souvent du bruit — classes CSS inline, etc.)
+            $text = mb_substr(trim($link['text']), 0, 80);
+            // Si l'ancre est vide (lien image sans alt-text), on met un placeholder
+            if ($text === '') {
+                $text = '[lien sans texte]';
+            }
+            $linkLines[] = sprintf('%s -> %s', $text, $link['url']);
+        }
+
+        $linkList = implode("\n", $linkLines);
+
+        // ── Construire la liste des URLs valides pour la validation anti-hallucination ──
+        // On construit un tableau indexé par URL normalisée pour une recherche O(1) rapide.
+        // La normalisation (https, minuscules, sans www., sans slash final) est faite
+        // pour tolérer des micro-variations dans la réponse LLM.
+        /** @var array<string, string> $validUrlsMap  normalizedUrl => urlOriginale */
+        $validUrlsMap = [];
+        foreach ($internalLinks as $link) {
+            // Clé de lookup : URL normalisée (sans query, fragment, slash final)
+            $normalized = $this->linkExtractorService->normalizeUrl($link['url']);
+            $validUrlsMap[$normalized] = $link['url'];
+        }
+
+        // ── Prompt système ────────────────────────────────────────────────────
+        // On insiste fortement sur "choisis dans la liste fournie" pour éviter
+        // que le LLM hallucine une URL non présente.
         $systemPrompt = <<<'PROMPT'
-Tu es un expert en ressources culturelles. On te donne le contenu textuel de la page d'accueil d'un site d'institution culturelle.
+Tu es un expert en ressources culturelles pour artistes.
 
-Ta mission : identifier l'URL EXACTE de la page qui LISTE les opportunités pour artistes (appels à candidatures, appels à projets, bourses, résidences artistiques, prix, financements).
+On te fournit la LISTE DES LIENS de la page d'accueil d'un site d'institution culturelle.
+Chaque ligne a le format : "Texte du lien -> URL"
 
-La page-liste est celle qui répertorie PLUSIEURS opportunités différentes — pas une opportunité individuelle.
+Ta mission : identifier PARMI CETTE LISTE l'URL de la page qui LISTE plusieurs opportunités pour artistes (appels à candidatures, appels à projets, bourses, résidences artistiques, prix, financements).
 
-Retourne uniquement un objet JSON avec ce format :
-{"listing_url": "https://exemple.com/page-liste-opportunites"}
+RÈGLES ABSOLUES :
+- Retourne UNIQUEMENT une URL qui figure EXACTEMENT dans la liste fournie.
+- N'invente PAS d'URL, ne modifie PAS les URLs de la liste.
+- La page cible doit LISTER plusieurs opportunités (pas une seule opportunité individuelle).
+- Si aucun lien de la liste ne semble mener à une page-liste d'opportunités, retourne null.
 
-Si le site ne semble pas avoir de telle page, ou si tu ne peux pas identifier l'URL avec confiance, retourne :
+Format de réponse (JSON uniquement, sans texte autour) :
+{"listing_url": "https://url-exacte-de-la-liste"}
+
+ou si aucun lien ne convient :
 {"listing_url": null}
-
-Ne retourne que le JSON, sans texte autour.
 PROMPT;
 
+        // ── Message utilisateur : contexte + liste des liens ──────────────────
         $userMessage = sprintf(
-            "Site analysé : %s\n\nContenu de la page d'accueil :\n%s",
+            "Site analysé : %s\n\nListe des liens de la page d'accueil (%d liens) :\n%s",
             $baseUrl,
-            $cleanText
+            count($internalLinks),
+            $linkList
         );
 
-        // Essayer Mistral en premier (moins cher, JSON natif garanti)
-        $urlFromMistral = $this->callMistralForListingUrl($systemPrompt, $userMessage, $baseUrl);
+        // ── Essayer Mistral en premier (moins cher, JSON natif garanti) ────────
+        // On passe $debugSteps par référence pour que callMistralForListingUrl() y ajoute
+        // l'URL brute retournée par le LLM avant validation (ou la raison du rejet).
+        $urlFromMistral = $this->callMistralForListingUrl($systemPrompt, $userMessage, $baseUrl, $validUrlsMap, $debugSteps);
 
         if ($urlFromMistral !== null) {
             return $urlFromMistral;
         }
 
-        // Fallback Anthropic si Mistral échoue ou n'a pas de clé
-        return $this->callAnthropicForListingUrl($systemPrompt, $userMessage, $baseUrl);
+        // ── Fallback Anthropic si Mistral échoue ou n'a pas de clé ────────────
+        return $this->callAnthropicForListingUrl($systemPrompt, $userMessage, $baseUrl, $validUrlsMap, $debugSteps);
     }
 
     /**
@@ -706,15 +855,19 @@ PROMPT;
      *   Ce nouveau cas d'usage (trouver UNE URL-liste) a son propre format de réponse
      *   {"listing_url": ...} — on l'implémente ici en suivant exactement le même pattern.
      *
-     * @param string $systemPrompt Prompt système
-     * @param string $userMessage  Message utilisateur (texte de la page d'accueil)
-     * @param string $baseUrl      URL de base (pour les logs uniquement)
-     * @return string|null URL-liste si trouvée, null si erreur ou absente
+     * @param string               $systemPrompt  Prompt système
+     * @param string               $userMessage   Message utilisateur (liste des liens)
+     * @param string               $baseUrl       URL de base (pour les logs uniquement)
+     * @param array<string,string> $validUrlsMap  Map normalizedUrl → urlOriginale (anti-hallucination)
+     * @param string[]             $debugSteps    Étapes de diagnostic (passées par référence)
+     * @return string|null URL-liste si trouvée et validée, null si erreur ou absente
      */
     private function callMistralForListingUrl(
         string $systemPrompt,
         string $userMessage,
         string $baseUrl,
+        array $validUrlsMap,
+        array &$debugSteps,
     ): ?string {
         // Lire la clé API Mistral depuis les settings BDD (table app_settings)
         $apiKey = $this->settingService->get('mistral_api_key');
@@ -722,6 +875,7 @@ PROMPT;
         if (empty($apiKey)) {
             // Pas de clé Mistral — on passe directement au fallback Anthropic
             $this->logger->debug('[ListingDiscoverer] Clé Mistral absente, skip Mistral.', ['url' => $baseUrl]);
+            $debugSteps[] = 'Mistral ignoré : clé API absente en BDD (table app_settings)';
             return null;
         }
 
@@ -752,6 +906,7 @@ PROMPT;
                     'status' => $response->getStatusCode(),
                     'url'    => $baseUrl,
                 ]);
+                $debugSteps[] = sprintf('Mistral : erreur HTTP %d', $response->getStatusCode());
                 return null;
             }
 
@@ -760,17 +915,26 @@ PROMPT;
             $rawText = $data['choices'][0]['message']['content'] ?? '';
 
             if (empty($rawText)) {
+                $debugSteps[] = 'Mistral : réponse vide (content absent)';
                 return null;
             }
 
+            // Étape de diagnostic : on trace la réponse brute du LLM AVANT validation.
+            // Cela permet de voir en -v si le LLM a retourné une URL plausible
+            // qui a ensuite été rejetée (hallucination hors-liste, SSRF, etc.)
+            $debugSteps[] = sprintf('Mistral a renvoyé (brut) : %s', mb_substr($rawText, 0, 200));
+
             // Parser le JSON retourné par Mistral : {"listing_url": "..."}
-            return $this->extractListingUrlFromJson($rawText, $baseUrl, 'mistral');
+            // On passe $validUrlsMap pour la validation anti-hallucination.
+            // On passe $debugSteps pour que l'extracteur y ajoute le motif de rejet.
+            return $this->extractListingUrlFromJson($rawText, $baseUrl, 'mistral', $validUrlsMap, $debugSteps);
 
         } catch (\Throwable $e) {
             $this->logger->warning('[ListingDiscoverer] Erreur Mistral.', [
                 'url'   => $baseUrl,
                 'error' => $e->getMessage(),
             ]);
+            $debugSteps[] = sprintf('Mistral : exception réseau/API — %s', $e->getMessage());
             return null;
         }
     }
@@ -783,20 +947,25 @@ PROMPT;
      *   - Réponse dans $data['content'][0]['text']
      *   - Extraction JSON par recherche de '{' … '}' (Anthropic ne garantit pas json_object)
      *
-     * @param string $systemPrompt Prompt système
-     * @param string $userMessage  Message utilisateur
-     * @param string $baseUrl      URL de base (pour les logs uniquement)
-     * @return string|null URL-liste si trouvée, null si erreur ou absente
+     * @param string               $systemPrompt  Prompt système
+     * @param string               $userMessage   Message utilisateur
+     * @param string               $baseUrl       URL de base (pour les logs uniquement)
+     * @param array<string,string> $validUrlsMap  Map normalizedUrl → urlOriginale (anti-hallucination)
+     * @param string[]             $debugSteps    Étapes de diagnostic (passées par référence)
+     * @return string|null URL-liste si trouvée et validée, null si erreur ou absente
      */
     private function callAnthropicForListingUrl(
         string $systemPrompt,
         string $userMessage,
         string $baseUrl,
+        array $validUrlsMap,
+        array &$debugSteps,
     ): ?string {
         $apiKey = $this->settingService->get('anthropic_api_key');
 
         if (empty($apiKey)) {
             $this->logger->debug('[ListingDiscoverer] Clé Anthropic absente, skip.', ['url' => $baseUrl]);
+            $debugSteps[] = 'Anthropic ignoré : clé API absente en BDD (table app_settings)';
             return null;
         }
 
@@ -823,6 +992,7 @@ PROMPT;
                     'status' => $response->getStatusCode(),
                     'url'    => $baseUrl,
                 ]);
+                $debugSteps[] = sprintf('Anthropic : erreur HTTP %d', $response->getStatusCode());
                 return null;
             }
 
@@ -831,6 +1001,7 @@ PROMPT;
             $rawText = $data['content'][0]['text'] ?? '';
 
             if (empty($rawText)) {
+                $debugSteps[] = 'Anthropic : réponse vide (content absent)';
                 return null;
             }
 
@@ -842,34 +1013,58 @@ PROMPT;
                 $rawText = substr($rawText, $start, $end - $start + 1);
             }
 
-            return $this->extractListingUrlFromJson($rawText, $baseUrl, 'anthropic');
+            // Étape de diagnostic : réponse brute de l'Anthropic AVANT validation
+            $debugSteps[] = sprintf('Anthropic a renvoyé (brut) : %s', mb_substr($rawText, 0, 200));
+
+            // On passe $validUrlsMap pour la validation anti-hallucination.
+            // On passe $debugSteps pour que l'extracteur y ajoute le motif de rejet.
+            return $this->extractListingUrlFromJson($rawText, $baseUrl, 'anthropic', $validUrlsMap, $debugSteps);
 
         } catch (\Throwable $e) {
             $this->logger->warning('[ListingDiscoverer] Erreur Anthropic.', [
                 'url'   => $baseUrl,
                 'error' => $e->getMessage(),
             ]);
+            $debugSteps[] = sprintf('Anthropic : exception réseau/API — %s', $e->getMessage());
             return null;
         }
     }
 
     /**
-     * Extrait l'URL-liste depuis le JSON retourné par le LLM.
+     * Extrait et valide l'URL-liste depuis le JSON retourné par le LLM.
      *
      * Format attendu : {"listing_url": "https://..."}
      * Si listing_url est null (LLM ne sait pas) → retourne null.
      * Si le JSON est invalide → retourne null + log.
      *
-     * Validation supplémentaire : on vérifie que l'URL est valide (filter_var)
-     * pour ne pas persister une URL inventée par le LLM.
+     * Validations dans l'ordre :
+     *   1. JSON valide (sinon log + null)
+     *   2. Champ listing_url non vide
+     *   3. filter_var FILTER_VALIDATE_URL — URL bien formée
+     *   4. isSafeHost() — garde SSRF
+     *   5. Appartenance à $validUrlsMap — anti-hallucination
+     *      Si le LLM retourne une URL qui n'était PAS dans la liste fournie,
+     *      on la rejette. Cette garde est critique : le prompt demande explicitement
+     *      au LLM de choisir dans la liste, mais les LLM peuvent quand même halluciner.
      *
-     * @param string $jsonText  JSON brut retourné par le LLM
-     * @param string $baseUrl   URL de base (pour les logs uniquement)
-     * @param string $provider  "mistral" ou "anthropic" (pour les logs uniquement)
-     * @return string|null URL-liste validée, ou null
+     * On retourne l'URL ORIGINALE (non normalisée) issue de $validUrlsMap si disponible,
+     * ou l'URL retournée par le LLM sinon (pour les cas où $validUrlsMap est vide,
+     * ce qui ne devrait pas arriver en pratique).
+     *
+     * @param string               $jsonText     JSON brut retourné par le LLM
+     * @param string               $baseUrl      URL de base (pour les logs uniquement)
+     * @param string               $provider     "mistral" ou "anthropic" (pour les logs uniquement)
+     * @param array<string,string> $validUrlsMap Map normalizedUrl → urlOriginale (anti-hallucination)
+     * @param string[]             $debugSteps   Étapes de diagnostic (passées par référence)
+     * @return string|null URL-liste validée (originale, non normalisée), ou null
      */
-    private function extractListingUrlFromJson(string $jsonText, string $baseUrl, string $provider): ?string
-    {
+    private function extractListingUrlFromJson(
+        string $jsonText,
+        string $baseUrl,
+        string $provider,
+        array $validUrlsMap,
+        array &$debugSteps,
+    ): ?string {
         try {
             /** @var array<string, string|null> $decoded */
             $decoded    = json_decode($jsonText, associative: true, flags: JSON_THROW_ON_ERROR);
@@ -881,11 +1076,12 @@ PROMPT;
                     'provider' => $provider,
                     'site'     => $baseUrl,
                 ]);
+                $debugSteps[] = sprintf('%s : listing_url = null (aucun lien ne convient selon le LLM)', ucfirst($provider));
                 return null;
             }
 
-            // Valider que l'URL retournée par le LLM est bien formée
-            // Le LLM peut parfois inventer des URLs qui n'existent pas
+            // ── Validation 3 : URL bien formée ───────────────────────────────
+            // Le LLM peut parfois retourner des URLs mal formées (espaces, guillemets…)
             $listingUrl = trim((string) $listingUrl);
             if (!filter_var($listingUrl, FILTER_VALIDATE_URL)) {
                 $this->logger->warning('[ListingDiscoverer] LLM a retourné une URL invalide.', [
@@ -893,10 +1089,11 @@ PROMPT;
                     'site'     => $baseUrl,
                     'url'      => $listingUrl,
                 ]);
+                $debugSteps[] = sprintf('%s : URL mal formée rejetée — "%s"', ucfirst($provider), $listingUrl);
                 return null;
             }
 
-            // ── Garde SSRF sur l'URL retournée par le LLM ────────────────────
+            // ── Validation 4 : garde SSRF sur l'URL retournée par le LLM ─────
             // Un LLM pourrait être manipulé (prompt injection dans le HTML de la page
             // d'accueil) pour retourner une URL interne comme http://169.254.169.254
             // ou http://192.168.1.1. On rejette immédiatement ces cas.
@@ -906,9 +1103,54 @@ PROMPT;
                     'site'     => $baseUrl,
                     'url'      => $listingUrl,
                 ]);
+                $debugSteps[] = sprintf('%s : URL rejetée (SSRF — hôte non sûr) : %s', ucfirst($provider), $listingUrl);
                 return null;
             }
 
+            // ── Validation 5 : anti-hallucination — l'URL DOIT être dans la liste ──
+            // On normalise l'URL LLM de la même façon que les URLs de la liste
+            // (LinkExtractorService::normalizeUrl : https, minuscules, sans www., sans slash final)
+            // pour tolérer des micro-variations (slash final, casse, www.) tout en rejetant
+            // les URLs inventées qui n'existent pas dans le HTML de la page d'accueil.
+            if (!empty($validUrlsMap)) {
+                $normalizedLlmUrl = $this->linkExtractorService->normalizeUrl($listingUrl);
+
+                if (!isset($validUrlsMap[$normalizedLlmUrl])) {
+                    // L'URL retournée par le LLM n'est pas dans la liste fournie — hallucination !
+                    $this->logger->warning('[ListingDiscoverer] URL LLM rejetée : hors-liste (hallucination possible).', [
+                        'provider'        => $provider,
+                        'site'            => $baseUrl,
+                        'url_llm'         => $listingUrl,
+                        'url_normalisee'  => $normalizedLlmUrl,
+                        'nb_urls_valides' => count($validUrlsMap),
+                    ]);
+                    $debugSteps[] = sprintf(
+                        '%s : URL rejetée (hors-liste / hallucination) : %s → normalisée : %s (%d URLs valides dans la liste)',
+                        ucfirst($provider),
+                        $listingUrl,
+                        $normalizedLlmUrl,
+                        count($validUrlsMap)
+                    );
+                    return null;
+                }
+
+                // On retourne l'URL ORIGINALE de la liste (pas la version retournée par le LLM)
+                // pour garantir qu'on persiste exactement l'URL présente dans le HTML.
+                $this->logger->info('[ListingDiscoverer] LLM a désigné une URL valide de la liste.', [
+                    'provider'    => $provider,
+                    'site'        => $baseUrl,
+                    'url_choisie' => $validUrlsMap[$normalizedLlmUrl],
+                ]);
+                $debugSteps[] = sprintf(
+                    '%s : URL validée et acceptée : %s',
+                    ucfirst($provider),
+                    $validUrlsMap[$normalizedLlmUrl]
+                );
+                return $validUrlsMap[$normalizedLlmUrl];
+            }
+
+            // Fallback : $validUrlsMap vide (ne devrait pas arriver) → retourner l'URL LLM
+            $debugSteps[] = sprintf('%s : URL retournée (sans validation hors-liste) : %s', ucfirst($provider), $listingUrl);
             return $listingUrl;
 
         } catch (\JsonException $e) {
@@ -918,6 +1160,7 @@ PROMPT;
                 'error'    => $e->getMessage(),
                 'raw'      => mb_substr($jsonText, 0, 200),
             ]);
+            $debugSteps[] = sprintf('%s : JSON invalide — %s', ucfirst($provider), $e->getMessage());
             return null;
         }
     }

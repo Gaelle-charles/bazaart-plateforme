@@ -14,6 +14,14 @@ namespace App\Service;
  *   - sourceId   : null = créée (ID après flush), -1 = doublon, null = dry-run
  *   - nom        : nom lisible de la source (depuis CSV ou domaine)
  *   - reason     : explication humaine du résultat (pour le rapport de la commande)
+ *   - debugSteps : tableau d'étapes de diagnostic (vide par défaut, rempli par le
+ *                  fallback LLM pour permettre l'affichage verbeux dans la commande).
+ *                  Chaque entrée est une chaîne lisible, ex :
+ *                    "Page d'accueil récupérée (42 300 octets)"
+ *                    "45 liens internes extraits"
+ *                    "LLM a renvoyé : https://example.com/appels"
+ *                  Affichés via -v dans DiscoverListingUrlsCommand pour diagnostiquer
+ *                  exactement où bloque la découverte sur un site donné.
  *
  * IMMUABILITÉ :
  *   Propriétés readonly — les résultats d'une découverte ne doivent pas être modifiés
@@ -24,12 +32,13 @@ namespace App\Service;
 final readonly class DiscoveryResult
 {
     /**
-     * @param string      $siteUrl    URL du site analysé
-     * @param string|null $listingUrl URL de la page-liste trouvée (null = aucune)
-     * @param string      $method     Méthode utilisée : 'heuristic', 'llm', 'none'
-     * @param int|null    $sourceId   null = créée ou dry-run, -1 = doublon ignoré
-     * @param string      $nom        Nom lisible de la source
-     * @param string      $reason     Explication lisible pour le rapport
+     * @param string      $siteUrl     URL du site analysé
+     * @param string|null $listingUrl  URL de la page-liste trouvée (null = aucune)
+     * @param string      $method      Méthode utilisée : 'heuristic', 'llm', 'none'
+     * @param int|null    $sourceId    null = créée ou dry-run, -1 = doublon ignoré
+     * @param string      $nom         Nom lisible de la source
+     * @param string      $reason      Explication lisible pour le rapport
+     * @param string[]    $debugSteps  Étapes de diagnostic du chemin LLM (pour --verbose)
      */
     public function __construct(
         public string $siteUrl,
@@ -38,6 +47,7 @@ final readonly class DiscoveryResult
         public ?int $sourceId,
         public string $nom,
         public string $reason,
+        public array $debugSteps = [],
     ) {
     }
 

@@ -129,14 +129,14 @@ class DiscoverListingUrlsCommand extends Command
         $singleUrl = $input->getOption('url');
 
         if ($singleUrl !== null) {
-            return $this->processSingleUrl($singleUrl, $io, $dryRun);
+            return $this->processSingleUrl($singleUrl, $io, $output, $dryRun);
         }
 
         // ── Cas 2 : traitement depuis le CSV ──────────────────────────────────
         /** @var string $csvPath */
         $csvPath = $input->getArgument('csv-path');
 
-        return $this->processFromCsv($csvPath, $io, $dryRun, $limit);
+        return $this->processFromCsv($csvPath, $io, $output, $dryRun, $limit);
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -149,12 +149,17 @@ class DiscoverListingUrlsCommand extends Command
      * Utile pour tester la commande sur un site spécifique avant de lancer
      * un traitement complet du CSV.
      *
-     * @param string      $url    URL du site à analyser
-     * @param SymfonyStyle $io    Interface console
-     * @param bool        $dryRun Mode simulation
+     * Avec le flag -v (--verbose), les étapes de diagnostic du chemin LLM sont affichées :
+     * taille de la page d'accueil, nombre de liens extraits, réponse brute du LLM,
+     * motif de rejet éventuel (hors-liste, SSRF, URL invalide, etc.).
+     *
+     * @param string          $url    URL du site à analyser
+     * @param SymfonyStyle    $io     Interface console
+     * @param OutputInterface $output Interface de sortie (pour vérifier le niveau de verbosité)
+     * @param bool            $dryRun Mode simulation
      * @return int Code retour Symfony (SUCCESS ou FAILURE)
      */
-    private function processSingleUrl(string $url, SymfonyStyle $io, bool $dryRun): int
+    private function processSingleUrl(string $url, SymfonyStyle $io, OutputInterface $output, bool $dryRun): int
     {
         $io->text(sprintf('Analyse du site : %s', $url));
         $io->newLine();
@@ -173,8 +178,8 @@ class DiscoverListingUrlsCommand extends Command
             dryRun: $dryRun,
         );
 
-        // Afficher le résultat
-        $this->displayResult($result, $io, $dryRun);
+        // Afficher le résultat (+ diagnostic LLM en mode -v)
+        $this->displayResult($result, $io, $output, $dryRun);
 
         // Flush si une source a été créée (non dry-run)
         if (!$dryRun && $result->found() && !$result->isDuplicate()) {
@@ -206,15 +211,22 @@ class DiscoverListingUrlsCommand extends Command
      *     "https://institutfrancais.com/calls" ET "https://institutfrancais.com/grants"
      *   → on ne veut analyser institutfrancais.com qu'UNE SEULE fois.
      *
-     * @param string      $csvPath Chemin vers le CSV
-     * @param SymfonyStyle $io     Interface console
-     * @param bool        $dryRun  Mode simulation
-     * @param int|null    $limit   Nombre max de sites à traiter
+     * MODE VERBOSE (-v) :
+     *   Pour les sites où le fallback LLM a été tenté, les étapes de diagnostic
+     *   sont affichées sous chaque site (taille de la page d'accueil, nombre de
+     *   liens extraits, réponse brute du LLM, motif de rejet).
+     *
+     * @param string          $csvPath Chemin vers le CSV
+     * @param SymfonyStyle    $io      Interface console
+     * @param OutputInterface $output  Interface de sortie (pour le niveau de verbosité)
+     * @param bool            $dryRun  Mode simulation
+     * @param int|null        $limit   Nombre max de sites à traiter
      * @return int Code retour Symfony
      */
     private function processFromCsv(
         string $csvPath,
         SymfonyStyle $io,
+        OutputInterface $output,
         bool $dryRun,
         ?int $limit,
     ): int {
@@ -307,6 +319,17 @@ class DiscoverListingUrlsCommand extends Command
             } else {
                 $io->text('    <comment>Aucune URL-liste détectée</comment>');
                 $notFound++;
+            }
+
+            // ── Mode verbeux (-v) : diagnostic LLM pour ce site ──────────────
+            // En mode -v, on affiche les étapes du chemin LLM pour chaque site
+            // qui a tenté le fallback LLM (debugSteps non vide).
+            // Cela permet de voir, site par site, pourquoi la découverte a échoué
+            // (ou réussi) sans avoir à fouiller les logs du container.
+            if ($output->isVerbose() && !empty($result->debugSteps)) {
+                foreach ($result->debugSteps as $step) {
+                    $io->text(sprintf('      <comment>[LLM diagnostic]</comment> %s', $step));
+                }
             }
         }
 
@@ -477,18 +500,43 @@ class DiscoverListingUrlsCommand extends Command
     /**
      * Affiche le résultat pour un seul site (mode --url).
      *
+     * En mode verbeux (-v), affiche également les étapes de diagnostic du chemin LLM
+     * (DiscoveryResult::$debugSteps). Cela permet de voir exactement où la découverte
+     * a bloqué : fetch de la page d'accueil, extraction de liens, réponse du LLM,
+     * validation anti-hallucination, etc.
+     *
      * @param DiscoveryResult $result  Résultat de la découverte
      * @param SymfonyStyle    $io      Interface console
+     * @param OutputInterface $output  Interface de sortie (pour le niveau de verbosité)
      * @param bool            $dryRun  Mode simulation
      */
-    private function displayResult(DiscoveryResult $result, SymfonyStyle $io, bool $dryRun): void
-    {
+    private function displayResult(
+        DiscoveryResult $result,
+        SymfonyStyle $io,
+        OutputInterface $output,
+        bool $dryRun,
+    ): void {
         $io->definitionList(
             ['Site analysé'  => $result->siteUrl],
             ['URL-liste'     => $result->listingUrl ?? '(aucune)'],
             ['Méthode'       => $result->method],
             ['Statut BDD'    => $result->isDuplicate() ? 'Doublon (déjà en BDD)' : ($dryRun ? 'DRY-RUN (non persisté)' : 'Créée')],
         );
+
+        // ── Mode verbeux (-v) : afficher les étapes de diagnostic du LLM ──────
+        // $debugSteps n'est rempli que si le fallback LLM a été tenté.
+        // Il permet de diagnostiquer exactement où bloque la découverte :
+        //   - page d'accueil inaccessible (timeout, HTTP non-200, SSRF bloqué)
+        //   - nombre de liens extraits (0 = SPA JavaScript sans <a href>)
+        //   - réponse brute du LLM (hallucination ? JSON invalide ?)
+        //   - motif de rejet (hors-liste, SSRF, URL mal formée)
+        if ($output->isVerbose() && !empty($result->debugSteps)) {
+            $io->section('Diagnostic LLM (--verbose)');
+            foreach ($result->debugSteps as $step) {
+                $io->text(sprintf('  <comment>•</comment> %s', $step));
+            }
+            $io->newLine();
+        }
 
         if ($result->found() && !$dryRun && !$result->isDuplicate()) {
             $io->success(sprintf('URL-liste trouvée (%s) : %s', $result->method, $result->listingUrl));
@@ -505,6 +553,10 @@ class DiscoverListingUrlsCommand extends Command
                 'La page d\'accueil est derrière un mur de cookies ou JavaScript',
                 'Les clés API LLM (Mistral/Anthropic) ne sont pas configurées dans /admin/settings',
             ]);
+            // En mode verbeux, suggérer de chercher dans les étapes de diagnostic
+            if ($output->isVerbose() && empty($result->debugSteps)) {
+                $io->text('<comment>Note (-v) : aucune étape LLM à afficher (l\'heuristique a peut-être planté avant d\'atteindre le LLM, ou le site était inaccessible).</comment>');
+            }
         }
     }
 
