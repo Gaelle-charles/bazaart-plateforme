@@ -345,6 +345,69 @@
         opacity: .75; /* légèrement plus transparent que "Rejeté" pour différencier visuellement */
     }
 
+    /* ── Boutons de reclassement (Archive / Documentation / En faire une source) ── */
+
+    /* Bouton "Archiver" — neutre, couleur muted, signale une action irréversible */
+    .adm-btn-archive {
+        height: 30px;
+        padding: 0 10px;
+        background: var(--bg-alt);
+        color: var(--ink-mute);
+        border: 1px solid var(--ink-mute);
+        border-radius: 0;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: box-shadow var(--transition-fast);
+    }
+    .adm-btn-archive:hover {
+        box-shadow: var(--shadow-offset-sm);
+        color: var(--ink);
+        border-color: var(--ink);
+    }
+
+    /* Bouton "Documentation" — teinte bleue/neutre pour distinguer d'une validation */
+    .adm-btn-doc {
+        height: 30px;
+        padding: 0 10px;
+        background: #e8f0fe; /* bleu très pâle — signal "publication douce" */
+        color: #1a73e8;
+        border: 1px solid #1a73e8;
+        border-radius: 0;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: box-shadow var(--transition-fast);
+    }
+    .adm-btn-doc:hover { box-shadow: var(--shadow-offset-sm); }
+
+    /* Bouton "En faire une source" — orange accent pour indiquer une action structurante */
+    .adm-btn-to-source {
+        height: 30px;
+        padding: 0 10px;
+        background: var(--bg-alt);
+        color: var(--accent-2); /* orange : action importante mais pas destructive */
+        border: 1px solid var(--accent-2);
+        border-radius: 0;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: box-shadow var(--transition-fast);
+    }
+    .adm-btn-to-source:hover { box-shadow: var(--shadow-offset-sm); }
+
 </style>
 {% endblock %}
 
@@ -747,6 +810,56 @@ document.addEventListener('DOMContentLoaded', function () {
                                                value="{{ csrf_token('reject_scraped_' ~ opp.id) }}">
                                         <button type="submit" class="adm-btn-reject">✗ Rejeter</button>
                                     </form>
+
+                                    {#
+                                      ── Boutons de reclassement ────────────────────────────────────────
+                                      Ces trois actions permettent de traiter différemment une opportunité
+                                      qui ne correspond pas au flux standard "Vérifier" ou "Rejeter".
+                                    #}
+
+                                    {# Archiver : offre déjà passée ou plus pertinente — pas de publication #}
+                                    <form method="post"
+                                          action="{{ path('app_admin_scraped_opportunity_archive', {id: opp.id}) }}"
+                                          onsubmit="return confirm('Archiver « {{ opp.title|e('js') }} » comme offre passée ?')"
+                                          style="display:inline;">
+                                        <input type="hidden" name="_token"
+                                               value="{{ csrf_token('archive_scraped_' ~ opp.id) }}">
+                                        <button type="submit" class="adm-btn-archive" title="Archiver — offre passée ou plus pertinente">
+                                            ⏱ Archive
+                                        </button>
+                                    </form>
+
+                                    {#
+                                      Documentation : publie l'opportunité comme Resource de type "Documentation"
+                                      au lieu d'un appel à candidatures standard.
+                                      Utile pour les guides, articles, rapports, etc.
+                                    #}
+                                    <form method="post"
+                                          action="{{ path('app_admin_scraped_opportunity_documentation', {id: opp.id}) }}"
+                                          onsubmit="return confirm('Publier « {{ opp.title|e('js') }} » comme Documentation ?')"
+                                          style="display:inline;">
+                                        <input type="hidden" name="_token"
+                                               value="{{ csrf_token('doc_scraped_' ~ opp.id) }}">
+                                        <button type="submit" class="adm-btn-doc" title="Publier comme Documentation (guide, article, rapport)">
+                                            📄 Doc
+                                        </button>
+                                    </form>
+
+                                    {#
+                                      En faire une source : l'organisme publie régulièrement des opportunités.
+                                      Crée une ScrapingSource pour scraper ce site automatiquement à l'avenir.
+                                      Peut prendre quelques secondes (requêtes HTTP + éventuel LLM).
+                                    #}
+                                    <form method="post"
+                                          action="{{ path('app_admin_scraped_opportunity_to_source', {id: opp.id}) }}"
+                                          onsubmit="return confirm('Transformer le site de « {{ opp.title|e('js') }} » en source de scraping ? (peut prendre quelques secondes)')"
+                                          style="display:inline;">
+                                        <input type="hidden" name="_token"
+                                               value="{{ csrf_token('to_source_scraped_' ~ opp.id) }}">
+                                        <button type="submit" class="adm-btn-to-source" title="Créer une source de scraping pour cet organisme">
+                                            + Source
+                                        </button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
@@ -1061,16 +1174,13 @@ document.addEventListener('DOMContentLoaded', function () {
                                 {% endif %}
                             </td>
 
-                            {# Actions : seulement Rejeter (pas de Verifier pour une opp perimee) #}
+                            {# Actions : Rejeter + reclassements (pas de Verifier pour une opp perimee) #}
                             <td>
                                 <div class="adm-action-group">
                                     {#
                                       Bouton "Rejeter" — marque l'opp comme rejected.
                                       On reutilise la meme route que l'onglet "A verifier"
                                       (rejectScrapedOpportunity) avec le meme token CSRF.
-                                      On peut rejeter une opp "verified" seulement si elle
-                                      n'a pas encore genere de Resource publiee — le garde-fou
-                                      est dans rejectScrapedOpportunity() (garde-fou existant).
                                     #}
                                     <form method="post"
                                           action="{{ path('app_admin_scraped_opportunity_reject', {id: opp.id}) }}"
@@ -1079,6 +1189,34 @@ document.addEventListener('DOMContentLoaded', function () {
                                         <input type="hidden" name="_token"
                                                value="{{ csrf_token('reject_scraped_' ~ opp.id) }}">
                                         <button type="submit" class="adm-btn-reject">Rejeter</button>
+                                    </form>
+
+                                    {# Archiver : deadline passée, on formalise l'archivage manuellement #}
+                                    <form method="post"
+                                          action="{{ path('app_admin_scraped_opportunity_archive', {id: opp.id}) }}"
+                                          onsubmit="return confirm('Archiver « {{ opp.title|e('js') }} » ?')"
+                                          style="display:inline;">
+                                        <input type="hidden" name="_token"
+                                               value="{{ csrf_token('archive_scraped_' ~ opp.id) }}">
+                                        <button type="submit" class="adm-btn-archive" title="Archiver manuellement">
+                                            ⏱ Archive
+                                        </button>
+                                    </form>
+
+                                    {#
+                                      En faire une source : même si la deadline est passée, l'organisme
+                                      peut publier d'autres opportunités à l'avenir. On crée la source
+                                      pour les capter automatiquement.
+                                    #}
+                                    <form method="post"
+                                          action="{{ path('app_admin_scraped_opportunity_to_source', {id: opp.id}) }}"
+                                          onsubmit="return confirm('Créer une source de scraping pour ce site ? (peut prendre quelques secondes)')"
+                                          style="display:inline;">
+                                        <input type="hidden" name="_token"
+                                               value="{{ csrf_token('to_source_scraped_' ~ opp.id) }}">
+                                        <button type="submit" class="adm-btn-to-source" title="Créer une source de scraping pour cet organisme">
+                                            + Source
+                                        </button>
                                     </form>
                                 </div>
                             </td>

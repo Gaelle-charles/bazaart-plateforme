@@ -21,6 +21,7 @@ use App\Repository\DisciplineRepository;
 use App\Service\AuthService;
 use App\Service\DisciplineMapperService;
 use App\Service\NotificationService;
+use App\Service\OpportunityToSourcePromoter;
 use App\Service\StructureService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
@@ -65,6 +66,9 @@ class AdminController extends AbstractController
         // les entités Discipline BDD lors de la propagation ScrapedResource → Resource.
         // ADR-0016 Lot 1.
         private readonly DisciplineMapperService $disciplineMapper,
+        // OpportunityToSourcePromoter : orchestre la transformation d'une opportunité
+        // scrapée en source de scraping (action "En faire une source").
+        private readonly OpportunityToSourcePromoter $toSourcePromoter,
     ) {}
 
     /**
@@ -1179,6 +1183,232 @@ class AdminController extends AbstractController
                 $updated,
                 $skipped
             ));
+        }
+
+        return $this->redirectToRoute('app_admin_scraped_opportunities');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ACTIONS DE RECLASSEMENT DES OPPORTUNITES SCRAPEES
+    //
+    // Ces trois actions permettent à l'admin de reclasser une opportunité scrapée
+    // sans la valider en tant qu'opportunité Bazaart standard.
+    //
+    //   1. archive     : marque l'opportunité comme "Archivée" (offre passée ou hors sujet)
+    //   2. documentation : la publie comme Resource de type "Documentation" (articles, guides…)
+    //   3. to-source   : promeut l'organisme émetteur en source de scraping
+    //
+    // Toutes les trois sont en POST avec vérification CSRF.
+    // La logique métier est dans les services (OpportunityToSourcePromoter, etc.),
+    // le controller orchestre uniquement.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Reclassement 1 : Archive une opportunité scrapée ("offre passée").
+     *
+     * Différent du rejet (Rejected) : l'opportunité était valide mais son moment est révolu.
+     * L'archivage conserve l'URL en BDD (pas de re-scraping) sans polluer la file "À vérifier".
+     *
+     * Peut s'appliquer à une opportunité en n'importe quel statut sauf Archived.
+     */
+    #[Route('/scraped-opportunities/{id}/archive', name: 'scraped_opportunity_archive', methods: ['POST'])]
+    public function archiveScrapedOpportunity(int $id, Request $request): Response
+    {
+        // Vérification CSRF — token spécifique à l'action et à l'ID
+        if (!$this->isCsrfTokenValid('archive_scraped_' . $id, $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+            return $this->redirectToRoute('app_admin_scraped_opportunities');
+        }
+
+        // Récupère l'opportunité scrapée (404 si inexistante)
+        $scraped = $this->scrapedResourceRepository->find($id);
+        if ($scraped === null) {
+            throw $this->createNotFoundException('Opportunité introuvable.');
+        }
+
+        // Garde-fou : ne pas ré-archiver ce qui l'est déjà
+        if ($scraped->isArchived()) {
+            $this->addFlash('warning', 'Cette opportunité est déjà archivée.');
+            return $this->redirectToRoute('app_admin_scraped_opportunities');
+        }
+
+        // Change le statut et persiste
+        $scraped->setStatus(ScrapedResourceStatus::Archived);
+        $this->em->flush();
+
+        $this->addFlash('success', sprintf('"%s" archivée (offre passée).', $scraped->getTitle()));
+        return $this->redirectToRoute('app_admin_scraped_opportunities');
+    }
+
+    /**
+     * Reclassement 2 : Publie l'opportunité scrapée comme Resource de type "Documentation".
+     *
+     * Utilisé quand l'opportunité est en réalité un article, un guide ou une ressource
+     * documentaire plutôt qu'un appel à candidatures classique.
+     *
+     * Logique identique à verifyScrapedOpportunity() MAIS :
+     *   - Le ResourceType est forcé à "Documentation" (créé idempotentement si absent)
+     *   - La deadline reste optionnelle (pas d'urgence temporelle pour un article)
+     *   - La ScrapedResource passe à Verified (comme une validation normale)
+     *
+     * Pourquoi ne pas réutiliser verifyScrapedOpportunity() directement ?
+     *   Pour éviter de passer un paramètre "forceType" dans une route déjà complexe.
+     *   Les deux actions ont une intention différente visible dans le flash message et les logs.
+     */
+    #[Route('/scraped-opportunities/{id}/documentation', name: 'scraped_opportunity_documentation', methods: ['POST'])]
+    public function documentationScrapedOpportunity(int $id, Request $request): Response
+    {
+        // Vérification CSRF
+        if (!$this->isCsrfTokenValid('doc_scraped_' . $id, $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+            return $this->redirectToRoute('app_admin_scraped_opportunities');
+        }
+
+        // Récupère l'opportunité scrapée (404 si inexistante)
+        $scraped = $this->scrapedResourceRepository->find($id);
+        if ($scraped === null) {
+            throw $this->createNotFoundException('Opportunité introuvable.');
+        }
+
+        // Garde-fou : une opportunité déjà vérifiée a déjà produit une Resource
+        if ($scraped->isVerified()) {
+            $this->addFlash('error', 'Cette opportunité a déjà été vérifiée et publiée.');
+            return $this->redirectToRoute('app_admin_scraped_opportunities');
+        }
+
+        // ── Récupération ou création idempotente du ResourceType "Documentation" ─
+        //
+        // On cherche d'abord le type existant pour éviter tout doublon.
+        // Si absent (première fois), on le crée à la volée : findOrCreate idempotent.
+        // Ce n'est pas une migration de schéma (ResourceType est une donnée applicative,
+        // pas une contrainte BDD) — la création à la volée est donc préférable à une migration.
+        $docType = $this->resourceTypeRepository->findOneBy(['name' => 'Documentation']);
+
+        if ($docType === null) {
+            // Création du type manquant — idempotent si la route est appelée plusieurs fois
+            // en concurrence (peu probable mais la contrainte unique BDD protège contre les doublons)
+            $docType = new \App\Entity\ResourceType();
+            $docType->setName('Documentation');
+            $docType->setIcon('📄');
+            $this->em->persist($docType);
+            // flush partiel ici pour obtenir l'ID avant de l'assigner à Resource
+            $this->em->flush();
+        }
+
+        // ── Conversion deadline texte → DateTime ────────────────────────────────
+        // Pour la documentation, la deadline est optionnelle : un article n'expire pas.
+        // On tente quand même le parsing — si présent, on l'utilise.
+        $deadline = null;
+        if ($scraped->getDeadline() !== null && $scraped->getDeadline() !== '') {
+            $deadline = \DateTime::createFromFormat('d/m/Y', $scraped->getDeadline())
+                     ?: \DateTime::createFromFormat('Y-m-d', $scraped->getDeadline())
+                     ?: null;
+        }
+
+        // ── Création de la Resource publiée de type Documentation ───────────────
+        // Même logique de propagation que verifyScrapedOpportunity() :
+        // tous les champs enrichis (ADR-0016, ADR-0018, ADR-0019) sont propagés.
+        $resource = new Resource();
+        $resource->setTitle($scraped->getTitle());
+        $resource->setDescription($scraped->getDescription() ?: 'Description non disponible.');
+        $resource->setExternalUrl($scraped->getUrl());
+        $resource->setDeadline($deadline);
+        $resource->setResourceType($docType);
+        $resource->setOrganization(null);
+
+        /** @var User $admin */
+        $admin = $this->getUser();
+        $resource->setSubmittedBy($admin);
+
+        // Traçabilité CDC §5.2 : publiée immédiatement, validée par l'admin connecté
+        $now = new \DateTime();
+        $resource->setStatus(ResourceStatus::Published);
+        $resource->setSubmitterRole(\App\Enum\SubmitterRole::Admin);
+        $resource->setAutoPublished(true);
+        $resource->setPublishedAt($now);
+        $resource->setValidatedAt($now);
+        $resource->setValidatedBy($admin);
+
+        // ── Propagation des champs enrichis (ADR-0016 Lot 1) ───────────────────
+        $resource->setCity($scraped->getCity());
+        $resource->setCountry($scraped->getCountry());
+        $resource->setExperienceLevel($scraped->getExperienceLevel());
+
+        // ── Propagation ADR-0018 (candidature + financement) ───────────────────
+        $resource->setHowToApply($scraped->getHowToApply());
+        $resource->setFundingAmount($scraped->getFundingAmount());
+        $resource->setFundingType($scraped->getFundingType());
+
+        // ── Propagation ADR-0019 (lien candidature + logo) ─────────────────────
+        $rawApplicationUrl = $scraped->getApplicationUrl();
+        $resource->setApplicationUrl(
+            $rawApplicationUrl !== null ? mb_substr($rawApplicationUrl, 0, 500) : null
+        );
+
+        $rawLogoUrl = $scraped->getLogoUrl();
+        $resource->setLogoUrl(
+            $rawLogoUrl !== null ? mb_substr($rawLogoUrl, 0, 500) : null
+        );
+
+        // ── Propagation des disciplines (ADR-0016 Lot 1) ───────────────────────
+        if ($scraped->getDisciplines() !== null && $scraped->getDisciplines() !== '') {
+            $disciplineLabels = array_map('trim', explode(',', $scraped->getDisciplines()));
+            $matchedDisciplines = $this->disciplineMapper->mapLabelsToEntities($disciplineLabels);
+            foreach ($matchedDisciplines as $discipline) {
+                $resource->addDiscipline($discipline);
+            }
+        }
+
+        $this->em->persist($resource);
+
+        // Marque la ScrapedResource comme vérifiée (même comportement que la vérification normale)
+        $scraped->setStatus(ScrapedResourceStatus::Verified);
+
+        $this->em->flush();
+
+        $this->addFlash(
+            'success',
+            sprintf('"%s" publiée comme Documentation.', $scraped->getTitle())
+        );
+        return $this->redirectToRoute('app_admin_scraped_opportunities');
+    }
+
+    /**
+     * Reclassement 3 : Promeut l'organisme émetteur en source de scraping.
+     *
+     * Flux :
+     *   1. Délègue à OpportunityToSourcePromoter::promote() toute la logique métier :
+     *      - Découverte de la page-liste via ListingUrlDiscoverer (heuristique + LLM)
+     *      - Fallback : création d'une source depuis l'URL directe si découverte échoue
+     *      - Archivage de la ScrapedResource dans tous les cas
+     *   2. Construit le flash message depuis le PromotionResult retourné
+     *
+     * Note : l'action peut prendre quelques secondes (requêtes HTTP + éventuel LLM).
+     * Acceptable pour une action admin manuelle et ponctuelle.
+     */
+    #[Route('/scraped-opportunities/{id}/to-source', name: 'scraped_opportunity_to_source', methods: ['POST'])]
+    public function opportunityToSource(int $id, Request $request): Response
+    {
+        // Vérification CSRF — token spécifique à l'action et à l'ID
+        if (!$this->isCsrfTokenValid('to_source_scraped_' . $id, $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
+            return $this->redirectToRoute('app_admin_scraped_opportunities');
+        }
+
+        // Récupère l'opportunité scrapée (404 si inexistante)
+        $scraped = $this->scrapedResourceRepository->find($id);
+        if ($scraped === null) {
+            throw $this->createNotFoundException('Opportunité introuvable.');
+        }
+
+        // Délègue toute la logique au service — le controller reste mince
+        $result = $this->toSourcePromoter->promote($scraped);
+
+        // Construit le flash selon le résultat du service
+        if ($result->success) {
+            $this->addFlash('success', $result->message);
+        } else {
+            $this->addFlash('error', $result->message);
         }
 
         return $this->redirectToRoute('app_admin_scraped_opportunities');

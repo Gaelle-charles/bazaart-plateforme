@@ -53,6 +53,10 @@ class LoadInitialDataCommand extends Command
             ['name' => 'Prix & concours',          'icon' => '🏆'],
             ['name' => 'Diffusion & exposition',   'icon' => '🖼️'],
             ['name' => 'Emploi & stage',           'icon' => '💼'],
+            // "Documentation" : ajouté pour l'action de reclassement admin
+            // (opportunités qui sont en réalité des guides, articles ou ressources textuelles).
+            // Idempotent : findOneBy vérifie l'existence avant création.
+            ['name' => 'Documentation',            'icon' => '📄'],
             ['name' => 'Autre',                    'icon' => '📌'],
         ];
 
