@@ -379,14 +379,20 @@
        Affiché en coin haut-droit du hero (position absolute dans le hero
        qui est déjà position:relative).
        Sur mobile : position statique dans le flux des badges pour ne pas
-       chevaucher le titre. */
+       chevaucher le titre.
+
+       Taille : 56×56 px (idem que les cartes de la vue liste/grille mais
+       légèrement mis en valeur par la position hero et le fond blanc tranchant
+       sur le fond sombre de la hero band).
+       object-fit: contain → le logo est contenu dans le carré sans déformation. */
     .resource-hero__logo {
         position: absolute;
         top: var(--space-xl);
         right: var(--space-xl);
         width: 56px;
         height: 56px;
-        background: var(--bg);
+        min-width: 56px; /* évite le rétrécissement flexbox si jamais utilisé en flex */
+        background: #ffffff; /* fond blanc neutre : le logo se détache sur fond clair */
         border: 1px solid rgba(242,239,230,.3);
         overflow: hidden;
         flex-shrink: 0;
@@ -395,7 +401,7 @@
         justify-content: center;
     }
 
-    /* Image du logo : couvre le carré sans déborder */
+    /* Image du logo dans le hero : contenue sans déformation */
     .resource-hero__logo img {
         width: 100%;
         height: 100%;
@@ -403,14 +409,12 @@
         display: block;
     }
 
-    /* Badge fallback "B" : fond accent lime, lettre encre en Archivo Black */
-    .resource-hero__logo--badge {
-        font-family: var(--display);
-        font-size: 24px;
-        font-weight: 900;
-        color: var(--ink);
-        background: var(--accent);
-        border: 1px solid var(--ink);
+    /* Variante repli Bazaart : fond légèrement teinté pour distinguer visuellement
+       le favicon Bazaart d'un vrai logo d'organisme (pas de fond lime qui était
+       le badge "B" — remplacé par une image réelle). */
+    .resource-hero__logo--bazaart {
+        background: var(--bg-alt, #E8E5DC);
+        border: 1px solid rgba(242,239,230,.5);
     }
 
     /* Sur mobile : logo dans le flux (pas en absolu), pour éviter le chevauchement */
@@ -422,12 +426,14 @@
     }
 
     /* ── ADR-0019 : miniature logo dans les cartes de la liste ──────────────
-       Petit carré 40×40 dans le coin de la carte, identique au design hero
-       mais réduit. Défini ici pour cohérence même si utilisé dans index.html.twig. */
+       Ce fichier (show.html.twig) est la référence des styles logo, même si les
+       cartes sont rendues dans index.html.twig. Les classes .card-logo sont
+       redéfinies dans index.html.twig avec les mêmes valeurs pour portabilité. */
     .card-logo {
-        width: 36px;
-        height: 36px;
-        background: var(--bg);
+        width: 48px;
+        height: 48px;
+        min-width: 48px;
+        background: #ffffff;
         border: 1px solid var(--line-soft);
         overflow: hidden;
         flex-shrink: 0;
@@ -441,13 +447,10 @@
         object-fit: contain;
         display: block;
     }
-    .card-logo--badge {
-        font-family: var(--display);
-        font-size: 14px;
-        font-weight: 900;
-        color: var(--ink);
-        background: var(--accent);
-        border: 1px solid var(--line-soft);
+    /* Variante repli : fond bg-alt pour distinguer du logo réel */
+    .card-logo--bazaart {
+        background: var(--bg-alt, #E8E5DC);
+        border-color: var(--line-soft);
     }
 
     /* Corps de description : on utilise le serif pour donner un caractère
@@ -790,17 +793,31 @@
             le navigateur gère le cas d'erreur réseau via l'attribut onerror.
     #}
     {% if resource.logoUrl %}
-        {# ── Logo réel : image depuis logoUrl ── #}
-        <div class="resource-hero__logo" aria-hidden="true">
+        {#
+            Logo réel de l'organisme.
+            En cas d'échec de chargement (onerror) :
+              1. this.onerror=null   → désactive le handler pour éviter une boucle
+                                       si favicon.png lui-même était inaccessible.
+              2. this.src=...        → bascule vers le favicon Bazaart.
+              3. this.alt='Bazaart'  → met à jour le texte alternatif.
+            On ajoute aussi la classe --bazaart sur le conteneur pour le fond différencié.
+        #}
+        <div class="resource-hero__logo">
             <img src="{{ resource.logoUrl|e }}"
-                 alt="{{ resource.title|e }}"
+                 alt="Logo {{ resource.title|e }}"
                  loading="lazy"
-                 onerror="this.parentElement.innerHTML='<span aria-hidden=\'true\'>B</span>'; this.parentElement.classList.add('resource-hero__logo--badge');">
+                 onerror="this.onerror=null; this.src='{{ asset('images/favicon.png') }}'; this.alt='Bazaart'; this.parentElement.classList.add('resource-hero__logo--bazaart');">
         </div>
     {% else %}
-        {# ── Badge "B" fallback : aucun logo disponible ── #}
-        <div class="resource-hero__logo resource-hero__logo--badge" aria-hidden="true">
-            B
+        {#
+            Pas de logo : on affiche le favicon/logo Bazaart dans le même emplacement
+            56×56 px, avec la variante de fond --bazaart pour le différencier visuellement
+            d'un logo d'organisme réel.
+        #}
+        <div class="resource-hero__logo resource-hero__logo--bazaart">
+            <img src="{{ asset('images/favicon.png') }}"
+                 alt="Bazaart"
+                 loading="lazy">
         </div>
     {% endif %}
 

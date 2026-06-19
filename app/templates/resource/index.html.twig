@@ -526,6 +526,47 @@
         pointer-events: none;
     }
 
+    /* ── Logo miniature dans les cartes (liste et grille) ──────────────────
+       .card-logo         : conteneur carré à taille FIXE — l'image source peut
+                           avoir n'importe quel ratio, elle sera contenue dedans
+                           (object-fit: contain) sans jamais être déformée.
+       .card-logo img     : règle de rendu de l'image à l'intérieur.
+       .card-logo--bazaart: variante utilisée quand logoUrl est absent ou cassé —
+                           on affiche le favicon Bazaart avec un fond légèrement
+                           différent pour signaler le repli. */
+
+    /* Conteneur logo : 48×48 px, fond blanc neutre, bordure douce, coins francs
+       (border-radius: 0 → cohérence thème Street "zéro radius") */
+    .card-logo {
+        width: 48px;
+        height: 48px;
+        min-width: 48px; /* évite que flexbox rétrécisse le carré */
+        background: #ffffff;
+        border: 1px solid var(--line-soft);
+        overflow: hidden;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Image à l'intérieur : object-fit: contain = l'image est réduite pour
+       tenir dans le carré, jamais rognée, jamais étirée. display:block élimine
+       le gap de ligne induit par inline-block. */
+    .card-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+    }
+
+    /* Variante "repli Bazaart" : fond légèrement plus sombre pour distinguer
+       visuellement le logo Bazaart d'un logo d'organisme réel */
+    .card-logo--bazaart {
+        background: var(--bg-alt, #E8E5DC);
+        border-color: var(--line-soft);
+    }
+
     /* ── Chips compacts (ADR-0016 Lot 3 — pays et niveau) ───────────────────
        Utilisés dans les cartes liste ET grille pour afficher des métadonnées
        supplémentaires sans surcharger visuellement.
@@ -846,21 +887,36 @@
                         l'émetteur de l'opportunité.
 
                         Comportement :
-                          - logoUrl renseigné  → image (lazy loading)
-                          - logoUrl vide/null  → badge "B" fond lime (identité Bazaart en fallback)
+                          - logoUrl renseigné  → image distante (lazy loading)
+                          - logoUrl vide/null  → favicon/logo Bazaart en repli
+                          - onerror            → si l'image distante est cassée, on bascule
+                                                 vers le favicon Bazaart (this.onerror=null
+                                                 évite une boucle infinie si le favicon lui-même
+                                                 venait à être inaccessible)
 
-                        Sécurité : logoUrl est auto-escaped par Twig dans href="{{ }}"
-                        (pas de |raw).
+                        Accessibilité :
+                          - alt="Logo {{ resource.title }}" pour le logo réel
+                          - alt="Bazaart" pour le repli
+                          - aria-hidden="true" car l'information est portée par le titre
+
+                        Sécurité : logoUrl est auto-escaped par Twig dans src="{{ }}"
+                        (jamais de |raw sur une URL externe).
                     #}
                     {% if resource.logoUrl %}
-                        <div class="card-logo" aria-hidden="true">
+                        {# Logo réel de l'organisme — chargé depuis l'URL distante #}
+                        <div class="card-logo">
                             <img src="{{ resource.logoUrl|e }}"
-                                 alt=""
+                                 alt="Logo {{ resource.title|e }}"
                                  loading="lazy"
-                                 onerror="this.parentElement.innerHTML='B'; this.parentElement.classList.add('card-logo--badge');">
+                                 onerror="this.onerror=null; this.src='{{ asset('images/favicon.png') }}'; this.alt='Bazaart';">
                         </div>
                     {% else %}
-                        <div class="card-logo card-logo--badge" aria-hidden="true">B</div>
+                        {# Pas de logo : on affiche le favicon/logo Bazaart en repli #}
+                        <div class="card-logo card-logo--bazaart">
+                            <img src="{{ asset('images/favicon.png') }}"
+                                 alt="Bazaart"
+                                 loading="lazy">
+                        </div>
                     {% endif %}
 
                     {#
@@ -907,20 +963,26 @@
                     ADR-0019 : logo de l'organisme dans la card grille.
                     Affiché en ligne avec les badges (flex row), ce qui donne
                     un effet "logo + type" sur la même ligne.
-                    Même logique que la vue liste : image si logoUrl, badge "B" sinon.
-                    aria-hidden="true" car purement décoratif (le titre est le texte accessible).
+                    Même logique que la vue liste : image si logoUrl, favicon Bazaart sinon.
+                    Les dimensions sont identiques à la vue liste (48×48 px via .card-logo).
                 #}
                 <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-                    {# Miniature logo grille #}
+                    {# Miniature logo grille — même comportement que la vue liste #}
                     {% if resource.logoUrl %}
-                        <div class="card-logo" aria-hidden="true">
+                        {# Logo réel de l'organisme #}
+                        <div class="card-logo">
                             <img src="{{ resource.logoUrl|e }}"
-                                 alt=""
+                                 alt="Logo {{ resource.title|e }}"
                                  loading="lazy"
-                                 onerror="this.parentElement.innerHTML='B'; this.parentElement.classList.add('card-logo--badge');">
+                                 onerror="this.onerror=null; this.src='{{ asset('images/favicon.png') }}'; this.alt='Bazaart';">
                         </div>
                     {% else %}
-                        <div class="card-logo card-logo--badge" aria-hidden="true">B</div>
+                        {# Repli favicon Bazaart #}
+                        <div class="card-logo card-logo--bazaart">
+                            <img src="{{ asset('images/favicon.png') }}"
+                                 alt="Bazaart"
+                                 loading="lazy">
+                        </div>
                     {% endif %}
 
                     {# Badges type + disciplines sur la même ligne que le logo #}
