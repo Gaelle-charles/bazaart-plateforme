@@ -685,6 +685,41 @@ class Resource
         return $this;
     }
 
+    // ─── Champ enrichedAt (marqueur d'enrichissement LLM) ────────────────────
+    //
+    // OBJECTIF : éviter les ré-enrichissements inutiles (coût LLM + drift des données).
+    //
+    // LOGIQUE :
+    //   - NULL  → jamais enrichi via LLM → éligible au prochain run de app:enrich-opportunities
+    //   - non NULL → déjà enrichi → EXCLU de la sélection automatique (sans --force)
+    //
+    // BACKFILL :
+    //   La migration qui introduit cette colonne met aussi à jour toutes les Resource
+    //   ayant déjà une description non vide (stock existant) à NOW(), pour que le cron
+    //   ne les retraite pas toutes le lendemain du déploiement.
+    //
+    // IMMUTABILITÉ EN RE-SCRAPE :
+    //   ScrapedResourcePersister::updateEnrichedFields() ne touche PAS à enrichedAt.
+    //   Un re-scrape ne réinitialise donc pas le marqueur — seul l'enrichissement LLM
+    //   (via EnrichOpportunitiesCommand) positionne ce champ.
+    //
+    // ÉDITIONS ADMIN :
+    //   Quand un admin modifie la description d'une Resource manuellement, enrichedAt
+    //   reste non nul → la commande ne l'écrasera pas → les éditions sont préservées.
+    //   Pour forcer un ré-enrichissement malgré tout, utiliser --force.
+
+    /**
+     * Date d'enrichissement LLM de cette ressource.
+     *
+     * NULL = jamais enrichi → éligible à app:enrich-opportunities (sans --force).
+     * non NULL = enrichi au moins une fois → exclu de la sélection automatique.
+     *
+     * Rempli par EnrichOpportunitiesCommand après un enrichissement RÉUSSI.
+     * Non remis à null par le re-scrape (ScrapedResourcePersister ne touche pas à ce champ).
+     */
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $enrichedAt = null;
+
     // ─── Getters / Setters ADR-0016 Lot 1 ────────────────────────────────────
 
     /**
@@ -738,6 +773,33 @@ class Resource
     public function setExperienceLevel(?ExperienceLevel $experienceLevel): static
     {
         $this->experienceLevel = $experienceLevel;
+        return $this;
+    }
+
+    // ─── Getter / Setter enrichedAt ───────────────────────────────────────────
+
+    /**
+     * Retourne la date d'enrichissement LLM, ou null si jamais enrichi.
+     *
+     * NULL signifie que cette Resource n'a jamais été enrichie par LLM →
+     * elle sera sélectionnée par app:enrich-opportunities lors du prochain run
+     * (sans --force).
+     */
+    public function getEnrichedAt(): ?\DateTimeInterface
+    {
+        return $this->enrichedAt;
+    }
+
+    /**
+     * Positionne la date d'enrichissement LLM.
+     *
+     * Appelé par EnrichOpportunitiesCommand après un enrichissement RÉUSSI.
+     * Passer null efface le marqueur — utile seulement en test ou en reset manuel.
+     * En production normale on ne passe jamais null explicitement.
+     */
+    public function setEnrichedAt(?\DateTimeInterface $enrichedAt): static
+    {
+        $this->enrichedAt = $enrichedAt;
         return $this;
     }
 }

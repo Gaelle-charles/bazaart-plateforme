@@ -218,6 +218,32 @@ class ScrapedResource
     #[ORM\Column(type: 'string', length: 20, enumType: ExperienceLevel::class, nullable: true)]
     private ?ExperienceLevel $experienceLevel = null;
 
+    // ─── Champ enrichedAt (marqueur d'enrichissement LLM) ────────────────────
+    //
+    // Même sémantique que sur Resource. Voir les commentaires de Resource::$enrichedAt
+    // pour l'explication complète.
+    //
+    // Sur ScrapedResource, le marqueur est positionné AVANT la vérification admin.
+    // Quand l'admin valide la ScrapedResource et crée la Resource correspondante,
+    // la Resource hérite des données enrichies mais REPART avec enrichedAt = NULL
+    // (la Resource est neuve, elle n'a pas encore été enrichie en tant que Resource).
+    // C'est acceptable : les champs enrichis (description, howToApply…) sont copiés
+    // depuis la ScrapedResource lors de la vérification — pas besoin de ré-enrichir.
+    // Dans la pratique, app:enrich-opportunities --published est rarement lancé sur
+    // des Resource récemment validées (elles ont déjà tout leur contenu).
+
+    /**
+     * Date d'enrichissement LLM de cette opportunité scrapée.
+     *
+     * NULL = jamais enrichi → éligible à app:enrich-opportunities (sans --force).
+     * non NULL = enrichi au moins une fois → exclu de la sélection automatique.
+     *
+     * Positionné par EnrichOpportunitiesCommand après un succès.
+     * Non remis à null par un re-scrape (ScrapedResourcePersister ne touche pas à ce champ).
+     */
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $enrichedAt = null;
+
     // ── Lifecycle Callbacks ──────────────────────────────────────────────────
 
     #[ORM\PrePersist]
@@ -461,6 +487,33 @@ class ScrapedResource
     public function setExperienceLevel(?ExperienceLevel $experienceLevel): static
     {
         $this->experienceLevel = $experienceLevel;
+        return $this;
+    }
+
+    // ─── Getter / Setter enrichedAt ───────────────────────────────────────────
+
+    /**
+     * Retourne la date d'enrichissement LLM, ou null si jamais enrichi.
+     *
+     * NULL signifie que cette ScrapedResource n'a jamais été enrichie par LLM →
+     * elle sera sélectionnée par app:enrich-opportunities lors du prochain run
+     * (sans --force).
+     */
+    public function getEnrichedAt(): ?\DateTimeInterface
+    {
+        return $this->enrichedAt;
+    }
+
+    /**
+     * Positionne la date d'enrichissement LLM.
+     *
+     * Appelé par EnrichOpportunitiesCommand après un enrichissement RÉUSSI.
+     * Ne pas appeler depuis ScrapedResourcePersister pour préserver l'idempotence
+     * du re-scrape (un re-scrape ne doit pas reseter ce marqueur).
+     */
+    public function setEnrichedAt(?\DateTimeInterface $enrichedAt): static
+    {
+        $this->enrichedAt = $enrichedAt;
         return $this;
     }
 }

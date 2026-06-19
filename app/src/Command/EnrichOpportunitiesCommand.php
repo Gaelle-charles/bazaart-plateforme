@@ -19,7 +19,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * EnrichOpportunitiesCommand — Enrichit les opportunités sans description via Mistral.
+ * EnrichOpportunitiesCommand — Enrichit les opportunités jamais enrichies via Mistral.
  *
  * PROBLÈME RÉSOLU :
  *   Beaucoup d'opportunités scrapées (notamment depuis On The Move) n'ont pas de
@@ -27,11 +27,23 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   Cette commande va chercher la PAGE INDIVIDUELLE de chaque opportunité,
  *   demande à Mistral de produire un titre clair + une description fidèle en français.
  *
+ * MARQUEUR enrichedAt (NOUVEAU) :
+ *   Après un enrichissement RÉUSSI, la commande positionne enrichedAt = now() sur l'entité.
+ *   Ce marqueur permet de n'enrichir chaque item QU'UNE SEULE FOIS automatiquement :
+ *     - enrichedAt IS NULL  → jamais enrichi → sélectionné par le cron
+ *     - enrichedAt non NULL → déjà enrichi → EXCLU de la sélection automatique
+ *   Avantages :
+ *     1. Pas de ré-enrichissement coûteux chaque nuit (coût LLM maîtrisé)
+ *     2. Pas de drift LLM (les bonnes descriptions ne sont pas écrasées aléatoirement)
+ *     3. Les éditions admin sont préservées (enrichedAt déjà non null → non sélectionné)
+ *     4. Items en échec LLM (DTO vide) : enrichedAt reste NULL → re-tentés au prochain run
+ *        (acceptable : mieux que d'enregistrer un enrichissement "vide")
+ *
  * FLUX DE TRAITEMENT :
- *   1. Récupère les ScrapedResource sans description (ou les Resource publiées avec --published)
+ *   1. Récupère les ScrapedResource avec enrichedAt IS NULL (ou les Resource publiées avec --published)
  *   2. Pour chacune : appelle OpportunityEnrichmentService::enrich($url)
- *   3. Si la description est non vide → met à jour la BDD
- *   4. Si le titre est non vide → remplace le titre existant (sauf si pas de description)
+ *   3. Si le DTO est non vide → met à jour les champs ET positionne enrichedAt = now()
+ *   4. Si le DTO est vide (LLM a échoué) → on ne positionne PAS enrichedAt (re-tenté plus tard)
  *   5. Flush par lots de BATCH_SIZE pour optimiser les transactions
  *   6. Affiche un tableau récapitulatif à la fin
  *
@@ -39,12 +51,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   --dry-run   : affiche ce qui serait modifié, n'écrit RIEN en BDD
  *   --limit=N   : nombre max d'opportunités traitées (défaut 20 — maîtrise du coût LLM)
  *   --source=X  : ne traiter que les opportunités d'une source donnée (ex: on-the-move.org)
- *   --force     : retraite même celles qui ont déjà une description
- *   --published : cible les Resource PUBLIÉES sans description (backlog post-validation)
+ *   --force     : retraite même celles qui ont enrichedAt non null (usage manuel uniquement)
+ *   --published : cible les Resource PUBLIÉES avec enrichedAt IS NULL
  *                 au lieu des ScrapedResource
  *
  * UTILISATION :
- *   # Enrichir 20 ScrapedResource sans description (défaut)
+ *   # Enrichir les nouvelles ScrapedResource jamais enrichies (usage cron)
  *   docker compose exec app php bin/console app:enrich-opportunities
  *
  *   # Enrichir uniquement On The Move (source problématique), 50 à la fois
@@ -53,15 +65,15 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   # Voir ce qui serait fait sans écrire (dry run)
  *   docker compose exec app php bin/console app:enrich-opportunities --dry-run --limit=10
  *
- *   # Rattraper le backlog des Resource publiées sans description
+ *   # Rattraper le backlog des Resource publiées jamais enrichies
  *   docker compose exec app php bin/console app:enrich-opportunities --published --limit=50
  *
- *   # Re-traiter même celles qui ont déjà une description (amélioration)
+ *   # Re-traiter même celles déjà enrichies (amélioration globale, coûteux)
  *   docker compose exec app php bin/console app:enrich-opportunities --force --limit=10
  *
  * IDEMPOTENCE :
- *   La commande est idempotente. Sans --force, elle ne traite que les entrées sans
- *   description — si elle est re-lancée après succès, elle ne fait rien.
+ *   La commande est idempotente. Sans --force, elle ne traite que les entrées avec
+ *   enrichedAt IS NULL. Si relancée après un run complet, elle ne fait rien (0 items).
  *
  * COÛT LLM :
  *   Chaque enrichissement = 1 appel Mistral (~0,001 € sur mistral-small-latest).
@@ -70,7 +82,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  */
 #[AsCommand(
     name: 'app:enrich-opportunities',
-    description: 'Enrichit les opportunités sans description via Mistral (fetch page + résumé IA en français)',
+    description: 'Enrichit via Mistral les opportunités avec enrichedAt IS NULL (une seule fois par item, sauf --force)',
 )]
 class EnrichOpportunitiesCommand extends Command
 {
@@ -106,14 +118,17 @@ class EnrichOpportunitiesCommand extends Command
     {
         $this
             ->setHelp(
-                'Enrichit les opportunités scrapées sans description en allant lire leur page '
+                'Enrichit les opportunités dont enrichedAt IS NULL (jamais enrichies) en allant lire leur page '
                 . 'd\'origine et en demandant à Mistral de produire titre + description en français.' . "\n\n"
+                . 'Après un enrichissement réussi, enrichedAt est positionné à NOW() → l\'item ne sera'
+                . ' plus sélectionné automatiquement (sauf --force). Les items pour lesquels le LLM'
+                . ' retourne un DTO vide conservent enrichedAt = NULL et seront re-tentés au prochain run.' . "\n\n"
                 . 'Options utiles :' . "\n"
                 . '  --dry-run   : simule sans écrire' . "\n"
                 . '  --limit=N   : max N opportunités (défaut 20)' . "\n"
                 . '  --source=X  : source spécifique (ex: on-the-move.org)' . "\n"
-                . '  --force     : retraite même celles avec une description' . "\n"
-                . '  --published : cible les Resource publiées (backlog post-validation)'
+                . '  --force     : retraite même celles avec enrichedAt non null (coûteux)' . "\n"
+                . '  --published : cible les Resource publiées avec enrichedAt IS NULL'
             )
             // ── Option --dry-run ──────────────────────────────────────────────
             // Affiche ce qui serait fait sans écrire en BDD.
@@ -143,22 +158,25 @@ class EnrichOpportunitiesCommand extends Command
                 description: 'Filtrer par source (ex: on-the-move.org) — s\'applique aux ScrapedResource seulement',
             )
             // ── Option --force ────────────────────────────────────────────────
-            // Par défaut, la commande ignore les entrées qui ont déjà une description.
-            // Avec --force, on les retraite pour améliorer des descriptions existantes.
+            // Par défaut, la commande ignore les entrées dont enrichedAt est non null.
+            // Avec --force, on ignore ce filtre et on retraite tous les items actifs.
+            // Usage : amélioration globale après évolution du prompt, reset forcé.
+            // ⚠️  Coûteux : peut re-traiter des centaines d'items. Toujours combiner avec --limit.
             ->addOption(
                 name: 'force',
                 shortcut: 'f',
                 mode: InputOption::VALUE_NONE,
-                description: 'Retraiter même les opportunités qui ont déjà une description',
+                description: 'Retraiter même les opportunités déjà enrichies (enrichedAt non null) — coûteux, combiner avec --limit',
             )
             // ── Option --published ────────────────────────────────────────────
-            // Mode alternatif : cible les Resource publiées plutôt que les ScrapedResource.
-            // Permet de rattraper le backlog des opportunités validées avant l'enrichissement.
+            // Mode alternatif : cible les Resource publiées (enrichedAt IS NULL) plutôt que
+            // les ScrapedResource. Permet de rattraper le backlog des opportunités validées
+            // avant l'implémentation de l'enrichissement.
             ->addOption(
                 name: 'published',
                 shortcut: 'p',
                 mode: InputOption::VALUE_NONE,
-                description: 'Cibler les Resource PUBLIÉES sans description (backlog post-validation)',
+                description: 'Cibler les Resource PUBLIÉES avec enrichedAt IS NULL (backlog post-validation)',
             );
     }
 
@@ -395,6 +413,25 @@ class EnrichOpportunitiesCommand extends Command
                     $item->setLogoUrl(mb_substr($enrichment->logoUrl, 0, 500));
                 }
 
+                // ── Marqueur enrichedAt : CŒUR DU SYSTÈME "UN SEUL ENRICHISSEMENT" ──
+                //
+                // On positionne enrichedAt = maintenant UNIQUEMENT si on arrive ici,
+                // c'est-à-dire si l'enrichissement a RÉUSSI (DTO non vide, pas d'exception).
+                //
+                // Conséquences de ce choix :
+                //   - Item enrichi avec succès → enrichedAt non null → EXCLU des prochains runs
+                //   - Item dont le LLM retourne un DTO vide → on a fait "continue" plus haut
+                //     → enrichedAt reste NULL → re-tenté au prochain run (comportement souhaité)
+                //   - Item en exception → on va dans le catch → enrichedAt reste NULL → re-tenté
+                //
+                // On n'utilise pas new \DateTime() mais new \DateTimeImmutable() pour la cohérence
+                // avec Doctrine. La colonne est de type 'datetime' (pas 'datetime_immutable'),
+                // mais Doctrine accepte les deux types PHP pour cette colonne.
+                // On utilise \DateTime (mutable) et non \DateTimeImmutable car la colonne
+                // enriched_at est mappée en type 'datetime' Doctrine, qui attend un \DateTime.
+                // Doctrine lèverait une exception de conversion si on passait \DateTimeImmutable.
+                $item->setEnrichedAt(new \DateTime());
+
                 $io->writeln('<info>ENRICHI</info>');
                 $stats['enriched']++;
 
@@ -538,6 +575,22 @@ class EnrichOpportunitiesCommand extends Command
                 if ($enrichment->logoUrl !== null && $enrichment->logoUrl !== '') {
                     $item->setLogoUrl(mb_substr($enrichment->logoUrl, 0, 500));
                 }
+
+                // ── Marqueur enrichedAt (mode --published) ────────────────────
+                //
+                // Même logique que dans processScrapedResources() :
+                //   - On positionne enrichedAt = maintenant uniquement si on arrive ici
+                //     (enrichissement réussi, DTO non vide, pas d'exception).
+                //   - Les Resource dont le LLM retourne un DTO vide restent à NULL → re-tentées.
+                //   - Les exceptions laissent aussi enrichedAt à NULL → re-tentées.
+                //
+                // En mode --published, la Resource n'a généralement jamais été enrichie
+                // directement (elle a été créée via la vérification admin depuis une ScrapedResource).
+                // C'est la première fois que le LLM traite cette Resource en tant que Resource.
+                // On utilise \DateTime (mutable) et non \DateTimeImmutable car la colonne
+                // enriched_at est mappée en type 'datetime' Doctrine, qui attend un \DateTime.
+                // Doctrine lèverait une exception de conversion si on passait \DateTimeImmutable.
+                $item->setEnrichedAt(new \DateTime());
 
                 $io->writeln('<info>ENRICHI</info>');
                 $stats['enriched']++;

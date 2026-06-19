@@ -452,16 +452,36 @@ class ScrapedResourceRepository extends ServiceEntityRepository
     /**
      * Retourne les ScrapedResource candidates à l'enrichissement IA.
      *
-     * CONDITIONS (selon les options de la commande app:enrich-opportunities) :
-     *   - description IS NULL OU description = '' (pas encore enrichies)
+     * NOUVEAU CRITÈRE DE SÉLECTION (remplace la sélection par description IS NULL) :
+     *   On cible maintenant les items dont enriched_at IS NULL — c'est-à-dire
+     *   ceux qui n'ont JAMAIS été enrichis par le LLM.
+     *
+     * AVANTAGES vs l'ancienne approche (description IS NULL) :
+     *   1. Idempotence stricte : un item enrichi une fois ne sera plus jamais sélectionné
+     *      automatiquement, quelle que soit la valeur de description (certains champs
+     *      comme disciplines peuvent être vides sans que la description le soit).
+     *   2. Préservation des éditions admin : si un admin modifie la description d'une
+     *      ScrapedResource, enriched_at est déjà non null → le cron ne l'écrase pas.
+     *   3. Pas de drift LLM : les items déjà correctement enrichis ne sont pas
+     *      re-traités, ce qui évite une variation aléatoire due au LLM.
+     *
+     * BACKFILL :
+     *   La migration Version20260619113604 a peuplé enriched_at = NOW() pour tous
+     *   les items du stock existant ayant une description non vide. Seuls les items
+     *   vraiment sans description démarrent avec enriched_at = NULL après le déploiement.
+     *
+     * --force :
+     *   Avec $includeWithDescription = true, on ignore le filtre enriched_at
+     *   et on cible tous les items actifs (comportement --force inchangé).
+     *
+     * CONDITIONS :
+     *   - enriched_at IS NULL (jamais enrichi) ← NOUVEAU, remplace description IS NULL
      *   - url IS NOT NULL (on a besoin de l'URL pour fetcher la page)
      *   - status IN (pending, verified) — on n'enrichit pas les rejected ni les archived
      *
-     * PARAMÈTRES :
-     *   @param int         $limit      Nombre max de résultats (maîtrise du coût LLM)
-     *   @param string|null $sourceSite Filtre sur le nom du site source (ex: "on-the-move.org")
-     *   @param bool        $includeWithDescription Si true (--force), inclut même celles qui
-     *                                   ont déjà une description (pour re-enrichissement)
+     * @param int         $limit               Nombre max de résultats (maîtrise du coût LLM)
+     * @param string|null $sourceSite          Filtre sur le site source (ex: "on-the-move.org")
+     * @param bool        $includeWithDescription Si true (--force), ignore le filtre enriched_at
      *
      * ORDRE : les plus récentes d'abord (par scrapedAt DESC) — on traite en priorité les
      *   nouvelles opportunités, car ce sont les plus susceptibles d'être encore valides.
@@ -474,7 +494,7 @@ class ScrapedResourceRepository extends ServiceEntityRepository
         bool $includeWithDescription = false,
     ): array {
         $qb = $this->createQueryBuilder('s')
-            // On doit avoir une URL pour pouvoir fetcher la page
+            // On doit avoir une URL pour pouvoir fetcher la page de détail
             ->where('s.url IS NOT NULL')
             // On n'enrichit pas les opportunités rejetées ou archivées
             // (décision admin à respecter — elles sont hors cycle de vie actif)
@@ -488,28 +508,21 @@ class ScrapedResourceRepository extends ServiceEntityRepository
             // Limite le nombre de résultats pour maîtriser le coût LLM et le temps d'exécution
             ->setMaxResults($limit);
 
-        // Filtre description ou disciplines manquantes (sauf si --force)
+        // ── Filtre d'éligibilité : enriched_at IS NULL (sauf --force) ──────────
+        //
+        // SANS --force (cas normal, run cron) :
+        //   On ne sélectionne que les items qui n'ont jamais été enrichis.
+        //   Critère : enriched_at IS NULL
+        //   Un item enrichi une fois (enriched_at non null) n'est plus sélectionné.
+        //
+        // AVEC --force ($includeWithDescription = true) :
+        //   On ignore complètement le filtre enriched_at → tous les items actifs
+        //   avec URL sont candidates. Usage manuel uniquement (amélioration globale,
+        //   re-enrichissement après évolution du prompt, etc.).
+        //   ⚠️  Coûteux : peut retraiter des centaines d'items. À utiliser avec --limit.
         if (!$includeWithDescription) {
-            // On cible les opportunités qui n'ont pas de description OU pas de disciplines.
-            // Cela permet d'enrichir les disciplines même pour les records qui ont déjà
-            // une description fournie par le scraper initial (cas le plus courant pour
-            // les opportunités On The Move enrichies lors d'une passe precedente).
-            //
-            // Conditions retenues :
-            //   - description IS NULL (jamais renseignee)
-            //   - description = '' (chaine vide)
-            //   - description = 'Description non disponible.' (placeholder du scraper)
-            //   - disciplines IS NULL (jamais detectees par le LLM)
-            //   - disciplines = '' (chaine vide)
-            $qb->andWhere(
-                $qb->expr()->orX(
-                    's.description IS NULL',
-                    "s.description = ''",
-                    "s.description = 'Description non disponible.'",
-                    's.disciplines IS NULL',
-                    "s.disciplines = ''"
-                )
-            );
+            // enriched_at IS NULL → jamais enrichi par le LLM
+            $qb->andWhere('s.enrichedAt IS NULL');
         }
 
         // Filtre par source (option --source de la commande)
