@@ -5,16 +5,23 @@
  * de titres par lettre. Chargé dans base.html.twig pour toutes les pages.
  *
  *
- * PRINCIPE DE L'EFFET
- * -------------------
- * Chaque lettre est enveloppée par le JS dans cette structure :
+ * STRUCTURE DOM PRODUITE PAR LE JS
+ * ---------------------------------
+ * Le JS enveloppe maintenant les lettres en deux niveaux :
  *
- *   <span class="tr-char">                          ← conteneur lettre (overflow:hidden)
- *     <span class="tr-char__main">A</span>          ← lettre principale (fondu+flou)
- *     <span class="tr-char__slice tr-char__slice--top"></span>    ← bande haute (vide)
- *     <span class="tr-char__slice tr-char__slice--mid"></span>    ← bande milieu (vide)
- *     <span class="tr-char__slice tr-char__slice--bot"></span>    ← bande basse (vide)
+ *   "Bonjour Monde" devient :
+ *
+ *   <span class="tr-word">                              ← conteneur du MOT
+ *     <span class="tr-char">                            ← conteneur d'une LETTRE
+ *       <span class="tr-char__main">B</span>            ← lettre principale (fondu+flou)
+ *       <span class="tr-char__slice tr-char__slice--top"></span>  ← bande haute (vide)
+ *       <span class="tr-char__slice tr-char__slice--mid"></span>  ← bande milieu (vide)
+ *       <span class="tr-char__slice tr-char__slice--bot"></span>  ← bande basse (vide)
+ *     </span>
+ *     ... (autres lettres du mot)
  *   </span>
+ *   " "                                                 ← VRAI nœud texte espace
+ *   <span class="tr-word">...</span>                    ← mot suivant
  *
  * Les slices sont des éléments VIDES (pas de texte). Leur fond coloré
  * (var(--accent) via CSS) crée l'effet de balayage décoratif.
@@ -25,6 +32,25 @@
  *
  * Le stagger (délai croissant par lettre) est piloté par la custom
  * property CSS --i posée en inline style par le JS sur chaque .tr-char.
+ *
+ *
+ * CORRECTION DE MISE EN PAGE (vs version précédente)
+ * ---------------------------------------------------
+ * Problème résolu : avec des .tr-char directement dans le titre, chaque
+ * lettre étant un inline-block, le navigateur pouvait :
+ *   1. Couper une ligne au milieu d'un mot (chaque lettre = point de coupure).
+ *   2. Changer l'alignement (le contenu inline-block se comporte différemment
+ *      d'un flux texte normal selon la largeur du conteneur et le text-align).
+ *   3. Modifier l'interligne (chaque inline-block a sa propre baseline).
+ *
+ * Solution :
+ *   - .tr-word { display:inline; white-space:nowrap } : les mots restent inline
+ *     (flux texte normal), ne se coupent jamais en deux, et le text-align du
+ *     titre est respecté sans modification.
+ *   - Les espaces entre mots sont de VRAIS nœuds texte ' ' (pas des spans)
+ *     => largeur naturelle de la fonte, points de coupure naturels.
+ *   - .tr-char { display:inline-block } reste pour overflow:hidden (contenir
+ *     les slices animées), mais est maintenant à l'intérieur d'un .tr-word.
  *
  *
  * PROGRESSIVE ENHANCEMENT
@@ -141,7 +167,7 @@
 
 
 /* ══════════════════════════════════════════════════════════════════════════
-   STRUCTURE : .tr-char et ses enfants
+   STRUCTURE : .tr-word, .tr-char et leurs enfants
    ─────────────────────────────────────────────────────────────────────────
    Ces règles structurelles ne cachent rien par défaut.
    Le CSS d'armement (qui cache les lettres avant l'animation) est
@@ -149,19 +175,48 @@
 ══════════════════════════════════════════════════════════════════════════ */
 
 /*
+ * Conteneur d'un MOT entier.
+ *
+ * display:inline : le mot s'intègre dans le flux texte du titre, EXACTEMENT
+ * comme le texte brut d'origine. L'alignement (text-align), le line-height,
+ * et la position dans la page restent identiques à la version non animée.
+ *
+ * white-space:nowrap : le navigateur ne coupe JAMAIS le mot en deux.
+ * La coupure de ligne ne peut se faire qu'entre les mots (avant ou après
+ * le nœud texte ' ' qui sépare deux .tr-word consécutifs), exactement
+ * comme pour du texte non animé.
+ *
+ * Pas de display:inline-block ici : inline-block changerait le comportement
+ * de text-align et introduirait des décalages de baseline.
+ */
+.tr-word {
+    display:     inline;
+    white-space: nowrap;
+}
+
+/*
  * Conteneur d'une lettre unique.
- * display:inline-block : permet à overflow:hidden de fonctionner sur
- * un élément inline (les <span> enfants sont inline par défaut).
+ * display:inline-block : nécessaire pour que overflow:hidden fonctionne
+ * sur un élément inline (les slices en position:absolute doivent être
+ * contenues dans la boîte de la lettre).
  * overflow:hidden : contient les bandes translateX dans les limites
  * de la boîte de la lettre => PAS de scroll horizontal.
  * position:relative : référence pour les bandes en position:absolute.
  * vertical-align:bottom : aligne les inline-blocks sur leur bord bas
- * (évite le décalage de baseline entre les lettres).
+ * (évite le décalage de baseline de 1-2px entre les lettres du même mot).
  *
  * line-height:inherit : sans ça, passer de inline à inline-block
  * réinitialise le line-height au "normal" du navigateur (~1.2).
  * Les titres utilisent des line-heights serrés (.88, .92…) — inherit
- * garantit que chaque .tr-char adopte le line-height de son parent h1/h2.
+ * garantit que chaque .tr-char adopte le line-height de son parent h1/h2
+ * via le .tr-word, qui lui-même hérite du titre.
+ *
+ * Note sur l'interligne :
+ * Avec display:inline-block, le navigateur aligne les lettres sur leur
+ * "baseline" (ou "bottom" grâce à vertical-align:bottom). La hauteur de
+ * ligne effective de chaque ligne du titre est celle du .tr-word le plus
+ * grand de cette ligne (inline) * le line-height hérité. Cela reproduit
+ * fidèlement le comportement du texte non animé.
  */
 .tr-char {
     display:        inline-block;
@@ -229,15 +284,14 @@
 }
 
 /*
- * Espace visuel pour les espaces inter-mots.
- * Le JS insère un <span class="tr-space"> pour chaque espace dans le texte.
- * min-width:0.3em est une valeur typique pour un espace em (dépend de la fonte).
- * inline-block : permet de définir une largeur sur un span.
+ * NOTE : la classe .tr-space (ancien système) est supprimée.
+ * Les espaces entre mots sont maintenant de VRAIS nœuds texte ' '
+ * insérés directement dans le DOM par le JS — pas de span intermédiaire.
+ * Avantage :
+ *   - Largeur naturelle de la fonte (pas de valeur arbitraire 0.3em).
+ *   - Pas de pollution du DOM avec des spans inutiles.
+ *   - Comportement 100% identique au texte non animé.
  */
-.tr-space {
-    display: inline-block;
-    width:   0.3em;
-}
 
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -330,8 +384,7 @@
      * Seuls les sélecteurs actifs du système actuel sont listés :
      *   - .tr-char__main : lettre principale (fondu + blur)
      *   - .tr-char__slice : bandes de balayage (translateX + opacity)
-     * Les anciens sélecteurs .tr-block et .tr-fade (systèmes précédents,
-     * supprimés) ont été retirés pour éviter des sélecteurs morts.
+     * La classe .tr-space est supprimée (ancien système).
      */
     .tr-char__main,
     .tr-char__slice {

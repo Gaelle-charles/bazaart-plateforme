@@ -31,17 +31,52 @@
  * (sans attendre le scroll), car il est déjà visible.
  *
  *
- * DÉCOUPAGE PAR CARACTÈRE
- * -----------------------
+ * DÉCOUPAGE PAR MOT (logique principale)
+ * ----------------------------------------
+ * Pour préserver la mise en page, on ne pose PAS les .tr-char directement dans
+ * le titre. À la place, chaque MOT est enveloppé dans un .tr-word (display:inline-block,
+ * white-space:nowrap) qui contient les .tr-char de ses lettres.
+ *
+ * Les espaces entre mots sont rendus par de VRAIS nœuds texte ' ' (espace ordinaire)
+ * afin que :
+ *   a) la largeur d'espace soit naturelle (celle de la fonte, pas une valeur arbitraire),
+ *   b) le navigateur ne coupe les lignes QU'aux frontières de mots (jamais au milieu
+ *      d'un mot, comme avec un texte non animé).
+ *
+ * Résultat : un titre animé doit s'afficher EXACTEMENT comme l'original.
+ *
+ *
+ * DÉCOUPAGE PAR CARACTÈRE (armElement)
+ * -------------------------------------
  * La fonction armElement() parcourt les nœuds enfants de chaque titre.
- *   - Nœuds TEXTE (nodeType 3) : chaque caractère est enveloppé dans un .tr-char.
- *     Les espaces deviennent des .tr-space (pas d'animation, juste largeur).
- *   - Nœuds ÉLÉMENTS (nodeType 1 : <span>, <br>, etc.) : préservés tels quels,
- *     pas détruits. Pour les éléments inline avec du texte (ex: <span> coloré),
- *     le découpage par caractère est appliqué RÉCURSIVEMENT sur leur contenu.
+ *   - Nœuds TEXTE (nodeType 3) : on extrait d'abord les mots (split sur whitespace),
+ *     puis chaque mot est enveloppé dans un .tr-word, et chaque lettre du mot dans
+ *     un .tr-char. Les espaces entre mots redeviennent des nœuds texte ' '.
+ *   - Nœuds ÉLÉMENTS (nodeType 1 : <span>, <br>, etc.) : préservés tels quels.
+ *     Pour les éléments inline avec du texte (ex: <span> coloré), le découpage
+ *     par mot/lettre est appliqué RÉCURSIVEMENT sur leur contenu.
  *     Pour les éléments structurels (<br>, <svg>…), ils sont replacés sans modification.
  *
  * L'index --i est global à tout le titre (pas par mot) pour un stagger continu.
+ *
+ *
+ * ALIGNEMENT ET INTERLIGNE
+ * ------------------------
+ * Le problème classique : display:inline-block sur chaque .tr-char crée des boîtes
+ * indépendantes, ce qui :
+ *   - décale l'alignement du titre (le bloc se centre si width:fit-content),
+ *   - coupe les mots au milieu (chaque lettre est cassable),
+ *   - perturbe le line-height (chaque inline-block a sa propre baseline).
+ *
+ * Solution adoptée :
+ *   - .tr-word { display:inline; white-space:nowrap } : chaque mot est inline,
+ *     donc le titre garde SON alignement naturel (text-align hérité du CSS du template).
+ *   - .tr-char { display:inline-block } reste nécessaire pour overflow:hidden
+ *     (contenir les slices animées), mais n'est plus le seul élément inline du titre.
+ *   - vertical-align:bottom sur .tr-char : aligne les inline-blocks sur la baseline bas,
+ *     ce qui évite le décalage de 1-2px entre lettres.
+ *   - line-height:inherit sur .tr-char : les titres avec line-height < 1 (0.88, 0.92)
+ *     gardent leur interligne serré.
  *
  *
  * ROBUSTESSE MARKUP
@@ -53,12 +88,14 @@
  * Cas limite documenté :
  * Les <br> sont préservés comme nœuds éléments (pas tentative de découpage
  * de leur contenu vide). L'index --i continue après le <br> sans interruption.
+ * Quand un <span> coloré ne contient qu'un seul mot (ex. "ART" en orange),
+ * le .tr-word est posé à l'intérieur du span, et les couleurs sont héritées.
  *
  *
  * PROGRESSIVE ENHANCEMENT
  * -----------------------
  * 1. Le JS ajoute .js-title-reveal-ready sur <html> EN PREMIER.
- * 2. Les titres sont ensuite armés (DOM modifié avec les .tr-char).
+ * 2. Les titres sont ensuite armés (DOM modifié avec les .tr-word/.tr-char).
  * 3. Sans JS : aucune classe posée => titres visibles normalement.
  * 4. prefers-reduced-motion : le JS sort IMMÉDIATEMENT, avant toute modification.
  *
@@ -133,9 +170,17 @@
         '.cp-title'
     ].join(', ');
 
-    /* ── 3. ARMEMENT D'UN TITRE PAR CARACTÈRE ──────────────────────────────────
-       Remplace le contenu textuel du titre par des .tr-char individuels.
+    /* ── 3. ARMEMENT D'UN TITRE PAR MOT ET PAR CARACTÈRE ──────────────────────
+       Remplace le contenu textuel du titre par des .tr-word contenant des .tr-char.
        Préserve les éléments HTML internes (couleurs, liens, <br>, icônes).
+
+       PRINCIPE CLÉ (correction mise en page) :
+       Au lieu de poser chaque .tr-char directement dans le titre (ce qui transforme
+       chaque lettre en inline-block cassable), on regroupe d'abord les lettres par MOT
+       dans un .tr-word (display:inline, white-space:nowrap). Ainsi :
+         - Le navigateur ne coupe les lignes qu'entre les mots (pas au milieu d'un mot).
+         - L'alignement text-align du titre est préservé (on ne change pas le flux).
+         - L'interligne est respecté (le titre reste un conteneur inline normal).
 
        @param {Element} el     - L'élément titre à armer.
        @param {Object}  state  - Objet partagé { charIndex: number }
@@ -155,29 +200,63 @@
             var node = childNodes[i];
 
             if (node.nodeType === 3) {
-                /* ── Nœud TEXTE : on découpe caractère par caractère ─── */
-                var text = node.nodeValue;
-                for (var c = 0; c < text.length; c++) {
-                    var ch = text[c];
+                /* ── Nœud TEXTE : on découpe par MOT, puis lettre par lettre ──
+                   Exemple : "LES INTERMÉDIAIRES." devient :
+                     [.tr-word "LES"] + nœud texte " " + [.tr-word "INTERMÉDIAIRES."]
 
-                    if (ch === ' ' || ch === ' ' || ch === '\n' || ch === '\t') {
-                        /* Espace (normal ou insécable) : on crée un .tr-space.
-                           Pas d'animation, juste un placeholder pour la largeur.
-                           Les sauts de ligne et tabulations sont ignorés
-                           (whitespace d'indentation Twig non visible). */
-                        if (ch === ' ' || ch === ' ') {
-                            var spaceSpan = document.createElement('span');
-                            spaceSpan.className = 'tr-space';
-                            /* Espace insécable : on conserve le caractère */
-                            spaceSpan.textContent = ch === ' ' ? ' ' : ' ';
-                            el.appendChild(spaceSpan);
+                   On split sur les espaces/retours à la ligne tout en conservant
+                   les espaces insécables ( ) comme partie du mot adjacent
+                   (un &nbsp; sert souvent à coller deux mots : "L'ART&nbsp;SANS").
+                   Pour ces espaces insécables, on les inclut dans le mot SUIVANT
+                   (ils font office de "colle" avant le mot suivant). */
+
+                var text = node.nodeValue;
+
+                /* Tokeniser : on découpe le texte en tokens.
+                   Chaque token est soit un "mot" (suite de caractères non-espace normal),
+                   soit un espace normal séparateur.
+                   On traite les whitespace invisibles (newline Twig) comme séparateurs. */
+                var tokens = tokenize(text);
+
+                for (var t = 0; t < tokens.length; t++) {
+                    var token = tokens[t];
+
+                    if (token.isSpace) {
+                        /* Espace NORMAL entre mots : on réinsère un vrai nœud texte ' '.
+                           La largeur est celle de la fonte (naturelle), pas une valeur fixe.
+                           Cela préserve l'espacement original du titre et permet au
+                           navigateur de couper les lignes exactement ici (et nulle part ailleurs). */
+                        el.appendChild(document.createTextNode(' '));
+                    } else if (token.text.length > 0) {
+                        /* MOT (ou fragment avec espace insécable) :
+                           on enveloppe toutes ses lettres dans un .tr-word.
+                           Le .tr-word est display:inline white-space:nowrap => le mot
+                           ne se coupe JAMAIS en deux (comportement d'un mot normal). */
+                        var wordSpan = document.createElement('span');
+                        wordSpan.className = 'tr-word';
+
+                        /* Découpe chaque caractère du mot en .tr-char animé */
+                        var wordText = token.text;
+                        for (var c = 0; c < wordText.length; c++) {
+                            var ch = wordText[c];
+
+                            /* Espace insécable (  = &nbsp;) :
+                               Il fait partie du mot (empêche la coupure entre deux mots
+                               dans le HTML source). On le laisse comme nœud texte à
+                               l'intérieur du .tr-word pour conserver son comportement
+                               visuel (coller les deux mots). */
+                            if (ch === ' ') {
+                                wordSpan.appendChild(document.createTextNode(' '));
+                            } else {
+                                /* Caractère visible : crée un .tr-char animé */
+                                wordSpan.appendChild(buildCharSpan(ch, state.charIndex));
+                                state.charIndex++;
+                            }
                         }
-                        /* Whitespace invisible (newline Twig) : ignoré */
-                    } else {
-                        /* Caractère visible : crée un .tr-char complet */
-                        el.appendChild(buildCharSpan(ch, state.charIndex));
-                        state.charIndex++;
+
+                        el.appendChild(wordSpan);
                     }
+                    /* Les tokens vides (whitespace invisible Twig) sont ignorés */
                 }
 
             } else if (node.nodeType === 1) {
@@ -186,7 +265,9 @@
 
                 if (tagName === 'br') {
                     /* <br> : on le réinsère tel quel.
-                       Il ne contient pas de texte à découper. */
+                       Il ne contient pas de texte à découper.
+                       Il force un retour à la ligne dans le flux inline,
+                       exactement comme le prévoit le template. */
                     el.appendChild(node);
 
                 } else if (tagName === 'svg' || tagName === 'img' ||
@@ -197,7 +278,7 @@
                 } else {
                     /* Éléments inline (<span>, <a>, <strong>, <em>…) :
                        on réinsère l'élément ET on découpe son contenu
-                       textuel récursivement.
+                       textuel récursivement par mot et par lettre.
                        Cela permet d'animer lettre par lettre les spans
                        de couleur comme .lp-hero__h1-orange ou .lp-saas__h2-accent,
                        tout en conservant leurs styles.
@@ -210,6 +291,65 @@
             }
             /* Les autres types de nœuds (commentaires, CDATA…) sont ignorés */
         }
+    }
+
+    /* ── 3b. TOKENISEUR DE TEXTE ──────────────────────────────────────────────
+       Découpe une chaîne de texte en tokens : mots ou espaces normaux.
+
+       Règles :
+       - Un espace ASCII ordinaire (0x20) ou un retour à la ligne / tabulation
+         (whitespace "invisible" Twig) = séparateur entre mots.
+       - Un espace insécable (  = &nbsp;) est COLLÉ au mot précédent ou suivant
+         (il ne crée pas de point de coupure de ligne — c'est son rôle sémantique).
+         Concrètement on l'inclut dans le token "mot" en cours.
+       - Plusieurs espaces ASCII consécutifs => un seul espace rendu (normalisé,
+         comme le ferait un navigateur pour du HTML normal).
+
+       @param {string} text - Le texte brut d'un nœud texte.
+       @returns {Array}  Tableau de { text: string, isSpace: boolean }
+                         isSpace=true => espace normal (nœud texte ' ' à insérer)
+                         isSpace=false => mot (à mettre dans un .tr-word) */
+    function tokenize(text) {
+        var tokens = [];
+        var current = '';   /* mot en cours de construction */
+        var i;
+
+        for (i = 0; i < text.length; i++) {
+            var ch = text[i];
+
+            if (ch === ' ' || ch === '\n' || ch === '\t' || ch === '\r') {
+                /* Espace ASCII ou whitespace invisible Twig :
+                   on finalise le mot en cours s'il n'est pas vide,
+                   puis on génère un token espace (un seul, même si plusieurs
+                   espaces consécutifs — les suivants sont sautés). */
+                if (current.length > 0) {
+                    tokens.push({ text: current, isSpace: false });
+                    current = '';
+                }
+                /* On génère un token espace UNIQUEMENT si ce n'est pas
+                   du whitespace invisible (newline Twig d'indentation).
+                   Règle : on ne génère un espace que si le caractère précédent
+                   n'était pas déjà un espace visible (évite les doublons). */
+                if (ch === ' ' && (tokens.length === 0 || !tokens[tokens.length - 1].isSpace)) {
+                    tokens.push({ text: ' ', isSpace: true });
+                }
+                /* Les \n, \t, \r Twig sont des espaces invisibles : ignorés */
+
+            } else {
+                /* Tout autre caractère (lettre, chiffre, ponctuation, espace insécable) :
+                   on l'accumule dans le mot en cours.
+                   L'espace insécable ( ) est volontairement traité comme
+                   partie du mot : il "colle" deux mots dans le template HTML. */
+                current += ch;
+            }
+        }
+
+        /* Finaliser le dernier mot s'il existe */
+        if (current.length > 0) {
+            tokens.push({ text: current, isSpace: false });
+        }
+
+        return tokens;
     }
 
     /* ── 4. CONSTRUCTION D'UN SPAN DE LETTRE ──────────────────────────────────
@@ -341,7 +481,7 @@
             return;
         }
 
-        /* ÉTAPE D : armer chaque titre (découpage par caractère). */
+        /* ÉTAPE D : armer chaque titre (découpage par mot et par caractère). */
         collected.forEach(function (el) {
 
             /* ── ACCESSIBILITÉ : aria-label avant découpe ─────────────────────
