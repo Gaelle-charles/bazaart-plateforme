@@ -2,6 +2,23 @@
 framework:
     secret: '%env(APP_SECRET)%'
 
+    # ── Versionnage des assets (cache-busting) ──────────────────────────────
+    #
+    # Problème résolu : Nginx sert nos fichiers statiques (CSS/JS/vidéos) avec un
+    # cache navigateur long « immutable » (max-age 30 jours). Sans version dans
+    # l'URL, après un déploiement le navigateur garde l'ANCIEN fichier (ex. le
+    # footer.css mis à jour n'apparaissait pas).
+    #
+    # Avec `assets.version`, la fonction Twig `asset('css/footer.css')` génère
+    # `/css/footer.css?v20260619` : à chaque changement on incrémente cette
+    # valeur, l'URL change donc, et le navigateur retélécharge le fichier.
+    #
+    # ⚠️ À INCRÉMENTER à chaque modification de fichier CSS / JS / image / vidéo
+    # dans public/ (ex. v20260619 -> v20260620). Volontairement manuel et committé
+    # avec le code, donc déployé automatiquement avec le reste.
+    assets:
+        version: 'v20260619'
+
     # Note that the session will be started ONLY if you read or write from it.
     session: true
 

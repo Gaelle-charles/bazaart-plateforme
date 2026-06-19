@@ -345,271 +345,297 @@
 
 
 /* ──────────────────────────────────────────────────────────────────────
-   2. HERO — Cœur du design
-   Titre géant en Archivo Black, sous-titre en Instrument Serif,
-   deux CTAs empilés, bandeau de coordonnées géographiques.
+   2. HERO — SCROLL-EXPAND (non-bloquant)
 
-   PHOTO DE FOND + PARALLAXE (ajout)
-   Architecture à trois couches (de bas en haut) :
-     1. ::before  — photo hero-bazaart.jpg, débordante (110% hauteur)
-                    manipulée par JS pour la parallaxe (transform translateY)
-     2. ::after   — overlay noir semi-transparent (lisibilité du texte)
-     3. contenu   — .lp-container (z-index: 1, position: relative)
+   ARCHITECTURE GENERALE :
+   La section .lp-hero est intentionnellement TRES HAUTE (200vh) pour
+   creer une "piste de scroll" pendant laquelle l'effet se produit.
+   L'utilisateur scrolle normalement — aucun hijacking de la molette.
 
-   On utilise des pseudo-éléments plutôt qu'un background-image direct car :
-     a) on peut appliquer transform: translateY sur UNIQUEMENT la photo
-        sans que le contenu suive (parallaxe propre)
-     b) on évite background-attachment:fixed (buggé/saccadé sur iOS)
-     c) overlay séparé = opacité réglable indépendamment de l'image
+   A l'interieur, .lp-hero__sticky est en position:sticky; top:0; height:100vh.
+   Ce conteneur reste visible pendant toute la descente dans la section,
+   puis disparait normalement quand la section se termine.
+
+   PROGRESSION :
+   progress = (scrollY - sectionTop) / (sectionHeight - viewportHeight)
+   0 = on vient d'entrer dans la section (etat initial)
+   1 = on a traverse toute la section (scroll reprend normalement apres)
+
+   COUCHES (du bas vers le haut) :
+     1. .lp-hero__bg         — image hero-bazaart.jpg : s'estompe (opacity 1->0)
+     2. .lp-hero__video-wrap — video hero-clap.mp4 : part petite, grandit
+     3. .lp-hero__video-veil — voile sombre pour lisibilite du titre
+     4. .lp-hero__text       — titre + sous-titre : les mots s'ecartent
+     5. .lp-hero__ctas-reveal — CTAs : apparaissent quand progress ~ 1
+
+   TECHNIQUE PERFORMANCE :
+   - requestAnimationFrame cale les mises a jour sur le refresh navigateur
+   - scroll listener passive:true : scroll natif fluide (pas de blocage)
+   - On n'anime QUE transform et opacity (zero reflow)
+   - will-change pre-alloue les layers GPU
 ────────────────────────────────────────────────────────────────────── */
 
+/* ── Section conteneur principal ────────────────────────────────────── */
 .lp-hero {
-    border-bottom: 1px solid var(--ink);
+    /* 200vh = deux hauteurs d'ecran : la zone de scroll de l'effet.
+       Quand l'utilisateur a scroll 100vh dans cette section, progress=1
+       et les animations sont terminees. Le reste de la page suit normalement. */
+    height:        200vh;
     position:      relative;
-    overflow:      hidden;
-    /* Pas de min-height sur la section : le hero grandit de son contenu
-       (container + marquee). C'est le container intérieur qui gère
-       la hauteur visible — voir .lp-hero > .lp-container ci-dessous. */
+    border-bottom: 1px solid var(--ink);
 }
 
-/* ── Couche 1 : photo de fond (::before) ──────────────────────────────
-   On positionne l'image en débordant suffisamment (top: -20%, height: 140%)
-   pour avoir de la marge en haut ET en bas pendant TOUTE la plage de parallaxe.
-
-   CALCUL DE LA MARGE NÉCESSAIRE :
-   - Hauteur hero ≈ 100dvh - 64px (nav) ≈ 650px sur un écran 720px de haut.
-   - facteur parallaxe JS = 0.25 (voir le script ci-dessous).
-   - déplacement max = scrollY_max × 0.25.
-   - scrollY_max pendant lequel le hero est visible ≈ hauteur du hero ≈ 650px.
-   - déplacement max ≈ 650 × 0.25 = 163px (image remonte vers le haut).
-
-   Avec top: -20% et height: 140% sur un hero de 650px :
-   - l'image mesure 140% × 650 = 910px.
-   - elle commence à -20% × 650 = -130px au-dessus du haut du hero.
-   - elle déborde de 910 - 650 - 130 = 130px sous le bas du hero.
-   - 130px de débordement bas > 163px de déplacement max... pas assez.
-
-   Correction finale : top: -25%, height: 150%.
-   - l'image mesure 150% × 650 = 975px.
-   - débordement haut : 25% × 650 = 163px.
-   - débordement bas : 975 - 650 - 163 = 162px.
-   - Les deux débordements (≈163px) couvrent exactement le déplacement max (163px).
-   On choisit 165px de marge soit top: -26%, height: 152% pour ajouter
-   un petit coussin de sécurité.
-
-   NB : sans ce débordement suffisant, translateY négatif révèle le fond
-   sable (#F2EFE6) sous la photo → "zone grise" visible en bas du hero. */
-.lp-hero::before {
-    content:             '';
-    position:            absolute;
-    /*
-     * Débordement vertical corrigé :
-     *   top: -26%    → 26% de la hauteur du hero au-dessus du bord haut
-     *   height: 152% → l'image couvre 152% de la hauteur du hero
-     * Débordement bas = 152% - 100% - 26% = 26% → ~169px sur un écran 650px.
-     * Déplacement parallaxe max = 650 × 0.25 = 163px < 169px → aucun bord visible.
-     */
-    top:                 -26%;
-    left:                0;
-    width:               100%;
-    height:              152%;
-    /* URL statique de l'image de fond du hero */
-    background-image:    url('/images/hero-bazaart.jpg');
-    background-size:     cover;
-    background-position: center center;
-    background-repeat:   no-repeat;
-    /* La couche photo est en z-index 0 : au-dessus du fond de section
-       mais sous l'overlay (::after, z-index 1) et le contenu (z-index 2). */
-    z-index:             0;
-    /* will-change: transform informe le navigateur qu'on va animer transform.
-       Il peut créer un layer GPU a l'avance -> pas de jank au premier scroll. */
-    will-change:         transform;
-    /* Technique "CSS variable pilotée par JS" :
-       Le JS ne peut pas cibler un pseudo-élément directement (::before n'est
-       pas dans le DOM). A la place, le JS définit une custom property
-       --hero-parallax-y sur la SECTION .lp-hero, et le ::before la consomme
-       via var(). C'est la technique standard pour animer des pseudo-éléments
-       avec du JS (sans dupliquer un vrai élément DOM). */
-    transform:           translate3d(0, var(--hero-parallax-y, 0px), 0);
+/* ── Conteneur sticky : reste ancre en haut pendant toute la descente ── */
+.lp-hero__sticky {
+    /* sticky : colle au haut du viewport tant qu'on est dans la section */
+    position: sticky;
+    top:      0;
+    /* 100vh : occupe exactement la hauteur du viewport */
+    height:   100vh;
+    /* overflow:hidden empeche les elements animes de depasser les bords */
+    overflow: hidden;
+    /* Fond noir derriere tout — visible quand l'image s'estompe */
+    background: #0D0D0D;
 }
 
-/* ── Couche 2 : overlay sombre (::after) ─────────────────────────────
-   Gradient léger du haut vers le bas : légèrement plus dense en bas
-   pour améliorer la lisibilité du sous-titre + CTAs sans trop assombrir
-   le titre. Valeurs finales : 45% haut -> 55% bas (filtre "léger").
-   Ajuster si la photo est très claire (monter à 55%/65%) ou très sombre
-   (descendre à 30%/40%). */
-.lp-hero::after {
-    content:    '';
-    position:   absolute;
-    inset:      0; /* shorthand pour top:0;right:0;bottom:0;left:0 */
+/* ── Couche 1 : image de fond (hero-bazaart.jpg) ────────────────────── */
+.lp-hero__bg {
+    position:    absolute;
+    inset:       0;
+    background:  url('/images/hero-bazaart.jpg') center/cover no-repeat;
+    z-index:     0;
+    will-change: opacity;
+    opacity:     1;
+}
+
+/* ── Couche 2 : video (hero-clap.mp4) ─────────────────────────────────
+   La video part d'un petit rectangle arrondi centre (scale 0.28)
+   et grandit jusqu'a plein ecran via transform: scale() pilote par JS.
+   scale() plutot que width/height -> zero reflow, animation fluide. */
+.lp-hero__video-wrap {
+    position:        absolute;
+    inset:           0;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    z-index:         1;
+    will-change:     transform;
+    /* Etat initial : petit rectangle */
+    transform:       scale(0.28);
+}
+
+.lp-hero__video {
+    width:         100%;
+    height:        100%;
+    object-fit:    cover;
+    /* Coins arrondis visibles uniquement en etat partiellement reduit */
+    border-radius: 20px;
+    box-shadow:    0 24px 80px rgba(0, 0, 0, 0.6);
+    display:       block;
+}
+
+/* ── Couche 3 : voile sombre sur la video ──────────────────────────────
+   Gradient noir semi-transparent pour lisibilite du titre. */
+.lp-hero__video-veil {
+    position:       absolute;
+    inset:          0;
+    z-index:        2;
+    pointer-events: none;
     background: linear-gradient(
         to bottom,
-        rgba(0, 0, 0, 0.45),
-        rgba(0, 0, 0, 0.58)
+        rgba(0, 0, 0, 0.20) 0%,
+        rgba(0, 0, 0, 0.55) 60%,
+        rgba(0, 0, 0, 0.70) 100%
     );
-    /* z-index 1 : au-dessus de la photo (::before z-index 0)
-       mais SOUS le contenu (.lp-container z-index 2). */
-    z-index:    1;
-    /* pointer-events: none : l'overlay ne capture pas les clics/hover —
-       les boutons CTA restent cliquables. */
+}
+
+/* ── Couche 4 : texte du hero (titre + sous-titre) ─────────────────────
+   Ancre en bas du conteneur sticky. Le JS anime translateX des parties
+   du titre (elles s'ecartent vers la gauche et la droite). */
+.lp-hero__text {
+    position:       absolute;
+    bottom:         15%;
+    left:           0;
+    right:          0;
+    z-index:        3;
+    padding-inline: var(--container-px, 32px);
+}
+
+/* Ligne du titre : overflow:hidden evite le scrollbar pendant le translateX */
+.lp-hero__title-row {
+    overflow: hidden;
+}
+
+/* Les deux parties du titre s'ecartent dans des directions opposees */
+.lp-hero__title-left,
+.lp-hero__title-right {
+    display:     inline-block;
+    will-change: transform;
+}
+
+/* ── Couche 5 : CTAs apparus en fin d'animation ────────────────────────
+   Invisibles par defaut, apparaissent quand progress ~ 1. */
+.lp-hero__ctas-reveal {
+    position:       absolute;
+    bottom:         7%;
+    left:           0;
+    right:          0;
+    z-index:        4;
+    padding-inline: var(--container-px, 32px);
+    display:        flex;
+    gap:            12px;
+    opacity:        0;
     pointer-events: none;
+    will-change:    opacity;
 }
 
-/* ── Couche 3 : contenu (position relative + z-index) ────────────────
-   Tout enfant direct de .lp-hero doit être au-dessus des deux couches.
-   On élève .lp-container et .lp-marquee via z-index. */
-.lp-hero > .lp-container,
-.lp-hero > .lp-marquee {
-    position: relative;
-    z-index:  2; /* au-dessus de ::before (0) et ::after (1) */
+/* Quand visible (JS met opacity=1 et pointer-events=auto) */
+.lp-hero__ctas-reveal.is-visible {
+    opacity:        1;
+    pointer-events: auto;
 }
 
-/* ── HAUTEUR PLEIN ÉCRAN DU HERO (sans min-height sur la section) ──────────
-   La navbar (.nav) est en position:sticky, height:64px, dans le flux normal.
-   Le hero section commence donc juste sous la navbar (pas d'overlap).
-   Pour que la zone de contenu du hero remplisse EXACTEMENT l'espace visible
-   sous la navbar, on applique min-height:calc(100dvh - 64px) sur ce container.
-
-   Résultat à 1280×720px :
-     - Navbar : 64px (y=0 → y=64)
-     - Container hero : 720-64 = 656px (y=64 → y=720) — remplit le viewport
-     - Marquee : commence à y=720 → juste sous la ligne de flottaison ✓
-     - Section Hubs : encore plus bas → nécessite de scroller ✓
-
-   justify-content:center centre verticalement le bloc (meta + H1 + grid)
-   dans les 656px disponibles, sans le coller en haut.
-
-   padding-bottom:48px : compense le padding-top:48px du .lp-hero__meta.
-   Sans ça, le centrage est asymétrique (le meta consomme 48px de padding
-   en haut du bloc, ce qui décale le centre visuel vers le bas).
-
-   ⚠️  Si la hauteur de la navbar change, mettre à jour cette valeur (64px). */
-.lp-hero > .lp-container {
-    min-height:      calc(100dvh - 64px);
-    display:         flex;
-    flex-direction:  column;
-    justify-content: center;
-    padding-bottom:  48px; /* symétrie avec padding-top:48px du meta */
-}
-
-/* Bandeau métadonnées (eyebrow + coordonnées) */
+/* ── Bandeau metadonnees (eyebrow + coordonnees) ────────────────────── */
 .lp-hero__meta {
+    position:        absolute;
+    top:             0;
+    left:            0;
+    right:           0;
+    z-index:         5;
     display:         flex;
     justify-content: space-between;
     align-items:     center;
-    padding-top:     48px;
-    margin-bottom:   24px;
+    padding-top:     80px;
+    padding-inline:  var(--container-px, 32px);
 }
 
-/* Coordonnées géographiques (côté droit) */
+/* ── Coordonnees geographiques ──────────────────────────────────────── */
 .lp-hero__coords {
     font-family:    var(--mono);
     font-size:      11px;
     letter-spacing: .1em;
-    color:          var(--ink-mute);
+    color:          rgba(255, 255, 255, 0.65);
 }
 
-/*
-   H1 géant — le cœur du design Street.
-   clamp() assure la fluidité du font-size entre les breakpoints :
-     - mobile 375px  : limité par les media queries ≤480px et ≤768px
-     - tablet 768px  : ~54px (7vw = 53.8px, dans le clamp naturellement)
-     - desktop 1280px: ~90px (7vw = 89.6px — imposant ET dans le fold !)
-     - desktop 1440px: ~101px (7vw = 100.8px → dans la plage)
-     - large 1600px+ : 112px (plafonné à 7rem = 112px)
+/* ── Typographie du H1 ─────────────────────────────────────────────── */
 
-   Historique des ajustements :
-     v1 — clamp(64px, 12vw, 180px) : trop grand → à 1280px = 154px,
-          le paragraphe + les CTAs passaient sous le fold.
-     v2 — clamp(2.5rem, 6vw, 5.5rem) : trop réduit → ~77px, titre trop
-          discret, plus imposant.
-     v3 (actuelle) — clamp(3rem, 7vw, 7rem) : entre-deux. À 1280px = 90px.
-          Le H1 sur 3 lignes ≈ 237px. Avec meta (92px) + grid (130px) +
-          marquee (100px) = 559px → tient dans 660px de viewport dédié.
-
-   letter-spacing négatif (-0.03em) = style "affiche imprimée"
-   line-height: .88 = lignes très serrées comme une affiche typographique
-*/
 .lp-hero__h1 {
-    font-family:    var(--display); /* Archivo Black */
-    /* clamp(min, préférence-fluide, max) :
-       - min  3rem  = 48px → plancher mobile (réduit par @480px/@768px)
-       - 7vw        → croît fluidement avec la largeur du viewport
-       - max  7rem  = 112px → plafond desktop large
-       Imposant sur desktop, contenu visible sans scroll à partir de 1280px. */
+    font-family:    var(--display);
     font-size:      clamp(3rem, 7vw, 7rem);
     line-height:    .88;
     letter-spacing: -.03em;
-    margin:         0;
-    color:          var(--ink);
+    margin:         0 0 16px;
+    color:          #ffffff;
     text-transform: uppercase;
 }
 
-/* Mot en orange (ART) — accent-2 = orange tangerine */
 .lp-hero__h1-orange {
     color: var(--accent-2);
 }
 
-/* Mot sur fond lime (SANS) — fond vert acide, texte ink */
 .lp-hero__h1-lime {
     background:  var(--accent);
     padding:     0 .12em;
-    /* display inline pour que le fond n'occupe pas toute la ligne */
     display:     inline;
+    color:       var(--ink);
 }
 
-/* Grille sous le H1 : texte (2/3) + CTAs (1/3) */
-.lp-hero__grid {
-    display:               grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap:                   32px;
-    margin-top:            48px;
-    align-items:           end;
-    padding-bottom:        24px;
-}
-
-/* Texte de description — 2 colonnes sur 3, Instrument Serif */
 .lp-hero__desc {
-    font-family:  var(--serif);  /* Instrument Serif — éditorial, doux */
-    font-size:    clamp(18px, 2vw, 24px);
-    line-height:  1.25;
+    font-family:  var(--serif);
+    font-size:    clamp(16px, 1.8vw, 22px);
+    line-height:  1.3;
     margin:       0;
-    grid-column:  span 2;
-    max-width:    760px;
-    color:        var(--ink);
+    color:        rgba(255, 255, 255, 0.88);
+    max-width:    600px;
+    will-change:  transform;
 }
 
 .lp-hero__desc em {
-    /* <em> est sémantiquement juste (emphase légère), on conserve l'italique
-       de Instrument Serif qui est très élégant */
     font-style: italic;
 }
 
-/* Colonne CTAs — boutons empilés */
-.lp-hero__ctas {
-    display:        flex;
-    flex-direction: column;
-    gap:            10px;
-    align-items:    flex-start;
+/* .lp-hero__grid conservee vide pour compatibilite */
+.lp-hero__grid {
+    display: none;
 }
 
+/* ─── ACCESSIBILITE : prefers-reduced-motion ──────────────────────────
+   Affiche directement l'etat final sans animation si OS demande
+   les mouvements reduits. */
+@media (prefers-reduced-motion: reduce) {
+    .lp-hero {
+        height:     auto;
+        min-height: 100vh;
+    }
+    .lp-hero__sticky {
+        position:   relative;
+        height:     auto;
+        min-height: 100vh;
+    }
+    .lp-hero__bg {
+        opacity: 0;
+    }
+    .lp-hero__video-wrap {
+        transform: scale(1);
+    }
+    .lp-hero__title-left,
+    .lp-hero__title-right,
+    .lp-hero__desc {
+        transform: none;
+    }
+    .lp-hero__ctas-reveal {
+        opacity:        1;
+        pointer-events: auto;
+    }
+}
+
+/* ─── MOBILE : hero plus court, amplitudes reduites ─────────────────── */
+@media (max-width: 768px) {
+    .lp-hero {
+        height: 180vh;
+    }
+    .lp-hero__h1 {
+        overflow-wrap: break-word;
+    }
+    .lp-hero__meta {
+        flex-direction: column;
+        align-items:    flex-start;
+        gap:            8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .lp-hero__h1 {
+        font-size:      clamp(28px, 8vw, 36px);
+        letter-spacing: -.01em;
+        line-height:    .92;
+    }
+    .lp-hero__text {
+        bottom: 20%;
+    }
+    .lp-hero__ctas-reveal {
+        flex-direction: column;
+        bottom:         6%;
+    }
+}
+
+/* ─── FIN DES STYLES HERO SCROLL-EXPAND ────────────────────────────── */
 
 /* ──────────────────────────────────────────────────────────────────────
-   3. MARQUEE — Bande défilante
+   3. MARQUEE — Bande defilante (suit la section hero dans le flux normal)
    Fond --ink, texte --accent (lime), animation CSS pure.
    Pause au survol via animation-play-state.
+   margin-top:0 car le marquee est maintenant APRES .lp-hero dans le HTML.
 ────────────────────────────────────────────────────────────────────── */
 
 .lp-marquee {
-    /* Bordures haut/bas héritées de la section hero (pas besoin de les répéter) */
     border-top:    1px solid var(--ink);
     border-bottom: 1px solid var(--ink);
     background:    var(--ink);
     color:         var(--accent);
     padding:       14px 0;
     overflow:      hidden;
-    margin-top:    48px;
+    margin-top:    0;
 }
 
 /* Piste défilante — width:max-content pour ne pas contraindre la largeur */
@@ -1350,32 +1376,6 @@
 
 @media (max-width: 768px) {
 
-    /* ─ Hero ─ */
-    /* Grille hero : 1 colonne */
-    .lp-hero__grid {
-        grid-template-columns: 1fr;
-        margin-top: 32px;
-    }
-    /* Le texte description reprend 1 colonne entière */
-    .lp-hero__desc {
-        grid-column: 1;
-        font-size: clamp(16px, 4vw, 20px);
-    }
-    /* CTAs en ligne sur mobile */
-    .lp-hero__ctas {
-        flex-direction: row;
-        flex-wrap:      wrap;
-    }
-    /* H1 hero : la base clamp(2.5rem, 6vw, 5.5rem) se comporte déjà bien
-       à 768px — 6vw = 46.1px, confortable sur tablette portrait.
-       Plus besoin de redéfinir le font-size ici (l'ancienne surcharge
-       à 9vw rendait le H1 PLUS grand que le desktop — bug de direction).
-       On conserve overflow-wrap en dernier recours (remplacé au niveau de
-       .lp-hub__name, mais utile ici aussi pour tous les navigateurs). */
-    .lp-hero__h1 {
-        overflow-wrap: break-word;
-    }
-
     /* ─ Hubs ─ */
     /* 1 colonne, bordures redéfinies */
     .lp-hubs__grid {
@@ -1486,25 +1486,7 @@
         gap:            12px;
     }
 
-    /* Hero méta : empile eyebrow + coordonnées en colonne sur mobile étroit.
-       Sans ça, les deux textes sur la même ligne se chevauchent. */
-    .lp-hero__meta {
-        flex-direction: column;
-        align-items:    flex-start;
-        gap:            8px;
-    }
-
-    /* H1 hero : sur très petit écran (375px iPhone SE), la base 6vw = 22.5px
-       se heurte au min de 2.5rem = 40px → trop grand pour 343px utiles.
-       Cette surcharge @480px réduit à clamp(28px, 8vw, 36px) :
-         - à 375px : 8vw = 30px → 30px (entre 28 et 36, ok)
-         - à 480px : 8vw = 38.4px → plafonné à 36px
-       "LES INTERMÉDIAIRES." à 30px en Archivo Black ≈ 226px → tient en 343px. */
-    .lp-hero__h1 {
-        font-size:      clamp(28px, 8vw, 36px);
-        letter-spacing: -.01em;
-        line-height:    .92; /* légèrement aéré pour la lisibilité à petite taille */
-    }
+    /* Hero meta/h1 : geres dans les @media dediees au hero scroll-expand (plus haut). */
 }
 
 
@@ -1672,130 +1654,157 @@
     <main id="main-content">
 
         {# ════════════════════════════════════════════════════════════════
-           2. HERO — Le cœur du design Street
-           Titre géant en Archivo Black + sous-titre en Instrument Serif
-           + 2 CTAs empilés.
+           2. HERO — SCROLL-EXPAND (non-bloquant)
+
+           Architecture :
+           - .lp-hero          : section haute (200vh) = "piste de scroll"
+           - .lp-hero__sticky  : position:sticky; height:100vh = fenetre visible
+           - .lp-hero__bg      : image de fond qui s'estompe (opacity 1 -> 0)
+           - .lp-hero__video-wrap : video qui grandit (scale 0.28 -> 1)
+           - .lp-hero__video-veil : voile sombre pour lisibilite du titre
+           - .lp-hero__text    : titre + sous-titre (mots qui s'ecartent)
+           - .lp-hero__ctas-reveal : CTAs apparus en fin d'animation
+           - .lp-hero__meta    : eyebrow + coordonnees (toujours visible)
+
+           Le JS calcule progress = scroll relatif dans la section (0 a 1)
+           et interpole chaque propriete en consequence.
+           Scroll NORMAL, aucun hijacking de la molette.
         ════════════════════════════════════════════════════════════════ #}
         <section class="lp-hero" aria-labelledby="lp-hero-title">
-            <div class="lp-container">
+            {# Conteneur sticky — reste visible pendant toute la piste de scroll #}
+            <div class="lp-hero__sticky">
 
-                {# Bandeau méta : eyebrow + coordonnées géographiques #}
-                <div class="lp-hero__meta">
-                    {# Eyebrow — sur-titre contextuel (prototypé : "Association · SaaS · Fr · 2026") #}
-                    <span class="lp-eyebrow" aria-hidden="true">
-                        Association · Plateforme · Fr · 2026
-                    </span>
-                    {# Coordonnées géographiques — détail "affiche de rue" du design #}
-                    <span class="lp-hero__coords" aria-hidden="true">
-                        48°&nbsp;51′&nbsp;N&nbsp;— Paris, France
-                    </span>
+                {# Couche 1 : image de fond (s'estompe au scroll) #}
+                <div class="lp-hero__bg" aria-hidden="true"></div>
+
+                {# Couche 2 : video hero-clap.mp4 (part petite, grandit) #}
+                <div class="lp-hero__video-wrap" aria-hidden="true">
+                    <video
+                        class="lp-hero__video"
+                        autoplay
+                        muted
+                        loop
+                        playsinline
+                        preload="auto"
+                        poster="{{ asset('videos/hero-clap-poster.jpg') }}"
+                        aria-label="Video d'ambiance Bazaart"
+                    >
+                        <source src="{{ asset('videos/hero-clap.mp4') }}" type="video/mp4">
+                    </video>
                 </div>
 
-                {#
-                    H1 géant — 3 lignes, style affiche typographique.
-                    Décomposition :
-                      Ligne 1 : "LE BAZAR" — texte encre pur
-                      Ligne 2 : "DE L'[ART en orange] — [SANS sur fond lime]"
-                      Ligne 3 : "LES INTERMÉDIAIRES."
+                {# Couche 3 : voile sombre sur la video (lisibilite du titre) #}
+                <div class="lp-hero__video-veil" aria-hidden="true"></div>
 
-                    Balises sémantiques :
-                    - <span class="lp-hero__h1-orange"> : couleur, pas de sémantique
-                    - <span class="lp-hero__h1-lime">   : surlignage fond, pas de <mark>
-                      (mark = "passage notable dans un résultat de recherche" — pas pertinent ici)
+                {# Couche 4 : texte du hero (titre + sous-titre) #}
+                <div class="lp-hero__text">
 
-                    font-size: clamp(3rem, 7vw, 7rem) → fluide entre mobile et desktop
-                    line-height: .88 → lignes très serrées, style "affiche imprimée"
-                #}
-                <h1 class="lp-hero__h1" id="lp-hero-title">
-                    LE BAZAR<br>
-                    DE L'<span class="lp-hero__h1-orange">ART</span>
-                    &nbsp;<span class="lp-hero__h1-lime">SANS</span><br>
-                    LES INTERMÉDIAIRES.
-                </h1>
-
-                {# Grille sous le H1 : texte (2 colonnes) + CTAs (1 colonne) #}
-                <div class="lp-hero__grid">
+                    {# Bandeau meta : eyebrow + coordonnees #}
+                    <div class="lp-hero__meta">
+                        <span class="lp-eyebrow" aria-hidden="true">
+                            Association &middot; Plateforme &middot; Fr &middot; 2026
+                        </span>
+                        <span class="lp-hero__coords" aria-hidden="true">
+                            48&deg;&nbsp;51&prime;&nbsp;N&nbsp;Paris, France
+                        </span>
+                    </div>
 
                     {#
-                        Description — Instrument Serif, 22-24px.
-                        Reproduit fidèlement le texte du prototype LandingManifesto.
-                        <em> sémantiquement juste : emphase légère sur "association"
-                        et "plateforme" — les lecteurs d'écran le prononcent avec
-                        une légère insistance, ce qui correspond à l'intention.
+                        H1 — decompose en deux <span> animes independamment :
+                        .lp-hero__title-left  → premier mot, part vers la GAUCHE
+                        .lp-hero__title-right → reste, part vers la DROITE
+
+                        overflow:hidden sur .lp-hero__title-row empeche les <span>
+                        de deborder pendant l'animation translateX.
+
+                        Le JS interpole translateX(0) -> translateX(+-Xpx) en
+                        fonction de la progression du scroll dans la section.
+                    #}
+                    <div class="lp-hero__title-row">
+                        <h1 class="lp-hero__h1" id="lp-hero-title">
+                            <span class="lp-hero__title-left">LE BAZAR</span>
+                            <span class="lp-hero__title-right">
+                                DE L'<span class="lp-hero__h1-orange">ART</span>
+                                &nbsp;<span class="lp-hero__h1-lime">SANS</span>
+                                LES&nbsp;INTERM&Eacute;DIAIRES.
+                            </span>
+                        </h1>
+                    </div>
+
+                    {#
+                        Sous-titre en Instrument Serif.
+                        Le JS lui applique le meme translateX que .lp-hero__title-right
+                        pour un effet de separation uniforme.
                     #}
                     <p class="lp-hero__desc">
-                        BazaArt rassemble en un seul endroit ce qui était dispersé
-                        sur 200 sites, 30 newsletters et trois groupes Facebook fatigués&nbsp;:
-                        les opportunités, les pairs, les ressources, les lives.
-                        Une <em>association</em> à trois hubs, et une <em>plateforme</em>
+                        BazaArt rassemble en un seul endroit ce qui &eacute;tait dispers&eacute;
+                        sur 200 sites, 30 newsletters et trois groupes Facebook fatigu&eacute;s&nbsp;:
+                        les opportunit&eacute;s, les pairs, les ressources, les lives.
+                        Une <em>association</em> &agrave; trois hubs, et une <em>plateforme</em>
                         faite par et pour les artistes.
                     </p>
 
-                    {# Colonne CTAs : "Explorer" (accent lime) + "Voir les tarifs" (ghost) #}
-                    <div class="lp-hero__ctas">
-                        <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--dark">
-                            Explorer les opportunités
-                            {# Flèche → SVG inline — pas de dépendance JS ni icône externe #}
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M5 12h14M13 5l7 7-7 7"/>
-                            </svg>
-                        </a>
-                        {#
-                            "Voir les tarifs" → dans le prototype, pointe vers /pricing.
-                            En V1, la plateforme est gratuite — on redirige vers l'inscription.
-                            BACK : si une page tarifaire est créée, remplacer path('app_register')
-                            par path('app_pricing').
-                        #}
-                        <a href="{{ path('app_register') }}" class="lp-btn lp-btn--ghost">
-                            Rejoindre gratuitement
-                        </a>
-                    </div>
+                </div>{# /.lp-hero__text #}
 
-                </div>{# /.lp-hero__grid #}
+                {#
+                    Couche 5 : CTAs — apparaissent en fade-in quand progress ~ 1.
+                    opacity:0 par defaut -> 1 via JS quand l'animation est presque terminee.
+                    pointer-events:none -> auto via JS en meme temps (evite clics accidentels).
+                #}
+                <div class="lp-hero__ctas-reveal">
+                    <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--dark">
+                        Explorer les opportunit&eacute;s
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M5 12h14M13 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                    <a href="{{ path('app_register') }}" class="lp-btn lp-btn--ghost" style="color:#fff;border-color:rgba(255,255,255,0.5);">
+                        Rejoindre gratuitement
+                    </a>
+                </div>{# /.lp-hero__ctas-reveal #}
 
-            </div>{# /.lp-container #}
-
-            {# ── Marquee bande défilante ──────────────────────────────────
-               Rendu DANS la section hero (border-bottom partagée avec lui).
-               Fond --ink, texte --accent. Animation CSS pure, pause au survol.
-
-               Le contenu est répété 3 fois pour créer l'illusion de continuité :
-               quand la piste a défilé de -33.333%, on revient au début
-               de manière seamless (l'œil ne perçoit pas le reset).
-            ─────────────────────────────────────────────────────────────── #}
-            <div class="lp-marquee" aria-hidden="true">
-                <div class="lp-marquee__track">
-                    {# Répétition 1 #}
-                    <span class="lp-marquee__item">+ 240 opportunités · indexées chaque semaine</span>
-                    <span class="lp-marquee__item">· · ·</span>
-                    <span class="lp-marquee__item">forum + lives — communauté d'artistes</span>
-                    <span class="lp-marquee__item">· · ·</span>
-                    <span class="lp-marquee__item">mentorat 1-to-1</span>
-                    <span class="lp-marquee__item">· · ·</span>
-                    <span class="lp-marquee__item">la plateforme qui te répond en 24h</span>
-                    <span class="lp-marquee__item">· · ·</span>
-                    {# Répétition 2 #}
-                    <span class="lp-marquee__item">+ 240 opportunités · indexées chaque semaine</span>
-                    <span class="lp-marquee__item">· · ·</span>
-                    <span class="lp-marquee__item">forum + lives — communauté d'artistes</span>
-                    <span class="lp-marquee__item">· · ·</span>
-                    <span class="lp-marquee__item">mentorat 1-to-1</span>
-                    <span class="lp-marquee__item">· · ·</span>
-                    <span class="lp-marquee__item">la plateforme qui te répond en 24h</span>
-                    <span class="lp-marquee__item">· · ·</span>
-                    {# Répétition 3 #}
-                    <span class="lp-marquee__item">+ 240 opportunités · indexées chaque semaine</span>
-                    <span class="lp-marquee__item">· · ·</span>
-                    <span class="lp-marquee__item">forum + lives — communauté d'artistes</span>
-                    <span class="lp-marquee__item">· · ·</span>
-                    <span class="lp-marquee__item">mentorat 1-to-1</span>
-                    <span class="lp-marquee__item">· · ·</span>
-                    <span class="lp-marquee__item">la plateforme qui te répond en 24h</span>
-                    <span class="lp-marquee__item">· · ·</span>
-                </div>
-            </div>
+            </div>{# /.lp-hero__sticky #}
 
         </section>{# /.lp-hero #}
+
+        {# ── Marquee bande defilante ───────────────────────────────────────
+           MAINTENANT APRES la section hero dans le flux normal.
+           Raison : le hero utilise position:sticky (200vh) donc le marquee
+           doit etre HORS de la section pour apparaitre au bon moment dans
+           le scroll (juste apres que le hero ait fini son animation).
+           Animation CSS pure, pause au survol, fond --ink, texte --accent.
+        ─────────────────────────────────────────────────────────────────── #}
+        <div class="lp-marquee" aria-hidden="true">
+            <div class="lp-marquee__track">
+                {# Repetition 1 #}
+                <span class="lp-marquee__item">+ 240 opportunites indexees chaque semaine</span>
+                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+                <span class="lp-marquee__item">forum + lives communaute d'artistes</span>
+                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+                <span class="lp-marquee__item">mentorat 1-to-1</span>
+                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+                <span class="lp-marquee__item">la plateforme qui te repond en 24h</span>
+                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+                {# Repetition 2 #}
+                <span class="lp-marquee__item">+ 240 opportunites indexees chaque semaine</span>
+                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+                <span class="lp-marquee__item">forum + lives communaute d'artistes</span>
+                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+                <span class="lp-marquee__item">mentorat 1-to-1</span>
+                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+                <span class="lp-marquee__item">la plateforme qui te repond en 24h</span>
+                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+                {# Repetition 3 #}
+                <span class="lp-marquee__item">+ 240 opportunites indexees chaque semaine</span>
+                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+                <span class="lp-marquee__item">forum + lives communaute d'artistes</span>
+                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+                <span class="lp-marquee__item">mentorat 1-to-1</span>
+                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+                <span class="lp-marquee__item">la plateforme qui te repond en 24h</span>
+                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+            </div>
+        </div>
 
 
         {# ════════════════════════════════════════════════════════════════
@@ -2542,147 +2551,215 @@
 {% block javascripts %}
 {{ parent() }}
 {#
-    SCRIPT PARALLAXE DU HERO
-    ========================
-    Technique : custom property CSS --hero-parallax-y définie sur .lp-hero
-    Le pseudo-élément ::before consomme cette variable via var() dans son
-    transform: translate3d(). JS ne peut pas cibler ::before directement
-    (ce n'est pas un vrai noeud DOM) — cette indirection via CSS variable
-    est la solution idiomatique.
-
-    Facteur parallaxe : 0.25 (réduit depuis 0.35 pour éviter la zone grise
-    en bas du hero). Le ::before a top: -26% / height: 152% pour un débordement
-    de 26% de chaque côté, calibré pour couvrir un déplacement max de 163px
-    sur un hero de 650px de hauteur.
-
+    SCRIPT SCROLL-EXPAND DU HERO
+    ============================
+    Technique non-bloquante : la section .lp-hero fait 200vh.
+    A l'interieur, .lp-hero__sticky est en position:sticky; top:0; height:100vh.
+    Le JS calcule progress = scroll relatif dans la section (0 -> 1) et
+    interpole opacity/scale/translateX en consequence.
+    L'utilisateur scrolle NORMALEMENT — aucun hijacking de la molette.
     Performances :
-    - requestAnimationFrame (rAF) : l'update visuel est toujours synchronisé
-      avec le refresh du navigateur (60fps max, jamais de frames perdues).
-    - On ne calcule qu'une seule fois par frame : si plusieurs événements
-      "scroll" arrivent dans la même frame, seul le dernier est traité.
-    - will-change: transform sur ::before -> le navigateur l'a déjà promu
-      en layer GPU, pas de repaint couteux.
+    - requestAnimationFrame : calculs cales sur le refresh navigateur (60fps max)
+    - scroll listener passive:true : scroll natif non bloque
+    - On n'anime QUE transform et opacity (zero reflow, couches GPU pre-allouees)
 
-    Accessibilité :
-    - prefers-reduced-motion: reduce -> on ne définit jamais la variable,
-      l'image reste fixe (transform: translate3d(0, 0px, 0) par défaut).
+    Accessibilite :
+    - prefers-reduced-motion : on sort immediatement, le CSS @media gere l'etat fixe
 
     Mobile :
-    - Sur mobile (< 768px), la parallaxe est désactivée : l'effet peut
-      scintiller sur iOS Safari et consomme de l'énergie pour un gain
-      visuel minimal sur petit écran.
-    - L'image de fond reste cover + center, donc belle et lisible.
+    - amplitudes reduites sur mobile (< 768px) pour eviter saccades iOS
+    - la section hero fait 180vh sur mobile (vs 200vh desktop)
 #}
 <script>
 (function () {
     'use strict';
 
-    /* 1. Vérifier l'accessibilité : si l'utilisateur préfère les mouvements
-          réduits, on ne fait rien du tout (l'image reste statique). */
-    var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (prefersReducedMotion) {
-        return; /* sortir du script immédiatement */
-    }
-
-    /* 2. Récupérer la section hero — si elle n'existe pas (page sans hero),
-          on sort proprement sans erreur. */
-    var heroSection = document.querySelector('.lp-hero');
-    if (!heroSection) {
+    /* ── 1. ACCESSIBILITE : prefers-reduced-motion ──────────────────────────
+       Si l'utilisateur a active "Reduire les animations" dans son OS,
+       on sort immediatement. Le CSS @media (prefers-reduced-motion) gere
+       l'affichage statique (video visible, titre immobile, CTAs accessibles). */
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         return;
     }
 
-    /* 3. Facteur parallaxe : valeur entre 0 (pas de mouvement) et 1 (suit le scroll).
-          0.25 signifie que pour 100px de scroll, l'image se déplace de 25px.
-          L'image semble donc défiler plus lentement que le contenu -> illusion de profondeur.
+    /* ── 2. REFERENCES DOM ──────────────────────────────────────────────────
+       On recupere une seule fois tous les elements qu'on va animer.
+       Si l'un d'eux est absent (page sans hero), on sort proprement. */
+    var section    = document.querySelector('.lp-hero');
+    var sticky     = document.querySelector('.lp-hero__sticky');
+    var bg         = document.querySelector('.lp-hero__bg');
+    var videoWrap  = document.querySelector('.lp-hero__video-wrap');
+    var titleLeft  = document.querySelector('.lp-hero__title-left');
+    var titleRight = document.querySelector('.lp-hero__title-right');
+    var desc       = document.querySelector('.lp-hero__desc');
+    var ctasReveal = document.querySelector('.lp-hero__ctas-reveal');
 
-          POURQUOI 0.25 et pas 0.35 (ancienne valeur) ?
-          Le ::before a un débordement vertical de 26% en haut et 26% en bas
-          (top: -26%, height: 152% — voir le CSS .lp-hero::before).
-          Sur un hero de 650px, ce débordement représente ≈ 169px de marge.
-          Avec un facteur de 0.35, le déplacement max était 650 × 0.35 = 228px,
-          supérieur à la marge de 169px → fond sable visible en bas (bug).
-          Avec 0.25, le déplacement max est 650 × 0.25 = 163px < 169px → OK.
-          Effet légèrement plus subtil, mais sans aucun bord visible. */
-    var PARALLAX_FACTOR = 0.25;
+    /* Sortie propre si un element est manquant */
+    if (!section || !sticky || !bg || !videoWrap || !titleLeft || !titleRight) {
+        return;
+    }
 
-    /* 4. Seuil mobile : désactiver sur petits écrans (performance + iOS).
-          768px correspond au breakpoint "tablette" du design. */
-    var MOBILE_BREAKPOINT = 768;
+    /* ── 3. PARAMETRES DE L'ANIMATION ──────────────────────────────────────
+       Tous les parametres sont centralises ici pour faciliter les reglages.
 
-    /* 5. Variables d'état pour la boucle rAF.
-          rafId : identifiant de la requête rAF en cours (pour annulation éventuelle).
-          lastScrollY : position du dernier scroll traité (évite les calculs inutiles). */
-    var rafId = null;
-    var lastScrollY = -1;
+       ECHELLE VIDEO :
+       - scaleStart : taille initiale de la video (28% de l'espace sticky)
+         Visuellement : un petit rectangle arrondi au centre de l'ecran.
+       - scaleEnd   : taille finale (110% = legerement plus grand que l'ecran,
+         overflow:hidden sur .lp-hero__sticky coupe les bords). */
+    var SCALE_START  = 0.28;
+    var SCALE_END    = 1.10;
 
-    /* 6. Fonction de mise à jour de la parallaxe.
-          Appelée par rAF — toujours dans le "bon" moment du rendu. */
-    function updateParallax() {
-        rafId = null; /* remettre à null : la prochaine requête pourra être planifiée */
+    /* ECARTEMENT DU TITRE (pixels) :
+       - titleSpread : de combien de pixels chaque partie du titre s'ecarte
+         (gauche vers la gauche, droite vers la droite).
+       - Sur mobile (<= 768px), amplitude reduite de moitie pour eviter
+         que le titre sorte de l'ecran sur les petits viewports. */
+    var TITLE_SPREAD_DESKTOP = 180; /* pixels */
+    var TITLE_SPREAD_MOBILE  = 80;  /* pixels */
 
-        /* Désactiver sur mobile pour éviter les scintillements iOS */
-        if (window.innerWidth < MOBILE_BREAKPOINT) {
-            /* Remettre l'image à 0 si on vient de passer du desktop au mobile */
-            heroSection.style.setProperty('--hero-parallax-y', '0px');
-            return;
-        }
+    /* SEUIL D'APPARITION DES CTAS :
+       Les CTAs commencent a apparaitre quand progress atteint ce seuil
+       et sont completement visibles a progress = 1. */
+    var CTA_FADE_START = 0.75;
+
+    /* ── 4. UTILITAIRES ─────────────────────────────────────────────────────
+
+       clamp(val, min, max) : borne une valeur entre min et max.
+       Equivalent de Math.min(max, Math.max(min, val)).
+       On l'ecrit a la main pour compatibilite max sans polyfill. */
+    function clamp(val, min, max) {
+        return val < min ? min : (val > max ? max : val);
+    }
+
+    /* lerp(a, b, t) : interpolation lineaire entre a et b pour t dans [0,1].
+       A t=0 retourne a, a t=1 retourne b, a t=0.5 retourne le milieu.
+       Utilise pour toutes les transitions de l'animation. */
+    function lerp(a, b, t) {
+        return a + (b - a) * t;
+    }
+
+    /* ── 5. VARIABLES D'ETAT (boucle rAF) ──────────────────────────────────
+       rafId : identifiant rAF en cours (null = pas de requete en attente).
+       lastScrollY : derniere position traitee (optimisation : evite les
+       recalculs si le scroll n'a pas change depuis la derniere frame). */
+    var rafId    = null;
+    var lastY    = -1;
+    var isMobile = window.innerWidth <= 768;
+
+    /* ── 6. FONCTION DE MISE A JOUR ─────────────────────────────────────────
+       Calcule la progression (0 -> 1) et applique les transformations.
+       Appelee via requestAnimationFrame -> toujours synchronisee avec
+       le refresh du navigateur (jamais entre deux frames). */
+    function update() {
+        rafId = null; /* libere le slot rAF pour la prochaine requete */
 
         var scrollY = window.scrollY || window.pageYOffset;
 
-        /* Optimisation : si le scroll n'a pas changé depuis la dernière frame, inutile
-           de recalculer et de toucher au DOM. On sort immédiatement. */
-        if (scrollY === lastScrollY) {
-            return;
+        /* Optimisation : si la position n'a pas change, rien a faire */
+        if (scrollY === lastY) { return; }
+        lastY = scrollY;
+
+        /* CALCUL DE LA PROGRESSION ─────────────────────────────────────────
+           La section fait 200vh (180vh sur mobile).
+           sectionTop    : position Y du haut de la section dans la page
+           sectionHeight : hauteur totale de la section (200vh ou 180vh)
+           trackLength   : distance de scroll utile = sectionHeight - viewportHeight
+                           (quand on a scroll de trackLength pixels depuis sectionTop,
+                            on est a la fin de la piste, progress = 1)
+
+           progress = (scrollY - sectionTop) / trackLength
+           clampee entre 0 et 1 pour eviter les valeurs negatives ou > 1. */
+        var rect        = section.getBoundingClientRect();
+        /* getBoundingClientRect().top est relatif au viewport.
+           Pour avoir la position absolue dans la page, on ajoute scrollY. */
+        var sectionTop  = rect.top + scrollY;
+        var trackLength = section.offsetHeight - window.innerHeight;
+
+        /* Protection contre une hauteur de section incorrecte (valeur aberrante) */
+        if (trackLength <= 0) { return; }
+
+        var raw      = (scrollY - sectionTop) / trackLength;
+        var progress = clamp(raw, 0, 1);
+
+        /* AMPLITUDE DU TITRE selon la taille d'ecran */
+        var spread = isMobile ? TITLE_SPREAD_MOBILE : TITLE_SPREAD_DESKTOP;
+
+        /* ── APPLICATION DES TRANSFORMATIONS ──────────────────────────────
+           On n'ecrit dans le DOM QUE si la section est visible
+           (progress entre 0 et 1) pour eviter des ecritures inutiles
+           quand on est tres loin de la section. */
+
+        /* 1. Image de fond : opacity 1 -> 0
+              Elle disparait completement sur la premiere moitie du scroll.
+              On multiplie progress par 2 et on clampe pour accelerer la disparition. */
+        var bgOpacity = clamp(1 - progress * 2, 0, 1);
+        bg.style.opacity = bgOpacity;
+
+        /* 2. Video : scale(SCALE_START) -> scale(SCALE_END)
+              Le scale est interpole lineairement avec progress. */
+        var scale = lerp(SCALE_START, SCALE_END, progress);
+        videoWrap.style.transform = 'scale(' + scale + ')';
+
+        /* 3. Titre gauche : translateX(0) -> translateX(-spread px)
+              La partie gauche du titre part vers la GAUCHE. */
+        var txLeft = lerp(0, -spread, progress);
+        titleLeft.style.transform = 'translateX(' + txLeft + 'px)';
+
+        /* 4. Titre droit + sous-titre : translateX(0) -> translateX(+spread px)
+              La partie droite et le sous-titre partent vers la DROITE. */
+        var txRight = lerp(0, spread, progress);
+        titleRight.style.transform = 'translateX(' + txRight + 'px)';
+        if (desc) { desc.style.transform = 'translateX(' + txRight + 'px)'; }
+
+        /* 5. CTAs : opacity 0 -> 1 quand progress > CTA_FADE_START
+              On normalise progress sur la plage [CTA_FADE_START, 1]. */
+        if (ctasReveal) {
+            var ctaProgress = clamp((progress - CTA_FADE_START) / (1 - CTA_FADE_START), 0, 1);
+            ctasReveal.style.opacity = ctaProgress;
+            /* pointer-events : active les clics uniquement quand partiellement visible */
+            ctasReveal.style.pointerEvents = ctaProgress > 0.1 ? 'auto' : 'none';
         }
-        lastScrollY = scrollY;
-
-        /* Calcul du déplacement vertical de la photo :
-           - scrollY positif (on défile vers le bas) -> translateY négatif (image remonte)
-             L'image se déplace vers le HAUT moins vite que le contenu -> effet de profondeur.
-           - Le débordement de 26% top + 152% height absorbe ce déplacement sans bords visibles.
-
-           Exemple concret a scrollY = 300px, facteur 0.25 :
-             déplacement = -(300 * 0.25) = -75px
-             L'image remonte de 75px alors que la section a quitté l'écran de 300px -> lent. */
-        var displacement = -(scrollY * PARALLAX_FACTOR);
-
-        /* Écrire la valeur sur la section (l'::before la consomme via var()) */
-        heroSection.style.setProperty('--hero-parallax-y', displacement + 'px');
     }
 
-    /* 7. Gestionnaire d'événement scroll.
-          On ne calcule PAS directement dans le listener scroll car celui-ci peut
-          se déclencher des dizaines de fois par seconde. On planifie un rAF à la place :
-          - si un rAF est déjà en attente (rafId !== null), on ignore -> une seule MAJ/frame.
-          - sinon, on planifie updateParallax pour la prochaine frame. */
+    /* ── 7. LISTENER SCROLL ─────────────────────────────────────────────────
+       On ne calcule PAS directement dans le listener scroll (peut se declencher
+       des dizaines de fois par seconde). On planifie un rAF a la place :
+       - si un rAF est deja en attente (rafId !== null), on l'ignore
+         (une seule mise a jour par frame de rendu).
+       - passive:true -> le navigateur sait qu'on ne bloquera jamais le scroll. */
     function onScroll() {
         if (rafId === null) {
-            rafId = window.requestAnimationFrame(updateParallax);
+            rafId = window.requestAnimationFrame(update);
         }
     }
 
-    /* 8. Initialisation :
-          - Calculer la position initiale (scrollY peut déjà être > 0 si la page
-            est rechargée avec un ancre ou via Turbo).
-          - Brancher le listener scroll. */
-    window.addEventListener('scroll', onScroll, { passive: true });
-    /* passive: true -> indique au navigateur que le listener ne appellera JAMAIS
-       preventDefault() sur l'événement scroll. Il peut donc déclencher le défilement
-       natif en parallèle sans attendre le retour du JS -> défilement plus fluide. */
+    /* Mise a jour de isMobile si la fenetre est redimensionnee */
+    function onResize() {
+        isMobile = window.innerWidth <= 768;
+        onScroll(); /* recalculer immediatement */
+    }
 
-    /* Appel initial pour positionner l'image au chargement de la page */
+    /* ── 8. INITIALISATION ──────────────────────────────────────────────────
+       On branche les listeners et on calcule l'etat initial.
+       (scrollY peut deja etre > 0 si la page est rechargee avec une ancre
+        ou via Turbo — on doit appliquer l'animation immediatement). */
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+
+    /* Calcul initial */
     onScroll();
 
-    /* 9. Optionnel : nettoyer si Turbo (SPA-like navigation) recharge la page.
-          Si Turbo est actif, les scripts ne se ré-exécutent pas mais le DOM change.
-          On écoute l'événement de navigation Turbo pour retirer le listener. */
+    /* ── 9. NETTOYAGE TURBO ─────────────────────────────────────────────────
+       Si Symfony UX Turbo est actif (navigation SPA-like), les scripts ne
+       se re-executent pas mais le DOM change. On retire les listeners
+       avant chaque navigation pour eviter les fuites memoire. */
     document.addEventListener('turbo:before-visit', function () {
         window.removeEventListener('scroll', onScroll);
-        if (rafId !== null) {
-            window.cancelAnimationFrame(rafId);
-        }
-    }, { once: true }); /* once: true -> auto-retire après le premier appel */
+        window.removeEventListener('resize', onResize);
+        if (rafId !== null) { window.cancelAnimationFrame(rafId); }
+    }, { once: true });
 
-}()); /* IIFE : encapsule tout dans une portée locale, pas de pollution globale */
+}()); /* IIFE : portee locale -> pas de variable globale */
 </script>
 {% endblock %}
