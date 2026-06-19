@@ -21,6 +21,12 @@ namespace App\Service;
  * et ne peuvent plus être modifiées ensuite. C'est approprié ici car les
  * compteurs sont des faits immuables (ils décrivent ce QUI S'EST PASSÉ,
  * pas un état en cours).
+ *
+ * ── CORRECTION AV-4 (ADR-0016 Lot 2) ───────────────────────────────────────
+ * Ajout de $insertedUrls : liste des URLs réellement insérées en BDD (Cas 1 du
+ * persister). Permet à ImportGrantCsvCommand de n'enrichir QUE les opportunités
+ * nouvelles, et non celles déjà en BDD (qui auraient sinon régénéré un appel
+ * Mistral inutile et coûteux à chaque ré-import).
  */
 final readonly class PersistResult
 {
@@ -36,6 +42,15 @@ final readonly class PersistResult
 
         // URLs ignorées : déjà vérifiées par un admin, ou doublons intra-lot
         public int $skipped,
+
+        /**
+         * Liste des URLs effectivement insérées (Cas 1 — nouvelles en BDD).
+         * Utilisé par ImportGrantCsvCommand (--enrich) pour ne Mistraliser que les
+         * nouvelles entrées, pas les URL déjà connues (updated/skipped/reactivated).
+         *
+         * @var string[]
+         */
+        public array $insertedUrls = [],
     ) {
     }
 

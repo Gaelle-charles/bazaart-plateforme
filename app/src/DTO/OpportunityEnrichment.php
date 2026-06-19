@@ -8,8 +8,13 @@ namespace App\DTO;
  * OpportunityEnrichment — Résultat de l'enrichissement IA d'une opportunité.
  *
  * Ce DTO encapsule la sortie d'OpportunityEnrichmentService::enrich().
- * Il transporte le titre, la description et les disciplines artistiques produits
- * par Mistral à partir du contenu de la page d'origine de l'opportunité.
+ * Il transporte le titre, la description, les disciplines, la ville, le pays
+ * et le niveau d'expérience produits par Mistral à partir du contenu de la page.
+ *
+ * HISTORIQUE :
+ *   - v1 (initial) : title, description, disciplines (texte libre)
+ *   - v2 (ADR-0016 Lot 2 correctif) : ajout city, country, experienceLevel,
+ *     disciplinesLabels (tableau contraint à la liste BDD)
  *
  * POURQUOI UN DTO SÉPARÉ DE ScrapedOpportunity ?
  *   - ScrapedOpportunity représente une opportunité EXTRAITE (lors du scraping initial).
@@ -19,7 +24,7 @@ namespace App\DTO;
  *   - Bien séparer les deux évite de mélanger deux responsabilités très différentes.
  *
  * PROPRIÉTÉS NULLABLE :
- *   Les trois champs sont nullable car Mistral peut échouer ou renvoyer une valeur vide.
+ *   Tous les champs sont nullable car Mistral peut échouer ou renvoyer une valeur vide.
  *   Dans ce cas, le service appelant ignore l'enrichissement pour ce champ précis
  *   et conserve la valeur existante en BDD.
  *
@@ -31,6 +36,9 @@ namespace App\DTO;
  */
 final readonly class OpportunityEnrichment
 {
+    /**
+     * @param string[]|null $disciplinesLabels Libellés contraints à la liste BDD (ex: ["Musique", "Danse"])
+     */
     public function __construct(
         /**
          * Titre reformulé en français par le LLM.
@@ -67,11 +75,10 @@ final readonly class OpportunityEnrichment
         public ?string $description,
 
         /**
-         * Disciplines artistiques détectées par le LLM.
+         * Disciplines artistiques — texte CSV (compatibilité rétrograde).
          *
          * Valeurs choisies depuis une liste fermée (Musique, Arts visuels, Danse…)
          * et séparées par des virgules. Exemple : "Musique, Danse".
-         * Si l'opportunité est pluridisciplinaire : "Pluridisciplinaire".
          *
          * Null si :
          *   - Le LLM n'a pas pu identifier la discipline depuis le texte
@@ -79,8 +86,52 @@ final readonly class OpportunityEnrichment
          *   - Une erreur s'est produite
          *
          * Max 150 caractères (tronqué dans le service si dépassé).
+         *
+         * PRÉFÉRER disciplinesLabels (tableau) pour les nouvelles utilisations.
          */
         public ?string $disciplines = null,
+
+        /**
+         * Ville où se déroule l'opportunité (extraite par le LLM).
+         *
+         * Exemples : "Paris", "Bruxelles", "Dakar"
+         * Null si le LLM ne l'a pas détectée depuis le texte de la page.
+         * Max 150 caractères (limite colonne BDD).
+         */
+        public ?string $city = null,
+
+        /**
+         * Pays de l'opportunité, nom en clair (extrait par le LLM).
+         *
+         * Exemples : "France", "Belgique", "Sénégal"
+         * Null si le LLM ne l'a pas détecté depuis le texte de la page.
+         * Max 100 caractères (limite colonne BDD).
+         *
+         * RÈGLE : ne pas écraser un country issu du CSV (champ WHERE) si déjà renseigné.
+         * La commande ImportGrantCsvCommand applique cette règle avant de persister.
+         */
+        public ?string $country = null,
+
+        /**
+         * Niveau d'expérience requis (extrait par le LLM).
+         *
+         * Valeurs attendues : "beginner", "intermediate", "experienced" ou null.
+         * Null = tous niveaux (aucune restriction).
+         * Toute autre valeur retournée par le LLM est ignorée (validée dans le service).
+         */
+        public ?string $experienceLevel = null,
+
+        /**
+         * Disciplines artistiques contraintes — tableau de libellés BDD exacts.
+         *
+         * Ce champ remplace $disciplines pour les nouvelles utilisations.
+         * Le LLM choisit parmi la liste exacte des Discipline en BDD, donc ces
+         * libellés sont directement mappables via DisciplineMapperService.
+         *
+         * Exemples : ["Musique", "Arts visuels"], ["Danse"]
+         * Null ou tableau vide si aucune discipline détectée.
+         */
+        public ?array $disciplinesLabels = null,
     ) {
     }
 
@@ -89,26 +140,24 @@ final readonly class OpportunityEnrichment
      *
      * Un DTO "vide" est retourné par OpportunityEnrichmentService en cas d'échec
      * (erreur réseau, clé manquante, JSON invalide, texte trop court…).
-     * Le service appelant (EnrichOpportunitiesCommand) doit vérifier isEmpty()
-     * avant d'écrire en BDD pour éviter d'écraser des valeurs existantes avec null.
+     * Le service appelant (EnrichOpportunitiesCommand, ImportGrantCsvCommand)
+     * doit vérifier isEmpty() avant d'écrire en BDD pour éviter d'écraser
+     * des valeurs existantes avec null.
      *
      * LOGIQUE :
-     *   - title = null ET description = null ET disciplines = null (ou vide) → vide (rien à écrire)
-     *   - title non null OU description non null OU disciplines non null → au moins un enrichissement
-     *
-     * Exemple d'usage :
-     *   if ($enrichment->isEmpty()) {
-     *       $io->writeln('  Aucun enrichissement produit, on ignore.');
-     *       continue;
-     *   }
+     *   - Tous les champs null ou vides → vide (rien à écrire)
+     *   - Au moins un champ non null et non vide → enrichissement utilisable
      */
     public function isEmpty(): bool
     {
-        // Les TROIS champs doivent être null (ou vides) pour considérer le DTO vide.
-        // Si au moins un champ est renseigné, il y a quelque chose à persister en BDD.
-        // Une chaîne vide "" n'apporte rien — on la traite comme null ici.
+        // On considère le DTO vide uniquement si TOUS les champs sont nuls/vides.
+        // Une description vide + une ville renseignée → on a quand même quelque chose.
         return $this->title === null
             && ($this->description === null || $this->description === '')
-            && ($this->disciplines === null || $this->disciplines === '');
+            && ($this->disciplines === null || $this->disciplines === '')
+            && ($this->city === null || $this->city === '')
+            && ($this->country === null || $this->country === '')
+            && $this->experienceLevel === null
+            && ($this->disciplinesLabels === null || $this->disciplinesLabels === []);
     }
 }

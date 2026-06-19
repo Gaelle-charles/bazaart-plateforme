@@ -69,6 +69,15 @@ class ScrapedResourcePersister
         $updated     = 0;
         $skipped     = 0;
 
+        /**
+         * URLs réellement insérées (Cas 1 — nouvelles en BDD).
+         * Collectées ici pour être renvoyées dans PersistResult et permettre
+         * à ImportGrantCsvCommand (--enrich) de n'enrichir QUE les nouvelles.
+         *
+         * @var string[]
+         */
+        $insertedUrls = [];
+
         // ── Guard en mémoire contre les doublons INTRA-LOT ───────────────────
         // Sans ce set, deux occurrences de la même URL dans le même batch
         // (cas fréquent avec les retours LLM) provoqueraient une violation
@@ -193,6 +202,12 @@ class ScrapedResourcePersister
             // L'INSERT SQL réel est exécuté lors du flush() à la fin du batch.
             $this->em->persist($scraped);
             $inserted++;
+
+            // On mémorise l'URL insérée pour que l'appelant puisse cibler
+            // l'enrichissement LLM uniquement sur les nouvelles entrées (AV-4).
+            if ($opp->url !== '') {
+                $insertedUrls[] = $opp->url;
+            }
         }
 
         // ── Flush unique ──────────────────────────────────────────────────────
@@ -206,6 +221,8 @@ class ScrapedResourcePersister
             reactivated: $reactivated,
             updated: $updated,
             skipped: $skipped,
+            // Liste des URLs effectivement insérées (Cas 1), pour ciblage --enrich (AV-4)
+            insertedUrls: $insertedUrls,
         );
     }
 

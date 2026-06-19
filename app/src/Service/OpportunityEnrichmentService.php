@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\DTO\OpportunityEnrichment;
+use App\Repository\DisciplineRepository;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpException;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -30,15 +31,24 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  *   - HttpClientInterface : même instance que dans LlmExtractorService (autowiring)
  *   - SettingService : lecture de mistral_api_key et llm_provider (même BDD)
  *   - LlmExtractorService::cleanHtml() : méthode rendue publique pour ce partage
+ *   - DisciplineRepository : même logique que LlmExtractorService pour contraindre le LLM
  *   - Constantes API URL/model : reprises identiques (MISTRAL_API_URL, MISTRAL_MODEL)
  *
  * POLITIQUE D'ERREURS :
  *   Ce service ne lève JAMAIS d'exception. Tout échec retourne un OpportunityEnrichment
- *   vide. Le service appelant (EnrichOpportunitiesCommand) log et continue.
+ *   vide. Le service appelant (EnrichOpportunitiesCommand, ImportGrantCsvCommand) log et continue.
  *   Cela garantit que la commande ne plante pas si une page est inaccessible.
  *
+ * CHAMPS PRODUITS (ADR-0016 Lot 2 correctif) :
+ *   - titre        : titre reformulé en français (déjà présent)
+ *   - description  : description HTML structurée (déjà présent)
+ *   - disciplines  : libellés CONTRAINTS à la liste BDD (plus de texte libre)
+ *   - city         : ville de l'opportunité (nouveau)
+ *   - country      : pays de l'opportunité (nouveau)
+ *   - experienceLevel : "beginner"|"intermediate"|"experienced"|"" (nouveau)
+ *
  * GARDE-FOUS ANTI INJECTION DE PROMPT :
- *   Voir la méthode buildEnrichmentPrompt() pour le détail complet.
+ *   Voir la méthode callMistral() pour le détail complet.
  *   En résumé :
  *     - Le texte tiers est toujours dans le message USER (jamais dans le SYSTEM)
  *     - Le texte est encadré par des délimiteurs explicites (<<<CONTENU_PAGE ... CONTENU_PAGE)
@@ -95,11 +105,23 @@ class OpportunityEnrichmentService
     private const MAX_DESCRIPTION_LENGTH = 3000;
 
     /**
-     * Longueur maximale du champ disciplines produit par le LLM (en caractères).
+     * Longueur maximale du champ disciplines CSV produit par le LLM (en caractères).
      * La liste de disciplines la plus longue possible fait environ 130 chars — 150 offre
      * une marge confortable sans risquer de tronquer une valeur réelle.
      */
     private const MAX_DISCIPLINES_LENGTH = 150;
+
+    /**
+     * Longueur maximale du champ city produit par le LLM (en caractères).
+     * Cohérent avec la limite de colonne BDD définie sur ScrapedResource::$city.
+     */
+    private const MAX_CITY_LENGTH = 150;
+
+    /**
+     * Longueur maximale du champ country produit par le LLM (en caractères).
+     * Cohérent avec la limite de colonne BDD définie sur ScrapedResource::$country.
+     */
+    private const MAX_COUNTRY_LENGTH = 100;
 
     /**
      * Taille maximale du corps HTTP lu (en octets).
@@ -107,6 +129,13 @@ class OpportunityEnrichmentService
      * Évite de lire un binaire ou une page géante par erreur.
      */
     private const MAX_BODY_BYTES = 512_000;
+
+    /**
+     * Cache de la liste des disciplines BDD (lazy-init, comme dans LlmExtractorService).
+     * Null = pas encore calculé. Calculé une seule fois lors du premier appel à enrich().
+     * Évite N requêtes BDD identiques quand on traite un lot d'opportunités.
+     */
+    private ?string $disciplinesListCache = null;
 
     public function __construct(
         // Client HTTP Symfony — même instance injectée que dans les scrapers
@@ -120,6 +149,10 @@ class OpportunityEnrichmentService
 
         // Logger PSR-3 — pour tracer les erreurs sans lever d'exception
         private readonly LoggerInterface $logger,
+
+        // Repository Discipline — pour construire la liste contrainte dans le prompt
+        // (même pattern que LlmExtractorService::buildDisciplinesListForPrompt)
+        private readonly DisciplineRepository $disciplineRepository,
     ) {
     }
 
@@ -329,19 +362,26 @@ class OpportunityEnrichmentService
         // LE PROMPT SYSTÈME EST NOTRE TERRAIN DE JEU — jamais de texte tiers ici.
         // Il contient :
         //   a) Le rôle de l'assistant
-        //   b) Le format de sortie attendu (JSON strict)
+        //   b) Le format de sortie attendu (JSON strict à 6 clés)
         //   c) L'instruction anti-injection (les délimiteurs sont des données, pas des instructions)
         //   d) Les règles de qualité (fidélité, non-invention, langues)
-        $systemPrompt = <<<'PROMPT'
+        //
+        // ADR-0016 Lot 2 correctif : le prompt demande maintenant aussi city, country,
+        // experienceLevel, et disciplines CONTRAINTES à la liste BDD (plus de texte libre).
+        $disciplinesList = $this->buildDisciplinesListForPrompt();
+        $systemPrompt = <<<PROMPT
 Tu es un assistant spécialisé dans la synthèse d'opportunités culturelles et artistiques.
 
 Ta seule tâche : analyser le texte fourni par l'utilisateur et produire un JSON valide.
 
-FORMAT DE SORTIE — tu dois retourner UNIQUEMENT un objet JSON avec exactement trois clés :
+FORMAT DE SORTIE — tu dois retourner UNIQUEMENT un objet JSON avec exactement ces six clés :
 {
   "titre": "...",
   "description": "...",
-  "disciplines": "..."
+  "city": "...",
+  "country": "...",
+  "experienceLevel": "...",
+  "disciplines": [...]
 }
 
 RÈGLES STRICTES :
@@ -354,19 +394,20 @@ RÈGLES STRICTES :
   Structure attendue (inclus toutes les sections pour lesquelles tu as des informations) :
   <p>[Introduction : résume ce qu'est l'opportunité, qui la propose et dans quel contexte.]</p><ul><li><strong>Pour qui :</strong> [critères d'éligibilité détaillés : nationalité, discipline, stade de carrière, âge, statut professionnel, etc.]</li><li><strong>Ce que ca offre :</strong> [bénéfices concrets : résidence, espace de travail, accompagnement, exposition, production, publication, visibilité, etc.]</li><li><strong>Montant / Dotation :</strong> [montant exact si mentionné, frais couverts : billet d'avion, logement, repas, per diem, etc.]</li><li><strong>Conditions :</strong> [langues requises, documents à fournir, durée, lieu, contraintes spécifiques]</li><li><strong>Calendrier :</strong> [date limite de candidature, dates du programme ou de la résidence]</li><li><strong>Comment postuler :</strong> [dossier à constituer, lien ou email de candidature si mentionné]</li></ul>
   Maximum 2500 caractères HTML au total. Si le texte est insuffisant pour décrire l'opportunité, mets "description": "".
-- "disciplines" : liste des disciplines artistiques concernées par cette opportunité.
-  Choisis UNE OU PLUSIEURS valeurs dans la liste suivante, séparées par des virgules :
-  Musique, Arts visuels, Danse, Cinéma / Audiovisuel, Littérature, Architecture, Design,
-  Photographie, Théâtre / Performance, Art numérique, Mode / Création textile,
-  Arts de la scène, Pluridisciplinaire.
-  Si l'opportunité s'adresse à toutes les disciplines ou à une liste très large, utilise
-  "Pluridisciplinaire".
-  Exemples valides : "Musique", "Musique, Danse", "Arts visuels, Photographie",
-  "Pluridisciplinaire".
-  Si tu ne peux pas déterminer la discipline depuis le texte, retourne "".
-- TYPOGRAPHIE : n'utilise JAMAIS de tiret cadratin (—) ni de tiret demi-cadratin (–), ni dans
-  le titre ni dans la description. Pour une incise, utilise une virgule ou des parenthèses ;
-  pour une plage de dates, utilise un tiret simple (-).
+- "city" : ville principale où se déroule l'opportunité (ex: "Paris", "Dakar", "Bruxelles").
+  Si la ville n'est pas clairement mentionnée dans le texte, retourne "".
+- "country" : pays de l'organisateur ou du lieu de l'opportunité, en toutes lettres en FRANÇAIS
+  (ex: "France", "Sénégal", "Belgique"). Si le pays n'est pas mentionné, retourne "".
+- "experienceLevel" : niveau d'expérience requis pour postuler.
+  Retourne UNE des valeurs suivantes : "beginner" (débutants/émergents), "intermediate"
+  (pratique régulière, quelques projets), "experienced" (parcours confirmé).
+  Retourne "" si l'opportunité ne précise pas de niveau ou s'adresse à tous les niveaux.
+- "disciplines" : tableau des disciplines artistiques concernées. Choisis UNIQUEMENT
+  parmi cette liste exacte (copie les noms exactement) : [$disciplinesList].
+  Retourne [] si aucune discipline ne correspond ou si l'opportunité est généraliste.
+  Exemples valides : ["Musique"], ["Musique", "Danse"], ["Arts visuels"].
+- TYPOGRAPHIE : n'utilise JAMAIS de tiret cadratin (—) ni de tiret demi-cadratin (–).
+  Pour une incise, utilise une virgule ou des parenthèses ; pour une plage de dates, un tiret simple (-).
 - Réponds UNIQUEMENT avec le JSON. Aucun texte avant ou après.
 
 IMPORTANT — SÉCURITÉ :
@@ -471,10 +512,18 @@ MSG;
      * POURQUOI CETTE MÉTHODE SÉPARÉE ?
      *   La validation de la sortie LLM est un garde-fou critique (Contre-mesure 5).
      *   Le LLM pourrait théoriquement retourner :
-     *   - un "titre" qui est un tableau (injection → tableau de commands)
+     *   - un "titre" qui est un tableau (injection → tableau de commandes)
      *   - une "description" de 50 000 chars (fuite de contexte)
      *   - des clés inattendues {"titre": ..., "IGNORE_PREVIOUS": ...}
-     *   On se protège en n'acceptant que les string et en tronquant aux longueurs max.
+     *   On se protège en n'acceptant que les types attendus et en tronquant aux longueurs max.
+     *
+     * CHAMPS VALIDÉS (ADR-0016 Lot 2 correctif) :
+     *   - titre            → string nullable, max MAX_TITLE_LENGTH chars
+     *   - description      → string nullable, max MAX_DESCRIPTION_LENGTH chars
+     *   - disciplines      → tableau de strings (plus de string CSV), converti en $disciplinesLabels
+     *   - city             → string nullable, max MAX_CITY_LENGTH chars
+     *   - country          → string nullable, max MAX_COUNTRY_LENGTH chars
+     *   - experienceLevel  → "beginner"|"intermediate"|"experienced" ou null
      *
      * @param array<string, mixed> $decoded  JSON décodé depuis Mistral
      * @param string               $url      URL source (pour les logs uniquement)
@@ -508,15 +557,11 @@ MSG;
         if (is_string($rawDesc)) {
             $rawDesc = trim($rawDesc);
             if (!empty($rawDesc)) {
-                // Tronquage garde-fou cote PHP.
-                // Le prompt demande 1 200 chars HTML ; MAX_DESCRIPTION_LENGTH est a 1 500 chars
+                // Tronquage garde-fou côté PHP.
+                // Le prompt demande 2 500 chars HTML ; MAX_DESCRIPTION_LENGTH est à 3 000 chars
                 // pour laisser une marge confortable (les balises HTML s'ajoutent au contenu visible).
-                // On accepte la troncature brute sur le HTML car :
-                //   1. La marge de 300 chars rend le cas rare (reponses anormales uniquement)
-                //   2. Les navigateurs corrigent le HTML partiel a l'affichage
-                //   3. Une troncature "propre" demanderait un parseur HTML complet (sur-ingenierie ici)
                 if (mb_strlen($rawDesc) > self::MAX_DESCRIPTION_LENGTH) {
-                    $this->logger->warning('[EnrichmentService] Description trop longue, troncature appliquee.', [
+                    $this->logger->warning('[EnrichmentService] Description trop longue, troncature appliquée.', [
                         'url'    => $url,
                         'length' => mb_strlen($rawDesc),
                         'max'    => self::MAX_DESCRIPTION_LENGTH,
@@ -525,7 +570,7 @@ MSG;
                 }
                 $description = $rawDesc;
             }
-            // Si la string est vide, on laisse $description = null (DTO isEmpty sera true si titre aussi null)
+            // Si la string est vide, on laisse $description = null
         } elseif ($rawDesc !== null) {
             $this->logger->warning('[EnrichmentService] Le champ "description" retourné par Mistral n\'est pas une string.', [
                 'url'  => $url,
@@ -533,41 +578,211 @@ MSG;
             ]);
         }
 
-        // ── Extraction des disciplines ─────────────────────────────────────────
-        // On accepte UNIQUEMENT une string. Valeur vide ("") → null.
-        $rawDisciplines = $decoded['disciplines'] ?? null;
-        $disciplines    = null;
+        // ── Extraction des disciplines (TABLEAU contraint) ─────────────────────
+        // Nouveau format (ADR-0016 Lot 2 correctif) : le prompt demande un TABLEAU.
+        // Rétrocompatibilité : si le LLM retourne quand même une string CSV, on l'explose.
+        // On reconstruit aussi le champ $disciplines (string CSV) pour la rétrocompat.
+        //
+        // NOTE PHPStan : on cast en variable typée avant les branches pour éviter
+        // l'erreur "is_array() on mixed will always evaluate to false" dans les elseif.
+        $rawDisciplinesMixed = $decoded['disciplines'] ?? null;
+        /** @var string[] $disciplinesLabels */
+        $disciplinesLabels = [];
 
-        if (is_string($rawDisciplines)) {
-            $rawDisciplines = trim($rawDisciplines);
-            if (!empty($rawDisciplines)) {
-                // Tronquage garde-fou cote PHP (le prompt utilise une liste fermee ~130 chars)
-                $disciplines = mb_substr($rawDisciplines, 0, self::MAX_DISCIPLINES_LENGTH);
+        if (is_array($rawDisciplinesMixed)) {
+            // Format tableau attendu — on nettoie chaque entrée
+            // PHPStan sait ici que $rawDisciplinesMixed est array<mixed>
+            foreach ($rawDisciplinesMixed as $d) {
+                $clean = trim((string) $d);
+                if ($clean !== '') {
+                    $disciplinesLabels[] = $clean;
+                }
             }
-            // Si la string est vide, on laisse $disciplines = null
-        } elseif ($rawDisciplines !== null) {
-            // Le LLM a retourne un type inattendu (tableau, entier...) : on log et on ignore
-            $this->logger->warning('[EnrichmentService] Le champ "disciplines" retourné par Mistral n\'est pas une string.', [
+        } elseif (is_string($rawDisciplinesMixed) && trim($rawDisciplinesMixed) !== '') {
+            // Rétrocompatibilité : string CSV retournée par le LLM malgré le prompt tableau
+            // On explose par virgule et on nettoie chaque item
+            $this->logger->warning('[EnrichmentService] "disciplines" retourné en string, conversion en tableau.', [
+                'url' => $url,
+                'raw' => mb_substr($rawDisciplinesMixed, 0, 200),
+            ]);
+            foreach (explode(',', $rawDisciplinesMixed) as $part) {
+                $clean = trim($part);
+                if ($clean !== '') {
+                    $disciplinesLabels[] = $clean;
+                }
+            }
+        } elseif ($rawDisciplinesMixed !== null) {
+            // Type inattendu (entier, booléen, etc.) → on ignore et on log.
+            // PHPStan sait ici que c'est ni null, ni array, ni string → c'est bien un "autre type".
+            $this->logger->warning('[EnrichmentService] Le champ "disciplines" est d\'un type inattendu.', [
                 'url'  => $url,
-                'type' => get_debug_type($rawDisciplines),
+                'type' => get_debug_type($rawDisciplinesMixed),
             ]);
         }
 
-        // Log succes si on a au moins un champ utilisable
-        if ($title !== null || $description !== null || $disciplines !== null) {
+        // ── Filtre anti-hallucination disciplines (AV-2) ──────────────────────
+        // Le LLM peut suggérer des disciplines inexistantes en BDD (ex: "Architecture",
+        // "Mode", etc.) qui seraient alors stockées en base sans correspondre à aucune
+        // Discipline PHP. On filtre strictement : seuls les labels présents dans la
+        // liste BDD ($disciplinesListCache) sont conservés.
+        //
+        // $disciplinesListCache est une string CSV "Musique, Danse, Peinture, ..."
+        // construite par buildDisciplinesListCache() au début de validateAndBuildDto().
+        // On l'explose en tableau pour un in_array strict.
+        //
+        // Si la liste BDD est vide (cache vide, ex: BDD sans fixtures) → on ne filtre
+        // pas (on conserve les labels tels quels pour ne pas tout supprimer).
+        if ($disciplinesLabels !== [] && !empty($this->disciplinesListCache)) {
+            $allowedList = array_map('trim', explode(', ', $this->disciplinesListCache));
+            // array_filter + array_values pour réindexer proprement après le filtre
+            $disciplinesLabels = array_values(
+                array_filter(
+                    $disciplinesLabels,
+                    static fn (string $label): bool => in_array($label, $allowedList, true)
+                )
+            );
+
+            // Log si des disciplines ont été filtrées (utile pour détecter les prompts
+            // à améliorer ou les labels BDD à ajouter)
+            if ($disciplinesLabels === []) {
+                $this->logger->info(
+                    '[EnrichmentService] Toutes les disciplines LLM ont été filtrées (hors liste BDD).',
+                    ['url' => $url]
+                );
+            }
+        }
+
+        // Reconstruction du champ $disciplines (string CSV rétrocompat) depuis les labels
+        $disciplinesString = count($disciplinesLabels) > 0
+            ? mb_substr(implode(', ', $disciplinesLabels), 0, self::MAX_DISCIPLINES_LENGTH)
+            : null;
+
+        // disciplinesLabels vide → null (cohérent avec isEmpty())
+        if ($disciplinesLabels === []) {
+            $disciplinesLabels = null;
+        }
+
+        // ── Extraction de la ville ─────────────────────────────────────────────
+        // Nouveau champ (ADR-0016 Lot 2 correctif).
+        // On accepte uniquement une string, vide = null.
+        $rawCity = $decoded['city'] ?? null;
+        $city    = null;
+
+        if (is_string($rawCity)) {
+            $rawCity = trim($rawCity);
+            if (!empty($rawCity)) {
+                $city = mb_substr($rawCity, 0, self::MAX_CITY_LENGTH);
+            }
+        } elseif ($rawCity !== null) {
+            $this->logger->warning('[EnrichmentService] Le champ "city" retourné par Mistral n\'est pas une string.', [
+                'url'  => $url,
+                'type' => get_debug_type($rawCity),
+            ]);
+        }
+
+        // ── Extraction du pays ─────────────────────────────────────────────────
+        // Nouveau champ (ADR-0016 Lot 2 correctif).
+        // On accepte uniquement une string, vide = null.
+        $rawCountry = $decoded['country'] ?? null;
+        $country    = null;
+
+        if (is_string($rawCountry)) {
+            $rawCountry = trim($rawCountry);
+            if (!empty($rawCountry)) {
+                $country = mb_substr($rawCountry, 0, self::MAX_COUNTRY_LENGTH);
+            }
+        } elseif ($rawCountry !== null) {
+            $this->logger->warning('[EnrichmentService] Le champ "country" retourné par Mistral n\'est pas une string.', [
+                'url'  => $url,
+                'type' => get_debug_type($rawCountry),
+            ]);
+        }
+
+        // ── Extraction du niveau d'expérience ─────────────────────────────────
+        // Nouveau champ (ADR-0016 Lot 2 correctif).
+        // Valeurs valides : "beginner", "intermediate", "experienced" ou null.
+        // Toute autre valeur (dont chaîne vide) est normalisée à null.
+        $rawLevel       = $decoded['experienceLevel'] ?? null;
+        $experienceLevel = null;
+
+        if (is_string($rawLevel)) {
+            $rawLevel = trim($rawLevel);
+            if (in_array($rawLevel, ['beginner', 'intermediate', 'experienced'], true)) {
+                $experienceLevel = $rawLevel;
+            }
+            // Valeur vide ou non reconnue → null (tous niveaux) — pas de log, comportement normal
+        } elseif ($rawLevel !== null) {
+            $this->logger->warning('[EnrichmentService] Le champ "experienceLevel" retourné par Mistral n\'est pas une string.', [
+                'url'  => $url,
+                'type' => get_debug_type($rawLevel),
+            ]);
+        }
+
+        // ── Log de succès si on a au moins un champ utilisable ─────────────────
+        $hasContent = $title !== null
+            || $description !== null
+            || $disciplinesString !== null
+            || $city !== null
+            || $country !== null
+            || $experienceLevel !== null;
+
+        if ($hasContent) {
             $this->logger->info('[EnrichmentService] Enrichissement produit avec succès.', [
-                'url'          => $url,
-                'title_length' => $title !== null ? mb_strlen($title) : 0,
-                'desc_length'  => $description !== null ? mb_strlen($description) : 0,
-                'disciplines'  => $disciplines ?? '(aucune)',
+                'url'              => $url,
+                'title_length'     => $title !== null ? mb_strlen($title) : 0,
+                'desc_length'      => $description !== null ? mb_strlen($description) : 0,
+                'disciplines'      => $disciplinesString ?? '(aucune)',
+                'city'             => $city ?? '(aucune)',
+                'country'          => $country ?? '(aucun)',
+                'experienceLevel'  => $experienceLevel ?? '(tous niveaux)',
             ]);
         } else {
-            // Le LLM a retourne du JSON valide mais sans contenu utile
+            // Le LLM a retourné du JSON valide mais sans contenu utile
             $this->logger->info('[EnrichmentService] Mistral a retourné un JSON valide mais sans contenu utilisable.', [
                 'url' => $url,
             ]);
         }
 
-        return new OpportunityEnrichment($title, $description, $disciplines);
+        return new OpportunityEnrichment(
+            title: $title,
+            description: $description,
+            disciplines: $disciplinesString,
+            city: $city,
+            country: $country,
+            experienceLevel: $experienceLevel,
+            disciplinesLabels: $disciplinesLabels,
+        );
+    }
+
+    /**
+     * Construit la liste des disciplines BDD formatée pour l'injection dans le prompt LLM.
+     *
+     * Même logique que LlmExtractorService::buildDisciplinesListForPrompt() —
+     * on ne la partage pas via héritage pour garder les deux services indépendants.
+     * Cache lazy-init : une seule requête BDD par exécution de commande.
+     *
+     * Exemple de sortie : "Musique, Cinéma & Audiovisuel, Arts visuels, Danse, ..."
+     */
+    private function buildDisciplinesListForPrompt(): string
+    {
+        // Cache lazy-init : on ne fait la requête BDD qu'une seule fois
+        if ($this->disciplinesListCache !== null) {
+            return $this->disciplinesListCache;
+        }
+
+        // Charge toutes les disciplines disponibles en BDD (triées alphabétiquement)
+        $disciplines = $this->disciplineRepository->findAllOrdered();
+
+        // Extrait juste les noms pour construire la liste formatée
+        $names = array_map(
+            static fn ($d) => $d->getName(),
+            $disciplines
+        );
+
+        // Format : "Musique, Cinéma & Audiovisuel, Arts visuels, Danse, ..."
+        // Directement injecté dans le prompt comme liste de valeurs autorisées.
+        $this->disciplinesListCache = implode(', ', $names);
+
+        return $this->disciplinesListCache;
     }
 }
