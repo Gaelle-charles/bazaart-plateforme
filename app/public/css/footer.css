@@ -120,6 +120,30 @@
 .lp-footer .lp-container {
     position:  relative;
     z-index:   2; /* au-dessus de l'overlay ::before (z-index 1) */
+
+    /*
+     * Padding interne + centrage du footer — RENDU AUTONOME.
+     *
+     * Problème corrigé : la règle globale `.lp-container` (max-width + padding
+     * horizontal) n'était définie QUE dans le CSS inline de la home
+     * (vitrine/index.html.twig). Résultat : sur les autres pages (qui étendent
+     * base_app), le container du footer n'avait ni max-width ni padding latéral,
+     * d'où un PADDING INTERNE différent de la home.
+     *
+     * En redéclarant ces valeurs ici (scopées au footer), le footer a le même
+     * rendu sur TOUTES les pages, indépendamment du CSS de la page. On réutilise
+     * les mêmes tokens globaux (design-tokens.css) que la home pour rester aligné.
+     */
+    max-width:      var(--container-max);  /* 1440px, comme la home */
+    margin-inline:  auto;                  /* centrage horizontal */
+    padding-inline: var(--container-px);   /* 32px, comme la home */
+}
+
+/* Sur très petit écran, on réduit le padding latéral (identique à la home). */
+@media (max-width: 480px) {
+    .lp-footer .lp-container {
+        padding-inline: 16px;
+    }
 }
 
 

@@ -74,6 +74,20 @@
     {# custom properties (--mono, --accent, --ink, --bg, etc.).                           #}
     <link rel="stylesheet" href="{{ asset('css/footer.css') }}">
 
+    {# ── Animation des titres (title-reveal) — site-wide ─────────────────────────────── #}
+    {# title-reveal.css définit les classes CSS d'animation (.tr-word, .tr-fade, etc.).   #}
+    {# Il doit être chargé APRES design-tokens.css et fonts.css car les animations        #}
+    {# utilisent les mêmes easing que le design system.                                   #}
+    {# Ce fichier est un NOUVEAU fichier (jamais mis en cache) — pas besoin de versionner #}
+    {# l'URL pour l'instant. Si un cache long-terme est ajouté en prod (Nginx expires),   #}
+    {# penser à ajouter un query param de version : title-reveal.css?v=1.                #}
+    {#                                                                                    #}
+    {# EXCLUSION back-office : base_admin.html.twig surcharge le bloc {% block navbar %}  #}
+    {# mais étend base.html.twig. Le CSS est donc chargé partout, mais le JS ne cible    #}
+    {# que les titres dans main/#main-content, ce qui exclut les pages admin par nature  #}
+    {# (leurs titres n'ont pas les classes listées dans SELECTORS du JS).                #}
+    <link rel="stylesheet" href="{{ asset('css/title-reveal.css') }}">
+
     <style>
         /* ══════════════════════════════════════════════════════════════════
          * DESIGN SYSTEM — Variables CSS (tokens du design Figma)
@@ -828,6 +842,22 @@
     APRÈS ces scripts nav — ordre garanti.
 #}
 {% block javascripts %}
+{# ── Script d'animation des titres (title-reveal) ─────────────────────────────────────
+    Chargé en attribut defer-like via placement en fin de <body>.
+    title-reveal.js utilise DOMContentLoaded pour s'initialiser → pas de blocage du rendu.
+    Il doit être déclaré AVANT les scripts de la page ({{ parent() }}) pour être disponible
+    sur toutes les pages, mais APRES le DOM structurel.
+
+    POURQUOI ICI et pas dans {% block javascripts %} ?
+    Parce que les scripts de page (block javascripts) utilisent {{ parent() }} pour hériter
+    des scripts de base. Si on met title-reveal.js dans le bloc javascripts de base,
+    les templates enfants qui font {{ parent() }} l'héritent correctement — c'est bon.
+    On le place donc via un <script src> dans le bloc javascripts de base.
+    NB : on l'inclut via une balise <script> séparée plutôt qu'inline pour bénéficier
+    du cache navigateur sur les pages suivantes.
+#}
+<script src="{{ asset('js/title-reveal.js') }}" defer></script>
+
 <script>
 /* ── Hamburger mobile ────────────────────────────────────────────────────── */
 (function () {
