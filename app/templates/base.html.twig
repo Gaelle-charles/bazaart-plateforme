@@ -68,6 +68,12 @@
     {# --body, --mono, --serif) référencent les noms de famille déclarés ici.   #}
     <link rel="stylesheet" href="{{ asset('css/fonts.css') }}">
 
+    {# ── Styles du footer global (chargé ici pour être disponible sur toutes les pages) ── #}
+    {# footer.css contient les règles .lp-footer* avec fond photo + overlay sombre.        #}
+    {# Il doit être chargé APRES fonts.css et design-tokens.css car il utilise leurs       #}
+    {# custom properties (--mono, --accent, --ink, --bg, etc.).                           #}
+    <link rel="stylesheet" href="{{ asset('css/footer.css') }}">
+
     <style>
         /* ══════════════════════════════════════════════════════════════════
          * DESIGN SYSTEM — Variables CSS (tokens du design Figma)
@@ -792,6 +798,23 @@
 
 {# ── CONTENU DE LA PAGE ─────────────────────────────────────────────────── #}
 {% block body %}{% endblock %}
+
+{#
+    Footer global — inclus ici pour apparaître sur TOUTES les pages qui étendent base.html.twig.
+    Le partial _footer.html.twig contient le markup complet (logo image, grille liens, copyright).
+    Les styles sont dans public/css/footer.css, chargé en <head>.
+
+    EXCEPTION : base_admin.html.twig surcharge {% block navbar %} pour retirer la nav Street.
+    Il N'hérite pas d'un bloc footer séparé ici, donc le footer est présent par défaut sur
+    toutes les pages. Si une page admin voulait retirer le footer, elle devrait surcharger
+    un bloc dédié (non implémenté en V1 — l'admin utilise base_admin.html.twig qui
+    extends base.html.twig, le footer y apparaitra aussi).
+
+    Note : la bannière RGPD ci-dessous est en position:fixed → elle ne déplace pas le footer.
+#}
+{% block footer %}
+{% include '_footer.html.twig' %}
+{% endblock %}
 
 {# ── SCRIPTS ────────────────────────────────────────────────────────────── #}
 {#

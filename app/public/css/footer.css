@@ -1,0 +1,292 @@
+/*
+ * footer.css — Styles du footer global Bazaart
+ *
+ * Ce fichier est chargé dans base.html.twig via <link rel="stylesheet">.
+ * Il est donc disponible sur TOUTES les pages qui étendent base.html.twig,
+ * ce qui permet d'inclure _footer.html.twig dans le layout global.
+ *
+ * Thème : Street (tokens :root de design-tokens.css).
+ * Préfixe : .lp-footer* (héritage de la landing page, conservé pour cohérence).
+ *
+ * Disposition générale :
+ *   - photo de fond (footer-bazaart.jpg) couvrant toute la largeur
+ *   - overlay sombre semi-transparent par-dessus la photo
+ *   - contenu (logo image + grille liens) en blanc sur le fond sombré
+ *
+ * Ces styles se déclenchent uniquement sur .lp-footer et ses enfants
+ * → aucune collision avec le reste de l'interface.
+ */
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION FOOTER — Fond photo + overlay
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.lp-footer {
+    /*
+     * position: relative est indispensable : l'overlay (::before)
+     * est positionné en absolute DANS le footer. Sans relative,
+     * il partirait se placer par rapport au premier ancêtre positionné
+     * (souvent la fenêtre), et déborderait du footer.
+     */
+    position:      relative;
+
+    /*
+     * Photo de fond :
+     * - background-size: cover → l'image couvre toujours tout le footer
+     *   quelle que soit la hauteur/largeur, même sur mobile.
+     * - background-position: center → le centre de la photo reste visible,
+     *   les bords sont rognés en priorité.
+     * - background-attachment: scroll (défaut) → pas de fixed qui
+     *   scintille sur iOS Safari.
+     * - background-repeat: no-repeat → évite la répétition si l'image
+     *   est plus petite que le footer (peu probable avec cover).
+     *
+     * IMPORTANT : on utilise une URL relative au fichier CSS (public/css/).
+     * "../images/" remonte d'un niveau (css/ → public/) puis entre dans images/.
+     */
+    background-image:    url('../images/footer-bazaart.jpg');
+    background-size:     cover;
+    background-position: center center;
+    background-repeat:   no-repeat;
+
+    /*
+     * Couleur de repli : si l'image ne charge pas (lenteur réseau, erreur 404),
+     * le fond reste sombre et le texte blanc reste lisible.
+     * --ink est le quasi-noir du design system Street.
+     */
+    background-color: var(--ink, #0D0D0D);
+
+    /* Bordure haute fine — sépare visuellement le footer du contenu */
+    border-top: 1px solid var(--ink, #0D0D0D);
+
+    /* Les textes du footer sont blancs sur fond sombré → surcharge globale.
+       Chaque sous-élément affine ensuite sa propre couleur. */
+    color: var(--bg, #F2EFE6);
+}
+
+
+/* ── Overlay sombre par-dessus la photo ────────────────────────────────────
+   Technique pseudo-élément ::before :
+     - Il se place ENTRE la photo de fond et le contenu (z-index 0 sur le footer,
+       le ::before prend z-index 1, le contenu HTML prend z-index 2 via position:relative).
+     - Le dégradé est plus dense en haut (0.75) qu'en bas (0.88) : les noms de liens
+       en haut du footer ont besoin d'un fond plus sombre pour le contraste WCAG AA,
+       alors que le copyright en bas, plus petit, bénéficie d'une légère clarté.
+     - pointer-events: none → l'overlay n'intercepte pas les clics sur les liens.
+     - Ajuster les valeurs rgba si la photo est très sombre (réduire à 0.55/0.65)
+       ou très claire (monter à 0.80/0.90).
+*/
+.lp-footer::before {
+    content:         '';
+    position:        absolute;
+    inset:           0; /* top:0; right:0; bottom:0; left:0 */
+    background:      linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.75),   /* haut : plus sombre → fond du logo + titres */
+        rgba(0, 0, 0, 0.88)    /* bas  : encore plus sombre → copyright */
+    );
+    /*
+     * z-index 1 : au-dessus de l'image de fond (z-index 0, l'élément lui-même),
+     * mais SOUS le contenu HTML (rendu via le conteneur .lp-container, z-index 2).
+     */
+    z-index:         1;
+    pointer-events:  none; /* clics passent au travers, les liens restent cliquables */
+}
+
+
+/* ── Conteneur interne — au-dessus de l'overlay ────────────────────────────
+   .lp-container est la div de centrage qui entoure tout le contenu du footer.
+   Elle DOIT être en position:relative + z-index:2 pour passer au-dessus du ::before. */
+.lp-footer .lp-container {
+    position:  relative;
+    z-index:   2; /* au-dessus de l'overlay ::before (z-index 1) */
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LOGO IMAGE — remplace le texte "BAZAART." géant
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/*
+ * .lp-footer__logo est maintenant un lien <a> qui contient une <img>.
+ * L'ancien style définissait font-size pour un texte géant — on l'adapte
+ * pour positionner et dimensionner l'image.
+ *
+ * display: block → le lien occupe sa propre ligne, sans espace de ligne
+ * inline autour de l'image.
+ *
+ * padding-top : conservé de l'original pour l'espacement en haut du footer.
+ */
+.lp-footer__logo {
+    display:     block;
+    padding-top: 48px;
+}
+
+/*
+ * L'image du logo dans le footer.
+ * - height: auto + width: max-content → la hauteur est fixe, la largeur
+ *   s'adapte proportionnellement.
+ * - max-width: 100% → évite tout débordement sur petit écran.
+ * - La hauteur de 80px est un bon compromis : lisible sans être écrasante,
+ *   cohérent avec les logos header (20px) mais nettement plus grand car
+ *   le footer est un espace éditorial.
+ * - On utilise logo-green.png : la teinte verte lime (--accent) ressort
+ *   très bien sur le fond sombre de la photo. Sur fond sombre, le vert lime
+ *   = ratio de contraste élevé (conforme WCAG AA).
+ */
+.lp-footer__logo img {
+    height:    80px;
+    width:     auto;
+    max-width: 100%;
+    display:   block;
+    /* Légère opacité pour un rendu plus élégant / moins agressif */
+    opacity:   0.90;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   GRILLE — description + colonnes de liens
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.lp-footer__grid {
+    display:               grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap:                   32px;
+    margin-top:            32px;
+    padding-top:           32px;
+    /* La bordure utilise rgba sur blanc plutôt que --line-soft (qui est ink/10%)
+       car le fond est sombre — une bordure claire est plus lisible ici. */
+    border-top:            1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* ── Colonne description (présentation de l'asso) ──────────────────────── */
+
+.lp-footer__about {
+    font-size:   13.5px;
+    line-height: 1.5;
+    /* Blanc à 70% : lisible sans être trop brillant face au logo */
+    color:       rgba(255, 255, 255, 0.70);
+    max-width:   380px;
+    margin:      12px 0 0;
+}
+
+.lp-footer__address {
+    font-family:    var(--mono, 'JetBrains Mono', monospace);
+    font-size:      10px;
+    letter-spacing: .1em;
+    /* Blanc à 45% : discret, informatif mais sans concurrencer les liens */
+    color:          rgba(255, 255, 255, 0.45);
+    margin-top:     12px;
+    line-height:    1.8;
+}
+
+/* ── Titres de colonnes (Plateforme / Légal) ─────────────────────────── */
+
+.lp-footer__col-title {
+    font-family:    var(--mono, 'JetBrains Mono', monospace);
+    font-size:      11px;
+    letter-spacing: .1em;
+    /* Blanc à 40% : discret, en retrait par rapport aux liens */
+    color:          rgba(255, 255, 255, 0.40);
+    text-transform: uppercase;
+    margin:         0;
+}
+
+/* ── Listes de liens ─────────────────────────────────────────────────── */
+
+.lp-footer__links {
+    list-style: none;
+    padding:    0;
+    margin:     12px 0 0;
+    display:    flex;
+    flex-direction: column;
+    gap:        8px;
+}
+
+.lp-footer__links a {
+    /* Blanc pur : contraste maximal sur fond sombre pour les liens cliquables */
+    color:           rgba(255, 255, 255, 0.85);
+    text-decoration: none;
+    font-size:       13px;
+    font-weight:     500;
+    transition:      color 0.15s;
+}
+
+.lp-footer__links a:hover {
+    /* Au survol, on passe au vert lime (--accent) : rappel de la charte Street */
+    color: var(--accent, #C6F24E);
+}
+
+/* ── L'eyebrow dans la colonne "L'asso" ─────────────────────────────── */
+
+/* L'eyebrow (.lp-eyebrow--nodot) est déjà stylé dans base.html.twig/vitrine.
+   On adapte juste la couleur sur fond sombre. */
+.lp-footer .lp-eyebrow {
+    color: rgba(255, 255, 255, 0.40);
+}
+
+/* Le carré ::before de l'eyebrow : vert lime, visible sur fond sombre */
+.lp-footer .lp-eyebrow::before {
+    background: var(--accent, #C6F24E);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   BARRE DE COPYRIGHT
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.lp-footer__copy {
+    margin-top:      32px;
+    padding-top:     16px;
+    padding-bottom:  32px; /* espace sous le copyright = espace en bas du footer */
+    border-top:      1px solid rgba(255, 255, 255, 0.12);
+    display:         flex;
+    justify-content: space-between;
+    font-family:     var(--mono, 'JetBrains Mono', monospace);
+    font-size:       11px;
+    letter-spacing:  .08em;
+    /* Blanc à 40% : très discret, informatif uniquement */
+    color:           rgba(255, 255, 255, 0.40);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RESPONSIVE — Mobile first
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/*
+ * Tablette (≤ 1024px) : la grille 3 colonnes passe en 2 colonnes.
+ * La colonne description prend la pleine largeur, les deux colonnes
+ * de liens se placent côte à côte en dessous.
+ */
+@media (max-width: 1024px) {
+    .lp-footer__grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/*
+ * Mobile (≤ 768px) : 1 seule colonne. Tout s'empile.
+ * Le copyright passe en colonne aussi (texte + version sur deux lignes).
+ */
+@media (max-width: 768px) {
+    .lp-footer__grid {
+        grid-template-columns: 1fr;
+    }
+
+    .lp-footer__copy {
+        flex-direction: column;
+        gap:            8px;
+    }
+
+    /* Logo : légèrement plus petit sur mobile pour proportionner */
+    .lp-footer__logo img {
+        height: 56px;
+    }
+
+    /* Padding en haut réduit sur mobile */
+    .lp-footer__logo {
+        padding-top: 32px;
+    }
+}

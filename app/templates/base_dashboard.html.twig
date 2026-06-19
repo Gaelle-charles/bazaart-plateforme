@@ -43,6 +43,15 @@
 #}
 {% block navbar %}{% endblock %}
 
+{#
+    Le footer public n'est pas inclus dans le dashboard : la sidebar latérale
+    (avec ses propres sections de navigation) remplace l'ensemble de la chrome
+    de navigation. Un footer ici créerait une rupture visuelle en dessous du
+    layout sd-app (qui a une margin-left: 220px) et serait décalé par rapport
+    a la sidebar.
+#}
+{% block footer %}{% endblock %}
+
 {% block stylesheets %}
 {{ parent() }}
 {#

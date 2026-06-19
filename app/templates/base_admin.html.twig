@@ -20,6 +20,13 @@
 #}
 {% block navbar %}{% endblock %}
 
+{#
+    Le footer global (_footer.html.twig) n'est pas pertinent dans le back-office.
+    L'interface admin est une application interne avec sidebar — pas de footer public.
+    On surcharge le bloc footer défini dans base.html.twig avec un bloc vide.
+#}
+{% block footer %}{% endblock %}
+
 {% block stylesheets %}
 <style>
 

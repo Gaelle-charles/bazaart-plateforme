@@ -1,0 +1,111 @@
+{#
+    _footer.html.twig — Footer global partagé de la plateforme Bazaart
+
+    Ce partial est inclus dans base.html.twig via :
+        {% include '_footer.html.twig' %}
+    Il s'affiche donc sur TOUTES les pages qui étendent base.html.twig
+    (ressources, forum, dashboard, articles, formations…), SAUF les pages
+    admin (base_admin.html.twig écrase le bloc navbar ET n'inclut pas ce footer
+    directement — la sidebar admin suffit comme navigation).
+
+    Styles requis : public/css/footer.css (chargé dans base.html.twig).
+
+    Photo de fond : public/images/footer-bazaart.jpg
+      → fond sombre via overlay ::before (voir footer.css)
+      → textes et liens en blanc/lime sur fond sombré
+
+    Logo : public/images/logo-green.png (vert lime, lisible sur fond sombre)
+      → remplace l'ancien texte "BAZAART." géant
+
+    Routes utilisées :
+      - app_resource_index   → /opportunites (Ressourcerie)
+      - app_forum_index      → /forum
+      - app_dashboard        → /dashboard
+      - app_legal_privacy    → /confidentialite
+      - app_legal_cgu        → /cgu
+      - app_legal_mentions   → /mentions-legales
+
+    Pas de logique PHP dans ce fichier : pur HTML/Twig.
+    Twig génère les URLs via path() → aucune URL en dur (sauf pour tester).
+#}
+
+{# ══════════════════════════════════════════════════════════════════════════════
+   FOOTER
+   Structure :
+     <footer.lp-footer>
+       <div.lp-container>        ← centrage max-width 1440px
+         <a.lp-footer__logo>     ← logo image (remplace le texte géant)
+         <div.lp-footer__grid>   ← 3 colonnes : description + Plateforme + Légal
+         <div.lp-footer__copy>   ← barre de copyright
+   role="contentinfo" : indique aux lecteurs d'écran que c'est le pied de page
+   du site (valeur ARIA standard pour le <footer> principal).
+══════════════════════════════════════════════════════════════════════════════ #}
+<footer class="lp-footer" role="contentinfo">
+    <div class="lp-container">
+
+        {#
+            Logo Bazaart — image au lieu du texte géant.
+            On utilise logo-green.png : le vert lime (#C6F24E) offre un excellent
+            contraste sur le fond sombre de la photo (ratio WCAG AA > 4.5:1).
+            alt="Bazaart" : texte alternatif court et descriptif.
+            Le lien renvoie vers l'accueil (convention UI standard).
+        #}
+        <a href="{{ path('app_home') }}" class="lp-footer__logo" aria-label="Bazaart — retour accueil">
+            <img src="{{ asset('images/logo-green.png') }}"
+                 alt="Bazaart"
+                 width="240"
+                 height="80">
+        </a>
+
+        {# Grille de contenu : description asso + 2 colonnes de liens #}
+        <div class="lp-footer__grid">
+
+            {# ── Colonne 1 : présentation de l'association ─────────────────── #}
+            <div>
+                {#
+                    lp-eyebrow--nodot : variante sans carré lime à gauche.
+                    Le carré serait peu visible sur fond sombre — on le masque.
+                    La couleur est surchargée dans footer.css (.lp-footer .lp-eyebrow).
+                #}
+                <span class="lp-eyebrow lp-eyebrow--nodot">L'asso</span>
+                <p class="lp-footer__about">
+                    Association loi 1901 basée a Paris, operant la plateforme BazaArt
+                    et trois hubs : evenementiel, ingenierie culturelle et formation.
+                </p>
+                <p class="lp-footer__address">
+                    PARIS, FRANCE<br>
+                    ASSOCIATION LOI 1901
+                </p>
+            </div>
+
+            {# ── Colonne 2 : liens plateforme ──────────────────────────────── #}
+            <nav aria-label="Liens plateforme">
+                <p class="lp-footer__col-title">Plateforme</p>
+                <ul class="lp-footer__links" role="list">
+                    <li><a href="{{ path('app_resource_index') }}">Opportunites</a></li>
+                    <li><a href="{{ path('app_forum_index') }}">Forum</a></li>
+                    <li><a href="{{ path('app_dashboard') }}">Mon espace</a></li>
+                    <li><a href="{{ path('app_course_index') }}">Formations</a></li>
+                </ul>
+            </nav>
+
+            {# ── Colonne 3 : liens légaux ──────────────────────────────────── #}
+            <nav aria-label="Liens legaux">
+                <p class="lp-footer__col-title">Legal</p>
+                <ul class="lp-footer__links" role="list">
+                    <li><a href="{{ path('app_legal_privacy') }}">Confidentialite</a></li>
+                    <li><a href="{{ path('app_legal_cgu') }}">CGU</a></li>
+                    <li><a href="{{ path('app_legal_mentions') }}">Mentions legales</a></li>
+                </ul>
+            </nav>
+
+        </div>{# /.lp-footer__grid #}
+
+        {# Barre de copyright en bas du footer #}
+        <div class="lp-footer__copy">
+            <span>© {{ "now"|date("Y") }} BAZAART - ASSOCIATION LOI 1901</span>
+            <span>v1.0 · PARIS, FRANCE</span>
+        </div>
+
+    </div>{# /.lp-container #}
+</footer>

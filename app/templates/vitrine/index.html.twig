@@ -1294,102 +1294,10 @@
 
 /* ──────────────────────────────────────────────────────────────────────
    9. FOOTER
-   Fond --ink, texte --bg. Logo géant en --accent (lime).
+   Les styles .lp-footer* ont ete deplacés dans public/css/footer.css,
+   charge globalement via base.html.twig.
+   On ne les redeclare plus ici pour eviter toute double definition.
 ────────────────────────────────────────────────────────────────────── */
-
-.lp-footer {
-    background:   var(--ink);
-    color:        var(--bg);
-    border-top:   1px solid var(--ink);
-}
-
-/* Logo géant — reproduit le style du prototype (80–220px) */
-.lp-footer__logo {
-    font-family:    var(--display);
-    font-size:      clamp(72px, 14vw, 180px);
-    line-height:    .85;
-    color:          var(--accent); /* lime — discret mais présent */
-    letter-spacing: -.03em;
-    padding-top:    48px;
-    display:        block;
-    opacity:        .85;
-}
-
-/* Grille du footer : description (2/5) + 4 colonnes de liens */
-.lp-footer__grid {
-    display:               grid;
-    grid-template-columns: 2fr 1fr 1fr;
-    gap:                   32px;
-    margin-top:            32px;
-    padding-top:           32px;
-    border-top:            1px solid var(--line-soft);
-}
-
-/* Texte de présentation de l'asso */
-.lp-footer__about {
-    font-size:   13.5px;
-    line-height: 1.5;
-    color:       rgba(242, 239, 230, .65);
-    max-width:   380px;
-    margin:      12px 0 0;
-}
-
-/* Adresse physique en mono discret */
-.lp-footer__address {
-    font-family:    var(--mono);
-    font-size:      10px;
-    letter-spacing: .1em;
-    color:          var(--ink-mute);
-    margin-top:     12px;
-    line-height:    1.8;
-    opacity:        .7;
-}
-
-/* Titre de colonne de liens — mono très discret */
-.lp-footer__col-title {
-    font-family:    var(--mono);
-    font-size:      11px;
-    letter-spacing: .1em;
-    color:          rgba(242, 239, 230, .4);
-    text-transform: uppercase;
-    margin:         0;
-}
-
-/* Liste de liens dans le footer */
-.lp-footer__links {
-    list-style: none;
-    padding:    0;
-    margin:     12px 0 0;
-    display:    flex;
-    flex-direction: column;
-    gap:        8px;
-}
-
-.lp-footer__links a {
-    color:          var(--bg);
-    text-decoration: none;
-    font-size:      13px;
-    font-weight:    500;
-    transition:     color var(--transition-fast);
-}
-
-.lp-footer__links a:hover {
-    color: var(--accent);
-}
-
-/* Barre de copyright en bas */
-.lp-footer__copy {
-    margin-top:     32px;
-    padding-top:    16px;
-    border-top:     1px solid var(--line-soft);
-    display:        flex;
-    justify-content: space-between;
-    font-family:    var(--mono);
-    font-size:      11px;
-    letter-spacing: .08em;
-    color:          rgba(242, 239, 230, .5);
-    padding-bottom: 24px;
-}
 
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -1411,10 +1319,7 @@
         grid-template-columns: 1fr;
     }
 
-    /* Footer : 2 colonnes */
-    .lp-footer__grid {
-        grid-template-columns: 1fr 1fr;
-    }
+    /* Footer : responsive geré dans public/css/footer.css */
 }
 
 @media (max-width: 768px) {
@@ -1507,14 +1412,7 @@
         grid-template-columns: 1fr;
     }
 
-    /* ─ Footer ─ */
-    .lp-footer__grid {
-        grid-template-columns: 1fr;
-    }
-    .lp-footer__copy {
-        flex-direction: column;
-        gap:            8px;
-    }
+    /* ─ Footer ─ responsive geré dans public/css/footer.css */
 }
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -2597,73 +2495,14 @@
     </main>
 
 
-    {# ════════════════════════════════════════════════════════════════════════
-       9. FOOTER
-       Reproduit fidèlement le Footer du prototype JSX.
-       Logo géant en lime, 2 colonnes de liens (Plateforme + Légal).
-       Note : les routes /confidentialite, /cgu, /mentions-legales n'existent
-       pas encore.
-       BACK : créer les pages statiques via un StaticController avec ces routes.
-    ════════════════════════════════════════════════════════════════════════ #}
-    <footer class="lp-footer" role="contentinfo">
-        <div class="lp-container">
-
-            {# Logo géant — style affiche, opacité réduite #}
-            <span class="lp-footer__logo" aria-label="BazaArt">BAZAART.</span>
-
-            {# Grille : description + 2 colonnes de liens #}
-            <div class="lp-footer__grid">
-
-                {# Colonne description #}
-                <div>
-                    <span class="lp-eyebrow lp-eyebrow--nodot" style="color:rgba(242,239,230,.4);">
-                        L'asso
-                    </span>
-                    <p class="lp-footer__about">
-                        Association loi 1901 basée à Paris, opérant la plateforme BazaArt
-                        et trois hubs : événementiel, ingénierie culturelle et formation.
-                    </p>
-                    <p class="lp-footer__address">
-                        PARIS, FRANCE<br>
-                        ASSOCIATION LOI 1901
-                    </p>
-                </div>
-
-                {# Colonne Plateforme #}
-                <nav aria-label="Liens plateforme">
-                    <p class="lp-footer__col-title">Plateforme</p>
-                    <ul class="lp-footer__links" role="list">
-                        <li><a href="{{ path('app_resource_index') }}">Ressources</a></li>
-                        {# BACK : route app_forum_index → /forum #}
-                        <li><a href="#">Forum</a></li>
-                        {# BACK : route app_dashboard (artiste) #}
-                        <li><a href="#">Dashboard</a></li>
-                    </ul>
-                </nav>
-
-                {# Colonne Légal #}
-                <nav aria-label="Liens légaux">
-                    <p class="lp-footer__col-title">Légal</p>
-                    <ul class="lp-footer__links" role="list">
-                        {# BACK : route app_privacy → /confidentialite (StaticController) #}
-                        <li><a href="/confidentialite">Confidentialité</a></li>
-                        {# BACK : route app_cgu → /cgu (StaticController) #}
-                        <li><a href="/cgu">CGU</a></li>
-                        {# BACK : route app_mentions_legales → /mentions-legales #}
-                        <li><a href="/mentions-legales">Mentions légales</a></li>
-                    </ul>
-                </nav>
-
-            </div>{# /.lp-footer__grid #}
-
-            {# Barre de copyright #}
-            <div class="lp-footer__copy">
-                <span>© 2026 BAZAART — ASSOCIATION LOI 1901</span>
-                <span>v1.0 · PARIS, FRANCE</span>
-            </div>
-
-        </div>{# /.lp-container #}
-    </footer>
+    {#
+       9. FOOTER — rendu par le partial partagé _footer.html.twig
+       Le footer est desormais inclus via base.html.twig ({% block footer %})
+       et s'affiche automatiquement sur toutes les pages publiques.
+       On ne redeclare plus le markup ici pour eviter le doublon.
+       Le <footer> est bien inclus une seule fois : via base.html.twig.
+       RIEN a faire ici — le footer est en dehors du {% block body %}.
+    #}
 
 </div>{# /.lp-root #}
 {% endblock %}
