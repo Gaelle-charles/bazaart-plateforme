@@ -373,20 +373,46 @@
 }
 
 /* ── Couche 1 : photo de fond (::before) ──────────────────────────────
-   On positionne l'image en débordant légèrement (top: -10%, height: 120%)
-   pour avoir de la marge en haut ET en bas lors du déplacement parallaxe.
-   Sans ce débordement, l'image laisserait apparaître le fond sable quand
-   on défile vers le bas (translateY négatif révèle le bord du bas). */
+   On positionne l'image en débordant suffisamment (top: -20%, height: 140%)
+   pour avoir de la marge en haut ET en bas pendant TOUTE la plage de parallaxe.
+
+   CALCUL DE LA MARGE NÉCESSAIRE :
+   - Hauteur hero ≈ 100dvh - 64px (nav) ≈ 650px sur un écran 720px de haut.
+   - facteur parallaxe JS = 0.25 (voir le script ci-dessous).
+   - déplacement max = scrollY_max × 0.25.
+   - scrollY_max pendant lequel le hero est visible ≈ hauteur du hero ≈ 650px.
+   - déplacement max ≈ 650 × 0.25 = 163px (image remonte vers le haut).
+
+   Avec top: -20% et height: 140% sur un hero de 650px :
+   - l'image mesure 140% × 650 = 910px.
+   - elle commence à -20% × 650 = -130px au-dessus du haut du hero.
+   - elle déborde de 910 - 650 - 130 = 130px sous le bas du hero.
+   - 130px de débordement bas > 163px de déplacement max... pas assez.
+
+   Correction finale : top: -25%, height: 150%.
+   - l'image mesure 150% × 650 = 975px.
+   - débordement haut : 25% × 650 = 163px.
+   - débordement bas : 975 - 650 - 163 = 162px.
+   - Les deux débordements (≈163px) couvrent exactement le déplacement max (163px).
+   On choisit 165px de marge soit top: -26%, height: 152% pour ajouter
+   un petit coussin de sécurité.
+
+   NB : sans ce débordement suffisant, translateY négatif révèle le fond
+   sable (#F2EFE6) sous la photo → "zone grise" visible en bas du hero. */
 .lp-hero::before {
     content:             '';
     position:            absolute;
-    /* Débordement vertical : -10% haut, 120% hauteur totale.
-       A 100dvh de hauteur hero : 10% = ~70px de marge de chaque côté.
-       facteur parallaxe JS ≈ 0.35 × scrollY ≤ ~200px max -> 70px suffit. */
-    top:                 -10%;
+    /*
+     * Débordement vertical corrigé :
+     *   top: -26%    → 26% de la hauteur du hero au-dessus du bord haut
+     *   height: 152% → l'image couvre 152% de la hauteur du hero
+     * Débordement bas = 152% - 100% - 26% = 26% → ~169px sur un écran 650px.
+     * Déplacement parallaxe max = 650 × 0.25 = 163px < 169px → aucun bord visible.
+     */
+    top:                 -26%;
     left:                0;
     width:               100%;
-    height:              120%;
+    height:              152%;
     /* URL statique de l'image de fond du hero */
     background-image:    url('/images/hero-bazaart.jpg');
     background-size:     cover;
@@ -2524,6 +2550,11 @@
     (ce n'est pas un vrai noeud DOM) — cette indirection via CSS variable
     est la solution idiomatique.
 
+    Facteur parallaxe : 0.25 (réduit depuis 0.35 pour éviter la zone grise
+    en bas du hero). Le ::before a top: -26% / height: 152% pour un débordement
+    de 26% de chaque côté, calibré pour couvrir un déplacement max de 163px
+    sur un hero de 650px de hauteur.
+
     Performances :
     - requestAnimationFrame (rAF) : l'update visuel est toujours synchronisé
       avec le refresh du navigateur (60fps max, jamais de frames perdues).
@@ -2561,11 +2592,18 @@
     }
 
     /* 3. Facteur parallaxe : valeur entre 0 (pas de mouvement) et 1 (suit le scroll).
-          0.35 signifie que pour 100px de scroll, l'image se déplace de 35px.
+          0.25 signifie que pour 100px de scroll, l'image se déplace de 25px.
           L'image semble donc défiler plus lentement que le contenu -> illusion de profondeur.
-          Valeurs raisonnables : 0.25 (discret) à 0.45 (prononcé).
-          On utilise 0.35 pour un effet équilibré. */
-    var PARALLAX_FACTOR = 0.35;
+
+          POURQUOI 0.25 et pas 0.35 (ancienne valeur) ?
+          Le ::before a un débordement vertical de 26% en haut et 26% en bas
+          (top: -26%, height: 152% — voir le CSS .lp-hero::before).
+          Sur un hero de 650px, ce débordement représente ≈ 169px de marge.
+          Avec un facteur de 0.35, le déplacement max était 650 × 0.35 = 228px,
+          supérieur à la marge de 169px → fond sable visible en bas (bug).
+          Avec 0.25, le déplacement max est 650 × 0.25 = 163px < 169px → OK.
+          Effet légèrement plus subtil, mais sans aucun bord visible. */
+    var PARALLAX_FACTOR = 0.25;
 
     /* 4. Seuil mobile : désactiver sur petits écrans (performance + iOS).
           768px correspond au breakpoint "tablette" du design. */
@@ -2601,11 +2639,11 @@
         /* Calcul du déplacement vertical de la photo :
            - scrollY positif (on défile vers le bas) -> translateY négatif (image remonte)
              L'image se déplace vers le HAUT moins vite que le contenu -> effet de profondeur.
-           - Le débordement de 10% top + 120% height absorbe ce déplacement sans bords visibles.
+           - Le débordement de 26% top + 152% height absorbe ce déplacement sans bords visibles.
 
-           Exemple concret a scrollY = 300px, facteur 0.35 :
-             déplacement = -(300 * 0.35) = -105px
-             L'image remonte de 105px alors que la section a quitté l'écran de 300px -> lent. */
+           Exemple concret a scrollY = 300px, facteur 0.25 :
+             déplacement = -(300 * 0.25) = -75px
+             L'image remonte de 75px alors que la section a quitté l'écran de 300px -> lent. */
         var displacement = -(scrollY * PARALLAX_FACTOR);
 
         /* Écrire la valeur sur la section (l'::before la consomme via var()) */

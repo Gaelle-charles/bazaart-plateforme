@@ -32,6 +32,25 @@
     position:      relative;
 
     /*
+     * Espacement au-dessus du footer — homogène sur TOUTES les pages.
+     *
+     * Problème sans ce margin-top : certaines pages (ex. /resources, /forum)
+     * terminent leur contenu sans padding-bottom, et le footer se retrouve
+     * collé directement au dernier élément de la page.
+     * Sur la home, les sections ont leur propre padding-bottom (48px) donc
+     * l'espace était présent. Ce margin-top garantit la respiration sur toutes
+     * les pages de manière uniforme.
+     *
+     * 64px = valeur choisie pour une respiration cohérente avec les espacements
+     * entre sections (48–64px sur la home). Sur les pages app (resources, forum...),
+     * la dernière section n'a pas de padding-bottom propre : les 64px représentent
+     * l'unique espace. Sur la home, la dernière section a déjà padding-bottom:48px,
+     * ce qui fait un total de 112px → acceptable, généreux mais pas excessif.
+     * Sur mobile (≤ 768px), on réduit à 40px via le media query ci-dessous.
+     */
+    margin-top:    64px;
+
+    /*
      * Photo de fond :
      * - background-size: cover → l'image couvre toujours tout le footer
      *   quelle que soit la hauteur/largeur, même sur mobile.
@@ -288,5 +307,10 @@
     /* Padding en haut réduit sur mobile */
     .lp-footer__logo {
         padding-top: 32px;
+    }
+
+    /* Espacement au-dessus du footer réduit sur mobile */
+    .lp-footer {
+        margin-top: 40px;
     }
 }
