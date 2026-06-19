@@ -40,6 +40,16 @@ Ne pas utiliser `DATE(colonne) = DATE(:param)` en DQL — Doctrine rejette les f
 **Why :** PHPStan avec l'extension doctrine.dql détecte le problème dès l'analyse statique.
 **How to apply :** Pour les colonnes 'date' (sans heure), passer un DateTimeImmutable à minuit et comparer avec `=` — Doctrine cast automatiquement en DATE SQL.
 
+**NULLS LAST en DQL : utiliser CASE WHEN à la place**
+La syntaxe `ORDER BY x ASC NULLS LAST` est valide en SQL PostgreSQL mais invalide en DQL Doctrine. PHPStan avec l'extension `doctrine.dql` la rejette. La solution portable : `addSelect('CASE WHEN r.deadline IS NULL THEN 1 ELSE 0 END AS HIDDEN sortNull')` puis `orderBy('sortNull', 'ASC')`. Le mot-clé `HIDDEN` exclut l'expression du résultat hydraté tout en permettant le tri.
+**Why :** Doctrine ORM ne supporte pas NULLS LAST/FIRST en DQL même si PostgreSQL le supporte.
+**How to apply :** Chaque fois qu'on veut NULLS LAST/FIRST en DQL : CASE WHEN nullable IS NULL THEN 1 ELSE 0 END AS HIDDEN + ORDER BY l'alias.
+
+**Filtre DISTINCT year en SQL natif via DBAL (pas DQL)**
+Pour des agrégats DISTINCT simples (ex: liste d'années, liste de pays) sur une colonne scalaire sans hydratation d'entités, utiliser `getEntityManager()->getConnection()->fetchAllAssociative($sql)`. C'est plus direct que de passer par un QB DQL et évite la complexité EXTRACT + GroupBy en DQL.
+**Why :** `EXTRACT(YEAR FROM deadline)` n'est pas une fonction DQL native ; passer par DBAL natif donne du SQL PostgreSQL idiomatique sans dépendance à des extensions Doctrine.
+**How to apply :** Uniquement pour des requêtes scalaires simples sans relations à hydrater. Toujours retourner array et bien documenter la structure retournée.
+
 **Normalisation de titres : utiliser Transliterator (ICU) plutôt qu'iconv//TRANSLIT**
 `iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', ...)` peut produire "e'" pour "é" sur certains systèmes (macOS/certains Linux), résultant en "cr e ation" après nettoyage. Utiliser `Transliterator::create('NFD; [:Nonspacing Mark:] Remove; NFC; Lower()')` à la place.
 **Why :** Extension `intl` disponible dans le container Docker ; résultat propre et portable.
