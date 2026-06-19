@@ -122,8 +122,10 @@
  * navigateurs peuvent avoir un "flicker" sur les animations de blur.
  */
 @keyframes tr-char-main {
-    0%   { opacity: 0; filter: blur(10px); }
-    100% { opacity: 1; filter: blur(0px); }
+    /* Plancher d'opacité remonté à 0.5 : les lettres restent bien visibles
+       pendant toute l'apparition (fondu plus léger, demande Gaëlle option B). */
+    0%   { opacity: 0.5; filter: blur(10px); }
+    100% { opacity: 1;   filter: blur(0px); }
 }
 
 /*
@@ -310,7 +312,8 @@
  * .is-revealing sur l'élément parent titre.
  */
 .js-title-reveal-ready .tr-char__main {
-    opacity:    0;
+    /* plancher 0.5 (au lieu de 0) : lettres visibles pendant l'apparition (option B). */
+    opacity:    0.5;
     filter:     blur(10px);
     will-change: opacity, filter;
 }
