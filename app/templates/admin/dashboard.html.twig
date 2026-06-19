@@ -605,11 +605,22 @@
                     {# Ligne de description : nb en attente + date du dernier scraping #}
                     <div class="adm-shortcut__desc">
                         {% if scrapingPendingCount > 0 %}
-                            {{ scrapingPendingCount }} à vérifier
+                            {{ scrapingPendingCount }} a verifier
                         {% else %}
                             Aucune en attente
                         {% endif %}
                         · {{ latestScrapedAt ? latestScrapedAt|date('d/m') : 'jamais' }}
+                        {#
+                          Alerte deadline passee : si des opportunites sont perimees
+                          mais non encore archivees, on l'indique ici avec un petit
+                          lien vers l'onglet "Deadline passee" (5eme onglet du tableau).
+                          On utilise un style inline discret (font-mono orange).
+                        #}
+                        {% if expiredScrapedCount > 0 %}
+                            · <a href="{{ path('app_admin_scraped_opportunities') }}"
+                                 style="color:var(--accent-2);font-weight:700;text-decoration:none;"
+                                 title="Voir les opportunites a deadline passee">{{ expiredScrapedCount }} perimee(s)</a>
+                        {% endif %}
                     </div>
                 </div>
             </a>

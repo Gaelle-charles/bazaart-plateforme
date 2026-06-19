@@ -99,6 +99,10 @@ class AdminController extends AbstractController
             // Utilisés dans le shortcut "Scraping Sheets" du dashboard pour enrichir l'affichage
             'scrapingPendingCount' => $this->scrapedResourceRepository->countPending(),
             'latestScrapedAt'      => $this->scrapedResourceRepository->findLatestScrapedAt(),
+            // Opportunites a deadline passee qui n'ont pas encore ete archivees/rejetees.
+            // Affiche un avertissement sur le dashboard pour inciter l'admin au nettoyage.
+            // COUNT SQL pur : pas de chargement d'entites.
+            'expiredScrapedCount'  => $this->scrapedResourceRepository->countExpired(),
         ]);
     }
 
@@ -441,26 +445,47 @@ class AdminController extends AbstractController
 
     /**
      * Liste les opportunités scrapées stockées en base de données.
-     * Affiche les "À vérifier" en premier, puis les "Vérifié".
+     * Affiche les "A vérifier" en premier, puis les "Vérifié", "Rejeté", "Archivé"
+     * et enfin le 5eme onglet "Deadline passée" (vue de nettoyage admin).
+     *
+     * Le 5eme onglet "Deadline passée" affiche toutes les opportunités en statut
+     * pending ou verified dont la date structurée (deadlineDate) est passée.
+     * C'est une vue de nettoyage : l'admin peut les rejeter ou les archiver
+     * manuellement. Elles ne sont PAS automatiquement archivées ici
+     * (archiveExpired() est deja appele par ScrapeOpportunitiesCommand).
+     *
+     * Note : le filtre ?filtre=expired dans l'URL n'est PAS necessaire ici
+     * car le template gere deja les onglets via JS cote client.
+     * On passe simplement la liste `expired` au template.
      */
     #[Route('/scraped-opportunities', name: 'scraped_opportunities')]
     public function scrapedOpportunities(): Response
     {
-        // Récupère les opportunités par statut pour alimenter les 4 onglets
+        // Recupere les opportunites par statut pour alimenter les 5 onglets
         $pending  = $this->scrapedResourceRepository->findPending();
         $verified = $this->scrapedResourceRepository->findVerified();
-        // Onglet "Rejeté" : opportunités jugées hors sujet par l'admin
+        // Onglet "Rejete" : opportunites jugees hors sujet par l'admin
         $rejected = $this->scrapedResourceRepository->findRejected();
-        // Onglet "Archivé" : opportunités expirées (deadline passée, archivage automatique)
+        // Onglet "Archive" : opportunites expirées (deadline passée, archivage automatique)
         // ou archivées manuellement. Consultation uniquement, pas d'action disponible.
         $archived        = $this->scrapedResourceRepository->findArchived();
         $latestScrapedAt = $this->scrapedResourceRepository->findLatestScrapedAt();
+
+        // Onglet 5 : "Deadline passée" — vue de nettoyage admin.
+        // Opportunites en statut pending ou verified dont la deadlineDate est depassee.
+        // Ces items ne seront pas rescrapés (URL connue) mais l'admin doit nettoyer
+        // le backlog pour eviter de valider par erreur une opportunite perimee.
+        // Note : distinct de "Archive" (qui a status=archived) ; ici on voit des
+        // pending/verified qui auraient du etre archives mais ne le sont pas encore
+        // (ex : deadlineDate remplie APRES le dernier run de ScrapeOpportunitiesCommand).
+        $expired = $this->scrapedResourceRepository->findExpired();
 
         return $this->render('admin/scraped_opportunities.html.twig', [
             'pending'         => $pending,
             'verified'        => $verified,
             'rejected'        => $rejected,
             'archived'        => $archived,
+            'expired'         => $expired,
             'latestScrapedAt' => $latestScrapedAt,
         ]);
     }

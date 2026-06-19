@@ -414,10 +414,14 @@
                 </svg>
                 Validation
                 {#
-                    TODO V2 : ajouter un badge avec le comptage des ressources en attente.
-                    Nécessite une variable globale Twig (TwigExtension ou GlobalVariable).
-                    Ex : <span class="sd-badge sd-badge--warn">{{ pending_count }}</span>
+                    Badge "ressources en attente" : appelle admin_badge_resources_pending()
+                    definie dans AdminBadgeExtension. Affiche uniquement si > 0.
+                    Couleur orange (--accent-2) pour signaler une action requise.
                 #}
+                {% set _rp = admin_badge_resources_pending() %}
+                {% if _rp > 0 %}
+                    <span class="sd-badge sd-badge--warn" aria-label="{{ _rp }} ressource(s) en attente">{{ _rp }}</span>
+                {% endif %}
             </a>
 
             {# Gestion des utilisateurs #}
@@ -448,6 +452,14 @@
                     <line x1="12" y1="4.5" x2="12" y2="13.5"/>
                 </svg>
                 Structures
+                {#
+                    Badge "candidatures en attente" — appelle admin_badge_structures_pending()
+                    definie dans AdminBadgeExtension. Affiche uniquement si > 0.
+                #}
+                {% set _sp = admin_badge_structures_pending() %}
+                {% if _sp > 0 %}
+                    <span class="sd-badge sd-badge--warn" aria-label="{{ _sp }} candidature(s) en attente">{{ _sp }}</span>
+                {% endif %}
             </a>
 
             {#
@@ -508,6 +520,16 @@
                     <path d="M12 5v14M5 12h14"/>
                 </svg>
                 Propositions
+                {#
+                    Badge "propositions en attente" — appelle admin_badge_proposals_pending()
+                    definie dans AdminBadgeExtension. Affiche uniquement si > 0.
+                    Couleur lime (--accent) : moins urgent que validation/structures,
+                    mais merite l'attention de l'admin.
+                #}
+                {% set _pp = admin_badge_proposals_pending() %}
+                {% if _pp > 0 %}
+                    <span class="sd-badge" style="background:var(--accent);color:var(--ink);border-color:var(--accent);" aria-label="{{ _pp }} proposition(s) en attente">{{ _pp }}</span>
+                {% endif %}
             </a>
 
             {#
@@ -536,7 +558,16 @@
                     <circle cx="11" cy="11" r="7"/>
                     <path d="m20 20-3.5-3.5"/>
                 </svg>
-                Opportunités scrapées
+                Opportunites scrapees
+                {#
+                    Badge "a verifier" — appelle admin_badge_scraped_pending()
+                    definie dans AdminBadgeExtension. Affiche uniquement si > 0.
+                    Orange (--accent-2) : action requise de l'admin.
+                #}
+                {% set _scp = admin_badge_scraped_pending() %}
+                {% if _scp > 0 %}
+                    <span class="sd-badge sd-badge--warn" aria-label="{{ _scp }} opportunite(s) a verifier">{{ _scp }}</span>
+                {% endif %}
             </a>
 
             {#

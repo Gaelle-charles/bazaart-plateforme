@@ -504,6 +504,24 @@ class ResourceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Compte les ressources en attente de validation (badge sidebar admin).
+     *
+     * COUNT SQL pur : on ne charge aucune entite, juste un entier.
+     * Utilise par AdminBadgeExtension pour le badge "Validation" dans la sidebar.
+     *
+     * @return int Nombre de ressources avec status PendingValidation
+     */
+    public function countPending(): int
+    {
+        return (int) $this->createQueryBuilder('r')
+            ->select('COUNT(r.id)')
+            ->where('r.status = :status')
+            ->setParameter('status', ResourceStatus::PendingValidation)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
      * Retourne toutes les ressources en attente de validation.
      * Utilisé dans l'interface d'administration.
      *

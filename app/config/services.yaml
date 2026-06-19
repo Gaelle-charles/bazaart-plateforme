@@ -17,6 +17,12 @@ parameters:
     # Ce fallback garantit que l'application tourne même si la variable n'est pas définie
     # côté serveur — comportement identique à env(ADMIN_EMAIL) ci-dessus.
     env(REFUND_WITHDRAWAL_DAYS): '14'
+    # Seuil d'alerte email pour les opportunités scrapées en attente de validation.
+    # Si le nombre d'opportunités en attente dépasse ce seuil, la commande
+    # app:notify-admin-pending-opportunities envoie un email à l'équipe Bazaart.
+    # Valeur par défaut : 5 (configurable via ADMIN_PENDING_THRESHOLD dans .env.local).
+    # Baisser à 1 en dev/staging pour tester l'envoi sans avoir 5 opportunités en attente.
+    env(ADMIN_PENDING_THRESHOLD): '5'
 
 services:
     # default configuration for services in *this* file
@@ -54,6 +60,11 @@ services:
             # Injectée dans EventCancellationService::$refundWithdrawalDays.
             # env(int:...) convertit la chaîne en entier PHP avant l'injection.
             int $refundWithdrawalDays: '%env(int:REFUND_WITHDRAWAL_DAYS)%'
+            # Seuil d'alerte opportunites en attente (commande app:notify-admin-pending-opportunities).
+            # Valeur par défaut 5 (voir parametre env(ADMIN_PENDING_THRESHOLD) ci-dessus).
+            # Le bind s'appuie sur le nom de paramètre $adminPendingThreshold —
+            # uniquement la commande NotifyAdminPendingOpportunitiesCommand utilise ce nom.
+            int $adminPendingThreshold: '%env(int:ADMIN_PENDING_THRESHOLD)%'
 
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name

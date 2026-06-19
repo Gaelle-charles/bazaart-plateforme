@@ -425,6 +425,71 @@ class ScrapedResourceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Retourne les opportunités dont la deadline structurée est passée (vue de nettoyage admin).
+     *
+     * CRITERES :
+     *   - deadlineDate IS NOT NULL  -> on a une date structurée exploitable
+     *   - deadlineDate < aujourd'hui (minuit Europe/Paris)
+     *   - status IN (pending, verified) -> on exclut les rejected et archived (deja traites)
+     *     Note : on inclut les "verified" car l'admin peut avoir valide une opp dont
+     *     la deadline est ensuite passee avant qu'il archivat manuellement.
+     *
+     * USAGE ADMIN UNIQUEMENT : cette vue sert au nettoyage du back-office.
+     * Le public masque deja les deadlines passees (hideExpired dans ResourceRepository).
+     *
+     * ATTENTION : ne pas confondre avec archiveExpired() qui MODIFIE le statut.
+     * findExpired() est READ-ONLY.
+     *
+     * @return ScrapedResource[]
+     */
+    public function findExpired(): array
+    {
+        // Minuit heure de Paris = reference temporelle coherente avec archiveExpired()
+        $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris'));
+
+        return $this->createQueryBuilder('s')
+            ->where('s.deadlineDate IS NOT NULL')
+            ->andWhere('s.deadlineDate < :today')
+            ->andWhere('s.status IN (:activeStatuses)')
+            ->setParameter('today', $today)
+            ->setParameter('activeStatuses', [
+                ScrapedResourceStatus::Pending,
+                ScrapedResourceStatus::Verified,
+            ])
+            // Plus anciennes en premier : les plus urgentes a traiter
+            ->orderBy('s.deadlineDate', 'ASC')
+            ->addOrderBy('s.scrapedAt', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Compte les opportunités à deadline passée (badge/widget dashboard admin).
+     *
+     * Memes criteres que findExpired() mais en COUNT SQL pur :
+     * on ne charge aucune entite en memoire, juste un entier.
+     *
+     * @return int Nombre d'opportunités avec deadline depassee
+     */
+    public function countExpired(): int
+    {
+        $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris'));
+
+        return (int) $this->createQueryBuilder('s')
+            ->select('COUNT(s.id)')
+            ->where('s.deadlineDate IS NOT NULL')
+            ->andWhere('s.deadlineDate < :today')
+            ->andWhere('s.status IN (:activeStatuses)')
+            ->setParameter('today', $today)
+            ->setParameter('activeStatuses', [
+                ScrapedResourceStatus::Pending,
+                ScrapedResourceStatus::Verified,
+            ])
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
      * Retourne les ScrapedResource candidates au backfill de deadlineDate.
      *
      * Critères :

@@ -601,7 +601,7 @@ document.addEventListener('DOMContentLoaded', function () {
         </span>
     </button>
     {#
-      4ème onglet : opportunités archivées (deadline passée, détectée automatiquement).
+      4eme onglet : opportunites archivees (deadline passee, detectee automatiquement).
       Pas d'action disponible — consultation uniquement.
       La couleur du compteur suit var(--ink-mute) pour indiquer que ces items sont "dormants".
     #}
@@ -610,10 +610,30 @@ document.addEventListener('DOMContentLoaded', function () {
             aria-selected="false"
             aria-controls="tab-archived"
             onclick="showTab('archived', this)">
-        Archivé
+        Archive
         <span class="adm-tab-count" style="background:var(--ink-mute);color:var(--bg);opacity:.75;">
             {{ archived|length }}
         </span>
+    </button>
+    {#
+      5eme onglet : "Deadline passee" — vue de NETTOYAGE admin.
+      Liste les opportunites en statut pending ou verified dont la deadlineDate est passee.
+      L'admin peut les rejeter ou les archiver manuellement (memes boutons que l'onglet
+      "A verifier"). Couleur orange pour signaler que l'action est urgente.
+      Note : ces items ne sont PAS encore dans "Archive" (status=archived) — ils ont
+      juste leur deadlineDate depassee mais leur statut est encore pending ou verified.
+    #}
+    <button class="adm-tab-btn"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-expired"
+            onclick="showTab('expired', this)">
+        Deadline passee
+        {% if expired|length > 0 %}
+            <span class="adm-tab-count adm-tab-count--pending">{{ expired|length }}</span>
+        {% else %}
+            <span class="adm-tab-count" style="background:var(--ink-mute);color:var(--bg);">0</span>
+        {% endif %}
     </button>
 </div>
 
@@ -933,6 +953,135 @@ document.addEventListener('DOMContentLoaded', function () {
                             <td class="adm-date">{{ opp.scrapedAt|date('d/m/Y') }}</td>
                             {# Badge "Archivé" — ton neutre (muted), légèrement transparent #}
                             <td><span class="adm-badge-archived">⏱ Archivé</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+</div>
+
+{#
+  ── Panneau : DEADLINE PASSEE (nettoyage admin) ────────────────────────────
+  Affiche les opportunites en statut pending ou verified dont deadlineDate < aujourd'hui.
+  Ces items n'ont PAS encore ete archives (ils pourraient l'etre au prochain run du cron),
+  mais l'admin peut les traiter manuellement ici.
+  Actions disponibles : Rejeter (meme bouton que l'onglet "A verifier").
+  Pas de bouton "Verifier" (inutile de publier une opportunite perimee).
+#}
+<div id="tab-expired" class="adm-tab-panel" role="tabpanel">
+
+    {% if expired is empty %}
+        <div class="adm-empty-state">
+            Aucune opportunite avec deadline passee.<br>
+            Bravo, le backlog est propre !
+        </div>
+    {% else %}
+        {# Note informative : contexte et action recommandee #}
+        <p style="font-family:var(--mono);font-size:11px;color:var(--ink-mute);margin-bottom:14px;letter-spacing:.04em;">
+            Ces opportunites ont une deadline structuree depassee mais n'ont pas encore ete archivees
+            (le cron le fera au prochain run). Tu peux les rejeter manuellement si elles ne doivent
+            pas etre publiees, ou attendre l'archivage automatique.
+        </p>
+        <div class="adm-table-wrap">
+            <table class="adm-table">
+                <thead>
+                    <tr>
+                        <th>Titre / Description</th>
+                        <th>Type</th>
+                        <th>Source</th>
+                        <th>Deadline</th>
+                        <th>Score Afro</th>
+                        <th>Statut</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for opp in expired %}
+                        <tr>
+                            {# Titre avec lien vers la source originale #}
+                            <td style="max-width:320px;">
+                                <div class="adm-opp-title">
+                                    {% if opp.url %}
+                                        <a href="{{ opp.url }}" target="_blank" rel="noopener noreferrer">
+                                            {{ opp.title }}
+                                        </a>
+                                    {% else %}
+                                        {{ opp.title }}
+                                    {% endif %}
+                                </div>
+                                {% if opp.description %}
+                                    <div class="adm-opp-desc">
+                                        {{ opp.description|striptags|slice(0, 120) }}{{ opp.description|striptags|length > 120 ? '...' : '' }}
+                                    </div>
+                                {% endif %}
+                            </td>
+
+                            {# Type de ressource #}
+                            <td>
+                                {% if opp.type %}
+                                    <span class="adm-chip">{{ opp.type }}</span>
+                                {% else %}
+                                    <span style="color:var(--ink-mute);">—</span>
+                                {% endif %}
+                            </td>
+
+                            {# Site source #}
+                            <td class="adm-date">{{ opp.sourceSite ?: '—' }}</td>
+
+                            {#
+                              Deadline : affichee en rouge-barre pour indiquer visuellement
+                              qu'elle est depassee. On affiche la deadlineDate structuree
+                              (format JJ/MM/AAAA) si disponible, sinon le champ texte libre.
+                            #}
+                            <td class="adm-date" style="color:var(--accent-2);text-decoration:line-through;font-weight:600;">
+                                {% if opp.deadlineDate %}
+                                    {{ opp.deadlineDate|date('d/m/Y') }}
+                                {% else %}
+                                    {{ opp.deadline ?: '—' }}
+                                {% endif %}
+                            </td>
+
+                            {# Score de pertinence afro-atlantique #}
+                            <td>
+                                <span class="adm-stars">
+                                    {% for i in 1..5 %}
+                                        {% if i <= opp.relevanceScore %}*{% else %}<span class="star-empty">o</span>{% endif %}
+                                    {% endfor %}
+                                </span>
+                            </td>
+
+                            {# Badge de statut actuel (pending ou verified) #}
+                            <td>
+                                {% if opp.status.value == 'pending' %}
+                                    <span class="adm-chip" style="background:var(--accent-2);color:var(--ink);border-color:var(--accent-2);">A verifier</span>
+                                {% else %}
+                                    <span class="adm-badge-verified">Verifie</span>
+                                {% endif %}
+                            </td>
+
+                            {# Actions : seulement Rejeter (pas de Verifier pour une opp perimee) #}
+                            <td>
+                                <div class="adm-action-group">
+                                    {#
+                                      Bouton "Rejeter" — marque l'opp comme rejected.
+                                      On reutilise la meme route que l'onglet "A verifier"
+                                      (rejectScrapedOpportunity) avec le meme token CSRF.
+                                      On peut rejeter une opp "verified" seulement si elle
+                                      n'a pas encore genere de Resource publiee — le garde-fou
+                                      est dans rejectScrapedOpportunity() (garde-fou existant).
+                                    #}
+                                    <form method="post"
+                                          action="{{ path('app_admin_scraped_opportunity_reject', {id: opp.id}) }}"
+                                          onsubmit="return confirm('Rejeter et supprimer du backlog ?')"
+                                          style="display:inline;">
+                                        <input type="hidden" name="_token"
+                                               value="{{ csrf_token('reject_scraped_' ~ opp.id) }}">
+                                        <button type="submit" class="adm-btn-reject">Rejeter</button>
+                                    </form>
+                                </div>
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>

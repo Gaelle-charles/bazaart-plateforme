@@ -61,6 +61,25 @@ class OrganizationProfileRepository extends ServiceEntityRepository
     }
 
     /**
+     * Compte les candidatures Structure en attente de traitement (badge sidebar admin).
+     *
+     * Memes criteres que findPendingStructureApplications() mais COUNT SQL pur :
+     * on ne charge aucune entite en memoire, juste un scalaire.
+     * Utilise par AdminBadgeExtension pour le badge "Structures" dans la sidebar.
+     *
+     * @return int Nombre de candidatures en attente
+     */
+    public function countPendingStructureApplications(): int
+    {
+        return (int) $this->createQueryBuilder('op')
+            ->select('COUNT(op.id)')
+            ->where('op.structureApplicationAt IS NOT NULL')
+            ->andWhere('op.isStructurePartner = false')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
      * Retourne les structures partenaires actives (isStructurePartner = true).
      *
      * Triées alphabétiquement pour l'annuaire et les listes admin.
