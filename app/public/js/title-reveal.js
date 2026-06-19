@@ -416,8 +416,8 @@
            delay de la dernière lettre = (charCount - 1) * 0.04s + 0.05s
            Durée de l'animation = 0.8s (tr-char-main, la plus longue)
            => temps total avant is-done = delay_dernière_lettre + durée + marge 50ms */
-        var lastDelay     = (charCount - 1) * 0.04 + 0.05;  /* en secondes */
-        var animDuration  = 0.8;                              /* secondes */
+        var lastDelay     = (charCount - 1) * 0.05 + 0.05;  /* en secondes (stagger 0.05) */
+        var animDuration  = 1.0;                              /* secondes (durée ralentie) */
         var totalMs       = (lastDelay + animDuration + 0.05) * 1000; /* millisecondes */
 
         /* Pose .is-revealing => les règles CSS .is-revealing .tr-char__main etc.

@@ -163,7 +163,7 @@
  */
 .lp-footer__logo {
     display:     block;
-    padding-top: 48px;
+    padding-top: 32px; /* réduit (48 -> 32) pour diminuer la hauteur du footer */
 }
 
 /*
@@ -179,7 +179,7 @@
  *   = ratio de contraste élevé (conforme WCAG AA).
  */
 .lp-footer__logo img {
-    height:    80px;
+    height:    64px; /* logo réduit (80 -> 64) */
     width:     auto;
     max-width: 100%;
     display:   block;
@@ -282,7 +282,7 @@
 .lp-footer__copy {
     margin-top:      32px;
     padding-top:     16px;
-    padding-bottom:  32px; /* espace sous le copyright = espace en bas du footer */
+    padding-bottom:  24px; /* espace sous le copyright = espace en bas du footer (réduit 32 -> 24) */
     border-top:      1px solid rgba(255, 255, 255, 0.12);
     display:         flex;
     justify-content: space-between;

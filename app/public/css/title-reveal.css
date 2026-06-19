@@ -324,7 +324,7 @@
  *
  * animation-delay : calculé par le JS en inline style sur chaque .tr-char :
  *   style="--i: 3" signifie que c'est la 4e lettre (index 3).
- *   animation-delay = calc(var(--i, 0) * 0.04s + 0.05s)
+ *   animation-delay = calc(var(--i, 0) * 0.05s + 0.05s)
  *     => lettre 0 : delay 0.05s
  *     => lettre 10 : delay 0.45s
  *   Le +0.05s de base laisse un "silence" avant que la première lettre parte.
@@ -334,8 +334,8 @@
  */
 .js-title-reveal-ready .is-revealing .tr-char__main {
     animation:
-        tr-char-main 0.8s cubic-bezier(0.22, 0.61, 0.36, 1)
-        calc(var(--i, 0) * 0.04s + 0.05s)
+        tr-char-main 1s cubic-bezier(0.22, 0.61, 0.36, 1)
+        calc(var(--i, 0) * 0.05s + 0.05s)
         forwards;
 }
 
@@ -346,20 +346,20 @@
  */
 .js-title-reveal-ready .is-revealing .tr-char__slice--top {
     animation:
-        tr-slice-top 0.7s cubic-bezier(0.65, 0, 0.35, 1)
-        calc(var(--i, 0) * 0.04s + 0.05s)
+        tr-slice-top 0.9s cubic-bezier(0.65, 0, 0.35, 1)
+        calc(var(--i, 0) * 0.05s + 0.05s)
         forwards;
 }
 .js-title-reveal-ready .is-revealing .tr-char__slice--mid {
     animation:
-        tr-slice-mid 0.7s cubic-bezier(0.65, 0, 0.35, 1)
-        calc(var(--i, 0) * 0.04s + 0.05s)
+        tr-slice-mid 0.9s cubic-bezier(0.65, 0, 0.35, 1)
+        calc(var(--i, 0) * 0.05s + 0.05s)
         forwards;
 }
 .js-title-reveal-ready .is-revealing .tr-char__slice--bot {
     animation:
-        tr-slice-bot 0.7s cubic-bezier(0.65, 0, 0.35, 1)
-        calc(var(--i, 0) * 0.04s + 0.05s)
+        tr-slice-bot 0.9s cubic-bezier(0.65, 0, 0.35, 1)
+        calc(var(--i, 0) * 0.05s + 0.05s)
         forwards;
 }
 
