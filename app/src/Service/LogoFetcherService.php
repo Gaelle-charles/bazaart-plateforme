@@ -6,7 +6,6 @@ namespace App\Service;
 
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DomCrawler\Crawler;
-use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpException;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
@@ -45,6 +44,9 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 class LogoFetcherService
 {
+    // Fournit buildBrowserHeaders() et requestWithRetry() — centralise les en-têtes
+    // navigateur Chrome 124 et la logique de retry (3 tentatives, backoff 1s/2s).
+    use HttpBrowserFetchTrait;
     /**
      * Timeout réseau pour le fetch de la page d'accueil (en secondes).
      * Court : on ne récupère que le <head> de la page, pas tout le body.
@@ -64,13 +66,6 @@ class LogoFetcherService
      * Évite de charger le <body> entier (inutile pour la détection de logo).
      */
     private const MAX_BODY_BYTES = 51_200; // 50 Ko
-
-    /**
-     * User-Agent navigateur réaliste pour éviter les blocages anti-bot.
-     * Chrome récent sur Windows = agent courant, peu suspect.
-     */
-    private const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        . 'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
     public function __construct(
         // Client HTTP Symfony — même instance que les autres services (autowiring)
@@ -186,7 +181,7 @@ class LogoFetcherService
      *   La section <head> d'une page HTML fait rarement plus de 10-20 Ko.
      *   Cette limite protège contre les pages géantes ou les downloads binaires.
      *
-     * GARDE SSRF APRÈS REDIRECTIONS (C1) :
+     * GARDE SSRF APRES REDIRECTIONS (C1) :
      *   isSafeHost() est vérifié sur l'URL INITIALE dans fetchLogoUrl() avant d'appeler
      *   cette méthode. Mais un serveur malveillant peut répondre avec une redirection
      *   vers une IP interne (ex: 302 vers http://169.254.169.254/...).
@@ -195,65 +190,75 @@ class LogoFetcherService
      *
      *   CONTRE-MESURE : après la requête, on récupère l'URL EFFECTIVE (URL réelle de la
      *   réponse finale après redirections) via $response->getInfo('url'). On la passe à
-     *   isSafeHost() ; si elle ne passe pas la garde → on log et on retourne null.
+     *   isSafeHost() ; si elle ne passe pas la garde, on log et on retourne null.
      *   Ce pattern est identique à ListingUrlDiscoverer::doFetch().
+     *
+     * EN-TÊTES ET RETRY :
+     *   On utilise buildBrowserHeaders() (trait HttpBrowserFetchTrait) pour envoyer
+     *   des en-têtes Chrome 124 complets avec Sec-Fetch-*.
+     *   requestWithRetry() relance jusqu'à 3 fois sur timeout / 429 / 5xx.
      *
      * @param string $siteRoot URL racine du site (ex: "https://www.cnap.fr")
      * @return string|null HTML brut (tronqué si > MAX_BODY_BYTES), null si échec réseau ou SSRF
      */
     private function fetchPage(string $siteRoot): ?string
     {
-        try {
-            $response = $this->httpClient->request('GET', $siteRoot, [
-                'timeout'       => self::FETCH_TIMEOUT,
-                // Nombre max de redirections HTTP suivies (3 couvre http→https→www).
-                // Limité pour réduire la surface SSRF par redirection en chaîne.
-                'max_redirects' => self::MAX_REDIRECTS,
-                'headers'       => [
-                    'User-Agent'      => self::USER_AGENT,
-                    'Accept'          => 'text/html,application/xhtml+xml,*/*;q=0.8',
-                    'Accept-Language' => 'fr-FR,fr;q=0.9,en;q=0.5',
-                ],
-            ]);
+        // Options : en-têtes navigateur complets + timeout court (on ne lit que le <head>)
+        $options = [
+            'timeout'       => self::FETCH_TIMEOUT,
+            // 3 redirections couvrent http->https->www — limité pour réduire la surface SSRF.
+            'max_redirects' => self::MAX_REDIRECTS,
+            // En-têtes Chrome 124 complets (via trait HttpBrowserFetchTrait).
+            // Incluent Sec-Fetch-* qui réduisent les faux positifs anti-bot.
+            'headers'       => $this->buildBrowserHeaders(),
+        ];
 
-            // ── Garde SSRF post-redirection (C1) ──────────────────────────────
-            // getInfo('url') retourne l'URL finale après que Symfony HttpClient a suivi
-            // toutes les redirections (HTTP 301/302/307/308). C'est cette URL réelle
-            // qu'on doit valider, pas l'URL initiale (déjà vérifiée dans fetchLogoUrl).
-            //
-            // Scénario d'attaque : le site cible (ex: https://attacker.com) redirige vers
-            // http://169.254.169.254/latest/meta-data/ (AWS metadata). Sans cette garde,
-            // Symfony HttpClient lirait l'IP interne et retournerait son contenu HTML.
-            //
-            // Note : on appelle getInfo() AVANT getStatusCode() / getContent() pour ne
-            // pas déclencher la lecture du body si l'URL effective est dangereuse.
-            $effectiveUrl = $response->getInfo('url');
-            if (is_string($effectiveUrl) && $effectiveUrl !== '' && $effectiveUrl !== $siteRoot) {
-                // L'URL a changé après redirection(s) → re-vérifier isSafeHost().
-                if (!$this->listingUrlDiscoverer->isSafeHost($effectiveUrl)) {
-                    $this->logger->warning(
-                        '[LogoFetcher] SSRF bloqué : URL effective après redirection rejetée par isSafeHost().',
-                        [
-                            'url_initiale' => $siteRoot,
-                            'url_effective' => $effectiveUrl,
-                        ]
-                    );
-                    return null;
-                }
-            }
+        // requestWithRetry() relance sur timeout / 429 / 5xx (3 tentatives, backoff 1s/2s).
+        // Le logger est fourni pour tracer les retries en niveau INFO.
+        $response = $this->requestWithRetry($this->httpClient, $this->logger, 'GET', $siteRoot, $options);
 
-            $statusCode = $response->getStatusCode();
-            if ($statusCode < 200 || $statusCode >= 300) {
-                $this->logger->debug('[LogoFetcher] HTTP non-2xx lors du fetch de la page d\'accueil.', [
-                    'site'   => $siteRoot,
-                    'status' => $statusCode,
-                ]);
+        if ($response === null) {
+            // Toutes les tentatives ont échoué (timeout, DNS, SSL, etc.)
+            return null;
+        }
+
+        // ── Garde SSRF post-redirection (C1) ──────────────────────────────────
+        // getInfo('url') retourne l'URL finale après que Symfony HttpClient a suivi
+        // toutes les redirections (HTTP 301/302/307/308). C'est cette URL réelle
+        // qu'on doit valider, pas l'URL initiale (déjà vérifiée dans fetchLogoUrl).
+        //
+        // Scénario d'attaque : le site cible redirige vers http://169.254.169.254/...
+        // (métadonnées AWS/DigitalOcean). Sans cette garde, Symfony lirait l'IP interne.
+        //
+        // Note : on appelle getInfo() AVANT getStatusCode() / getContent() pour ne pas
+        // déclencher la lecture du body si l'URL effective est dangereuse.
+        $effectiveUrl = $response->getInfo('url');
+        if (is_string($effectiveUrl) && $effectiveUrl !== '' && $effectiveUrl !== $siteRoot) {
+            if (!$this->listingUrlDiscoverer->isSafeHost($effectiveUrl)) {
+                $this->logger->warning(
+                    '[LogoFetcher] SSRF bloqué : URL effective après redirection rejetée par isSafeHost().',
+                    [
+                        'url_initiale'  => $siteRoot,
+                        'url_effective' => $effectiveUrl,
+                    ]
+                );
                 return null;
             }
+        }
 
+        $statusCode = $response->getStatusCode();
+        if ($statusCode < 200 || $statusCode >= 300) {
+            $this->logger->debug('[LogoFetcher] HTTP non-2xx lors du fetch de la page d\'accueil.', [
+                'site'   => $siteRoot,
+                'status' => $statusCode,
+            ]);
+            return null;
+        }
+
+        try {
             // Lecture du contenu, bornée à MAX_BODY_BYTES.
-            // Note : getContent() lit tout le body en mémoire. Pour des pages
-            // ordinaires (<< 1 Mo), c'est acceptable ; on tronque après.
+            // getContent() lit tout le body en mémoire — pour des pages ordinaires
+            // (<< 1 Mo), c'est acceptable ; on tronque après.
             $content = $response->getContent();
 
             // Tronquage en octets bruts (pas en chars multibytes) pour respecter
@@ -264,14 +269,8 @@ class LogoFetcherService
 
             return $content;
 
-        } catch (HttpException $e) {
-            $this->logger->debug('[LogoFetcher] Erreur réseau lors du fetch de la page d\'accueil.', [
-                'site'      => $siteRoot,
-                'exception' => $e->getMessage(),
-            ]);
-            return null;
         } catch (\Exception $e) {
-            $this->logger->debug('[LogoFetcher] Erreur inattendue lors du fetch.', [
+            $this->logger->debug('[LogoFetcher] Erreur lors de la lecture du body.', [
                 'site'      => $siteRoot,
                 'exception' => $e->getMessage(),
             ]);

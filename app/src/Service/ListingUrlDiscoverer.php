@@ -40,11 +40,10 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 class ListingUrlDiscoverer
 {
-    // ── User-Agent pour les requêtes HTTP ──────────────────────────────────────
-    // On se présente comme Chrome pour éviter les blocages anti-bot des sites
-    // culturels qui refusent les crawlers génériques.
-    private const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-        . '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+    // Fournit buildBrowserHeaders() (en-têtes Chrome 124 + Sec-Fetch-*) et
+    // requestWithRetry() (3 tentatives, backoff 1s/2s sur timeout/429/5xx).
+    // Remplace la constante USER_AGENT locale — les en-têtes sont plus complets.
+    use HttpBrowserFetchTrait;
 
     // ── Timeout HTTP par requête (en secondes) ─────────────────────────────────
     // Court (8s) pour les tests d'heuristique car on peut en enchaîner ~15.
@@ -421,13 +420,14 @@ class ListingUrlDiscoverer
         }
 
         try {
+            // En-têtes navigateur Chrome 124 complets via buildBrowserHeaders() (trait).
+            // Note : PAS de retry ici car scoreUrl() est appelé sur ~30 URLs en heuristique.
+            // Retenter chaque URL multiplierait le temps total par 3 — trop lent pour un batch.
+            // Le retry est réservé aux fetches unitaires (doFetch, fetchPage) sur une seule URL.
+            $browserHeaders = $this->buildBrowserHeaders();
+
             $response = $this->httpClient->request('GET', $url, [
-                'headers' => [
-                    'User-Agent'      => self::USER_AGENT,
-                    // On accepte le français (la plupart des sites cibles sont francophones)
-                    'Accept-Language' => 'fr-FR,fr;q=0.9,en;q=0.8',
-                    'Accept'          => 'text/html,application/xhtml+xml,*/*;q=0.8',
-                ],
+                'headers'       => $browserHeaders,
                 'timeout'       => self::HEURISTIC_TIMEOUT,
                 // Désactiver la vérification SSL pour les sites avec certificats problématiques
                 // (fréquent sur les petites structures culturelles)
@@ -689,20 +689,29 @@ class ListingUrlDiscoverer
             return null;
         }
 
-        try {
-            $response = $this->httpClient->request('GET', $url, [
-                'headers' => [
-                    'User-Agent'      => self::USER_AGENT,
-                    'Accept-Language' => 'fr-FR,fr;q=0.9,en;q=0.8',
-                    'Accept'          => 'text/html,application/xhtml+xml,*/*;q=0.8',
-                ],
-                'timeout'       => self::HOMEPAGE_TIMEOUT,
-                'verify_peer'   => false,
-                'verify_host'   => false,
-                // Réduit à MAX_REDIRECTS (3) — voir même raison que scoreUrl()
-                'max_redirects' => self::MAX_REDIRECTS,
-            ]);
+        // Options communes : en-têtes Chrome 124 + SSL souple + redirections limitées.
+        // verify_peer/verify_host = false : certaines petites structures culturelles ont
+        // des certificats problématiques (auto-signés ou CA non reconnue dans Docker).
+        $options = [
+            'headers'       => $this->buildBrowserHeaders(),
+            'timeout'       => self::HOMEPAGE_TIMEOUT,
+            'verify_peer'   => false,
+            'verify_host'   => false,
+            // Réduit à MAX_REDIRECTS (3) — limite la surface SSRF par redirection en chaîne.
+            'max_redirects' => self::MAX_REDIRECTS,
+        ];
 
+        // requestWithRetry() : 3 tentatives avec backoff 1s/2s sur timeout/429/5xx.
+        // doFetch() n'est appelé que sur la page d'accueil (1 URL par site) — le retry
+        // est acceptable ici contrairement à scoreUrl() qui teste ~30 URLs.
+        $response = $this->requestWithRetry($this->httpClient, $this->logger, 'GET', $url, $options);
+
+        if ($response === null) {
+            // Toutes les tentatives ont échoué (timeout, DNS, SSL, etc.)
+            return null;
+        }
+
+        try {
             if ($response->getStatusCode() !== 200) {
                 return null;
             }

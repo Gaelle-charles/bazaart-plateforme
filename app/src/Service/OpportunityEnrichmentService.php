@@ -61,6 +61,9 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 class OpportunityEnrichmentService
 {
+    // Centralise les en-têtes navigateur Chrome et la logique de retry.
+    // Fournit : buildBrowserHeaders() et requestWithRetry().
+    use HttpBrowserFetchTrait;
     /**
      * URL de l'API Mistral (même que LlmExtractorService — partagée par convention).
      * On la redéfinit ici en constante privée pour que cette classe soit autonome
@@ -323,10 +326,12 @@ class OpportunityEnrichmentService
      * Retourne le corps HTML brut (string) ou null si une erreur survient.
      * Jamais d'exception : tout est capturé et loggé.
      *
-     * PARAMÈTRES HTTP :
-     *   - timeout 15s : suffisant pour une page statique, pas trop long pour un batch
-     *   - max_redirects 5 : permet les redirections courantes (http → https, etc.)
-     *   - User-Agent : simule un navigateur Firefox récent pour éviter les 403 "bot detected"
+     * PARAMETRES HTTP :
+     *   - timeout 22s : un peu plus genereux que l'ancien 15s pour les sites lents
+     *   - max_redirects 5 : permet les redirections courantes (http->https, etc.)
+     *   - En-têtes navigateur complets via buildBrowserHeaders() (trait HttpBrowserFetchTrait)
+     *   - Retry automatique via requestWithRetry() : 3 tentatives, backoff 1s/2s
+     *     sur timeout reseau, HTTP 429 et HTTP 5xx
      *
      * LIMITATION DE TAILLE :
      *   On lit un maximum de MAX_BODY_BYTES (512 Ko). La plupart des pages d'appels
@@ -334,40 +339,44 @@ class OpportunityEnrichmentService
      */
     private function fetchPage(string $url): ?string
     {
+        // Options de la requête : en-têtes navigateur complets + timeout généreux
+        $options = [
+            // Timeout 22s — un peu plus généreux que l'ancien 15s pour les sites lents.
+            // Certains sites culturels ont des pages qui mettent 10-15s à se charger
+            // (CMS vieillissants, serveurs mutualisés surchargés).
+            'timeout'       => 22,
+            // On suit jusqu'à 5 redirections (http->https, slug canonique, etc.)
+            'max_redirects' => 5,
+            // En-têtes navigateur Chrome 124 complets — via le trait HttpBrowserFetchTrait.
+            // Plus complets que l'ancien User-Agent Firefox seul : les Sec-Fetch-*
+            // réduisent les faux positifs anti-bot (Cloudflare, protections custom).
+            'headers'       => $this->buildBrowserHeaders(),
+        ];
+
+        // requestWithRetry() relance automatiquement sur timeout / 429 / 5xx.
+        // 3 tentatives avec backoff exponentiel 1s / 2s.
+        // Retourne null si toutes les tentatives ont échoué.
+        $response = $this->requestWithRetry($this->httpClient, $this->logger, 'GET', $url, $options);
+
+        if ($response === null) {
+            // Toutes les tentatives ont échoué (timeout, DNS, SSL, etc.)
+            // requestWithRetry() a déjà loggé le message d'erreur final.
+            return null;
+        }
+
+        // Vérification du code HTTP AVANT de lire le corps.
+        $statusCode = $response->getStatusCode();
+        if ($statusCode < 200 || $statusCode >= 300) {
+            $this->logger->warning(
+                '[EnrichmentService] HTTP non-2xx lors du fetch de la page.',
+                ['url' => $url, 'status' => $statusCode]
+            );
+            return null;
+        }
+
         try {
-            $response = $this->httpClient->request('GET', $url, [
-                // Timeout réseau : on attend max 15 secondes la réponse
-                'timeout' => 15,
-                // Redirections : on suit jusqu'à 5 redirections (http→https, slugs propres…)
-                'max_redirects' => 5,
-                'headers' => [
-                    // User-Agent navigateur réaliste pour éviter les 403 anti-bot.
-                    // Firefox 122 sur Windows — agent très courant, peu suspect.
-                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) '
-                        . 'Gecko/20100101 Firefox/122.0',
-                    // Accept HTML + tout autre format (certains sites vérifient ce header)
-                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    // Langue française en priorité (pertinent pour les sites francophones)
-                    'Accept-Language' => 'fr-FR,fr;q=0.9,en;q=0.5',
-                ],
-            ]);
-
-            // Vérification du code HTTP AVANT de lire le corps.
-            // getStatusCode() est synchrone sur Symfony HttpClient.
-            $statusCode = $response->getStatusCode();
-            if ($statusCode < 200 || $statusCode >= 300) {
-                $this->logger->warning(
-                    '[EnrichmentService] HTTP non-2xx lors du fetch de la page.',
-                    ['url' => $url, 'status' => $statusCode]
-                );
-                return null;
-            }
-
             // Lecture du contenu, limitée à MAX_BODY_BYTES.
-            // On utilise getContent() qui retourne le corps entier en string ;
-            // pour les pages très grandes, on tronque après coup.
-            // Note : pour un vrai streaming on utiliserait toStream(), mais pour des
-            // pages web ordinaires (~100 Ko max), getContent() est suffisant.
+            // getContent() retourne le corps entier en string.
             $content = $response->getContent();
 
             if (mb_strlen($content, '8bit') > self::MAX_BODY_BYTES) {
@@ -380,24 +389,17 @@ class OpportunityEnrichmentService
             return $content;
 
         } catch (HttpException $e) {
-            // Symfony HttpClient regroupe sous HttpException toutes les erreurs réseau
-            // (timeout, SSL, DNS, connexion refusée, etc.)
+            // Erreur lors de la lecture du corps (stream interrompu, etc.)
             $this->logger->warning(
-                '[EnrichmentService] Erreur réseau/HTTP lors du fetch de la page.',
-                [
-                    'url'       => $url,
-                    'exception' => $e->getMessage(),
-                ]
+                '[EnrichmentService] Erreur réseau lors de la lecture du body.',
+                ['url' => $url, 'exception' => $e->getMessage()]
             );
             return null;
         } catch (\Exception $e) {
             // Filet de sécurité : toute autre exception inattendue
             $this->logger->warning(
                 '[EnrichmentService] Erreur inattendue lors du fetch de la page.',
-                [
-                    'url'       => $url,
-                    'exception' => $e->getMessage(),
-                ]
+                ['url' => $url, 'exception' => $e->getMessage()]
             );
             return null;
         }

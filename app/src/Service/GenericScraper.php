@@ -33,6 +33,9 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 class GenericScraper
 {
+    // Fournit buildBrowserHeaders() et requestWithRetry() pour des en-têtes
+    // Chrome 124 complets et des retries automatiques sur timeout/429/5xx.
+    use HttpBrowserFetchTrait;
     /**
      * Mots-clés pour filtrer les items RSS jugés pertinents.
      *
@@ -246,36 +249,51 @@ class GenericScraper
      * et retourne une liste structurée d'opportunités.
      *
      * Prérequis : clé API LLM configurée dans /admin/settings.
-     * Si la clé est absente → LlmExtractorService retourne [] avec un warning dans les logs.
+     * Si la clé est absente, LlmExtractorService retourne [] avec un warning dans les logs.
+     *
+     * EN-TÊTES ET RETRY :
+     *   buildBrowserHeaders() envoie des en-têtes Chrome 124 complets (Sec-Fetch-*, etc.).
+     *   requestWithRetry() relance jusqu'à 3 fois sur timeout / 429 / 5xx.
+     *   Timeout porté à 25s pour les sites lents.
      *
      * @return ScrapedOpportunity[]
      */
     private function scrapeHtmlLlm(ScrapingSource $source): array
     {
-        try {
-            $response = $this->httpClient->request('GET', $source->getUrl(), [
-                'headers' => [
-                    'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-                    'Accept'          => 'text/html,application/xhtml+xml',
-                    'Accept-Language' => 'fr-FR,fr;q=0.9,en;q=0.8',
-                ],
-                'timeout' => 20,
-            ]);
+        // Options : en-têtes Chrome 124 + timeout généreux pour les sites lents
+        $options = [
+            // En-têtes Chrome 124 complets — via trait HttpBrowserFetchTrait.
+            // Incluent Sec-Fetch-* qui réduisent les faux positifs anti-bot.
+            'headers'       => $this->buildBrowserHeaders(),
+            // 25s : plus généreux que l'ancien 20s pour les CMS lents
+            'timeout'       => 25,
+            // On suit les redirections courantes (http->https, etc.)
+            'max_redirects' => 5,
+        ];
 
+        // requestWithRetry() : 3 tentatives avec backoff 1s/2s sur timeout/429/5xx.
+        $response = $this->requestWithRetry($this->httpClient, $this->logger, 'GET', $source->getUrl(), $options);
+
+        if ($response === null) {
+            // Toutes les tentatives ont échoué — le message de log est déjà tracé par le trait.
+            return [];
+        }
+
+        try {
             if ($response->getStatusCode() !== 200) {
                 return [];
             }
 
-            $html       = $response->getContent();
+            $html = $response->getContent();
             // Le nom du site source = domaine de l'URL, fallback sur le nom BDD
             $sourceSite = parse_url($source->getUrl(), PHP_URL_HOST) ?: $source->getNom();
 
-            // Délégation complète au LlmExtractorService
+            // Délégation complète au LlmExtractorService.
             // Il gère : nettoyage HTML, appel API, parsing JSON, mapping vers ScrapedOpportunity[]
             return $this->llmExtractor->extractFromHtml($html, $source->getUrl(), $sourceSite);
 
         } catch (\Exception $e) {
-            $this->logger->warning('[GenericScraper] Erreur HTML/LLM', [
+            $this->logger->warning('[GenericScraper] Erreur lecture HTML/LLM', [
                 'url'   => $source->getUrl(),
                 'error' => $e->getMessage(),
             ]);

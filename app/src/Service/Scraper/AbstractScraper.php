@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service\Scraper;
 
 use App\DTO\ScrapedOpportunity;
+use App\Service\HttpBrowserFetchTrait;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -20,6 +21,12 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 abstract class AbstractScraper
 {
+    // Fournit buildBrowserHeaders() et requestWithRetry() — centralise les en-têtes
+    // Chrome 124 complets (Sec-Fetch-*) et la logique de retry (3 tentatives, backoff 1s/2s).
+    // AbstractScraper n'a pas de LoggerInterface injecté, donc requestWithRetry() sera
+    // appelé avec null comme logger — les retries auront lieu sans log de trace.
+    use HttpBrowserFetchTrait;
+
     // Propriétés pour le debug — remplies à chaque appel à fetch()
     protected int $lastStatusCode = 0;
     protected string $lastError = '';
@@ -56,33 +63,44 @@ abstract class AbstractScraper
      * DomCrawler est un outil Symfony qui permet de naviguer dans le HTML
      * comme on le ferait avec jQuery en JavaScript (sélecteurs CSS, XPath...).
      *
+     * EN-TÊTES : buildBrowserHeaders() (trait HttpBrowserFetchTrait) envoie un bloc
+     * Chrome 124 complet avec Sec-Fetch-* — plus efficace que le seul User-Agent Chrome.
+     *
+     * RETRY : requestWithRetry() relance 3 fois sur timeout / 429 / 5xx.
+     * AbstractScraper n'a pas de logger → les retries sont silencieux (logger = null).
+     *
+     * IMPORTANT — Accept-Encoding intentionnellement ABSENT de buildBrowserHeaders() :
+     *   Quand Accept-Encoding est posé manuellement, Symfony HTTP Client bypasse sa
+     *   décompression automatique → getContent() retourne des octets gzip bruts (~25%
+     *   de la taille réelle), ce qui casse DomCrawler. Symfony décompresse seul si
+     *   Accept-Encoding n'est pas forcé — on ne l'interfère donc pas.
+     *
      * @param string $url L'URL à télécharger
      * @return Crawler|null null si la requête échoue
      */
     protected function fetch(string $url): ?Crawler
     {
+        // Options : en-têtes Chrome 124 + timeout 22s (un peu plus généreux qu'avant)
+        $options = [
+            // buildBrowserHeaders() n'inclut PAS Accept-Encoding — voir docblock ci-dessus.
+            'headers'       => $this->buildBrowserHeaders(),
+            // Timeout 22s — légèrement plus généreux que l'ancien 20s pour les sites lents.
+            'timeout'       => 22,
+            // Suit les redirections automatiquement (302, 301...).
+            'max_redirects' => 5,
+        ];
+
+        // requestWithRetry() : 3 tentatives, backoff 1s/2s (logger null = silencieux).
+        $response = $this->requestWithRetry($this->httpClient, null, 'GET', $url, $options);
+
+        if ($response === null) {
+            // Toutes les tentatives ont échoué (timeout, DNS, SSL, etc.)
+            $this->lastError = 'Echec réseau après 3 tentatives';
+            return null;
+        }
+
         try {
-            $response = $this->httpClient->request('GET', $url, [
-                // On se fait passer pour un navigateur pour éviter les blocages.
-                // NOTE : Accept-Encoding est intentionnellement ABSENT.
-                // Quand ce header est posé manuellement, Symfony HTTP Client bypasse
-                // sa décompression automatique → getContent() retourne des octets gzip bruts
-                // (~25% de la taille réelle), ce qui casse DomCrawler et LLM downstream.
-                // Sans ce header, Symfony négocie et décompresse automatiquement.
-                'headers' => [
-                    'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language' => 'fr-FR,fr;q=0.9,en;q=0.8',
-                    'Cache-Control'   => 'no-cache',
-                ],
-                // Timeout de 20 secondes
-                'timeout' => 20,
-                // Suit les redirections automatiquement (302, 301...)
-                'max_redirects' => 5,
-            ]);
-
             $statusCode = $response->getStatusCode();
-
             // Stocke le dernier code HTTP pour le debug
             $this->lastStatusCode = $statusCode;
 
@@ -140,23 +158,29 @@ abstract class AbstractScraper
      * cette méthode retourne le HTML brut — utile pour l'envoyer au LLM
      * qui fera lui-même l'extraction.
      *
+     * Memes améliorations que fetch() : en-têtes Chrome 124 complets + retry 3x.
+     * Accept-Encoding absent intentionnellement (même raison que fetch()).
+     *
      * @param string $url L'URL à télécharger
      * @return string HTML brut, ou chaîne vide si la requête échoue
      */
     protected function fetchHtml(string $url): string
     {
-        try {
-            $response = $this->httpClient->request('GET', $url, [
-                'headers' => [
-                    'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language' => 'fr-FR,fr;q=0.9,en;q=0.8',
-                    'Cache-Control'   => 'no-cache',
-                ],
-                'timeout'       => 20,
-                'max_redirects' => 5,
-            ]);
+        $options = [
+            // buildBrowserHeaders() n'inclut PAS Accept-Encoding — voir docblock de fetch().
+            'headers'       => $this->buildBrowserHeaders(),
+            'timeout'       => 22,
+            'max_redirects' => 5,
+        ];
 
+        $response = $this->requestWithRetry($this->httpClient, null, 'GET', $url, $options);
+
+        if ($response === null) {
+            $this->lastError = 'Echec réseau après 3 tentatives';
+            return '';
+        }
+
+        try {
             $this->lastStatusCode = $response->getStatusCode();
 
             if ($this->lastStatusCode !== 200) {
@@ -206,16 +230,22 @@ abstract class AbstractScraper
                 'verify_host' => false,   // Désactive aussi la vérification du nom d'hôte
             ]);
 
-            $response = $insecureClient->request('GET', $url, [
-                'headers' => [
-                    'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language' => 'fr-FR,fr;q=0.9,en;q=0.8',
-                    'Cache-Control'   => 'no-cache',
-                ],
-                'timeout'       => 20,
+            $options = [
+                // En-têtes Chrome 124 complets via trait — meme logique que fetch().
+                // Accept-Encoding absent intentionnellement (voir docblock de fetch()).
+                'headers'       => $this->buildBrowserHeaders(),
+                'timeout'       => 22,
                 'max_redirects' => 5,
-            ]);
+            ];
+
+            // requestWithRetry() : 3 tentatives, backoff 1s/2s (logger null = silencieux).
+            // On passe $insecureClient (SSL désactivé) au lieu de $this->httpClient.
+            $response = $this->requestWithRetry($insecureClient, null, 'GET', $url, $options);
+
+            if ($response === null) {
+                $this->lastError = 'Echec réseau après 3 tentatives (SSL désactivé)';
+                return '';
+            }
 
             $this->lastStatusCode = $response->getStatusCode();
 
