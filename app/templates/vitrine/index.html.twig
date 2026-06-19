@@ -5,19 +5,19 @@
 
     Cette page traduit le composant LandingManifesto du prototype JSX
     (src/screens-public.jsx) en HTML/CSS pur Twig. Elle est la vitrine
-    principale de l'association et de la plateforme. Elle ne reçoit
-    aucune variable du contrôleur (contenu 100 % statique en dur).
+    principale de l'association et de la plateforme.
 
-    Sections produites :
-      1. Navbar sticky (hamburger CSS pur)
-      2. Hero géant (H1 + sous-titre serif + 2 CTAs)
+    Sections produites (ordre réel du HTML) :
+      1. Navbar sticky (rendue par base.html.twig via {% block navbar %})
+      2. Hero géant scroll-expand (H1 + sous-titre serif + 2 CTAs)
       3. Marquee bande défilante (CSS pur, pause au survol)
-      4. Hubs (3 colonnes, bordures partagées)
-      5. SaaS pitch (fond --ink, liste de features)
-      6. Opportunités (3 cartes statiques, aperçu du flux)
-      7. Communauté (live fictif + fils de discussion)
+      4. SaaS pitch (fond --ink, liste de features)
+      5. Vidéo de présentation (grille texte + vidéo, index 01)
+      6. Opportunités (flux BDD, 3 cartes max, index 02)
+      7. Communauté (live fictif + fils de discussion, index 03)
       8. CTA inscription (fond --accent = lime)
-      9. Footer
+      9. Hubs (3 colonnes, bordures partagées, index 04)
+     10. Footer (rendu par base.html.twig via {% block footer %})
 
     Polices : Archivo Black (--display) + Space Grotesk (--body)
               + JetBrains Mono (--mono) + Instrument Serif (--serif)
@@ -505,7 +505,13 @@
     display:         flex;
     justify-content: space-between;
     align-items:     center;
-    padding-top:     80px;
+    /* AV-1 : le padding-top ne peut pas etre fixe en dur car la hauteur
+       de la navbar peut varier (responsive, zoom, future evolution).
+       On utilise la custom property --hero-meta-top initialisee par JS
+       au chargement et mis a jour sur chaque resize.
+       Le fallback 80px (hauteur connue de la .nav) reste valide si le
+       JS n'est pas encore execute ou si l'element .nav est introuvable. */
+    padding-top:     var(--hero-meta-top, 80px);
     padding-inline:  var(--container-px, 32px);
 }
 
@@ -1679,6 +1685,14 @@
 
                 {# Couche 2 : video hero-clap.mp4 (part petite, grandit) #}
                 <div class="lp-hero__video-wrap" aria-hidden="true">
+                    {#
+                        AV-3 : le wrapper .lp-hero__video-wrap porte deja aria-hidden="true",
+                        ce qui masque TOUT son contenu aux lecteurs d'ecran, y compris la <video>.
+                        L'attribut aria-label sur la <video> enfant etait donc du code mort :
+                        il n'etait jamais lu par les assistances techniques (ignore dans un sous-arbre
+                        aria-hidden). Il a ete supprime pour eviter toute confusion future lors
+                        d'un audit accessibilite.
+                    #}
                     <video
                         class="lp-hero__video"
                         autoplay
@@ -1687,7 +1701,6 @@
                         playsinline
                         preload="auto"
                         poster="{{ asset('videos/hero-clap-poster.jpg') }}"
-                        aria-label="Video d'ambiance Bazaart"
                     >
                         <source src="{{ asset('videos/hero-clap.mp4') }}" type="video/mp4">
                     </video>
@@ -1943,9 +1956,26 @@
                         muted
                         loop
                         playsinline
-                        preload="auto"
+                        preload="metadata"
+                        poster="{{ asset('uploads/video/video-artiste-bazaart-poster.jpg') }}"
                         aria-label="Vidéo d'ambiance de l'association Bazaart et des artistes de la diaspora afro-atlantique"
                     >
+                    {#
+                        AV-2 : le poster affiche une image statique avant que la video soit chargee.
+                        Sans poster, le navigateur laisse un rectangle noir ou gris pendant le
+                        chargement — mauvaise premiere impression, surtout sur mobile ou connexion lente.
+                        Le fichier poster a ete pre-genere dans public/uploads/video/.
+
+                        S-5 : preload passe de "auto" a "metadata".
+                        Cette video est sous la ligne de flottaison (non visible immediatement).
+                        "auto" demandait au navigateur de pre-charger les donnees de la video des
+                        le debut, meme si l'utilisateur ne la regarde jamais.
+                        "metadata" ne charge que les informations legeres (duree, dimensions,
+                        premiere image) — suffisant pour l'autoplay au moment ou l'element
+                        entre dans le viewport. Economie notable sur mobile (2G/3G).
+                        A ne pas confondre avec la video hero (hero-clap.mp4, au-dessus de la ligne
+                        de flottaison) qui doit rester en preload="auto" pour un demarrage immediat.
+                    #}
                         <source src="{{ asset('uploads/video/video-artiste-bazaart.mp4') }}" type="video/mp4">
                         {#
                             Texte de repli : affiché uniquement si le navigateur
@@ -2734,10 +2764,13 @@
         }
     }
 
-    /* Mise a jour de isMobile si la fenetre est redimensionnee */
+    /* Mise a jour de isMobile et de la hauteur navbar si la fenetre est redimensionnee.
+       setNavHeight() est definie plus bas (initialisation) mais JavaScript hisse les
+       declarations de fonctions (function hoisting) — l'appel ici est valide. */
     function onResize() {
         isMobile = window.innerWidth <= 768;
-        onScroll(); /* recalculer immediatement */
+        setNavHeight(); /* recalcule --hero-meta-top si la navbar a change de hauteur */
+        onScroll();     /* recalcule les transformations du hero */
     }
 
     /* ── 8. INITIALISATION ──────────────────────────────────────────────────
@@ -2746,6 +2779,37 @@
         ou via Turbo — on doit appliquer l'animation immediatement). */
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onResize, { passive: true });
+
+    /* AV-1 : mesure de la hauteur reelle de la navbar
+       ─────────────────────────────────────────────────────────────────────
+       La navbar (header.nav dans base.html.twig) est sticky en haut du viewport.
+       Le bandeau .lp-hero__meta doit se positionner JUSTE EN DESSOUS pour ne
+       pas etre chevauche — d'ou ce padding-top dynamique.
+
+       Pourquoi ne pas utiliser 80px en dur ?
+         La hauteur de la navbar peut varier : zoom navigateur, responsive,
+         futures modifications de base.html.twig. Une valeur en dur deviendrait
+         silencieusement incorrecte sans que le bug soit evident visuellement.
+
+       Principe :
+         - On lit offsetHeight de l'element header.nav (mesure CSS reelle).
+         - On ecrit la valeur dans --hero-meta-top sur la section .lp-hero.
+         - Le CSS utilise var(--hero-meta-top, 80px) comme padding-top de .lp-hero__meta.
+         - La custom property est recalculee au demarrage ET a chaque resize
+           (appel de setNavHeight() dans onResize() ci-dessus). */
+    function setNavHeight() {
+        /* On cible l'element header.nav tel que defini dans base.html.twig.
+           Si la nav est absente ou son selector a change, on retombe sur le fallback 80px. */
+        var nav  = document.querySelector('header.nav');
+        var navH = nav ? nav.offsetHeight : 80;
+        /* On pose la variable sur la section .lp-hero plutot que sur :root pour
+           limiter la portee (cette valeur ne concerne que le hero). */
+        section.style.setProperty('--hero-meta-top', navH + 'px');
+    }
+
+    /* Mesure initiale — doit etre faite AVANT onScroll() pour que le
+       premier calcul d'animation parte avec le bon padding-top. */
+    setNavHeight();
 
     /* Calcul initial */
     onScroll();
