@@ -122,6 +122,67 @@ class ScrapedResource
     #[ORM\Column(type: 'datetime')]
     private \DateTimeInterface $scrapedAt;
 
+    // ─── Champs ADR-0018 : candidature, financement, description enrichie ────
+    // Ces trois champs sont remplis par le LLM (LlmExtractorService /
+    // OpportunityEnrichmentService) et propagés vers Resource lors de la vérif.
+    // Tous nullable : migration non-destructive (existantes restent à NULL).
+
+    /**
+     * Modalités de candidature extraites par le LLM.
+     * Ex : "Déposez votre dossier avant le 30/06 via le formulaire en ligne.
+     *       Joindre CV artistique, portfolio (10 images max) et note d'intention."
+     *
+     * Stocké en TEXT : peut être long (plusieurs paragraphes d'instructions).
+     * Null si le LLM n'a pas trouvé d'information sur les modalités de candidature.
+     */
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $howToApply = null;
+
+    /**
+     * Montant du financement ou de la dotation (valeur lisible humaine).
+     * Ex : "5 000 €", "jusqu'à 10 000 €", "10 000 USD", "non précisé".
+     *
+     * String courte (≤ 255 chars) : c'est une information de synthèse, pas un chiffre
+     * calculable. On stocke la forme lisible retournée par le LLM.
+     * Null si le LLM n'a pas trouvé de montant.
+     */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $fundingAmount = null;
+
+    /**
+     * Nature du financement (type de soutien proposé).
+     * Ex : "Bourse en argent", "Prise en charge des frais de résidence",
+     *       "Prix (non monétaire)", "Avance sur production".
+     *
+     * String courte (≤ 255 chars). Null si non précisé ou indéterminable.
+     */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $fundingType = null;
+
+    // ─── Champs ADR-0019 : lien de candidature + logo ────────────────────────
+    // Même sémantique que sur Resource. Remplis par LogoFetcherService
+    // (logoUrl, sans LLM) et LlmExtractorService / OpportunityEnrichmentService
+    // (applicationUrl via LLM + garde anti-hallucination).
+    // Tous nullable : migration non-destructive.
+
+    /**
+     * URL de candidature directe extraite par le LLM parmi les liens de la page.
+     * Distincte de l'URL source ($url) qui pointe vers la page de présentation.
+     *
+     * Garde anti-hallucination : l'URL doit être présente dans les liens réels
+     * de la page ; toute URL inventée par le LLM est rejetée (null).
+     */
+    #[ORM\Column(type: 'string', length: 500, nullable: true)]
+    private ?string $applicationUrl = null;
+
+    /**
+     * URL du logo de l'organisme, récupérée par parsing HTML (sans LLM).
+     * Domaine cible : applicationUrl si présent, sinon URL source.
+     * Null si aucun logo trouvé ou si le fetch échoue.
+     */
+    #[ORM\Column(type: 'string', length: 500, nullable: true)]
+    private ?string $logoUrl = null;
+
     // ─── Champs ADR-0016 Lot 1 : localisation fine + niveau d'expérience ─────
     // Ces champs sont remplis par le LLM enrichi (LlmExtractorService) et
     // propagés vers l'entité Resource lors de la vérification admin.
@@ -249,6 +310,103 @@ class ScrapedResource
     public function setScrapedAt(\DateTimeInterface $scrapedAt): static
     {
         $this->scrapedAt = $scrapedAt;
+        return $this;
+    }
+
+    // ─── Getters / Setters ADR-0018 ──────────────────────────────────────────
+
+    /**
+     * Retourne les modalités de candidature extraites par le LLM.
+     * Null si l'information n'était pas disponible sur la page source.
+     */
+    public function getHowToApply(): ?string
+    {
+        return $this->howToApply;
+    }
+
+    /**
+     * Définit les modalités de candidature.
+     * Passer null efface l'information (opportunité sans instructions de candidature).
+     */
+    public function setHowToApply(?string $howToApply): static
+    {
+        $this->howToApply = $howToApply;
+        return $this;
+    }
+
+    /**
+     * Retourne le montant du financement sous forme lisible.
+     * Ex : "5 000 €", "jusqu'à 10 000 €".
+     * Null si le montant n'était pas mentionné sur la page.
+     */
+    public function getFundingAmount(): ?string
+    {
+        return $this->fundingAmount;
+    }
+
+    /**
+     * Définit le montant du financement (forme lisible issue du LLM).
+     */
+    public function setFundingAmount(?string $fundingAmount): static
+    {
+        $this->fundingAmount = $fundingAmount;
+        return $this;
+    }
+
+    /**
+     * Retourne la nature du financement.
+     * Ex : "Bourse en argent", "Prise en charge des frais".
+     * Null si non précisé.
+     */
+    public function getFundingType(): ?string
+    {
+        return $this->fundingType;
+    }
+
+    /**
+     * Définit la nature du financement.
+     */
+    public function setFundingType(?string $fundingType): static
+    {
+        $this->fundingType = $fundingType;
+        return $this;
+    }
+
+    // ─── Getters / Setters ADR-0019 ──────────────────────────────────────────
+
+    /**
+     * Retourne l'URL de candidature directe, ou null si non trouvée / rejetée.
+     * Distincte de getUrl() (page source de l'opportunité).
+     */
+    public function getApplicationUrl(): ?string
+    {
+        return $this->applicationUrl;
+    }
+
+    /**
+     * Définit l'URL de candidature directe.
+     * Null = aucun lien trouvé ou garde anti-hallucination déclenchée.
+     */
+    public function setApplicationUrl(?string $applicationUrl): static
+    {
+        $this->applicationUrl = $applicationUrl;
+        return $this;
+    }
+
+    /**
+     * Retourne l'URL du logo, ou null si le site ne fournit pas de logo récupérable.
+     */
+    public function getLogoUrl(): ?string
+    {
+        return $this->logoUrl;
+    }
+
+    /**
+     * Définit l'URL du logo de l'organisme.
+     */
+    public function setLogoUrl(?string $logoUrl): static
+    {
+        $this->logoUrl = $logoUrl;
         return $this;
     }
 

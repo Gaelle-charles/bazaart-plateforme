@@ -81,6 +81,39 @@ class ScrapedOpportunity
         //   lors de la propagation ScrapedResource → Resource.
         /** @var string[] */
         public readonly array $disciplinesLabels = [],
+
+        // ─── Champs ADR-0018 : candidature & financement ──────────────────────
+        // Ces trois champs sont remplis uniquement par LlmExtractorService et
+        // OpportunityEnrichmentService. Les scrapers RSS/CSS ne les renseignent pas.
+
+        // Modalités de candidature extraites par le LLM.
+        // Chaîne vide si non détectées.
+        public readonly string $howToApply = '',
+
+        // Montant du financement (forme lisible), ex : "5 000 €", "jusqu'à 10 000 €".
+        // Chaîne vide si non mentionné. Sera tronqué à 255 chars à la persistance.
+        public readonly string $fundingAmount = '',
+
+        // Nature du financement, ex : "Bourse en argent", "Prix (non monétaire)".
+        // Chaîne vide si non précisé. Sera tronqué à 255 chars à la persistance.
+        public readonly string $fundingType = '',
+
+        // ─── Champs ADR-0019 : lien de candidature + logo ────────────────────
+        // Ces deux champs sont remplis par le pipeline d'enrichissement :
+        //   - applicationUrl : LlmExtractorService / OpportunityEnrichmentService
+        //     (extraction LLM + garde anti-hallucination URL)
+        //   - logoUrl        : LogoFetcherService (parsing HTML, sans LLM)
+        // Chaîne vide = non trouvé / rejeté.
+        // Seront tronqués à 500 chars à la persistance (ScrapedResourcePersister).
+
+        // URL du bouton "Candidater / Postuler / Apply" de la page source.
+        // Distincte de $url (page de présentation de l'offre).
+        // Garde anti-hallucination : doit appartenir aux liens réels de la page.
+        public readonly string $applicationUrl = '',
+
+        // URL du logo de l'organisme, récupérée par parsing HTML (sans LLM).
+        // Domaine cible : applicationUrl si présent, sinon URL source.
+        public readonly string $logoUrl = '',
     ) {
     }
 

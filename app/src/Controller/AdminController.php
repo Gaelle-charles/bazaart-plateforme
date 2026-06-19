@@ -529,7 +529,7 @@ class AdminController extends AbstractController
         $resource->setValidatedAt($now);
         $resource->setValidatedBy($admin);
 
-        // ── ADR-0016 Lot 1 : propagation des champs enrichis ─────────────────
+        // ── ADR-0016 Lot 1 : propagation des champs géo + niveau ─────────────
         //
         // On recopie city, country et experienceLevel depuis la ScrapedResource
         // vers la Resource publiée. Ces champs ont été remplis par le LLM
@@ -539,6 +539,40 @@ class AdminController extends AbstractController
         $resource->setCity($scraped->getCity());
         $resource->setCountry($scraped->getCountry());
         $resource->setExperienceLevel($scraped->getExperienceLevel());
+
+        // ── ADR-0018 : propagation candidature + financement ─────────────────
+        //
+        // On recopie les 3 nouveaux champs (howToApply, fundingAmount, fundingType)
+        // depuis la ScrapedResource vers la Resource publiée.
+        // Tous nullable : les anciennes ScrapedResource sans LLM enrichi ADR-0018
+        // auront ces champs à null — la Resource correspondante les aura aussi à null,
+        // ce qui est cohérent (pas d'information à afficher).
+        $resource->setHowToApply($scraped->getHowToApply());
+        $resource->setFundingAmount($scraped->getFundingAmount());
+        $resource->setFundingType($scraped->getFundingType());
+
+        // ── ADR-0019 : propagation lien de candidature + logo ────────────────
+        //
+        // applicationUrl : URL du bouton "Candidater" distinct de l'URL source.
+        //   Permet d'afficher un bouton CTA direct sur la page de détail de la Resource.
+        //   Null = aucun lien distinct trouvé (le bouton n'est pas affiché en front).
+        //
+        // logoUrl : URL du logo de l'organisme émetteur, récupérée par LogoFetcherService.
+        //   Null = aucun logo trouvé, le template affiche le badge "B" en fallback.
+        //
+        // Troncature défensive : la colonne BDD est limitée à 500 chars.
+        // Même si ScrapedResourcePersister a déjà tronqué lors du scraping,
+        // on applique la troncature ici aussi pour les cas où la valeur a pu être
+        // mise à jour directement en back-office (admin qui édite manuellement).
+        $rawApplicationUrl = $scraped->getApplicationUrl();
+        $resource->setApplicationUrl(
+            $rawApplicationUrl !== null ? mb_substr($rawApplicationUrl, 0, 500) : null
+        );
+
+        $rawLogoUrl = $scraped->getLogoUrl();
+        $resource->setLogoUrl(
+            $rawLogoUrl !== null ? mb_substr($rawLogoUrl, 0, 500) : null
+        );
 
         // ── ADR-0016 Lot 1 : mapping disciplines texte → entités Discipline ──
         //

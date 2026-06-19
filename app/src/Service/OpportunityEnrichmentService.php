@@ -10,6 +10,10 @@ use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpException;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
+// Note : LogoFetcherService est injecté dans le constructeur (voir ci-dessous).
+// LlmExtractorService::extractPageLinksForLlm() est utilisé pour fournir les liens
+// réels de la page au LLM (garde anti-hallucination applicationUrl ADR-0019).
+
 /**
  * OpportunityEnrichmentService — Enrichit une opportunité via Mistral à partir de sa page d'origine.
  *
@@ -72,11 +76,13 @@ class OpportunityEnrichmentService
 
     /**
      * Limite de tokens pour la réponse Mistral.
-     * Une description complète en HTML (jusqu'à 2 500 chars) + titre (~80 chars) + disciplines (~150 chars)
-     * peut atteindre 1 500-1 800 tokens. On prend 2 000 pour avoir de la marge sur le JSON complet.
-     * La description est maintenant exhaustive (6 sections possibles) — plus verbose que les résumés courts.
+     * ADR-0018 : on monte à 3 000 tokens pour accommoder les 3 nouveaux champs
+     * (howToApply peut être long) en plus de la description complète structurée.
+     * Calcul indicatif : description (3 000 chars HTML ≈ 900 tok) + howToApply
+     * (800 chars ≈ 250 tok) + autres champs (~200 tok) + JSON overhead (~150 tok) ≈ 1 500 tok.
+     * On prend 3 000 pour avoir une marge confortable.
      */
-    private const MAX_RESPONSE_TOKENS = 2000;
+    private const MAX_RESPONSE_TOKENS = 3000;
 
     /**
      * Taille max du texte envoyé à Mistral (en caractères).
@@ -123,12 +129,45 @@ class OpportunityEnrichmentService
      */
     private const MAX_COUNTRY_LENGTH = 100;
 
+    // ── ADR-0018 : limites des nouveaux champs ─────────────────────────────
+
+    /**
+     * Longueur maximale de howToApply (modalités de candidature).
+     * TEXT en BDD (pas de limite serrée), mais on borne à 8 000 chars côté PHP
+     * pour éviter un débordement mémoire en cas de réponse LLM anormale.
+     */
+    private const MAX_HOW_TO_APPLY_LENGTH = 8000;
+
+    /**
+     * Longueur maximale de fundingAmount (montant lisible).
+     * Cohérent avec la limite de colonne BDD string(255).
+     */
+    private const MAX_FUNDING_AMOUNT_LENGTH = 255;
+
+    /**
+     * Longueur maximale de fundingType (nature du financement).
+     * Cohérent avec la limite de colonne BDD string(255).
+     */
+    private const MAX_FUNDING_TYPE_LENGTH = 255;
+
     /**
      * Taille maximale du corps HTTP lu (en octets).
      * 500 Ko est suffisant pour n'importe quelle page d'opportunité.
      * Évite de lire un binaire ou une page géante par erreur.
      */
     private const MAX_BODY_BYTES = 512_000;
+
+    /**
+     * Longueur maximale de applicationUrl (lien de candidature directe).
+     * Cohérent avec la limite de colonne BDD (string 500).
+     */
+    private const MAX_APPLICATION_URL_LENGTH = 500;
+
+    /**
+     * Longueur maximale de logoUrl (URL du logo de l'organisme).
+     * Cohérent avec la limite de colonne BDD (string 500).
+     */
+    private const MAX_LOGO_URL_LENGTH = 500;
 
     /**
      * Cache de la liste des disciplines BDD (lazy-init, comme dans LlmExtractorService).
@@ -144,7 +183,8 @@ class OpportunityEnrichmentService
         // Lecture des paramètres BDD (clé API Mistral, provider LLM)
         private readonly SettingService $settingService,
 
-        // LlmExtractorService — réutilisé pour cleanHtml() uniquement
+        // LlmExtractorService — réutilisé pour cleanHtml() ET extractPageLinksForLlm()
+        // (garde anti-hallucination ADR-0019 : liste des liens de la page pour applicationUrl)
         private readonly LlmExtractorService $llmExtractor,
 
         // Logger PSR-3 — pour tracer les erreurs sans lever d'exception
@@ -153,6 +193,10 @@ class OpportunityEnrichmentService
         // Repository Discipline — pour construire la liste contrainte dans le prompt
         // (même pattern que LlmExtractorService::buildDisciplinesListForPrompt)
         private readonly DisciplineRepository $disciplineRepository,
+
+        // LogoFetcherService — récupère l'URL du logo par parsing HTML (sans LLM)
+        // ADR-0019 : appelé après l'appel Mistral pour compléter le DTO avec logoUrl.
+        private readonly LogoFetcherService $logoFetcher,
     ) {
     }
 
@@ -212,6 +256,14 @@ class OpportunityEnrichmentService
             return new OpportunityEnrichment(null, null);
         }
 
+        // ── Étape 3bis : extraire les liens de la page AVANT le nettoyage HTML ─
+        // ADR-0019 : la garde anti-hallucination pour applicationUrl exige de fournir
+        // au LLM la liste des liens réels de la page. On extrait les liens depuis
+        // le HTML BRUT (avant strip_tags) car les href seront perdus après nettoyage.
+        // On délègue à LlmExtractorService::extractPageLinksForLlm() (méthode publique
+        // rendue accessible pour ce partage — même approche que cleanHtml()).
+        $pageLinksContext = $this->llmExtractor->extractPageLinksForLlm($html, $url);
+
         // ── Étape 4 : nettoyage HTML ────────────────────────────────────────────
         // On réutilise LlmExtractorService::cleanHtml() (rendue publique pour ce partage).
         // Cette méthode supprime scripts, styles, éléments masqués (anti-injection),
@@ -229,7 +281,38 @@ class OpportunityEnrichmentService
         }
 
         // ── Étape 5 : appel Mistral ────────────────────────────────────────────
-        return $this->callMistral($apiKey, $cleanText, $url);
+        // On passe pageLinksContext pour que le LLM puisse identifier applicationUrl.
+        $enrichment = $this->callMistral($apiKey, $cleanText, $url, $pageLinksContext);
+
+        // ── Étape 6 : récupération du logo (sans LLM) ─────────────────────────
+        // ADR-0019 : on récupère l'URL du logo par parsing HTML de la page d'accueil
+        // du site cible. La chaîne de repli est : applicationUrl (si trouvé) > sourceUrl.
+        // LogoFetcherService gère les gardes SSRF, timeouts et le stream borné.
+        // On n'appelle le service que si le logo n'est pas déjà renseigné (évite un
+        // fetch inutile si enrich() est appelé plusieurs fois sur la même URL).
+        if ($enrichment->logoUrl === null) {
+            $logoUrl = $this->logoFetcher->fetchLogoUrl($url, $enrichment->applicationUrl);
+            if ($logoUrl !== null) {
+                // On reconstruit un nouveau DTO avec logoUrl renseigné.
+                // OpportunityEnrichment est readonly — on ne peut pas modifier après construction.
+                $enrichment = new OpportunityEnrichment(
+                    title:             $enrichment->title,
+                    description:       $enrichment->description,
+                    disciplines:       $enrichment->disciplines,
+                    city:              $enrichment->city,
+                    country:           $enrichment->country,
+                    experienceLevel:   $enrichment->experienceLevel,
+                    disciplinesLabels: $enrichment->disciplinesLabels,
+                    howToApply:        $enrichment->howToApply,
+                    fundingAmount:     $enrichment->fundingAmount,
+                    fundingType:       $enrichment->fundingType,
+                    applicationUrl:    $enrichment->applicationUrl,
+                    logoUrl:           mb_substr($logoUrl, 0, self::MAX_LOGO_URL_LENGTH),
+                );
+            }
+        }
+
+        return $enrichment;
     }
 
     /**
@@ -319,7 +402,7 @@ class OpportunityEnrichmentService
     }
 
     /**
-     * Appelle l'API Mistral pour produire titre + description en français.
+     * Effectue l'appel Mistral pour enrichir une opportunité.
      *
      * GARDE-FOUS ANTI INJECTION DE PROMPT (DÉTAIL COMPLET) :
      *
@@ -351,49 +434,67 @@ class OpportunityEnrichmentService
      *     On vérifie que titre et description sont bien des string (rejet si autre type).
      *     On tronque aux longueurs max (pas de description de 10 000 chars en cas de fuite).
      *
-     * @param string $apiKey    Clé API Mistral (lue en BDD, non vide garantie par l'appelant)
-     * @param string $cleanText Texte nettoyé de la page (après cleanHtml)
-     * @param string $url       URL source (pour les logs uniquement)
+     * ADR-0019 : $pageLinksContext est ajouté au message utilisateur pour permettre
+     * au LLM d'identifier applicationUrl parmi les liens réels de la page.
+     *
+     * @param string $apiKey           Clé API Mistral (lue en BDD, non vide garantie par l'appelant)
+     * @param string $cleanText        Texte nettoyé de la page (après cleanHtml)
+     * @param string $url              URL source (pour les logs uniquement)
+     * @param string $pageLinksContext Liste des liens de la page (pour applicationUrl, ADR-0019)
      * @return OpportunityEnrichment DTO avec les champs enrichis (ou vide si échec)
      */
-    private function callMistral(string $apiKey, string $cleanText, string $url): OpportunityEnrichment
-    {
+    private function callMistral(
+        string $apiKey,
+        string $cleanText,
+        string $url,
+        string $pageLinksContext = '',
+    ): OpportunityEnrichment {
         // ── Construction du prompt SYSTÈME ────────────────────────────────────
         // LE PROMPT SYSTÈME EST NOTRE TERRAIN DE JEU — jamais de texte tiers ici.
         // Il contient :
         //   a) Le rôle de l'assistant
-        //   b) Le format de sortie attendu (JSON strict à 6 clés)
+        //   b) Le format de sortie attendu (JSON strict — 11 clés depuis ADR-0019)
         //   c) L'instruction anti-injection (les délimiteurs sont des données, pas des instructions)
         //   d) Les règles de qualité (fidélité, non-invention, langues)
         //
-        // ADR-0016 Lot 2 correctif : le prompt demande maintenant aussi city, country,
-        // experienceLevel, et disciplines CONTRAINTES à la liste BDD (plus de texte libre).
+        // ADR-0016 Lot 2 correctif : city, country, experienceLevel, disciplines CONTRAINTES.
+        // ADR-0018 : ajout de howToApply, fundingAmount, fundingType.
+        // ADR-0019 : ajout de applicationUrl (lien candidature) et logoUrl (non demandé au LLM,
+        //            traité séparément par LogoFetcherService).
         $disciplinesList = $this->buildDisciplinesListForPrompt();
         $systemPrompt = <<<PROMPT
 Tu es un assistant spécialisé dans la synthèse d'opportunités culturelles et artistiques.
 
 Ta seule tâche : analyser le texte fourni par l'utilisateur et produire un JSON valide.
 
-FORMAT DE SORTIE — tu dois retourner UNIQUEMENT un objet JSON avec exactement ces six clés :
+FORMAT DE SORTIE — tu dois retourner UNIQUEMENT un objet JSON avec exactement ces dix clés :
 {
   "titre": "...",
   "description": "...",
   "city": "...",
   "country": "...",
   "experienceLevel": "...",
-  "disciplines": [...]
+  "disciplines": [...],
+  "howToApply": "...",
+  "fundingAmount": "...",
+  "fundingType": "...",
+  "applicationUrl": "..."
 }
 
 RÈGLES STRICTES :
 - "titre" : reformulation claire, concise et compréhensible en un coup d'oeil, en FRANÇAIS.
   Maximum 80 caractères. Résume l'essentiel : type d'opportunité + organisme si possible.
-- "description" : description COMPLÈTE et structurée en FRANÇAIS, au format HTML, basée UNIQUEMENT
-  sur le texte fourni. N'invente RIEN. N'inclus que les informations présentes dans le texte source.
+- "description" : OBLIGATOIRE — description COMPLÈTE et STRUCTURÉE en FRANÇAIS, au format HTML.
+  Basée UNIQUEMENT sur le texte fourni. N'invente RIEN. N'inclus que les informations présentes.
+  Produis TOUJOURS une description détaillée à partir des informations de la page ;
+  ne te contente JAMAIS d'une seule phrase.
+  Si une information est absente du texte, indique "non précisé" dans la section correspondante.
   Utilise UNIQUEMENT ces balises HTML : <p>, <ul>, <li>, <strong>.
   Sois EXHAUSTIF : si plusieurs informations sont disponibles dans une section, mentionne-les TOUTES.
   Structure attendue (inclus toutes les sections pour lesquelles tu as des informations) :
-  <p>[Introduction : résume ce qu'est l'opportunité, qui la propose et dans quel contexte.]</p><ul><li><strong>Pour qui :</strong> [critères d'éligibilité détaillés : nationalité, discipline, stade de carrière, âge, statut professionnel, etc.]</li><li><strong>Ce que ca offre :</strong> [bénéfices concrets : résidence, espace de travail, accompagnement, exposition, production, publication, visibilité, etc.]</li><li><strong>Montant / Dotation :</strong> [montant exact si mentionné, frais couverts : billet d'avion, logement, repas, per diem, etc.]</li><li><strong>Conditions :</strong> [langues requises, documents à fournir, durée, lieu, contraintes spécifiques]</li><li><strong>Calendrier :</strong> [date limite de candidature, dates du programme ou de la résidence]</li><li><strong>Comment postuler :</strong> [dossier à constituer, lien ou email de candidature si mentionné]</li></ul>
-  Maximum 2500 caractères HTML au total. Si le texte est insuffisant pour décrire l'opportunité, mets "description": "".
+  <p>[Introduction : résume ce qu'est l'opportunité, qui la propose et dans quel contexte.]</p><ul><li><strong>Pour qui :</strong> [critères d'éligibilité détaillés : nationalité, discipline, stade de carrière, âge, statut professionnel, etc.]</li><li><strong>Ce que ca offre :</strong> [bénéfices concrets : résidence, espace de travail, accompagnement, exposition, production, publication, visibilité, etc.]</li><li><strong>Montant / Dotation :</strong> [montant exact si mentionné, frais couverts : billet d'avion, logement, repas, per diem, etc. Sinon : "non précisé".]</li><li><strong>Conditions :</strong> [langues requises, documents à fournir, durée, lieu, contraintes spécifiques]</li><li><strong>Calendrier :</strong> [date limite de candidature, dates du programme ou de la résidence]</li><li><strong>Comment postuler :</strong> [dossier à constituer, lien ou email de candidature si mentionné]</li></ul>
+  Maximum 2500 caractères HTML au total.
+  Si le texte est vraiment insuffisant pour décrire l'opportunité, mets "description": "".
 - "city" : ville principale où se déroule l'opportunité (ex: "Paris", "Dakar", "Bruxelles").
   Si la ville n'est pas clairement mentionnée dans le texte, retourne "".
 - "country" : pays de l'organisateur ou du lieu de l'opportunité, en toutes lettres en FRANÇAIS
@@ -406,6 +507,25 @@ RÈGLES STRICTES :
   parmi cette liste exacte (copie les noms exactement) : [$disciplinesList].
   Retourne [] si aucune discipline ne correspond ou si l'opportunité est généraliste.
   Exemples valides : ["Musique"], ["Musique", "Danse"], ["Arts visuels"].
+- "howToApply" : modalités de candidature COMPLÈTES extraites du texte.
+  Inclus : comment postuler (formulaire, email, plateforme), quels documents envoyer,
+  à qui, avant quelle date, et tout autre détail pratique mentionné.
+  Si les modalités ne sont pas précisées dans le texte, retourne "".
+  Maximum 800 caractères. Ne résume pas : reprends les informations telles quelles.
+- "fundingAmount" : montant exact si mentionné dans le texte.
+  Exemples : "5 000 €", "jusqu'a 10 000 €", "3 500 USD", "non précisé".
+  Retourne "" si aucun montant n'est indiqué.
+  Retourne "non précisé" uniquement si le texte CONFIRME EXPLICITEMENT l'absence de montant.
+- "fundingType" : nature du financement proposé.
+  Exemples : "Bourse en argent", "Prise en charge des frais (logement + transport)",
+  "Prix non monétaire (résidence + exposition)", "Avance sur production".
+  Retourne "" si le type de financement n'est pas mentionné dans le texte.
+- "applicationUrl" : ADR-0019 — URL du bouton "Candidater / Postuler / Apply / Submit / Déposer / Register".
+  Tu dois UNIQUEMENT retourner une URL présente dans la liste de liens fournie en début de message.
+  Mots-clés à rechercher dans le texte ancre ou le contexte : "candidater", "postuler", "apply",
+  "submit", "déposer", "register", "inscription", "s'inscrire".
+  Si aucun lien ne correspond clairement à une action de candidature, retourne "".
+  NE PAS inventer d'URL — retourner "" plutôt que d'inventer.
 - TYPOGRAPHIE : n'utilise JAMAIS de tiret cadratin (—) ni de tiret demi-cadratin (–).
   Pour une incise, utilise une virgule ou des parenthèses ; pour une plage de dates, un tiret simple (-).
 - Réponds UNIQUEMENT avec le JSON. Aucun texte avant ou après.
@@ -419,13 +539,23 @@ PROMPT;
 
         // ── Construction du message UTILISATEUR ────────────────────────────────
         // Le texte de la page est dans le message USER, encadré par des délimiteurs.
-        // Ces délimiteurs signalent clairement au LLM : "ce qui suit est de la donnée".
-        // Le format est intentionnellement inhabituel (<<<...>>>) pour ne pas être
-        // confondu avec du Markdown ou des balises que le LLM interpréterait autrement.
-        $userMessage = <<<MSG
-Analyse le texte de la page suivante et produis le JSON demandé.
+        // ADR-0019 : on ajoute AVANT le contenu la liste des liens réels de la page,
+        // pour que le LLM puisse identifier applicationUrl parmi eux.
+        // Les liens sont en clair (pas dans les délimiteurs) car c'est de la "meta-info"
+        // sur la page, pas du contenu suspect — ils sont extraits par notre propre code.
 
-<<<CONTENU_PAGE>>>
+        // On construit le bloc "liste des liens" à insérer conditionnellement.
+        $linksSection = '';
+        if ($pageLinksContext !== '') {
+            $linksSection = "Liens présents sur la page (pour applicationUrl UNIQUEMENT) :\n"
+                . $pageLinksContext
+                . "\n\n";
+        }
+
+        $userMessage = <<<MSG
+Analyse la page suivante et produis le JSON demandé.
+
+{$linksSection}<<<CONTENU_PAGE>>>
 {$cleanText}
 <<<FIN_CONTENU_PAGE>>>
 MSG;
@@ -466,13 +596,32 @@ MSG;
 
             // ── Décodage de la réponse ─────────────────────────────────────────
             // Format Mistral (compatible OpenAI) :
-            // { "choices": [{ "message": { "content": "{\"titre\": \"...\", \"description\": \"...\"}" } }] }
+            // { "choices": [{ "message": { "content": "{\"titre\": \"...\", \"description\": \"...\"}" }, "finish_reason": "..." }] }
             $data    = $response->toArray();
             $rawText = $data['choices'][0]['message']['content'] ?? '';
 
             if (empty($rawText)) {
                 $this->logger->warning('[EnrichmentService] Réponse Mistral vide.', ['url' => $url]);
                 return new OpportunityEnrichment(null, null);
+            }
+
+            // ── C2 : détection de troncature par max_tokens (Mistral) ─────────
+            // finish_reason === 'length' signifie que Mistral a arrêté de générer parce
+            // que le quota de tokens est épuisé avant la fin du JSON. Le JSON retourné
+            // peut être invalide (tronqué en milieu de valeur) ou incomplet (champs manquants).
+            // On log un WARNING pour alerter sur une configuration à ajuster.
+            // On continue le parsing normalement : si le JSON est encore valide (troncature
+            // après le dernier champ), on récupère ce qu'on peut via validateAndBuildDto().
+            $finishReason = $data['choices'][0]['finish_reason'] ?? '';
+            if ($finishReason === 'length') {
+                $this->logger->warning(
+                    '[EnrichmentService] Réponse Mistral tronquée par max_tokens (callMistral). '
+                    . 'Le JSON peut être incomplet — envisager d\'augmenter MAX_RESPONSE_TOKENS.',
+                    [
+                        'url'        => $url,
+                        'max_tokens' => self::MAX_RESPONSE_TOKENS,
+                    ]
+                );
             }
 
             // ── Parsing JSON ───────────────────────────────────────────────────
@@ -517,16 +666,28 @@ MSG;
      *   - des clés inattendues {"titre": ..., "IGNORE_PREVIOUS": ...}
      *   On se protège en n'acceptant que les types attendus et en tronquant aux longueurs max.
      *
-     * CHAMPS VALIDÉS (ADR-0016 Lot 2 correctif) :
+     * CHAMPS VALIDÉS :
      *   - titre            → string nullable, max MAX_TITLE_LENGTH chars
      *   - description      → string nullable, max MAX_DESCRIPTION_LENGTH chars
      *   - disciplines      → tableau de strings (plus de string CSV), converti en $disciplinesLabels
      *   - city             → string nullable, max MAX_CITY_LENGTH chars
      *   - country          → string nullable, max MAX_COUNTRY_LENGTH chars
      *   - experienceLevel  → "beginner"|"intermediate"|"experienced" ou null
+     *   - howToApply       → string nullable, max MAX_HOW_TO_APPLY_LENGTH chars (ADR-0018)
+     *   - fundingAmount    → string nullable, max MAX_FUNDING_AMOUNT_LENGTH chars (ADR-0018)
+     *   - fundingType      → string nullable, max MAX_FUNDING_TYPE_LENGTH chars (ADR-0018)
+     *   - applicationUrl   → string nullable, garde anti-hallucination stricte (ADR-0019)
+     *
+     * GARDE ANTI-HALLUCINATION applicationUrl (ADR-0019) :
+     *   L'URL retournée par le LLM doit satisfaire TOUS ces critères :
+     *     1. Être une string non vide
+     *     2. Être une URL HTTP(s) valide (filter_var)
+     *     3. Être différente de $url (URL source de la page)
+     *     4. Avoir un host parseable
+     *   Si l'un de ces critères échoue → null (rejet silencieux, log debug).
      *
      * @param array<string, mixed> $decoded  JSON décodé depuis Mistral
-     * @param string               $url      URL source (pour les logs uniquement)
+     * @param string               $url      URL source (pour les logs et la garde anti-hallucination)
      * @return OpportunityEnrichment DTO validé
      */
     private function validateAndBuildDto(array $decoded, string $url): OpportunityEnrichment
@@ -718,23 +879,139 @@ MSG;
             ]);
         }
 
+        // ── ADR-0018 : extraction des modalités de candidature ────────────────
+        // "howToApply" : texte libre décrivant comment postuler.
+        // On accepte uniquement une string ; vide → null.
+        $rawHowToApply = $decoded['howToApply'] ?? null;
+        $howToApply    = null;
+
+        if (is_string($rawHowToApply)) {
+            $rawHowToApply = trim($rawHowToApply);
+            if (!empty($rawHowToApply)) {
+                if (mb_strlen($rawHowToApply) > self::MAX_HOW_TO_APPLY_LENGTH) {
+                    $this->logger->warning('[EnrichmentService] howToApply trop long, troncature.', [
+                        'url'    => $url,
+                        'length' => mb_strlen($rawHowToApply),
+                    ]);
+                    $rawHowToApply = mb_substr($rawHowToApply, 0, self::MAX_HOW_TO_APPLY_LENGTH);
+                }
+                $howToApply = $rawHowToApply;
+            }
+        } elseif ($rawHowToApply !== null) {
+            $this->logger->warning('[EnrichmentService] Le champ "howToApply" n\'est pas une string.', [
+                'url'  => $url,
+                'type' => get_debug_type($rawHowToApply),
+            ]);
+        }
+
+        // ── ADR-0018 : extraction du montant du financement ───────────────────
+        $rawFundingAmount = $decoded['fundingAmount'] ?? null;
+        $fundingAmount    = null;
+
+        if (is_string($rawFundingAmount)) {
+            $rawFundingAmount = trim($rawFundingAmount);
+            if (!empty($rawFundingAmount)) {
+                $fundingAmount = mb_substr($rawFundingAmount, 0, self::MAX_FUNDING_AMOUNT_LENGTH);
+            }
+        } elseif ($rawFundingAmount !== null) {
+            $this->logger->warning('[EnrichmentService] Le champ "fundingAmount" n\'est pas une string.', [
+                'url'  => $url,
+                'type' => get_debug_type($rawFundingAmount),
+            ]);
+        }
+
+        // ── ADR-0018 : extraction de la nature du financement ─────────────────
+        $rawFundingType = $decoded['fundingType'] ?? null;
+        $fundingType    = null;
+
+        if (is_string($rawFundingType)) {
+            $rawFundingType = trim($rawFundingType);
+            if (!empty($rawFundingType)) {
+                $fundingType = mb_substr($rawFundingType, 0, self::MAX_FUNDING_TYPE_LENGTH);
+            }
+        } elseif ($rawFundingType !== null) {
+            $this->logger->warning('[EnrichmentService] Le champ "fundingType" n\'est pas une string.', [
+                'url'  => $url,
+                'type' => get_debug_type($rawFundingType),
+            ]);
+        }
+
+        // ── ADR-0019 : extraction et validation de applicationUrl ─────────────
+        //
+        // Garde anti-hallucination STRICTE :
+        //   1. Doit être une string non vide
+        //   2. Doit être une URL HTTP(s) valide (filter_var)
+        //   3. Doit être différente de $url (URL source = page de présentation de l'offre)
+        //   4. Doit avoir un host parseable
+        //
+        // Note : contrairement à LlmExtractorService::mapItemsToOpportunities(), on a
+        // ici accès à $url (l'URL source exacte), ce qui permet la vérification 3.
+        // La garde est la même dans les deux services par cohérence.
+        $rawApplicationUrl = $decoded['applicationUrl'] ?? null;
+        $applicationUrl    = null;
+
+        if (is_string($rawApplicationUrl)) {
+            $rawApplicationUrl = trim($rawApplicationUrl);
+
+            if ($rawApplicationUrl !== '') {
+                if (filter_var($rawApplicationUrl, FILTER_VALIDATE_URL) !== false
+                    && (str_starts_with($rawApplicationUrl, 'http://') || str_starts_with($rawApplicationUrl, 'https://'))
+                    && $rawApplicationUrl !== $url
+                ) {
+                    $parsedHost = parse_url($rawApplicationUrl, PHP_URL_HOST);
+                    if (is_string($parsedHost) && $parsedHost !== '') {
+                        // Validation réussie : on tronque à 500 chars (limite BDD)
+                        $applicationUrl = mb_substr($rawApplicationUrl, 0, self::MAX_APPLICATION_URL_LENGTH);
+                    } else {
+                        $this->logger->debug('[EnrichmentService] applicationUrl rejetée (host non parseable).', [
+                            'url_proposee' => mb_substr($rawApplicationUrl, 0, 200),
+                            'url'          => $url,
+                        ]);
+                    }
+                } else {
+                    // L'URL est invalide ou identique à l'URL source → on la rejette
+                    // silencieusement (debug uniquement, pas un warning — c'est un cas normal
+                    // quand le LLM retourne l'URL source en fallback ou une URL invalide).
+                    $this->logger->debug('[EnrichmentService] applicationUrl rejetée (invalide, non-http ou identique à sourceUrl).', [
+                        'url_proposee' => mb_substr($rawApplicationUrl, 0, 200),
+                        'url'          => $url,
+                    ]);
+                }
+            }
+        } elseif ($rawApplicationUrl !== null) {
+            $this->logger->warning('[EnrichmentService] Le champ "applicationUrl" n\'est pas une string.', [
+                'url'  => $url,
+                'type' => get_debug_type($rawApplicationUrl),
+            ]);
+        }
+
         // ── Log de succès si on a au moins un champ utilisable ─────────────────
         $hasContent = $title !== null
             || $description !== null
             || $disciplinesString !== null
             || $city !== null
             || $country !== null
-            || $experienceLevel !== null;
+            || $experienceLevel !== null
+            || $howToApply !== null
+            || $fundingAmount !== null
+            || $fundingType !== null
+            || $applicationUrl !== null;
 
         if ($hasContent) {
             $this->logger->info('[EnrichmentService] Enrichissement produit avec succès.', [
-                'url'              => $url,
-                'title_length'     => $title !== null ? mb_strlen($title) : 0,
-                'desc_length'      => $description !== null ? mb_strlen($description) : 0,
-                'disciplines'      => $disciplinesString ?? '(aucune)',
-                'city'             => $city ?? '(aucune)',
-                'country'          => $country ?? '(aucun)',
-                'experienceLevel'  => $experienceLevel ?? '(tous niveaux)',
+                'url'               => $url,
+                'title_length'      => $title !== null ? mb_strlen($title) : 0,
+                'desc_length'       => $description !== null ? mb_strlen($description) : 0,
+                'disciplines'       => $disciplinesString ?? '(aucune)',
+                'city'              => $city ?? '(aucune)',
+                'country'           => $country ?? '(aucun)',
+                'experienceLevel'   => $experienceLevel ?? '(tous niveaux)',
+                // ADR-0018 : log des champs financement/candidature
+                'funding_amount'    => $fundingAmount ?? '(aucun)',
+                'funding_type'      => $fundingType ?? '(aucun)',
+                'how_to_apply_len'  => $howToApply !== null ? mb_strlen($howToApply) : 0,
+                // ADR-0019 : log du lien de candidature
+                'application_url'   => $applicationUrl ?? '(aucun)',
             ]);
         } else {
             // Le LLM a retourné du JSON valide mais sans contenu utile
@@ -751,6 +1028,13 @@ MSG;
             country: $country,
             experienceLevel: $experienceLevel,
             disciplinesLabels: $disciplinesLabels,
+            // ADR-0018 : champs candidature + financement
+            howToApply: $howToApply,
+            fundingAmount: $fundingAmount,
+            fundingType: $fundingType,
+            // ADR-0019 : lien candidature (logoUrl sera renseigné après par enrich())
+            applicationUrl: $applicationUrl,
+            logoUrl: null, // Rempli par LogoFetcherService dans la méthode enrich()
         );
     }
 

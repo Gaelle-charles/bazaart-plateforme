@@ -222,6 +222,97 @@
 
     .resource-main { display: flex; flex-direction: column; gap: var(--space-xl); }
 
+    /* ── Bloc financement + candidature (ADR-0018) ───────────────────────── */
+
+    /*
+     * Ce bloc « En un coup d'oeil » apparaît EN TÊTE de la colonne principale,
+     * avant la description, pour que l'artiste sache immédiatement le montant
+     * et comment candidater sans avoir à lire tout le texte.
+     *
+     * Style : fond bg-alt, bordure gauche accent lime épaisse = accent visuel
+     * sans être intrusif. Cohérent avec le thème Street (bords francs, mono).
+     */
+    .funding-candidature-block {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-md);
+        border: 1px solid var(--ink);
+        border-left: 4px solid var(--accent);
+        background: var(--bg-alt);
+        padding: var(--space-lg) var(--space-xl);
+    }
+
+    /* Ligne titre du bloc (eyebrow style) */
+    .funding-candidature-block__eyebrow {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: var(--space-xs);
+    }
+
+    /* Grille interne : montant à gauche, type à droite (si les deux existent) */
+    .funding-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-md) var(--space-xl);
+        align-items: flex-start;
+    }
+
+    /* Bloc d'un champ financement : label + valeur */
+    .funding-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    /* Label de champ (clé) */
+    .funding-item__label {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    /* Valeur du champ financement : grande, affichée en display font */
+    .funding-item__value {
+        font-family: var(--display);
+        font-size: 20px;
+        line-height: 1.1;
+        color: var(--ink);
+    }
+
+    /* Valeur secondaire (fundingType) : plus petite, serif */
+    .funding-item__value--secondary {
+        font-family: var(--body);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--ink);
+    }
+
+    /* Section "Comment candidater" : séparée du financement */
+    .how-to-apply {
+        border-top: 1px solid var(--line-soft);
+        padding-top: var(--space-md);
+        margin-top: var(--space-xs);
+    }
+
+    /* Contenu howToApply : préserve les sauts de ligne via white-space */
+    .how-to-apply__content {
+        font-family: var(--body);
+        font-size: 14px;
+        line-height: 1.65;
+        color: var(--ink);
+        /* white-space: pre-line interprète les \n comme des sauts de ligne HTML.
+           Le filtre nl2br Twig sera utilisé en fallback si le contenu vient du LLM
+           sans balises HTML — voir le bloc de rendu Twig ci-dessous. */
+        white-space: pre-line;
+    }
+
     /* Bouton CTA externe "Candidater" — plein accent lime, pleine largeur sur mobile */
     .btn-candidater {
         display: inline-flex;
@@ -245,6 +336,118 @@
     .btn-candidater:hover {
         background: var(--ink);
         color: var(--accent);
+    }
+
+    /* ── ADR-0019 : bouton secondaire "En savoir plus" ──────────────────────
+       Variante outline du bouton CTA — utilisé quand applicationUrl est présent
+       et que externalUrl joue le rôle de page de présentation uniquement. */
+    .btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-sm);
+        padding: var(--btn-padding);
+        background: transparent;
+        color: var(--ink);
+        border: 2px solid var(--ink);
+        font-family: var(--body);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: var(--btn-radius);
+        transition: background var(--transition-fast), color var(--transition-fast);
+        align-self: flex-start;
+    }
+    .btn-secondary:hover {
+        background: var(--ink);
+        color: var(--bg);
+    }
+
+    /* ── ADR-0019 : groupe de boutons CTA ───────────────────────────────────
+       Contient le bouton primaire (applicationUrl) et le bouton secondaire
+       (externalUrl) côte à côte, avec wrap mobile automatique. */
+    .cta-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-md);
+        align-items: center;
+    }
+
+    /* ── ADR-0019 : logo de l'organisme dans le hero ────────────────────────
+       Affiché en coin haut-droit du hero (position absolute dans le hero
+       qui est déjà position:relative).
+       Sur mobile : position statique dans le flux des badges pour ne pas
+       chevaucher le titre. */
+    .resource-hero__logo {
+        position: absolute;
+        top: var(--space-xl);
+        right: var(--space-xl);
+        width: 56px;
+        height: 56px;
+        background: var(--bg);
+        border: 1px solid rgba(242,239,230,.3);
+        overflow: hidden;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Image du logo : couvre le carré sans déborder */
+    .resource-hero__logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+    }
+
+    /* Badge fallback "B" : fond accent lime, lettre encre en Archivo Black */
+    .resource-hero__logo--badge {
+        font-family: var(--display);
+        font-size: 24px;
+        font-weight: 900;
+        color: var(--ink);
+        background: var(--accent);
+        border: 1px solid var(--ink);
+    }
+
+    /* Sur mobile : logo dans le flux (pas en absolu), pour éviter le chevauchement */
+    @media (max-width: 640px) {
+        .resource-hero__logo {
+            position: static;
+            margin-bottom: var(--space-sm);
+        }
+    }
+
+    /* ── ADR-0019 : miniature logo dans les cartes de la liste ──────────────
+       Petit carré 40×40 dans le coin de la carte, identique au design hero
+       mais réduit. Défini ici pour cohérence même si utilisé dans index.html.twig. */
+    .card-logo {
+        width: 36px;
+        height: 36px;
+        background: var(--bg);
+        border: 1px solid var(--line-soft);
+        overflow: hidden;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .card-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+    }
+    .card-logo--badge {
+        font-family: var(--display);
+        font-size: 14px;
+        font-weight: 900;
+        color: var(--ink);
+        background: var(--accent);
+        border: 1px solid var(--line-soft);
     }
 
     /* Corps de description : on utilise le serif pour donner un caractère
@@ -568,6 +771,39 @@
 #}
 <div class="resource-hero">
 
+    {#
+       ADR-0019 : Logo de l'organisme émetteur de la ressource.
+       Positionné en absolu dans le coin haut-droit du hero (voir CSS .resource-hero__logo).
+       Sur mobile il revient dans le flux naturel (media query).
+
+       Comportement :
+         - Si resource.logoUrl est renseigné  → on affiche l'image (lazy loading, alt descriptif)
+         - Si resource.logoUrl est vide/null  → badge "B" fond lime (fallback visuel cohérent)
+
+       Sécurité anti-XSS :
+         - logoUrl est affiché via |e (auto-escape Twig) — JAMAIS |raw
+         - L'attribut onerror en JavaScript est minimaliste : il remplace l'img
+           par le contenu HTML du badge si le chargement de l'image échoue.
+           On ne peut pas faire de |raw côté serveur ici, donc on gère côté client.
+
+       NB : on ne vérifie pas si l'image charge réellement depuis le serveur ;
+            le navigateur gère le cas d'erreur réseau via l'attribut onerror.
+    #}
+    {% if resource.logoUrl %}
+        {# ── Logo réel : image depuis logoUrl ── #}
+        <div class="resource-hero__logo" aria-hidden="true">
+            <img src="{{ resource.logoUrl|e }}"
+                 alt="{{ resource.title|e }}"
+                 loading="lazy"
+                 onerror="this.parentElement.innerHTML='<span aria-hidden=\'true\'>B</span>'; this.parentElement.classList.add('resource-hero__logo--badge');">
+        </div>
+    {% else %}
+        {# ── Badge "B" fallback : aucun logo disponible ── #}
+        <div class="resource-hero__logo resource-hero__logo--badge" aria-hidden="true">
+            B
+        </div>
+    {% endif %}
+
     {# Badges : type de ressource + disciplines + "Deadline proche" si urgente #}
     <div class="resource-hero__badges">
 
@@ -700,40 +936,201 @@
     {# ═══════ COLONNE PRINCIPALE (gauche, 70%) ═══════ #}
     <div class="resource-main">
 
-        {# ── Bouton CTA externe "Candidater" ── #}
+        {# ── ADR-0018 : Bloc financement + candidature ── #}
         {#
-           Affiché en premier car c'est l'action principale de la page.
-           target="_blank" + rel="noopener noreferrer" = bonne pratique sécurité.
-           Noopener empêche la nouvelle page d'accéder à window.opener.
+           Ce bloc est affiché EN TÊTE de la colonne principale, avant tout le reste.
+           Il donne à l'artiste l'information la plus actionnable immédiatement :
+             - Montant et nature du financement (fundingAmount + fundingType)
+             - Modalités de candidature (howToApply)
+
+           RENDU CONDITIONNEL :
+             - Le bloc n'est affiché que si AU MOINS l'un des 3 champs est renseigné.
+             - Chaque sous-section (financement, candidature) est elle-même conditionnelle.
+             - Zéro tiret cadratin ajouté (règle de typographie du projet).
+
+           SÉCURITÉ XSS (important) :
+             - resource.howToApply contient du texte produit par le LLM (pas de HTML garanti).
+             - On utilise `resource.howToApply|e|nl2br` pour :
+                 1. `|e` : échappement HTML automatique (protège contre les injections XSS)
+                 2. `|nl2br` : convertit les \n en <br> pour préserver les sauts de ligne
+             - On N'UTILISE PAS `|raw` sur ce champ (règle absolue pour le contenu LLM libre).
+             - resource.description (champ HTML Mistral avec balises <p><ul><li><strong>)
+               continue à utiliser `|raw` car le pipeline d'enrichissement garantit
+               que seules ces balises sont présentes (cf. OpportunityEnrichmentService).
+             - resource.fundingAmount et resource.fundingType sont de courtes strings texte
+               → échappement automatique de Twig (pas de |raw ni de |nl2br nécessaires).
         #}
-        {% if resource.externalUrl %}
-            <div>
-                {# href : URL NORMALISÉE (schéma garanti) pour éviter les liens cassés
-                   interprétés comme relatifs — cf. Resource::getExternalUrlNormalized() #}
-                <a href="{{ resource.externalUrlNormalized }}"
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   class="btn-candidater">
-                    Candidater / En savoir plus
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                        <path d="M5 12h14M13 5l7 7-7 7"/>
-                    </svg>
-                </a>
+        {% if resource.fundingAmount or resource.fundingType or resource.howToApply %}
+            <div class="funding-candidature-block">
+                <div class="funding-candidature-block__eyebrow">En un coup d'oeil</div>
+
+                {# Sous-section financement : affiché uniquement si au moins un des deux champs existe #}
+                {% if resource.fundingAmount or resource.fundingType %}
+                    <div class="funding-grid">
+
+                        {# Montant : affiché en grand (display font) si renseigné #}
+                        {% if resource.fundingAmount %}
+                            <div class="funding-item">
+                                <span class="funding-item__label">Montant</span>
+                                <span class="funding-item__value">{{ resource.fundingAmount }}</span>
+                            </div>
+                        {% endif %}
+
+                        {# Nature du financement : affiché en plus petit si renseignée #}
+                        {% if resource.fundingType %}
+                            <div class="funding-item">
+                                <span class="funding-item__label">Nature</span>
+                                <span class="funding-item__value--secondary">{{ resource.fundingType }}</span>
+                            </div>
+                        {% endif %}
+
+                    </div>
+                {% endif %}
+
+                {# Sous-section "Comment candidater" : affiché uniquement si howToApply est renseigné #}
+                {% if resource.howToApply %}
+                    <div class="how-to-apply">
+                        <div class="funding-candidature-block__eyebrow">Comment candidater</div>
+                        {#
+                           EXPLICATION DU FILTRE `|e('html')|nl2br` :
+                           Le texte de howToApply vient du LLM (texte libre, pas de HTML structuré).
+                           On ne peut pas lui faire confiance pour contenir du HTML valide ou sûr.
+                           Stratégie :
+                             1. `|e('html')` : Twig échappe les caractères HTML spéciaux
+                                (< > & " ') → protège contre les injections XSS.
+                                On utilise la forme EXPLICITE `|e('html')` plutôt que l'auto-échappement
+                                implicite de Twig pour deux raisons :
+                                  a) Rendre l'intention de sécurité visible et auditable dans le code.
+                                  b) Garantir le bon ordre : l'échappement AVANT nl2br.
+                             2. `|nl2br` : après l'échappement, convertit \n en <br>.
+                                L'ordre est CRITIQUE : si on faisait nl2br AVANT l'échappement,
+                                les <br> injectés seraient à leur tour échappés en &lt;br&gt;
+                                et n'auraient aucun effet visuel (texte affiché tel quel).
+                                En Twig, |nl2br est appliqué sur le texte DÉJÀ échappé — les <br>
+                                qu'il ajoute ne seront donc PAS re-échappés (Twig marque le résultat
+                                comme "safe HTML" après nl2br).
+                           Résultat : le contenu est sûr (XSS protégé) et les sauts de ligne
+                           sont respectés (lisibilité des instructions de candidature).
+                           PAS de double-échappement : `|e('html')` → chaîne échappée ;
+                           `|nl2br` → Markup (safe) avec <br> — Twig n'échappe pas à nouveau.
+                        #}
+                        <div class="how-to-apply__content">
+                            {{ resource.howToApply|e('html')|nl2br }}
+                        </div>
+                    </div>
+                {% endif %}
+
+            </div>
+        {% endif %}
+
+        {#
+           ── ADR-0019 : Boutons CTA ────────────────────────────────────────────
+           Deux scénarios selon les données disponibles :
+
+           A) applicationUrl présent (lien de candidature DIRECT extrait par LLM) :
+              → Bouton PRIMAIRE  : "Candidater" → applicationUrl  (accent lime + encre)
+              → Bouton secondaire: "En savoir plus" → externalUrl (outline, si externalUrl existe)
+              Logique : l'artiste veut candidater directement — inutile de
+              l'envoyer d'abord sur la page de présentation.
+
+           B) Pas d'applicationUrl (ancienne logique) :
+              → Bouton PRIMAIRE  : "Candidater / En savoir plus" → externalUrl
+              (comportement identique à avant ADR-0019, rétro-compatible)
+
+           Sécurité :
+              - applicationUrl est affiché via auto-escape Twig (|e implicite dans href="{{ }}")
+              - JAMAIS de |raw sur ces URLs
+              - rel="noopener noreferrer" sur tous les liens externes
+
+           Si ni applicationUrl ni externalUrl → aucun bouton affiché.
+        #}
+        {% if resource.applicationUrl or resource.externalUrl %}
+            <div class="cta-group">
+
+                {% if resource.applicationUrl %}
+                    {# ── Cas A : bouton primaire "Candidater" vers applicationUrl ── #}
+                    {#
+                       applicationUrl est l'URL du bouton "Postuler / Déposer / Apply"
+                       extrait par le LLM depuis les liens réels de la page source.
+                       Garde anti-hallucination validée dans OpportunityEnrichmentService.
+                       C'est l'action principale → bouton accent lime.
+                    #}
+                    <a href="{{ resource.applicationUrl }}"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="btn-candidater">
+                        Candidater
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                            <path d="M5 12h14M13 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+
+                    {% if resource.externalUrl %}
+                        {# ── Cas A suite : bouton secondaire "En savoir plus" → externalUrl ── #}
+                        {#
+                           externalUrl = page de présentation de l'opportunité.
+                           Action secondaire → bouton outline (transparent + bordure encre).
+                        #}
+                        <a href="{{ resource.externalUrlNormalized }}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="btn-secondary">
+                            En savoir plus
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                                <path d="M5 12h14M13 5l7 7-7 7"/>
+                            </svg>
+                        </a>
+                    {% endif %}
+
+                {% else %}
+                    {# ── Cas B : pas d'applicationUrl → fallback externalUrl seul ── #}
+                    {#
+                       Comportement rétro-compatible ADR-0018 et avant.
+                       externalUrl joue à la fois le rôle de page de présentation
+                       et de point d'entrée candidature.
+                    #}
+                    <a href="{{ resource.externalUrlNormalized }}"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="btn-candidater">
+                        Candidater / En savoir plus
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                            <path d="M5 12h14M13 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                {% endif %}
+
             </div>
         {% endif %}
 
         {# ── Description complète ── #}
         {#
-           La description peut contenir du HTML structure genere par Mistral
-           (balises p, ul, li, strong) via la commande app:enrich-opportunities.
-           On utilise |raw pour que ces balises soient interpretees par le navigateur.
+           La description peut contenir du HTML structuré généré par Mistral
+           (balises p, ul, li, strong) via la commande app:enrich-opportunities
+           ou lors du scraping LLM (LlmExtractorService / OpportunityEnrichmentService).
+
+           ADR-0018 : la description est maintenant COMPLÈTE et STRUCTURÉE (plusieurs sections).
+           Elle peut aussi contenir du texte brut avec sauts de ligne si elle provient du
+           scraping liste (LlmExtractorService — pas de HTML garanti dans ce cas).
+
+           STRATÉGIE D'AFFICHAGE :
+             - Si la description contient des balises HTML (<p>, <ul>, etc.) : |raw
+               permet au navigateur de les interpréter. C'est le cas pour les descriptions
+               produites par OpportunityEnrichmentService (format HTML structuré garanti).
+             - Si la description est du texte brut (LlmExtractorService sur page-liste) :
+               |raw fonctionne aussi (le texte sans balises s'affiche comme texte brut).
 
            ATTENTION XSS : ce |raw est valide UNIQUEMENT parce que resource.description
-           est alimenté exclusivement par le pipeline IA (EnrichOpportunitiesCommand) ou
-           par un administrateur via /admin/resources/{id}/edit.
+           est alimenté exclusivement par le pipeline IA (jamais par saisie artiste libre).
+           Le pipeline garantit que seules les balises sûres (<p><ul><li><strong>) sont émises.
            NE PAS utiliser |raw si une soumission artiste ou structure peut écrire
            directement dans ce champ sans sanitisation préalable.
+
+           Pour howToApply (texte LLM libre sans HTML garanti), on utilise |nl2br ci-dessus
+           (et NON |raw) — deux stratégies différentes selon la source du contenu.
         #}
         <div class="resource-desc">
             {{ resource.description|raw }}

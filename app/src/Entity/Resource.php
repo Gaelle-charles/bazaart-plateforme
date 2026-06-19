@@ -516,6 +516,175 @@ class Resource
         return $this;
     }
 
+    // ─── Champs ADR-0018 : candidature, financement, description enrichie ────
+    // Ces trois champs sont propagés depuis ScrapedResource lors de la vérification
+    // admin (AdminController::verifyScrapedOpportunity) ou produits directement par
+    // OpportunityEnrichmentService (commande app:enrich-opportunities).
+    // Tous nullable — migration non-destructive.
+
+    /**
+     * Modalités de candidature (comment postuler, quoi envoyer, où, délai…).
+     * Produit par le LLM à partir du contenu de la page de l'opportunité.
+     * Affiché en tête de la page détail pour guider l'artiste immédiatement.
+     *
+     * TEXT : longueur variable, pas de limite serrée.
+     * Null si l'information n'était pas disponible.
+     */
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $howToApply = null;
+
+    /**
+     * Montant du financement sous forme lisible (ex : "5 000 €", "jusqu'à 10 000 €").
+     * Longueur max 255 : c'est une information de synthèse, pas un chiffre calculable.
+     * Null si non mentionné.
+     */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $fundingAmount = null;
+
+    /**
+     * Nature du financement (ex : "Bourse en argent", "Prise en charge des frais").
+     * Longueur max 255. Null si non précisé.
+     */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $fundingType = null;
+
+    // ─── Champs ADR-0019 : lien de candidature + logo ────────────────────────
+    // Ces deux champs sont remplis par le pipeline d'extraction LLM/HTML :
+    //   - applicationUrl : extrait par le LLM parmi les liens réels de la page
+    //     (garde anti-hallucination : l'URL doit appartenir aux liens de la page)
+    //   - logoUrl        : récupéré par parsing HTML (apple-touch-icon > icon > og:image)
+    //                      sans appel LLM, en utilisant le domaine de applicationUrl
+    //                      ou de l'URL source comme cible.
+    // Tous deux nullable : migration non-destructive (existants restent à NULL).
+    // Propagés depuis ScrapedResource lors de la vérification admin.
+
+    /**
+     * URL de candidature directe — distinct de l'URL source où l'offre est trouvée.
+     *
+     * Extraction : le LLM identifie parmi les liens réels de la page celui qui
+     * correspond à un bouton "Candidater / Postuler / Apply / Submit / Déposer".
+     * Garde anti-hallucination : l'URL retournée doit appartenir aux liens de la page ;
+     * si le LLM invente une URL inconnue, elle est rejetée (null).
+     *
+     * Longueur max 500 chars : même limite que externalUrl pour cohérence.
+     * Null si aucun lien de candidature n'a été trouvé ou si la garde anti-hallucination
+     * a rejeté la proposition du LLM.
+     */
+    #[ORM\Column(type: 'string', length: 500, nullable: true)]
+    private ?string $applicationUrl = null;
+
+    /**
+     * URL du logo de l'organisme — affiché sur les cartes et la page détail.
+     *
+     * Chaîne de repli pour déterminer quelle page scraper :
+     *   1. Si applicationUrl présente → logo du site de candidature
+     *   2. Sinon → logo du site source de l'offre
+     * Balises lues dans l'ordre de préférence :
+     *   <link rel="apple-touch-icon"> > <link rel="icon"> > <meta property="og:image">
+     *
+     * On stocke l'URL du logo (string) — jamais l'image elle-même (pas de download).
+     * Null si aucun logo trouvé ou si le site cible est inaccessible.
+     */
+    #[ORM\Column(type: 'string', length: 500, nullable: true)]
+    private ?string $logoUrl = null;
+
+    // ─── Getters / Setters ADR-0018 ──────────────────────────────────────────
+
+    /**
+     * Retourne les modalités de candidature, ou null si non renseignées.
+     */
+    public function getHowToApply(): ?string
+    {
+        return $this->howToApply;
+    }
+
+    /**
+     * Définit les modalités de candidature.
+     */
+    public function setHowToApply(?string $howToApply): static
+    {
+        $this->howToApply = $howToApply;
+        return $this;
+    }
+
+    /**
+     * Retourne le montant du financement (forme lisible), ou null.
+     */
+    public function getFundingAmount(): ?string
+    {
+        return $this->fundingAmount;
+    }
+
+    /**
+     * Définit le montant du financement.
+     */
+    public function setFundingAmount(?string $fundingAmount): static
+    {
+        $this->fundingAmount = $fundingAmount;
+        return $this;
+    }
+
+    /**
+     * Retourne la nature du financement, ou null.
+     */
+    public function getFundingType(): ?string
+    {
+        return $this->fundingType;
+    }
+
+    /**
+     * Définit la nature du financement.
+     */
+    public function setFundingType(?string $fundingType): static
+    {
+        $this->fundingType = $fundingType;
+        return $this;
+    }
+
+    // ─── Getters / Setters ADR-0019 ──────────────────────────────────────────
+
+    /**
+     * Retourne l'URL de candidature directe, ou null si non trouvée.
+     *
+     * Cette URL pointe vers le formulaire / la page de dépôt de candidature,
+     * distincte de l'URL source (externalUrl) qui est la page de présentation
+     * de l'opportunité.
+     */
+    public function getApplicationUrl(): ?string
+    {
+        return $this->applicationUrl;
+    }
+
+    /**
+     * Définit l'URL de candidature directe.
+     * Passer null efface l'information (pas de lien de candidature direct trouvé).
+     * Tronquée à 500 chars avant persistance par ScrapedResourcePersister.
+     */
+    public function setApplicationUrl(?string $applicationUrl): static
+    {
+        $this->applicationUrl = $applicationUrl;
+        return $this;
+    }
+
+    /**
+     * Retourne l'URL du logo de l'organisme, ou null si non trouvée.
+     * Cette URL est stockée telle quelle — l'image n'est pas téléchargée.
+     */
+    public function getLogoUrl(): ?string
+    {
+        return $this->logoUrl;
+    }
+
+    /**
+     * Définit l'URL du logo de l'organisme.
+     * Passer null signifie "pas de logo trouvé" → le template affichera le badge "B".
+     */
+    public function setLogoUrl(?string $logoUrl): static
+    {
+        $this->logoUrl = $logoUrl;
+        return $this;
+    }
+
     // ─── Getters / Setters ADR-0016 Lot 1 ────────────────────────────────────
 
     /**

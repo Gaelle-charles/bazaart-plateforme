@@ -359,8 +359,11 @@ class ScrapedResourcePersister
     }
 
     /**
-     * Met à jour les champs enrichis ADR-0016 Lot 1 d'une ScrapedResource
-     * depuis un ScrapedOpportunity.
+     * Met à jour les champs enrichis d'une ScrapedResource depuis un ScrapedOpportunity.
+     *
+     * Couvre :
+     *   - ADR-0016 Lot 1 : city, country, experienceLevel
+     *   - ADR-0018      : howToApply, fundingAmount, fundingType
      *
      * Règle d'écrasement :
      *   On n'écrase que si la nouvelle valeur du DTO est non vide.
@@ -379,6 +382,8 @@ class ScrapedResourcePersister
      */
     private function updateEnrichedFields(ScrapedResource $entity, ScrapedOpportunity $opp): void
     {
+        // ── ADR-0016 Lot 1 : champs géo + niveau ─────────────────────────────
+
         // Ville : on ne met à jour que si la nouvelle valeur est non vide.
         // Troncature défensive à 150 chars : évite une violation de contrainte Doctrine
         // si la valeur issue du DTO n'avait pas encore été tronquée en amont
@@ -404,6 +409,46 @@ class ScrapedResourcePersister
             if ($level !== null) {
                 $entity->setExperienceLevel($level);
             }
+        }
+
+        // ── ADR-0018 : modalités de candidature + financement ─────────────────
+
+        // Modalités de candidature (TEXT — pas de limite serrée, mais troncature
+        // défensive à 8 000 chars identique à LlmExtractorService).
+        if ($opp->howToApply !== '') {
+            $entity->setHowToApply(mb_substr($opp->howToApply, 0, 8000));
+        }
+
+        // Montant du financement — tronqué à 255 chars (limite colonne BDD).
+        if ($opp->fundingAmount !== '') {
+            $entity->setFundingAmount(mb_substr($opp->fundingAmount, 0, 255));
+        }
+
+        // Nature du financement — tronqué à 255 chars.
+        if ($opp->fundingType !== '') {
+            $entity->setFundingType(mb_substr($opp->fundingType, 0, 255));
+        }
+
+        // ── ADR-0019 : lien de candidature + logo ────────────────────────────
+        //
+        // Règle d'écrasement identique aux autres champs :
+        //   - On n'écrase jamais une valeur existante avec une chaîne vide.
+        //   - Les scrapers RSS ne renseignent pas ces champs ('' par défaut dans DTO).
+        //   - Troncature défensive à 500 chars (limite colonne BDD définie dans l'entité).
+        //
+        // applicationUrl : URL du bouton "Candidater" extraite par le LLM.
+        //   Garde anti-hallucination appliquée en amont (LlmExtractorService +
+        //   OpportunityEnrichmentService) : l'URL est déjà validée, mais on tronque
+        //   par prudence en cas de DTO construit manuellement.
+        if ($opp->applicationUrl !== '') {
+            $entity->setApplicationUrl(mb_substr($opp->applicationUrl, 0, 500));
+        }
+
+        // logoUrl : URL du logo de l'organisme, récupérée par LogoFetcherService.
+        //   Pas de validation sémantique ici : le fetcher vérifie déjà le SSRF
+        //   et retourne uniquement des URLs HTTP(s) issues du HTML de la page d'accueil.
+        if ($opp->logoUrl !== '') {
+            $entity->setLogoUrl(mb_substr($opp->logoUrl, 0, 500));
         }
     }
 }

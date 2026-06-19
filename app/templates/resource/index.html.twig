@@ -837,8 +837,32 @@
 
                 </div>
 
-                {# ── Colonne droite : deadline ── #}
+                {# ── Colonne droite : logo + deadline ── #}
                 <div class="list-card__right">
+
+                    {#
+                        ADR-0019 : miniature logo de l'organisme.
+                        Affiché en haut de la colonne droite pour identifier visuellement
+                        l'émetteur de l'opportunité.
+
+                        Comportement :
+                          - logoUrl renseigné  → image (lazy loading)
+                          - logoUrl vide/null  → badge "B" fond lime (identité Bazaart en fallback)
+
+                        Sécurité : logoUrl est auto-escaped par Twig dans href="{{ }}"
+                        (pas de |raw).
+                    #}
+                    {% if resource.logoUrl %}
+                        <div class="card-logo" aria-hidden="true">
+                            <img src="{{ resource.logoUrl|e }}"
+                                 alt=""
+                                 loading="lazy"
+                                 onerror="this.parentElement.innerHTML='B'; this.parentElement.classList.add('card-logo--badge');">
+                        </div>
+                    {% else %}
+                        <div class="card-logo card-logo--badge" aria-hidden="true">B</div>
+                    {% endif %}
+
                     {#
                         Logique deadline :
                         - Resource.deadline est un ?DateTimeInterface dans l'entité.
@@ -879,17 +903,38 @@
                class="grid-card"
                aria-label="Voir l'opportunité : {{ resource.title }}">
 
-                {# Badges en haut de la card grille (type + disciplines) #}
-                <div class="list-card__badges">
-                    {% if resource.resourceType %}
-                        <span class="badge-type">{{ resource.resourceType.name }}</span>
+                {#
+                    ADR-0019 : logo de l'organisme dans la card grille.
+                    Affiché en ligne avec les badges (flex row), ce qui donne
+                    un effet "logo + type" sur la même ligne.
+                    Même logique que la vue liste : image si logoUrl, badge "B" sinon.
+                    aria-hidden="true" car purement décoratif (le titre est le texte accessible).
+                #}
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                    {# Miniature logo grille #}
+                    {% if resource.logoUrl %}
+                        <div class="card-logo" aria-hidden="true">
+                            <img src="{{ resource.logoUrl|e }}"
+                                 alt=""
+                                 loading="lazy"
+                                 onerror="this.parentElement.innerHTML='B'; this.parentElement.classList.add('card-logo--badge');">
+                        </div>
+                    {% else %}
+                        <div class="card-logo card-logo--badge" aria-hidden="true">B</div>
                     {% endif %}
-                    {% for discipline in resource.disciplines|slice(0, 2) %}
-                        <span class="badge-disc">{{ discipline.name }}</span>
-                    {% endfor %}
-                    {% if resource.disciplines|length > 2 %}
-                        <span class="badge-disc">+{{ resource.disciplines|length - 2 }}</span>
-                    {% endif %}
+
+                    {# Badges type + disciplines sur la même ligne que le logo #}
+                    <div class="list-card__badges" style="flex:1; margin-bottom:0;">
+                        {% if resource.resourceType %}
+                            <span class="badge-type">{{ resource.resourceType.name }}</span>
+                        {% endif %}
+                        {% for discipline in resource.disciplines|slice(0, 2) %}
+                            <span class="badge-disc">{{ discipline.name }}</span>
+                        {% endfor %}
+                        {% if resource.disciplines|length > 2 %}
+                            <span class="badge-disc">+{{ resource.disciplines|length - 2 }}</span>
+                        {% endif %}
+                    </div>
                 </div>
 
                 {# Titre : display Archivo Black, 3 lignes max, prend l'espace disponible #}

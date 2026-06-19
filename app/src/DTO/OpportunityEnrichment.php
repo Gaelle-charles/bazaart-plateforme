@@ -15,6 +15,7 @@ namespace App\DTO;
  *   - v1 (initial) : title, description, disciplines (texte libre)
  *   - v2 (ADR-0016 Lot 2 correctif) : ajout city, country, experienceLevel,
  *     disciplinesLabels (tableau contraint à la liste BDD)
+ *   - v3 (ADR-0018) : ajout howToApply, fundingAmount, fundingType
  *
  * POURQUOI UN DTO SÉPARÉ DE ScrapedOpportunity ?
  *   - ScrapedOpportunity représente une opportunité EXTRAITE (lors du scraping initial).
@@ -132,6 +133,52 @@ final readonly class OpportunityEnrichment
          * Null ou tableau vide si aucune discipline détectée.
          */
         public ?array $disciplinesLabels = null,
+
+        /**
+         * Modalités de candidature (comment postuler, quoi envoyer, contact, délai…).
+         * Produit par le LLM à partir du contenu de la page de détail.
+         *
+         * Contenu texte libre (pas de HTML). Peut être nul si la page ne précise
+         * pas les modalités ou si le LLM n'a pas pu les extraire.
+         *
+         * Affiché en tête de la page détail Resource pour guider l'artiste directement.
+         * Max ~8 000 chars (tronqué dans le service si nécessaire).
+         */
+        public ?string $howToApply = null,
+
+        /**
+         * Montant du financement sous forme lisible (ex : "5 000 €", "jusqu'à 10 000 €").
+         * Null si non mentionné dans la page source.
+         * Max 255 chars.
+         */
+        public ?string $fundingAmount = null,
+
+        /**
+         * Nature du financement (ex : "Bourse en argent", "Prise en charge des frais").
+         * Null si non précisé ou indéterminable depuis la page source.
+         * Max 255 chars.
+         */
+        public ?string $fundingType = null,
+
+        // ─── Champs ADR-0019 : lien de candidature + logo ────────────────────
+
+        /**
+         * URL de candidature directe extraite par le LLM (ADR-0019).
+         *
+         * Distingte de l'URL source : pointe vers le formulaire ou la page de dépôt.
+         * Garde anti-hallucination appliquée dans OpportunityEnrichmentService :
+         * l'URL doit être présente dans les liens réels de la page.
+         * Null si aucun lien de candidature trouvé ou si la garde a rejeté la valeur.
+         */
+        public ?string $applicationUrl = null,
+
+        /**
+         * URL du logo de l'organisme (ADR-0019).
+         *
+         * Récupérée par LogoFetcherService sans appel LLM (parsing HTML de la page d'accueil).
+         * Null si aucun logo trouvé ou si le fetch a échoué.
+         */
+        public ?string $logoUrl = null,
     ) {
     }
 
@@ -151,13 +198,18 @@ final readonly class OpportunityEnrichment
     public function isEmpty(): bool
     {
         // On considère le DTO vide uniquement si TOUS les champs sont nuls/vides.
-        // Une description vide + une ville renseignée → on a quand même quelque chose.
+        // ADR-0019 : applicationUrl et logoUrl entrent aussi dans le calcul.
         return $this->title === null
             && ($this->description === null || $this->description === '')
             && ($this->disciplines === null || $this->disciplines === '')
             && ($this->city === null || $this->city === '')
             && ($this->country === null || $this->country === '')
             && $this->experienceLevel === null
-            && ($this->disciplinesLabels === null || $this->disciplinesLabels === []);
+            && ($this->disciplinesLabels === null || $this->disciplinesLabels === [])
+            && ($this->howToApply === null || $this->howToApply === '')
+            && ($this->fundingAmount === null || $this->fundingAmount === '')
+            && ($this->fundingType === null || $this->fundingType === '')
+            && ($this->applicationUrl === null || $this->applicationUrl === '')
+            && ($this->logoUrl === null || $this->logoUrl === '');
     }
 }

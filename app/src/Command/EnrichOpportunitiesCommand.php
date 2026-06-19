@@ -6,6 +6,7 @@ namespace App\Command;
 
 use App\Entity\Resource;
 use App\Entity\ScrapedResource;
+use App\Enum\ExperienceLevel;
 use App\Repository\ResourceRepository;
 use App\Repository\ScrapedResourceRepository;
 use App\Service\OpportunityEnrichmentService;
@@ -356,6 +357,37 @@ class EnrichOpportunitiesCommand extends Command
                     $item->setDisciplines($enrichment->disciplines);
                 }
 
+                // ── ADR-0018 : mise à jour des champs candidature + financement ──
+                // Ces champs sont TOUJOURS mis à jour si le LLM les fournit.
+                // Même logique que les disciplines : on les enrich même sur un record
+                // qui avait déjà une description (ils sont indépendants).
+                // On n'écrase pas une valeur existante par null — on ne met à jour
+                // que si la nouvelle valeur est renseignée.
+                if ($enrichment->howToApply !== null && $enrichment->howToApply !== '') {
+                    $item->setHowToApply($enrichment->howToApply);
+                }
+                if ($enrichment->fundingAmount !== null && $enrichment->fundingAmount !== '') {
+                    $item->setFundingAmount($enrichment->fundingAmount);
+                }
+                if ($enrichment->fundingType !== null && $enrichment->fundingType !== '') {
+                    $item->setFundingType($enrichment->fundingType);
+                }
+
+                // ── ADR-0019 : mise à jour du lien candidature + logo ──────────
+                // applicationUrl : extrait par le LLM (garde anti-hallucination dans EnrichmentService).
+                //   On ne met à jour que si non vide (pas d'écrasement d'une valeur existante).
+                //   Troncature défensive à 500 chars (limite colonne BDD).
+                if ($enrichment->applicationUrl !== null && $enrichment->applicationUrl !== '') {
+                    $item->setApplicationUrl(mb_substr($enrichment->applicationUrl, 0, 500));
+                }
+
+                // logoUrl : récupéré par LogoFetcherService dans OpportunityEnrichmentService::enrich().
+                //   Même règle : on met à jour seulement si non null/vide.
+                //   Si null → pas de changement, le badge "B" sera affiché en front.
+                if ($enrichment->logoUrl !== null && $enrichment->logoUrl !== '') {
+                    $item->setLogoUrl(mb_substr($enrichment->logoUrl, 0, 500));
+                }
+
                 $io->writeln('<info>ENRICHI</info>');
                 $stats['enriched']++;
 
@@ -444,6 +476,55 @@ class EnrichOpportunitiesCommand extends Command
 
                 if ($enrichment->title !== null && $enrichment->title !== '' && $enrichment->description !== null) {
                     $item->setTitle($enrichment->title);
+                }
+
+                // ── ADR-0016 : propagation géographie + niveau d'expérience → Resource ──
+                // Ces champs sont présents sur Resource (ADR-0016 Lot 1) mais n'étaient
+                // pas mis à jour dans ce mode --published. Correction A4 : on les aligne
+                // sur le comportement de processScrapedResources() (cohérence entre les deux modes).
+                // Troncatures défensives identiques à celles de ScrapedResource :
+                //   city          → 150 chars (limite colonne BDD)
+                //   country       → 100 chars (limite colonne BDD)
+                //   experienceLevel → valeur enum (beginner|intermediate|experienced)
+                if ($enrichment->city !== null && $enrichment->city !== '') {
+                    $item->setCity(mb_substr($enrichment->city, 0, 150));
+                }
+                if ($enrichment->country !== null && $enrichment->country !== '') {
+                    $item->setCountry(mb_substr($enrichment->country, 0, 100));
+                }
+                // experienceLevel : le DTO stocke une string ("beginner"|"intermediate"|"experienced")
+                // mais Resource::setExperienceLevel() attend un ExperienceLevel (enum PHP 8.1).
+                // On convertit via ExperienceLevel::tryFrom() — tryFrom retourne null si la valeur
+                // n'est pas un cas valide de l'enum (filet de sécurité supplémentaire).
+                // On ne propage que si la conversion a réussi.
+                if ($enrichment->experienceLevel !== null && $enrichment->experienceLevel !== '') {
+                    $experienceLevelEnum = ExperienceLevel::tryFrom($enrichment->experienceLevel);
+                    if ($experienceLevelEnum !== null) {
+                        $item->setExperienceLevel($experienceLevelEnum);
+                    }
+                }
+
+                // ── ADR-0018 : propagation candidature + financement → Resource ──
+                // Pour les Resource publiées, on met aussi à jour les nouveaux champs.
+                // Même règle : on n'écrase pas une valeur existante par null.
+                if ($enrichment->howToApply !== null && $enrichment->howToApply !== '') {
+                    $item->setHowToApply($enrichment->howToApply);
+                }
+                if ($enrichment->fundingAmount !== null && $enrichment->fundingAmount !== '') {
+                    $item->setFundingAmount($enrichment->fundingAmount);
+                }
+                if ($enrichment->fundingType !== null && $enrichment->fundingType !== '') {
+                    $item->setFundingType($enrichment->fundingType);
+                }
+
+                // ── ADR-0019 : propagation lien candidature + logo → Resource ──
+                // Mêmes règles que pour ScrapedResource (première boucle ci-dessus).
+                // On met à jour uniquement si non null/vide, avec troncature défensive.
+                if ($enrichment->applicationUrl !== null && $enrichment->applicationUrl !== '') {
+                    $item->setApplicationUrl(mb_substr($enrichment->applicationUrl, 0, 500));
+                }
+                if ($enrichment->logoUrl !== null && $enrichment->logoUrl !== '') {
+                    $item->setLogoUrl(mb_substr($enrichment->logoUrl, 0, 500));
                 }
 
                 $io->writeln('<info>ENRICHI</info>');

@@ -474,6 +474,17 @@ class ImportGrantCsvCommand extends Command
                         $scraped->setDisciplines(mb_substr($enrichment->disciplines, 0, 150));
                     }
 
+                    // ── ADR-0019 : lien candidature + logo ───────────────────────
+                    // applicationUrl : URL directe du bouton candidater (extrait par LLM + garde).
+                    // logoUrl : URL du logo (fetché par LogoFetcherService sans LLM).
+                    // Troncature défensive à 500 chars (limite colonne BDD).
+                    if ($enrichment->applicationUrl !== null && $enrichment->applicationUrl !== '') {
+                        $scraped->setApplicationUrl(mb_substr($enrichment->applicationUrl, 0, 500));
+                    }
+                    if ($enrichment->logoUrl !== null && $enrichment->logoUrl !== '') {
+                        $scraped->setLogoUrl(mb_substr($enrichment->logoUrl, 0, 500));
+                    }
+
                     $io->writeln('<info>ENRICHI</info>');
                     $enrichedCount++;
 

@@ -7,6 +7,7 @@ namespace App\Service;
 use App\DTO\ScrapedOpportunity;
 use App\Repository\DisciplineRepository;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
@@ -64,9 +65,10 @@ class LlmExtractorService
 
     /**
      * Nombre maximum de tokens en réponse.
-     * 2000 tokens ≈ ~8 opportunités bien décrites, largement suffisant.
+     * ADR-0018 : on monte à 3 500 tokens pour accueillir les 3 nouveaux champs
+     * (howToApply peut être verbeux) sans tronquer les opportunités en bout de liste.
      */
-    private const MAX_TOKENS = 2000;
+    private const MAX_TOKENS = 3500;
 
     /**
      * Taille maximale du texte envoyé au LLM (en caractères).
@@ -549,6 +551,9 @@ PROMPT;
      *   - 'mistral'   → callMistralApi() (Mistral Small 3.2, response_format json natif)
      *   - 'anthropic' → callAnthropicApi() (Claude Haiku, comportement historique)
      *
+     * ADR-0019 : les liens de la page HTML brute sont extraits AVANT le nettoyage
+     * et passés au LLM pour permettre l'extraction d'applicationUrl sans hallucination.
+     *
      * @param string $htmlContent Contenu HTML brut de la page (sera nettoyé en interne)
      * @param string $sourceUrl   URL source de la page (pour fallback si LLM ne trouve pas l'URL)
      * @param string $sourceSite  Nom du site (ex: "on-the-move.org") — champ source du DTO
@@ -563,6 +568,15 @@ PROMPT;
         // L'admin peut choisir 'mistral' (recommandé) ou 'anthropic' (fallback) depuis /admin/settings.
         // Valeur par défaut : 'mistral' (Mistral Small 3.2 — JSON natif, moins cher).
         $provider = $this->settingService->get('llm_provider', 'mistral');
+
+        // ── Étape 1bis : extraire les liens de la page AVANT le nettoyage HTML ─
+        // ADR-0019 : la garde anti-hallucination pour applicationUrl exige que l'on
+        // fournisse au LLM la liste des liens réels de la page.
+        // On extrait les liens depuis le HTML BRUT (avant strip_tags) pour avoir
+        // accès aux attributs href — ils seraient perdus après le nettoyage.
+        // extractPageLinksForLlm() retourne une string formatée "- url1\n- url2\n..."
+        // (max 100 URLs pour limiter les tokens).
+        $pageLinksContext = $this->extractPageLinksForLlm($htmlContent, $sourceUrl);
 
         // ── Étape 2 : nettoyer le HTML ─────────────────────────────────────────
         // Supprime les balises HTML, les blocs nav/header/footer, et normalise les espaces.
@@ -581,7 +595,7 @@ PROMPT;
         try {
             if ($provider === 'mistral') {
                 // Mistral : JSON object natif, pas de regex pour extraire le JSON
-                return $this->callMistralApi($cleanText, $sourceUrl, $sourceSite);
+                return $this->callMistralApi($cleanText, $sourceUrl, $sourceSite, $pageLinksContext);
             }
 
             // Fallback Anthropic (comportement historique — conservé intégralement)
@@ -595,7 +609,7 @@ PROMPT;
                 return [];
             }
 
-            return $this->callAnthropicApi($apiKey, $cleanText, $sourceUrl, $sourceSite);
+            return $this->callAnthropicApi($apiKey, $cleanText, $sourceUrl, $sourceSite, $pageLinksContext);
 
         } catch (\Exception $e) {
             // On log l'erreur mais on ne la propage jamais — le scraper continue sans planter
@@ -610,6 +624,116 @@ PROMPT;
             );
             return [];
         }
+    }
+
+    /**
+     * Extrait les liens de la page HTML pour les fournir au LLM (garde anti-hallucination ADR-0019).
+     *
+     * BUT : Le LLM doit identifier applicationUrl PARMI les liens réels de la page.
+     * Cette méthode extrait tous les <a href> du HTML brut et retourne leur liste
+     * sous forme compacte (une URL par ligne, préfixée par "- ").
+     *
+     * LIMITES :
+     *   - Max 100 URLs (évite de surcharger le prompt avec des milliers de liens)
+     *   - Seulement les URLs http(s) — on exclut mailto:, tel:, #ancres, javascript:
+     *   - Déduplication : une URL ne peut apparaître qu'une seule fois dans la liste
+     *   - Résolution des URLs relatives en absolues (grâce à $baseUrl)
+     *
+     * RETOUR : string formatée "- https://url1\n- https://url2\n..."
+     * Chaîne vide si aucun lien HTTP(s) trouvé (les ancres seules, par exemple).
+     *
+     * @param string $html    HTML brut de la page (AVANT nettoyage)
+     * @param string $baseUrl URL de la page source (pour résoudre les relatifs)
+     * @return string Liste des liens formatée pour injection dans le prompt LLM
+     */
+    public function extractPageLinksForLlm(string $html, string $baseUrl): string
+    {
+        // DomCrawler est déjà utilisé dans LinkExtractorService — on suit le même pattern.
+        // Ici on l'instancie directement car on n'a pas besoin du pipeline de filtrage
+        // de LinkExtractorService (qui est conçu pour la découverte de SOURCES, pas pour
+        // la liste des liens d'une page d'opportunité).
+        $crawler = new Crawler($html);
+
+        /** @var array<string, true> $seen Déduplication par URL normalisée */
+        $seen  = [];
+        $links = [];
+
+        $crawler->filter('a[href]')->each(function (Crawler $node) use (&$seen, &$links, $baseUrl): void {
+            // Plafond de 100 liens — suffisant pour couvrir les boutons de candidature
+            if (count($links) >= 100) {
+                return;
+            }
+
+            $href = trim($node->attr('href') ?? '');
+
+            if ($href === '' || str_starts_with($href, '#')
+                || str_starts_with($href, 'mailto:')
+                || str_starts_with($href, 'tel:')
+                || str_starts_with($href, 'javascript:')) {
+                return; // Liens non-HTTP → ignorés
+            }
+
+            // Résolution des URLs relatives
+            $absolute = $this->resolveHrefToAbsolute($href, $baseUrl);
+            if ($absolute === null) {
+                return;
+            }
+
+            // Déduplication : on n'ajoute chaque URL qu'une seule fois
+            if (isset($seen[$absolute])) {
+                return;
+            }
+            $seen[$absolute] = true;
+            $links[] = $absolute;
+        });
+
+        if (empty($links)) {
+            return '';
+        }
+
+        // Format compact pour le prompt : "- https://url1\n- https://url2\n..."
+        return implode("\n", array_map(static fn (string $l): string => '- ' . $l, $links));
+    }
+
+    /**
+     * Résout un href brut en URL absolue.
+     *
+     * Méthode privée utilitaire pour extractPageLinksForLlm().
+     * Similaire à LinkExtractorService::resolveUrl() mais simplifiée
+     * (on n'a pas besoin de la gestion des ports ici).
+     *
+     * @param string $href    Valeur brute de href (peut être relative)
+     * @param string $baseUrl URL de la page (pour résoudre les relatifs)
+     * @return string|null URL absolue ou null si non résolvable
+     */
+    private function resolveHrefToAbsolute(string $href, string $baseUrl): ?string
+    {
+        // Déjà absolue
+        if (str_starts_with($href, 'http://') || str_starts_with($href, 'https://')) {
+            return $href;
+        }
+
+        // Protocole-relative
+        if (str_starts_with($href, '//')) {
+            return 'https:' . $href;
+        }
+
+        // Relative — on a besoin du baseUrl
+        $parts = parse_url($baseUrl);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return null;
+        }
+
+        $scheme = $parts['scheme'] ?? 'https';
+        $host   = $parts['host'];
+
+        if (str_starts_with($href, '/')) {
+            return $scheme . '://' . $host . $href;
+        }
+
+        // Relatif chemin
+        $basePath = isset($parts['path']) ? dirname($parts['path']) : '';
+        return $scheme . '://' . $host . rtrim($basePath, '/') . '/' . ltrim($href, '/');
     }
 
     /**
@@ -751,6 +875,11 @@ PROMPT;
     /**
      * Effectue l'appel HTTP à l'API Anthropic et retourne les opportunités extraites.
      *
+     * ADR-0019 : $pageLinksContext contient la liste des liens réels de la page
+     * formatée pour le prompt (une URL par ligne, préfixée par "- ").
+     * Ce contexte est ajouté au message utilisateur pour permettre au LLM
+     * d'identifier applicationUrl PARMI des liens réels (garde anti-hallucination).
+     *
      * @throws \Exception En cas d'erreur HTTP ou de JSON invalide
      * @return ScrapedOpportunity[]
      */
@@ -759,6 +888,7 @@ PROMPT;
         string $cleanText,
         string $sourceUrl,
         string $sourceSite,
+        string $pageLinksContext = '',
     ): array {
         // ── Construction du prompt système ─────────────────────────────────────
         // ADR-0016 Lot 1 : ajout des champs city, country, experienceLevel, disciplines contraints.
@@ -770,7 +900,18 @@ PROMPT;
         //   On passe la liste exacte des disciplines BDD pour que le LLM choisisse
         //   parmi elles plutôt qu'inventer des libellés libres.
         //   Si aucune discipline ne correspond, le LLM doit retourner [].
+        // ── ADR-0018 : enrichissement du prompt Anthropic ─────────────────────
+        // Ajout des champs howToApply, fundingAmount, fundingType.
+        // Consigne renforcée pour la description : complète et structurée OBLIGATOIRE.
         $disciplinesList = $this->buildDisciplinesListForPrompt();
+
+        // ── ADR-0019 : les liens de la page sont transmis via le paramètre $pageLinksContext ──
+        // Le paramètre est déjà rempli par l'appelant (callAnthropicApi reçoit
+        // $pageLinksContext en 5e argument depuis extractFromHtml()).
+        // On l'injecte directement dans le userMessage ci-dessous.
+        // Si vide (HTML sans liens ou appelant ne l'a pas fourni) → le LLM
+        // retournera "" pour applicationUrl (comportement normal attendu).
+
         $systemPrompt = <<<PROMPT
 Tu es un extracteur d'opportunités artistiques et culturelles. Analyse le contenu fourni et extrait TOUTES les opportunités (appels à projets, résidences, bourses, financements, prix, concours) présentes.
 
@@ -782,21 +923,28 @@ Pour chaque opportunité, retourne un objet JSON avec exactement ces champs :
 - city (string) : ville principale où se déroule l'opportunité (ex: "Paris", "Lyon", "Bruxelles") sinon ""
 - disciplines (array) : tableau des disciplines artistiques parmi la liste suivante UNIQUEMENT : [$disciplinesList]. Retourne [] si aucune ne correspond.
 - experienceLevel (string) : niveau d'expérience requis — "beginner" (débutant), "intermediate" (intermédiaire), "experienced" (expérimenté) — ou "" si non précisé / tous niveaux
-- montant (string) : montant si mentionné (ex: "5 000 €") sinon ""
+- fundingAmount (string) : montant exact si mentionné (ex: "5 000 €", "jusqu'à 10 000 €", "non précisé"), sinon ""
+- fundingType (string) : nature du financement (ex: "Bourse en argent", "Prise en charge des frais", "Prix non monétaire"), sinon ""
+- howToApply (string) : modalités de candidature complètes — comment postuler, quoi envoyer, contact ou lien, dates clés. Si absent : "". Max 800 caractères.
+- applicationUrl (string) : ADR-0019 — URL du bouton "Candidater / Postuler / Apply / Submit / Déposer / Register" si elle se trouve dans la liste de liens fournie. IMPORTANT : tu dois UNIQUEMENT retourner une URL présente dans la liste de liens — si aucun lien ne correspond à une action de candidature, retourne "". Ne pas inventer d'URL.
 - publicEligible (string) : public éligible si mentionné sinon ""
 - deadline (string) : date limite au format ISO 8601 (AAAA-MM-JJ) si trouvée sinon ""
-- description (string) : description courte max 200 caractères
+- description (string) : OBLIGATOIRE — description COMPLÈTE et STRUCTURÉE de l'opportunité en sections claires. Inclus TOUJOURS : présentation générale, objectifs/bénéfices, critères d'éligibilité, financement/dotation si précisé. Format : sections séparées par des sauts de ligne. Ne te contente PAS d'une phrase : produis une description détaillée à partir des informations de la page. Si une information manque, indique "non précisé" plutôt que de l'inventer. Max 1000 caractères.
 - url (string) : URL de l'opportunité si trouvée sinon celle de la page source
 
 Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour. Si aucune opportunité trouvée, réponds [].
 PROMPT;
 
         // ── Construction du message utilisateur ────────────────────────────────
-        // On inclut l'URL source pour que le LLM puisse l'utiliser comme fallback
-        // quand il ne trouve pas de lien spécifique pour une opportunité
+        // On inclut l'URL source + la liste des liens de la page (ADR-0019).
+        // La liste des liens permet au LLM de choisir applicationUrl PARMI eux
+        // (garde anti-hallucination : pas d'URL inventée).
         $userMessage = sprintf(
-            "URL de la page source : %s\n\nContenu de la page :\n%s",
+            "URL de la page source : %s\n\n%sContenu de la page :\n%s",
             $sourceUrl,
+            $pageLinksContext !== ''
+                ? "Liens présents sur la page (pour applicationUrl UNIQUEMENT) :\n" . $pageLinksContext . "\n\n"
+                : '',
             $cleanText
         );
 
@@ -839,7 +987,7 @@ PROMPT;
 
         // ── Décodage de la réponse JSON ────────────────────────────────────────
         // La réponse Anthropic a la structure :
-        // { "content": [{ "type": "text", "text": "[{...}]" }], ... }
+        // { "content": [{ "type": "text", "text": "[{...}]" }], "stop_reason": "...", ... }
         $responseData = $response->toArray();
 
         // Extraire le texte de la réponse LLM
@@ -851,6 +999,24 @@ PROMPT;
                 ['source' => $sourceSite]
             );
             return [];
+        }
+
+        // ── C2 : détection de troncature par max_tokens (Anthropic) ──────────
+        // stop_reason === 'max_tokens' signifie que Claude a arrêté de générer parce
+        // que le quota de tokens est épuisé, PAS parce qu'il a terminé normalement.
+        // Le JSON peut être tronqué en milieu de valeur → on avertit le développeur.
+        // On continue le parsing normalement : parfois le JSON reste exploitable
+        // (la troncature arrive après la dernière opportunité).
+        $stopReason = $responseData['stop_reason'] ?? '';
+        if ($stopReason === 'max_tokens') {
+            $this->logger->warning(
+                '[LlmExtractor] Réponse Anthropic tronquée par max_tokens (callAnthropicApi). '
+                . 'Le JSON peut être incomplet — envisager d\'augmenter MAX_TOKENS.',
+                [
+                    'source'     => $sourceSite,
+                    'max_tokens' => self::MAX_TOKENS,
+                ]
+            );
         }
 
         // ── Parsing du JSON retourné par le LLM ───────────────────────────────
@@ -885,6 +1051,9 @@ PROMPT;
      *   Pas besoin de regex pour extraire le JSON du texte — il est TOUJOURS structuré.
      *   On demande {"opportunites": [...]} car json_object exige un objet JSON (pas un tableau direct).
      *
+     * ADR-0019 : $pageLinksContext contient la liste des liens réels de la page.
+     * Injecté dans le message utilisateur pour la garde anti-hallucination applicationUrl.
+     *
      * Format de la réponse Mistral :
      *   { "choices": [{ "message": { "content": "{\"opportunites\": [...]}" } }] }
      *
@@ -895,8 +1064,12 @@ PROMPT;
      * @return ScrapedOpportunity[]
      * @throws \Exception En cas d'erreur HTTP (capturée par extractFromHtml)
      */
-    private function callMistralApi(string $cleanText, string $sourceUrl, string $sourceSite): array
-    {
+    private function callMistralApi(
+        string $cleanText,
+        string $sourceUrl,
+        string $sourceSite,
+        string $pageLinksContext = '',
+    ): array {
         // Lecture de la clé API depuis les settings BDD
         $apiKey = $this->settingService->get('mistral_api_key');
 
@@ -911,6 +1084,7 @@ PROMPT;
 
         // ── Construction du prompt système ────────────────────────────────────
         // ADR-0016 Lot 1 : ajout des champs city, country, experienceLevel, disciplines contraints.
+        // ADR-0018 : ajout howToApply, fundingAmount, fundingType + description enrichie obligatoire.
         //
         // On demande explicitement la clé "opportunites" car response_format json_object
         // exige un objet JSON (pas un tableau direct) — {"opportunites": [...]} est la convention.
@@ -930,18 +1104,27 @@ Retourne un objet JSON avec une clé "opportunites" contenant un tableau. Chaque
 - city (string) : ville où se déroule l'opportunité (ex: "Paris", "Lyon") sinon ""
 - disciplines (array) : tableau des disciplines artistiques parmi cette liste UNIQUEMENT : [$disciplinesList]. Retourne [] si aucune ne correspond.
 - experienceLevel (string) : niveau requis — "beginner", "intermediate", "experienced" — ou "" si non précisé / tous niveaux
-- montant (string) : montant si mentionné, sinon ""
+- fundingAmount (string) : montant exact si mentionné (ex: "5 000 €", "jusqu'à 10 000 €"), sinon ""
+- fundingType (string) : nature du financement (ex: "Bourse en argent", "Prise en charge des frais"), sinon ""
+- howToApply (string) : modalités de candidature complètes — comment postuler, quoi envoyer, contact ou lien, dates clés. Si absent : "". Max 800 caractères.
+- applicationUrl (string) : ADR-0019 — URL du bouton "Candidater / Postuler / Apply / Submit / Déposer / Register" si elle se trouve dans la liste de liens fournie en début de message. IMPORTANT : retourne UNIQUEMENT une URL présente dans cette liste. Ne pas inventer d'URL. Retourne "" si aucun lien ne correspond.
 - publicEligible (string) : public éligible si mentionné, sinon ""
 - deadline (string) : date limite ISO 8601 (AAAA-MM-JJ) si trouvée, sinon ""
-- description (string) : description courte max 200 caractères
+- description (string) : OBLIGATOIRE — description COMPLÈTE et STRUCTURÉE en sections claires (présentation, objectifs/bénéfices, éligibilité, financement). Sections séparées par des sauts de ligne. Ne te contente PAS d'une phrase : produis une description détaillée à partir du contenu de la page. Si une info manque, indique "non précisé" sans inventer. Max 1000 caractères.
 - url (string) : URL de l'opportunité ou URL de la page source si introuvable
 
 Si aucune opportunité trouvée, retourne {"opportunites": []}.
 PROMPT;
 
+        // ── ADR-0019 : ajout de la liste des liens au message utilisateur ─────
+        // Les liens réels de la page sont fournis AVANT le contenu textuel pour
+        // que le LLM puisse identifier applicationUrl parmi eux (garde anti-hallucination).
         $userMessage = sprintf(
-            "URL de la page source : %s\n\nContenu :\n%s",
+            "URL de la page source : %s\n\n%sContenu :\n%s",
             $sourceUrl,
+            $pageLinksContext !== ''
+                ? "Liens présents sur la page (pour applicationUrl UNIQUEMENT) :\n" . $pageLinksContext . "\n\n"
+                : '',
             $cleanText
         );
 
@@ -980,6 +1163,25 @@ PROMPT;
         if (empty($rawText)) {
             $this->logger->warning('[LlmExtractor] Réponse Mistral vide', ['source' => $sourceSite]);
             return [];
+        }
+
+        // ── C2 : détection de troncature par max_tokens (Mistral) ────────────
+        // finish_reason === 'length' signifie que Mistral a arrêté de générer parce
+        // que le quota de tokens est épuisé, PAS parce qu'il a terminé normalement.
+        // Dans ce cas le JSON peut être tronqué en milieu de valeur → avertir le
+        // développeur pour qu'il augmente MAX_TOKENS si cela se produit trop souvent.
+        // On continue le parsing normalement : parfois le JSON est encore valide
+        // (la troncature arrive après la dernière opportunité) et on récupère ce qu'on peut.
+        $finishReason = $data['choices'][0]['finish_reason'] ?? '';
+        if ($finishReason === 'length') {
+            $this->logger->warning(
+                '[LlmExtractor] Réponse Mistral tronquée par max_tokens (callMistralApi). '
+                . 'Le JSON peut être incomplet — envisager d\'augmenter MAX_TOKENS.',
+                [
+                    'source'     => $sourceSite,
+                    'max_tokens' => self::MAX_TOKENS,
+                ]
+            );
         }
 
         try {
@@ -1091,14 +1293,31 @@ PROMPT;
      *   titre            → title
      *   type             → type
      *   url              → url
-     *   description      → description
+     *   description      → description (COMPLÈTE et STRUCTURÉE — ADR-0018)
      *   deadline         → deadline (string ISO 8601 ou vide)
      *   disciplines      → disciplines (string CSV rétrocompat) + disciplinesLabels (tableau)
      *   country          → country (ADR-0016 Lot 1 — pays en clair)
      *   city             → city    (ADR-0016 Lot 1 — ville)
      *   experienceLevel  → experienceLevel (ADR-0016 Lot 1 — "beginner"|"intermediate"|"experienced"|"")
+     *   fundingAmount    → fundingAmount (ADR-0018 — montant lisible)
+     *   fundingType      → fundingType   (ADR-0018 — nature du financement)
+     *   howToApply       → howToApply    (ADR-0018 — modalités de candidature)
+     *   applicationUrl   → applicationUrl (ADR-0019 — lien candidature, garde anti-hallucination)
      *   (documents non cherchés par le LLM → string vide)
      *   (relevanceScore → 0, recalculé par AfrodiasporaRelevanceScorer dans la commande)
+     *   (logoUrl → '' ici, rempli par LogoFetcherService dans EnrichOpportunitiesCommand)
+     *
+     * GARDE ANTI-HALLUCINATION applicationUrl (ADR-0019) :
+     *   Le LLM ne doit retourner QUE des URLs présentes dans la liste fournie dans le prompt.
+     *   Mais on ne peut pas faire confiance à 100 % au LLM — il peut quand même halluciner.
+     *   On valide ici que l'URL retournée (si non vide) :
+     *     1. Est une URL HTTP(s) valide (filter_var)
+     *     2. EST différente de l'URL source (sinon c'est un fallback inutile)
+     *     3. N'est PAS manifestement inventée (on vérifie que le host est parseable)
+     *   Si la validation échoue → '' (on rejette silencieusement, log en debug).
+     *   Note : on ne re-vérifie PAS que l'URL est dans $pageLinks car mapItemsToOpportunities
+     *   n'a pas accès à cette liste. La consigne dans le prompt fait le travail principal.
+     *   Cette validation PHP est la seconde ligne de défense.
      *
      * @param array<int, array<string, mixed>> $items     Items JSON du LLM
      * @param string                           $sourceUrl URL de la page source
@@ -1125,37 +1344,24 @@ PROMPT;
                 $url = $sourceUrl;
             }
 
-            // Enrichissement de la description avec l'organisme, le pays et le montant
+            // ── ADR-0018 : description COMPLÈTE et STRUCTURÉE ─────────────────
+            //
+            // CHANGEMENT DE COMPORTEMENT PAR RAPPORT À L'ANCIEN CODE :
+            //   AVANT : la description était une "description courte" de 200 chars
+            //           enrichie avec organisme + pays + montant en préfixe.
+            //   MAINTENANT : le prompt demande une description COMPLÈTE et STRUCTURÉE.
+            //   On NE préfixe PLUS avec organisme/pays/montant (ces infos sont dans
+            //   les champs dédiés : fundingAmount, fundingType, country, city).
+            //
+            // On prend la description brute du LLM et on la tronque à 1 500 chars
+            // (garde-fou défensif : le prompt dit 1 000 chars, on prend 1 500 pour
+            // la marge et pour l'affichage en page détail qui peut montrer plus).
             $description = trim((string) ($item['description'] ?? ''));
-            $organisme   = trim((string) ($item['organisme'] ?? ''));
-            // country remplace l'ancien champ "pays" dans le prompt enrichi ADR-0016
-            $pays        = trim((string) ($item['country'] ?? $item['pays'] ?? ''));
-            $montant     = trim((string) ($item['montant'] ?? ''));
-
-            // Construction d'un contexte supplémentaire à ajouter à la description
-            $contextParts = [];
-            if (!empty($organisme)) {
-                $contextParts[] = $organisme;
-            }
-            if (!empty($pays)) {
-                $contextParts[] = $pays;
-            }
-            if (!empty($montant)) {
-                $contextParts[] = 'Montant : ' . $montant;
-            }
-
-            if (!empty($contextParts)) {
-                $context = implode(' · ', $contextParts);
-                // Ajouter le contexte au début de la description (séparé par un tiret)
-                $description = !empty($description)
-                    ? $context . ' — ' . $description
-                    : $context;
-            }
-
-            // Tronquer la description à 200 caractères — convention du projet (A2 corrigé).
-            // La valeur 300 qui existait ici était incohérente avec le commentaire "200 chars".
-            // 200 chars est la limite affichée dans l'interface admin (colonne description).
-            $description = mb_substr($description, 0, 200);
+            // Tronquage défensif : le prompt dit 1 000 chars mais le LLM peut déborder.
+            // 1 500 chars est notre limite PHP interne pour ce point d'entrée (scraping liste).
+            // OpportunityEnrichmentService a sa propre limite plus haute (3 000 chars)
+            // car il lit la page COMPLÈTE — plus de contenu disponible.
+            $description = mb_substr($description, 0, 1500);
 
             // ── ADR-0016 Lot 1 : extraction des nouveaux champs ───────────────
 
@@ -1170,11 +1376,12 @@ PROMPT;
             // Fallback sur l'ancien champ "pays" pour rétrocompatibilité si un seul appel LLM
             // utilisait l'ancien prompt (ex: appel Anthropic avec l'ancien code).
             // Troncature à 100 caractères : même raison que city (longueur colonne).
-            $country = mb_substr($pays, 0, 100); // $pays = $item['country'] ?? $item['pays'] ci-dessus
+            $pays    = trim((string) ($item['country'] ?? $item['pays'] ?? ''));
+            $country = mb_substr($pays, 0, 100);
 
             // Extraction du niveau d'expérience
             // Le LLM doit retourner "beginner", "intermediate", "experienced" ou ""
-            $rawLevel       = trim((string) ($item['experienceLevel'] ?? ''));
+            $rawLevel        = trim((string) ($item['experienceLevel'] ?? ''));
             $experienceLevel = in_array($rawLevel, ['beginner', 'intermediate', 'experienced'], true)
                 ? $rawLevel
                 : ''; // Valeur invalide → on ignore, "" = tous niveaux
@@ -1212,6 +1419,62 @@ PROMPT;
             // Il est déduit de $disciplinesLabels.
             $disciplinesString = implode(', ', $disciplinesLabels);
 
+            // ── ADR-0018 : extraction des champs financement + candidature ─────
+
+            // Montant du financement — tronqué à 255 chars (limite colonne BDD).
+            // Le LLM peut retourner une chaîne verbose — on la garde courte.
+            $fundingAmount = mb_substr(trim((string) ($item['fundingAmount'] ?? '')), 0, 255);
+
+            // Nature du financement — tronqué à 255 chars.
+            $fundingType = mb_substr(trim((string) ($item['fundingType'] ?? '')), 0, 255);
+
+            // Modalités de candidature — TEXT en BDD, pas de limite serrée,
+            // mais on borne défensivement à 8 000 chars pour éviter un débordement
+            // en cas de réponse LLM anormalement longue.
+            $howToApply = mb_substr(trim((string) ($item['howToApply'] ?? '')), 0, 8000);
+
+            // ── ADR-0019 : extraction et validation de applicationUrl ──────────
+            //
+            // Le LLM a reçu la liste des liens réels de la page dans le prompt.
+            // Il doit retourner l'URL de candidature parmi eux.
+            // Garde anti-hallucination côté PHP (2e ligne de défense) :
+            //   1. L'URL doit être non vide et valide (filter_var FILTER_VALIDATE_URL)
+            //   2. Elle doit être différente de l'URL source ($url)
+            //      → si le LLM retourne l'URL source comme "applicationUrl",
+            //        c'est un fallback inutile (on a déjà externalUrl pour ça)
+            //   3. Le host doit être parseable (URL bien formée)
+            //
+            // On ne vérifie PAS que l'URL figure dans la liste envoyée au LLM car
+            // mapItemsToOpportunities() n'a pas accès à cette liste.
+            // La consigne dans le prompt reste la 1re ligne de défense.
+            $rawApplicationUrl = mb_substr(trim((string) ($item['applicationUrl'] ?? '')), 0, 500);
+            $applicationUrl = '';
+
+            if ($rawApplicationUrl !== '') {
+                // Validation HTTP(s) stricte
+                if (filter_var($rawApplicationUrl, FILTER_VALIDATE_URL) !== false
+                    && (str_starts_with($rawApplicationUrl, 'http://') || str_starts_with($rawApplicationUrl, 'https://'))
+                    && $rawApplicationUrl !== $url  // Distinct de l'URL source
+                ) {
+                    // Vérifier que le host est parseable (URL bien formée)
+                    $parsedHost = parse_url($rawApplicationUrl, PHP_URL_HOST);
+                    if (is_string($parsedHost) && $parsedHost !== '') {
+                        $applicationUrl = $rawApplicationUrl;
+                    } else {
+                        $this->logger->debug('[LlmExtractor] applicationUrl rejetée (host non parseable).', [
+                            'url_proposee' => $rawApplicationUrl,
+                            'source'       => $sourceSite,
+                        ]);
+                    }
+                } else {
+                    $this->logger->debug('[LlmExtractor] applicationUrl rejetée (invalide ou identique à URL source).', [
+                        'url_proposee' => $rawApplicationUrl,
+                        'url_source'   => $url,
+                        'source'       => $sourceSite,
+                    ]);
+                }
+            }
+
             $opportunities[] = new ScrapedOpportunity(
                 title: $title,
                 type: $this->normalizeType((string) ($item['type'] ?? '')),
@@ -1227,6 +1490,14 @@ PROMPT;
                 country: $country,
                 experienceLevel: $experienceLevel,
                 disciplinesLabels: $disciplinesLabels,
+                howToApply: $howToApply,
+                fundingAmount: $fundingAmount,
+                fundingType: $fundingType,
+                // ADR-0019 : lien candidature (validé ci-dessus) et logo (rempli plus tard)
+                // logoUrl est laissé à '' ici — il sera rempli par LogoFetcherService
+                // dans EnrichOpportunitiesCommand ou OpportunityEnrichmentService.
+                applicationUrl: $applicationUrl,
+                logoUrl: '',
             );
         }
 
