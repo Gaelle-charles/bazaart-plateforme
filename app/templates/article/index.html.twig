@@ -63,8 +63,16 @@
         letter-spacing: -.03em;
     }
 
-    /* Ligne secondaire du titre (même style, bloc séparé pour la sémantique) */
-    .art-header__title span {
+    /*
+     * Ligne secondaire du titre : "Vous lisez." forcé sur sa propre ligne.
+     * On cible la classe .art-header__title__line2 (plutôt que le sélecteur
+     * générique "span") pour ne PAS toucher les .tr-block-wrap et .tr-block
+     * que title-reveal.js injecte dans le h1 lors de l'animation.
+     * Ces wrappers ont besoin de display:inline-block (title-reveal.css) :
+     * un sélecteur "span" trop large écraserait cette règle et casserait
+     * le positionnement horizontal des blocs animés.
+     */
+    .art-header__title__line2 {
         display: block;
     }
 
@@ -369,11 +377,26 @@
         Le journal de Bazaart
     </p>
 
-    {# Titre en deux lignes — l'effet typographique principal de ce design #}
-    <h1 class="art-header__title">
-        <span>On écrit.</span>
-        <span>Vous lisez.</span>
-    </h1>
+    {#
+        Titre en deux lignes — l'effet typographique principal de ce design.
+
+        STRUCTURE IMPORTANTE pour title-reveal.js :
+        Le JS cherche le PREMIER NŒUD TEXTE direct du h1 pour isoler le
+        premier mot (bloc gauche) du reste (bloc droit). Si le h1 commence
+        par un élément HTML (<span>, <br>, etc.), le JS ne peut pas faire la
+        découpe et tombe en mode "un seul bloc" (moins expressif).
+
+        Solution : "On écrit." est du TEXTE PUR direct dans le h1 (pas dans
+        un <span>). Le JS trouve ce texte, isole "On" en bloc gauche et
+        "écrit. Vous lisez." en bloc droit. L'animation deux-blocs s'applique.
+
+        "Vous lisez." reste dans un <span> pour que le CSS
+        `.art-header__title span { display:block; }` le force sur sa propre
+        ligne. Sans JS, le rendu est identique à l'ancien (On écrit. / Vous
+        lisez. sur deux lignes distinctes). Avec le JS, le premier mot "On"
+        part vers la gauche et le reste (écrit. / Vous lisez.) vers la droite.
+    #}
+    <h1 class="art-header__title">On écrit. <span class="art-header__title__line2">Vous lisez.</span></h1>
 
     {#
         Bouton "Écrire un article +" visible uniquement pour les admins.

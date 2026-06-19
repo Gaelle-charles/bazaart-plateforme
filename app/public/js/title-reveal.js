@@ -96,7 +96,7 @@
        PÉRIMÈTRE : on limite la portée aux éléments dans main / #main-content
        (voir l'appel querySelectorAll plus bas).
 
-       EXCLUSION EXPLICITE du H1 hero : il est animé par le JS scroll-expand
+       EXCLUSION EXPLICITE du H1 hero : il est animé par le JS scroll-driven
        de index.html.twig. L'attribut data-no-reveal="true" posé sur ce H1
        permet de l'exclure sans avoir à connaître sa classe exacte ici.
 
@@ -134,7 +134,7 @@
     ].join(', ');
 
     /* ── 3. PARAMÈTRES D'ANIMATION — COPIÉS DU HERO ───────────────────────
-       Ces valeurs sont IDENTIQUES à celles du JS scroll-expand du hero
+       Ces valeurs sont IDENTIQUES à celles du JS scroll-driven du hero
        (index.html.twig) pour garantir un ressenti visuel uniforme.
 
        TITLE_SPREAD_DESKTOP : amplitude de déplacement horizontal en px
@@ -295,8 +295,16 @@
         /* ── Remplacement du contenu de el ───────────────────────────────
            On vide le titre et on insère les deux blocs.
            Si leadingWS est non vide (indentation Twig), on peut l'ignorer
-           car les espaces de début d'un titre sont invisibles. */
-        el.textContent = ''; /* vide proprement (supprime TOUS les nœuds enfants) */
+           car les espaces de début d'un titre sont invisibles.
+
+           Pourquoi while() plutôt que textContent='' ?
+           Certains nœuds ont déjà été déplacés dans spanLeft/spanRight
+           via appendChild() — ils ne sont plus enfants de el mais de leurs
+           nouveaux parents. textContent='' sur el supprimerait AUSSI ces
+           nœuds déplacés si le navigateur les avait gardés en mémoire tampon.
+           La boucle while ne retire que ce qui est ENCORE enfant direct de el,
+           garantissant un DOM propre sans effet de bord. */
+        while (el.firstChild) { el.removeChild(el.firstChild); }
         el.appendChild(wrapLeft);
 
         /* Espace blanc entre les deux blocs : reproduit l'espace naturel
@@ -335,7 +343,9 @@
         }
 
         wrap.appendChild(span);
-        el.textContent = '';
+        /* Même raison que dans armTwoBlocks : boucle while pour vider el
+           sans risquer d'affecter les nœuds déjà déplacés dans span. */
+        while (el.firstChild) { el.removeChild(el.firstChild); }
         el.appendChild(wrap);
 
         el._trBlocks = [

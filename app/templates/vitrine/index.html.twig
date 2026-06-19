@@ -776,12 +776,14 @@
     letter-spacing: -.02em;
     margin:         0;
     color:          var(--ink);
-    /* nowrap : interdit le retour à la ligne AUTOMATIQUE (donc plus de mot
-       coupé en plein milieu). Les retours volontaires "INGÉNIERIE<br>CULTURELLE"
-       restent respectés car un <br> force le saut même en nowrap.
-       Plus besoin d'overflow-wrap / word-break : le dimensionnement en cqi
-       garantit déjà que le mot tient dans la colonne. */
-    white-space:    nowrap;
+    /* white-space:normal : autorise le retour à la ligne automatique.
+       On a retiré le <br> de "INGÉNIERIE CULTURELLE" (car il créait un espace
+       vide au-dessus dans l'animation title-reveal.js). Le retour à la ligne
+       entre les deux mots est désormais géré naturellement par le navigateur
+       quand la fonte clampée (9cqi) est trop grande pour tenir sur une ligne.
+       Pour "EVENT" et "FORMATION" (mots uniques), aucun retour involontaire
+       ne peut se produire. */
+    white-space:    normal;
 }
 
 /* Description du hub */
@@ -2461,11 +2463,16 @@
                         <span class="lp-chip lp-chip--sand">Accompagnement</span>
                     </div>
                     {#
-                        "INGÉNIERIE\nCULTURELLE" — le retour à la ligne est
-                        rendu par white-space:pre-line sur .lp-hub__name.
-                        On utilise un <br> HTML ici pour plus de clarté.
+                        "INGÉNIERIE CULTURELLE" — le retour à la ligne entre les
+                        deux mots est géré naturellement par white-space:normal sur
+                        .lp-hub__name (CSS). Le <br> a été retiré car il provoquait
+                        un espace vide au-dessus du texte dans l'animation title-reveal.js
+                        (le bloc droit commençait par une ligne fantôme de hauteur non nulle).
+                        Avec white-space:normal et clamp(20px,9cqi,46px), "INGÉNIERIE"
+                        et "CULTURELLE" passent sur 2 lignes dès que la fonte dépasse
+                        la largeur disponible de la colonne (1fr dans 3 colonnes de grid).
                     #}
-                    <h3 class="lp-hub__name" id="lp-hub-ing-title">INGÉNIERIE<br>CULTURELLE</h3>
+                    <h3 class="lp-hub__name" id="lp-hub-ing-title">INGÉNIERIE CULTURELLE</h3>
                     <p class="lp-hub__desc">
                         On structure. Conseil aux artistes et aux structures sur
                         le montage de projets, les financements croisés, et la

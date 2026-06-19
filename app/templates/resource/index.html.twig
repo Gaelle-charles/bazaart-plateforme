@@ -599,9 +599,20 @@
                 Titre geant en deux lignes, uppercase, Archivo Black.
                 clamp(64px, 9vw, 132px) : typographie fluide selon le CDC.
             #}
+            {#
+                Titre "CE QUI EST OUVERT." — sans <br> intentionnel.
+                Le retour à la ligne naturel est géré par clamp(64px, 9vw, 132px)
+                en combinaison avec la largeur du conteneur (la colonne gauche du
+                header). Sur grand écran, la taille de police est si importante
+                que le titre passe naturellement sur 2 lignes. Sur mobile (375px),
+                le clamp tombe à 64px : "CE QUI EST" tient sur une ligne,
+                "OUVERT." passe à la suivante automatiquement.
+                Supprimer le <br> est important pour l'animation title-reveal.js :
+                avec <br>, le bloc droit commençait par une ligne vide (hauteur
+                de ligne fantôme) qui créait un espace vide au-dessus du texte.
+            #}
             <h1 class="opp-title">
-                CE QUI EST<br>
-                OUVERT.
+                CE QUI EST OUVERT.
             </h1>
         </div>
 

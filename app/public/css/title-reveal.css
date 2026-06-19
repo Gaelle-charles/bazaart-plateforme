@@ -106,9 +106,17 @@
  * Note : on n'initialise PAS opacity:0 ici en CSS.
  * C'est le JS qui pose la valeur initiale au premier updateAll().
  * Sans JS : .tr-block n'existe pas => les titres sont lisibles normalement.
+ *
+ * line-height:inherit — sans cette règle, le passage de display:inline à
+ * display:inline-block réinitialise le line-height au "normal" du navigateur
+ * (~1.2). Or les titres utilisent des line-height serrés (0.88, etc.) définis
+ * sur l'élément parent (h1, h2...). Sans inherit, chaque bloc aurait un
+ * line-height différent de celui du titre, ce qui crée un espacement vertical
+ * inattendu sur les titres multi-lignes et rompt le rendu compact voulu.
  */
 .tr-block {
-    display: inline-block;
+    display:     inline-block;
+    line-height: inherit; /* hérite du line-height du titre parent (ex: 0.88) */
 }
 
 /*
