@@ -4,46 +4,73 @@
  * Vanilla JS pur, zéro dépendance, zéro framework.
  * Chargé via base.html.twig => actif sur toutes les pages publiques.
  *
- * EFFET VISUEL
- * ------------
- * Quand un titre entre dans le viewport, les mots s'écartent et s'estompent
- * (p=0 = titre hors-écran). Quand il est à sa position de lecture, les
- * mots sont rassemblés et bien visibles (p=1). L'animation est RÉVERSIBLE :
- * en remontant la page, les mots s'écartent à nouveau.
+ * EFFET VISUEL — UNIFIÉ SUR LE MODÈLE DU HERO
+ * --------------------------------------------
+ * TOUS les titres ciblés utilisent désormais LE MÊME effet que le hero
+ * de la page d'accueil (index.html.twig) :
  *
- *   - Variante SIMPLE (texte brut, peu de mots, pas de balisage interne) :
- *     Le 1er mot glisse vers la gauche, le reste vers la droite,
- *     en fonction de p. Reproduit le ressenti du hero scroll-expand.
- *   - Variante COMPLEXE (titre long, multi-lignes, markup interne) :
- *     Fondu + léger glissement vertical (plus robuste car ne touche pas
- *     aux nœuds enfants du titre).
+ *   - Le titre est découpé en DEUX blocs :
+ *       Bloc 1 : le PREMIER MOT (translateX négatif = part vers la gauche)
+ *       Bloc 2 : le RESTE DU TITRE (translateX positif = part vers la droite)
+ *   - Quand le titre entre dans la zone de lecture du viewport, les deux blocs
+ *     se REJOIGNENT (animation à l'envers = lisible).
+ *   - Quand il en sort (par le bas en entrant, par le haut en sortant),
+ *     les blocs s'ECARTENT.
+ *   - L'animation est REVERSIBLE : scroll vers le bas = les blocs s'écartent
+ *     à mesure que le titre sort de la zone ; remonter = ils se rejoignent.
+ *
+ * PARAMETRES COPIÉS DU HERO (identiques pour un ressenti uniforme)
+ * ----------------------------------------------------------------
+ *   AMPLITUDE_DESKTOP = 160px  (même que TITLE_SPREAD_DESKTOP du hero)
+ *   AMPLITUDE_MOBILE  = 70px   (même que TITLE_SPREAD_MOBILE du hero)
+ *   Interpolation : linéaire (lerp, comme le hero — pas de smoothstep)
+ *
+ * DÉCOUPAGE EN 2 BLOCS (pas mot-par-mot)
+ * ---------------------------------------
+ * Pour chaque titre, le JS :
+ *   1. Extrait le TEXTE du premier nœud texte trouvé pour isoler le premier mot.
+ *   2. Place le reste du contenu (y compris tout markup interne) dans le bloc 2.
+ *   Cela préserve les <br>, <span>, icônes, liens, etc. dans le bloc 2.
+ *
+ * CAS LIMITE — TITRES INSCINDABLES (avec markup avant le premier mot)
+ * -------------------------------------------------------------------
+ * Si un titre commence directement par un élément HTML (pas un nœud texte),
+ * on ne peut pas isoler le "premier mot" sans casser le markup.
+ * Dans ce cas, on applique l'effet sur UN SEUL BLOC (le titre entier translate
+ * vers la droite uniquement). Le ressenti reste cohérent avec le hero —
+ * pas de fondu vertical, pas d'animation différente. Voir armTwoBlocks().
  *
  * PROGRESSION p
  * -------------
- * Pour chaque titre, on calcule p = f(position_dans_le_viewport) :
- *   - Quand le titre approche du tiers supérieur du viewport -> p=1 (lisible)
- *   - Quand il est en bas du viewport (entrant) ou en dehors -> p=0 (écarté)
- *   - Quand il est très haut (sortant) -> p diminue progressivement
- * L'animation est continue (recalculée à chaque scroll) et réversible.
+ * Pour chaque titre, p = f(position_dans_le_viewport) :
+ *   p = 1  => titre dans la zone de lecture (blocs rassemblés, lisible)
+ *   p = 0  => titre hors-écran ou trop loin de la zone (blocs écartés)
+ * Animation continue (recalculée à chaque scroll) et réversible.
  *
  * PROGRESSIVE ENHANCEMENT
  * -----------------------
  * 1. Le JS ajoute .js-title-reveal-ready sur <html> EN PREMIER.
- * 2. Seulement ensuite, il arme les titres (transform + opacity via CSS).
+ * 2. Seulement ensuite, il arme les titres (DOM modifié + transform via JS).
  * Si le JS ne s'exécute pas => aucune classe armée => titres visibles normalement.
  *
  * PERFORMANCE
  * -----------
  * - Un SEUL listener scroll global {passive:true} + requestAnimationFrame.
- * - Recalcul sur resize (debounce léger).
+ * - Recalcul sur resize (debounce léger via rAF).
  * - Nettoyage sur turbo:before-visit (pas de fuite mémoire).
  * - transform + opacity uniquement (zéro reflow, GPU composited).
  *
- * PÉRIMÈTRE
+ * PREVENTION DU SCROLL HORIZONTAL
+ * --------------------------------
+ * Chaque bloc est enveloppé dans un .tr-block-wrap (overflow:hidden).
+ * L'amplitude est bornée par le CSS (voir title-reveal.css) et par la
+ * logique mobile qui réduit l'amplitude à 70px (même que le hero mobile).
+ *
+ * PERIMETRE
  * ---------
  * Ne touche qu'aux éléments dans main / #main-content.
- * Exclut explicitement le H1 du hero (animé par le JS scroll-expand
- * de index.html.twig) via l'attribut data-no-reveal="true".
+ * Exclut explicitement le H1 du hero (data-no-reveal="true") qui a sa propre
+ * animation dans index.html.twig.
  */
 
 (function () {
@@ -56,9 +83,10 @@
 
     /* ── 1. ACCESSIBILITÉ : prefers-reduced-motion ─────────────────────────
        Si l'utilisateur a activé "Réduire les animations" dans son OS,
-       on ne pose aucune animation. Les titres sont déjà visibles via CSS
-       (la règle @media prefers-reduced-motion dans title-reveal.css
-       force l'état final immédiatement). On sort immédiatement. */
+       on ne pose aucune animation. Les titres restent dans leur état HTML
+       naturel. Le CSS @media prefers-reduced-motion dans title-reveal.css
+       force la visibilité complète au cas où .js-title-reveal-ready aurait
+       quand même été posée. */
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }
 
     /* ── 2. SÉLECTEURS DES TITRES À ANIMER ────────────────────────────────
@@ -105,117 +133,239 @@
         '.cp-title'                    /* "Proposer une formation" */
     ].join(', ');
 
-    /* ── 3. DÉTECTION VARIANTE SIMPLE vs COMPLEXE ──────────────────────────
-       Un titre est "simple" si :
-       - Il n'a PAS d'élément enfant de type balise (span, br, strong, em...).
-         (des nœuds TEXT seulement sont OK — c'est du texte brut).
-       - Son texte brut fait 6 mots ou moins (seuil arbitraire raisonnable).
-         Au-delà, le découpage mot-par-mot risque d'être trop agité visuellement.
+    /* ── 3. PARAMÈTRES D'ANIMATION — COPIÉS DU HERO ───────────────────────
+       Ces valeurs sont IDENTIQUES à celles du JS scroll-expand du hero
+       (index.html.twig) pour garantir un ressenti visuel uniforme.
 
-       Tous les autres titres (multi-lignes, avec markup interne, longs) =>
-       variante COMPLEXE (fondu + glissement vertical).
+       TITLE_SPREAD_DESKTOP : amplitude de déplacement horizontal en px
+         => même valeur que TITLE_SPREAD_DESKTOP dans le hero (160px).
+         Bloc 1 (premier mot) translateX(-160px), Bloc 2 translateX(+160px)
+         quand p=0.
 
-       @param {Element} el - L'élément titre à examiner.
-       @returns {boolean} true = variante simple, false = variante complexe. */
-    function isSimpleTitle(el) {
-        /* Vérifie la présence d'éléments enfants HTML (PAS les nœuds texte) */
-        var hasChildElements = el.querySelector('*') !== null;
-        if (hasChildElements) { return false; } /* markup interne => complexe */
+       TITLE_SPREAD_MOBILE : amplitude réduite sur mobile
+         => même valeur que TITLE_SPREAD_MOBILE dans le hero (70px).
 
-        /* Compte les mots (split sur les espaces blancs, filtre les chaînes vides) */
-        var wordCount = (el.textContent || '').trim().split(/\s+/).filter(Boolean).length;
-        return wordCount <= 6;
+       Seuil mobile : 768px (identique au hero). */
+    var TITLE_SPREAD_DESKTOP = 160; /* pixels, desktop — copié du hero */
+    var TITLE_SPREAD_MOBILE  = 70;  /* pixels, mobile  — copié du hero */
+    var MOBILE_BREAKPOINT    = 768; /* px — même breakpoint que le hero */
+
+    /* isMobile est mis à jour à chaque resize */
+    var isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+
+    /* ── 4. UTILITAIRES ────────────────────────────────────────────────────
+
+       lerp(a, b, t) : interpolation linéaire entre a et b pour t dans [0,1].
+       MÊME fonction que dans le hero — on n'utilise PAS smoothstep ici
+       pour coller au ressenti du hero (interpolation linéaire pure). */
+    function lerp(a, b, t) {
+        return a + (b - a) * t;
     }
 
-    /* ── 4. ARMEMENT VARIANTE SIMPLE (découpage en mots) ───────────────────
-       On remplace le contenu textuel du titre par une suite de :
-         <span class="tr-word-wrap">
-           <span class="tr-word" style="--tr-dir-x: Xpx;">mot</span>
+    /* clamp(val, min, max) : borne une valeur entre min et max. */
+    function clamp(val, min, max) {
+        return val < min ? min : (val > max ? max : val);
+    }
+
+    /* ── 5. ARMEMENT : découpage en 2 BLOCS (modèle hero) ─────────────────
+       Cette fonction remplace le contenu du titre par DEUX blocs :
+         <span class="tr-block-wrap tr-block-wrap--left">
+           <span class="tr-block" data-tr-side="-1">PREMIER MOT</span>
+         </span>
+         <span class="tr-block-wrap tr-block-wrap--right">
+           <span class="tr-block" data-tr-side="1">reste du titre...</span>
          </span>
 
-       Le 1er mot a un translateX négatif (vers la gauche quand écarté).
-       Les suivants ont un translateX positif (vers la droite quand écartés).
+       Pour le bloc 1 : data-tr-side="-1" => translateX négatif (vers la gauche)
+       Pour le bloc 2 : data-tr-side="1"  => translateX positif (vers la droite)
+       => IDENTIQUE au comportement de .lp-hero__title-left / .lp-hero__title-right
 
-       NOUVEAU : plus de transition CSS ni de délais en cascade.
-       Le JS applique directement transform et opacity en fonction de p.
-       C'est le JS seul qui pilote l'état visuel à chaque frame.
+       STRATÉGIE DE DÉCOUPAGE :
+       - On cherche le premier nœud texte direct du titre.
+       - On isole le premier mot de ce nœud texte dans le bloc gauche.
+       - Le reste de ce nœud texte + tous les autres nœuds enfants (markup)
+         vont dans le bloc droit.
+       - Si le titre ne commence pas par un nœud texte (markup en premier),
+         on tombe sur le cas limite "un seul bloc" (voir plus bas).
+
+       POURQUOI CETTE APPROCHE plutôt que innerHTML ?
+       - innerHTML.split(' ') casserait le markup (les spans, les br, etc.)
+       - Travailler sur les nœuds DOM préserve toute la structure HTML.
 
        @param {Element} el - L'élément titre à armer. */
-    function armSimple(el) {
-        var text  = (el.textContent || '').trim();
-        var words = text.split(/\s+/).filter(Boolean);
+    function armTwoBlocks(el) {
 
-        /* Amplitude de déplacement horizontal (en pixels) pour chaque mot.
-           Valeur modérée : suffisamment visible pour le ressenti "écartement",
-           mais pas au point de créer un scroll horizontal même sur mobile.
-           L'overflow:hidden sur .tr-word-wrap contient les débordements. */
-        var AMPLITUDE = 28;
+        /* ── Collecte de tous les nœuds enfants actuels ─────────────────── */
+        /* On crée un tableau (snapshot) car on va modifier el pendant la boucle. */
+        var childNodes = Array.prototype.slice.call(el.childNodes);
 
-        /* Construction du HTML de remplacement via DocumentFragment
-           (évite les reflows en boucle avec innerHTML +=). */
-        var fragment = document.createDocumentFragment();
+        /* ── Recherche du premier nœud texte non vide ───────────────────── */
+        /* Un nœud texte (nodeType === 3) peut être du whitespace pur (sauts
+           de ligne, espaces d'indentation Twig). On cherche le premier avec
+           du contenu réel. */
+        var firstTextNode  = null;
+        var firstTextIndex = -1;
 
-        words.forEach(function (word, index) {
-            /* Wrapper : masque le débordement pendant l'animation */
-            var wrap = document.createElement('span');
-            wrap.className = 'tr-word-wrap';
+        for (var i = 0; i < childNodes.length; i++) {
+            var node = childNodes[i];
+            if (node.nodeType === 3 && node.nodeValue.trim().length > 0) {
+                firstTextNode  = node;
+                firstTextIndex = i;
+                break;
+            }
+        }
 
-            /* Élément animé */
-            var span = document.createElement('span');
-            span.className = 'tr-word';
+        /* ── CAS LIMITE : pas de nœud texte en premier ───────────────────
+           Si le titre commence par un élément HTML (par exemple une icône,
+           un <span> coloré, un <br>) avant tout texte, on ne peut pas
+           isoler le "premier mot" sans casser le markup.
+           SOLUTION : on enveloppe TOUT le contenu dans un SEUL bloc droit
+           (translateX positif, comme le bloc "reste" du hero). L'effet reste
+           cohérent visuellement avec le hero — pas de fondu vertical. */
+        if (firstTextNode === null) {
+            armSingleBlock(el, childNodes);
+            return;
+        }
 
-            /* --tr-dir-x : amplitude de départ de ce mot (négatif pour le 1er,
-               positif pour les suivants). Le JS multiplie cette valeur par (1-p)
-               pour obtenir le déplacement courant. */
-            var dirX = index === 0 ? -AMPLITUDE : AMPLITUDE;
-            span.style.setProperty('--tr-dir-x', dirX + 'px');
-            span.textContent = word;
+        /* ── Extraction du premier mot dans le nœud texte ────────────────
+           On coupe le texte du nœud sur le premier espace blanc.
+           Exemple : "  CE QUI EST OUVERT." -> firstWord="CE", restText=" QUI EST OUVERT."
+           On prend en compte les espaces de début (trim avant split). */
+        var rawText   = firstTextNode.nodeValue;
+        /* On repère la position du premier espace APRÈS le premier mot.
+           leading spaces sont conservés dans rawText mais ignorés pour le split. */
+        var trimmed   = rawText.trimStart ? rawText.trimStart() : rawText.replace(/^\s+/, '');
+        /* leadingWhitespace = l'espace de début (indentation Twig, etc.) */
+        var leadingWS = rawText.slice(0, rawText.length - trimmed.length);
 
-            wrap.appendChild(span);
-            fragment.appendChild(wrap);
-        });
+        /* Découpe sur le premier espace blanc dans trimmed */
+        var spaceIdx  = trimmed.search(/\s/);
 
-        /* Vide le titre et insère les spans */
+        var firstWord, restOfText;
+        if (spaceIdx === -1) {
+            /* Cas : le nœud texte ne contient qu'un seul mot (pas d'espace).
+               Le premier mot = tout le nœud texte.
+               Le "reste" sera constitué des nœuds suivants (s'ils existent). */
+            firstWord  = trimmed;
+            restOfText = '';
+        } else {
+            firstWord  = trimmed.slice(0, spaceIdx);
+            /* On conserve l'espace lui-même dans restOfText pour ne pas
+               coller les mots au début du bloc droit. */
+            restOfText = trimmed.slice(spaceIdx);
+        }
+
+        /* ── Construction des deux blocs ─────────────────────────────────
+
+           BLOC GAUCHE : premier mot uniquement.
+           data-tr-side="-1" => le JS lui appliquera translateX(-amplitude) quand p=0. */
+        var wrapLeft  = document.createElement('span');
+        wrapLeft.className = 'tr-block-wrap tr-block-wrap--left';
+
+        var spanLeft  = document.createElement('span');
+        spanLeft.className = 'tr-block';
+        spanLeft.setAttribute('data-tr-side', '-1'); /* direction gauche */
+        spanLeft.textContent = firstWord;
+
+        wrapLeft.appendChild(spanLeft);
+
+        /* BLOC DROIT : reste du nœud texte + tous les nœuds suivants.
+           data-tr-side="1" => translateX(+amplitude) quand p=0. */
+        var wrapRight = document.createElement('span');
+        wrapRight.className = 'tr-block-wrap tr-block-wrap--right';
+
+        var spanRight = document.createElement('span');
+        spanRight.className = 'tr-block';
+        spanRight.setAttribute('data-tr-side', '1'); /* direction droite */
+
+        /* On insère d'abord le texte résiduel du premier nœud texte */
+        if (restOfText.length > 0) {
+            spanRight.appendChild(document.createTextNode(restOfText));
+        }
+
+        /* Puis on réinsère tous les nœuds qui suivaient le premier nœud texte.
+           Cela inclut les <span class="lp-hero__h1-orange">, les <br>, les liens, etc.
+           Ces nœuds sont DÉPLACÉS (non clonés) depuis el vers spanRight. */
+        for (var j = firstTextIndex + 1; j < childNodes.length; j++) {
+            spanRight.appendChild(childNodes[j]);
+        }
+
+        wrapRight.appendChild(spanRight);
+
+        /* ── Remplacement du contenu de el ───────────────────────────────
+           On vide le titre et on insère les deux blocs.
+           Si leadingWS est non vide (indentation Twig), on peut l'ignorer
+           car les espaces de début d'un titre sont invisibles. */
+        el.textContent = ''; /* vide proprement (supprime TOUS les nœuds enfants) */
+        el.appendChild(wrapLeft);
+
+        /* Espace blanc entre les deux blocs : reproduit l'espace naturel
+           entre le premier mot et la suite (un espace simple suffit).
+           On n'utilise PAS margin car on veut que les blocs soient collés
+           quand p=1 (comme dans le titre du hero). */
+        el.appendChild(document.createTextNode(' '));
+
+        el.appendChild(wrapRight);
+
+        /* ── Stockage des références pour applyState() ───────────────────
+           On stocke directement les deux .tr-block (les éléments animés),
+           avec leur direction (side) pour le calcul du translateX. */
+        el._trBlocks = [
+            { el: spanLeft,  side: -1 },
+            { el: spanRight, side:  1 }
+        ];
+    }
+
+    /* ── 6. CAS LIMITE : armement en un seul bloc ──────────────────────────
+       Utilisé quand le titre commence par du markup (pas de nœud texte en premier).
+       On translate TOUT le contenu vers la droite (side=+1), sans fondu vertical.
+       Le ressenti est différent d'un vrai "deux blocs" mais reste cohérent
+       avec le hero (pas d'animation différente de type fondu). */
+    function armSingleBlock(el, childNodes) {
+        var wrap = document.createElement('span');
+        wrap.className = 'tr-block-wrap tr-block-wrap--right';
+
+        var span = document.createElement('span');
+        span.className = 'tr-block';
+        span.setAttribute('data-tr-side', '1');
+
+        /* Réinsère tous les nœuds enfants dans le bloc */
+        for (var k = 0; k < childNodes.length; k++) {
+            span.appendChild(childNodes[k]);
+        }
+
+        wrap.appendChild(span);
         el.textContent = '';
-        el.appendChild(fragment);
+        el.appendChild(wrap);
 
-        /* Stocke une référence aux spans pour les mises à jour continues */
-        el._trWords = el.querySelectorAll('.tr-word');
+        el._trBlocks = [
+            { el: span, side: 1 }
+        ];
     }
 
-    /* ── 5. ARMEMENT VARIANTE COMPLEXE (fondu + glissement vertical) ────────
-       On marque simplement le titre avec une classe CSS et un attribut data
-       pour que le JS puisse le piloter.
-       Pas de modification du DOM interne => le markup HTML est préservé intact.
-
-       @param {Element} el - L'élément titre à armer. */
-    function armFade(el) {
-        el.classList.add('tr-fade');
-    }
-
-    /* ── 6. CALCUL DE LA PROGRESSION p ────────────────────────────────────
+    /* ── 7. CALCUL DE LA PROGRESSION p ─────────────────────────────────────
        Pour un élément donné, calcule p dans [0..1] selon sa position
        dans le viewport.
 
-       Convention :
-         p = 1  => titre à sa position de lecture (visible, mots rassemblés)
-         p = 0  => titre hors-écran ou en bas du viewport (écarté, invisible)
+       Convention (IDENTIQUE au hero) :
+         p = 1  => titre dans la zone de lecture (blocs rassemblés, lisible)
+         p = 0  => titre hors-écran ou trop écarté de la zone (blocs écartés)
 
        FENÊTRE DE LISIBILITÉ :
-       Le titre est à p=1 quand son centre est dans la zone "tiers supérieur"
-       du viewport (entre 15% et 65% du bas). En dehors de cette zone,
-       p décroît progressivement vers 0.
+       Le titre est à p=1 quand il est dans la zone centrale du viewport.
+       En dehors de cette zone (en bas en entrant, en haut en sortant),
+       p décroît progressivement vers 0 — les blocs s'écartent.
 
        PARAMÈTRES DE LA FENÊTRE (en fraction du viewport height) :
-         START_FROM_BOTTOM : quand le bord bas du titre dépasse ce seuil
-                             en entrant depuis le bas => p commence à monter
-         FULL_READ_TOP     : quand le bord haut du titre est en dessous de
-                             ce seuil depuis le haut => p=1 (pleinement lisible)
-         FADE_OUT_START    : quand le bord bas du titre remonte au-dessus de
-                             ce seuil (sortie par le haut) => p commence à baisser
+         START_FROM_BOTTOM : seuil d'entrée depuis le bas (le titre commence
+                             à se rassembler quand son bas dépasse ce seuil)
+         FULL_READ_BOTTOM  : à partir de là, le titre est pleinement lisible (p=1)
+         FADE_OUT_START    : à partir de là (sortie par le haut), p commence à baisser
+         FADE_OUT_END      : le titre est complètement sorti (p=0)
 
-       Cela garantit que les titres ne sont jamais "cassés/illisibles"
-       trop longtemps : ils sont p=1 dès qu'ils entrent dans la zone de lecture.
+       Ces valeurs créent une fenêtre de lisibilité confortable : le titre est
+       p=1 dès qu'il entre dans la zone centrale, et commence à "s'ouvrir"
+       seulement quand il repart vers le haut.
 
        @param {Element} el - L'élément titre.
        @returns {number}   p dans [0..1]. */
@@ -223,106 +373,101 @@
         var vh   = window.innerHeight;
         var rect = el.getBoundingClientRect();
 
-        /* Bords du titre par rapport au viewport (positif = visible) */
-        var elBottom = rect.bottom; /* bord bas du titre, en px depuis le haut du vp */
-        var elTop    = rect.top;    /* bord haut du titre, en px depuis le haut du vp */
+        var elBottom = rect.bottom; /* bord bas du titre, en px depuis le haut du viewport */
+        var elTop    = rect.top;    /* bord haut du titre, en px depuis le haut du viewport */
 
         /* ZONE ENTRÉE (depuis le bas) :
            Le titre entre dans le viewport par le bas.
-           On commence l'animation quand elBottom dépasse START_FROM_BOTTOM * vh
-           (c'est-à-dire quand le titre est encore assez bas pour commencer à
-           "monter" visuellement sans être brutalement révélé). */
-        var START_FROM_BOTTOM = 0.92; /* 92% du viewport height depuis le haut */
+           L'animation commence quand elBottom passe sous START_FROM_BOTTOM*vh. */
+        var START_FROM_BOTTOM = 0.92; /* 92% de la hauteur du viewport */
 
-        /* Le titre est pleinement visible (p=1) quand son centre
-           est dans le tiers supérieur-central du viewport. */
-        var FULL_READ_BOTTOM = 0.60; /* bord bas en dessous de 60% du vp => p=1 */
-        var FULL_READ_TOP    = 0.65; /* bord haut en dessous de 65% du vp => p=1 */
+        /* Zone de pleine lisibilité */
+        var FULL_READ_BOTTOM  = 0.60; /* bord bas en dessous de 60%*vh => p=1 */
+        var FULL_READ_TOP     = 0.65; /* bord haut en dessous de 65%*vh => p=1 */
 
-        /* ZONE SORTIE (par le haut) :
-           Quand le titre commence à sortir du haut du viewport,
-           p diminue progressivement. */
-        var FADE_OUT_THRESHOLD = 0.15; /* titre sorti à 85% du vp par le haut => p=0 */
+        /* Zone de sortie (par le haut) */
+        var FADE_OUT_END      = 0.15; /* titre sorti à 85% par le haut => p=0 */
 
-        /* Cas 1 : titre entièrement en dehors en bas (pas encore entré) */
+        /* Cas 1 : titre entièrement en dessous du viewport (pas encore entré) */
         if (elBottom <= 0) { return 0; }
 
-        /* Cas 2 : titre entièrement en dehors en haut (déjà sorti) */
+        /* Cas 2 : titre entièrement sorti par le haut */
         if (elTop <= -el.offsetHeight) { return 0; }
 
         /* Cas 3 : entrée depuis le bas
-           Le titre est encore dans la moitié basse du viewport.
-           p progresse de 0 à 1 au fur et à mesure qu'il monte. */
+           elBottom décroît quand le titre remonte => p augmente de 0 à 1. */
         if (elBottom > FULL_READ_BOTTOM * vh) {
-            /* Progression : de (START_FROM_BOTTOM*vh) à (FULL_READ_BOTTOM*vh)
-               elBottom décroît quand le titre monte => p augmente */
-            var enterStart  = START_FROM_BOTTOM * vh;
-            var enterEnd    = FULL_READ_BOTTOM * vh;
+            var enterStart = START_FROM_BOTTOM * vh;
+            var enterEnd   = FULL_READ_BOTTOM * vh;
             if (elBottom >= enterStart) { return 0; } /* pas encore entré */
-            var p = 1 - (elBottom - enterEnd) / (enterStart - enterEnd);
-            return p < 0 ? 0 : (p > 1 ? 1 : p);
+            var pEnter = 1 - (elBottom - enterEnd) / (enterStart - enterEnd);
+            return pEnter < 0 ? 0 : (pEnter > 1 ? 1 : pEnter);
         }
 
-        /* Cas 4 : titre dans la zone de pleine lisibilité */
-        if (elTop >= FADE_OUT_THRESHOLD * vh) { return 1; }
+        /* Cas 4 : titre dans la zone de pleine lisibilité (p=1) */
+        if (elTop >= FADE_OUT_END * vh) { return 1; }
 
         /* Cas 5 : sortie par le haut
-           Le bord haut du titre remonte au-dessus de FADE_OUT_THRESHOLD*vh.
-           p diminue de 1 à 0. */
+           Le bord haut remonte au-dessus de FADE_OUT_END*vh => p diminue de 1 à 0.
+           RÉVERSIBILITÉ : si l'utilisateur remonte, elTop remonte aussi et p
+           augmente => les blocs se rejoignent à nouveau. */
         var exitStart = FULL_READ_TOP * vh;
-        var exitEnd   = FADE_OUT_THRESHOLD * vh;
+        var exitEnd   = FADE_OUT_END * vh;
         if (elTop >= exitStart) { return 1; }
         var pExit = (elTop - exitEnd) / (exitStart - exitEnd);
         return pExit < 0 ? 0 : (pExit > 1 ? 1 : pExit);
     }
 
-    /* ── 7. APPLICATION DE L'ÉTAT VISUEL ────────────────────────────────────
-       Applique transform et opacity directement en inline style
+    /* ── 8. APPLICATION DE L'ÉTAT VISUEL ────────────────────────────────────
+       Applique translateX et opacity directement en inline style
        en fonction de p (calculé par calcProgress).
 
-       Pour la variante SIMPLE : chaque mot reçoit un translateX proportionnel
-       à (1-p) * amplitude du mot, et une opacity = p.
-       Pour la variante COMPLEXE : translateY(18*(1-p)px) + opacity = p.
+       LOGIQUE (IDENTIQUE AU HERO) :
+         spread = amplitude selon l'écran (TITLE_SPREAD_DESKTOP ou MOBILE)
+         Pour le bloc gauche  (side=-1) : translateX = lerp(0, -spread, 1-p)
+           => à p=1 (lisible) : translateX=0 (position naturelle)
+           => à p=0 (écarté)  : translateX=-spread (parti vers la gauche)
+         Pour le bloc droit (side=+1) : translateX = lerp(0, +spread, 1-p)
+           => à p=1 (lisible) : translateX=0
+           => à p=0 (écarté)  : translateX=+spread (parti vers la droite)
+
+       Opacity : suit aussi p (0 = invisible, 1 = opaque).
+       On utilise opacity sur les .tr-block (pas sur le titre entier) pour
+       éviter de faire disparaître les éléments de layout du titre.
 
        @param {Element} el - Le titre à mettre à jour.
        @param {number}  p  - Progression dans [0..1]. */
     function applyState(el, p) {
-        if (el._trWords) {
-            /* Variante simple : applique sur chaque mot */
-            var opacity = p;
+        if (!el._trBlocks) { return; } /* titre non armé, rien à faire */
 
-            /* Petite fenêtre d'easing : on rend l'apparition légèrement plus douce
-               en utilisant une courbe en S simple (p² * (3 - 2p) = smoothstep).
-               Cela évite l'effet "brusque" au début et à la fin de la transition. */
-            var smooth = p * p * (3 - 2 * p);
+        /* Amplitude selon la taille d'écran — mise à jour à chaque frame
+           via la variable isMobile qui est recalculée au resize. */
+        var spread  = isMobile ? TITLE_SPREAD_MOBILE : TITLE_SPREAD_DESKTOP;
 
-            for (var i = 0; i < el._trWords.length; i++) {
-                var wordEl = el._trWords[i];
-                /* --tr-dir-x est l'amplitude maximale posée lors de l'armement.
-                   On la récupère depuis le style inline pour calculer le déplacement courant.
-                   (1 - smooth) = facteur d'écartement : 0 quand lisible, 1 quand écarté */
-                var dirX = parseFloat(wordEl.style.getPropertyValue('--tr-dir-x')) || 0;
-                var tx   = dirX * (1 - smooth);
-                wordEl.style.transform = 'translateX(' + tx + 'px)';
-                wordEl.style.opacity   = smooth;
-            }
-        } else if (el.classList.contains('tr-fade')) {
-            /* Variante complexe : glissement vertical + fondu */
-            var smooth2   = p * p * (3 - 2 * p);
-            var translateY = 18 * (1 - smooth2); /* 18px max de décalage vertical */
-            el.style.transform = 'translateY(' + translateY + 'px)';
-            el.style.opacity   = smooth2;
+        /* 1-p = facteur d'écartement : 0 quand lisible (p=1), 1 quand écarté (p=0). */
+        var factor  = 1 - p;
+        var opacity = p; /* même que dans le hero : opacité proportionnelle à p */
+
+        for (var i = 0; i < el._trBlocks.length; i++) {
+            var block   = el._trBlocks[i];
+            /* side = -1 (gauche) ou +1 (droite).
+               lerp(0, side*spread, factor) :
+                 - à factor=0 (p=1) => translateX=0 (rassemblé)
+                 - à factor=1 (p=0) => translateX = side*spread (écarté) */
+            var tx = lerp(0, block.side * spread, factor);
+            block.el.style.transform = 'translateX(' + tx + 'px)';
+            block.el.style.opacity   = opacity;
         }
     }
 
-    /* ── 8. ÉTAT GLOBAL DU LISTENER ─────────────────────────────────────────
+    /* ── 9. ÉTAT GLOBAL DU LISTENER ─────────────────────────────────────────
        Un seul rAF partagé pour tous les titres de la page.
-       elements : liste des titres à animer (Array d'Elements).
+       elements : liste des titres armés (Array d'Elements).
        rafId    : handle rAF en cours (null = aucune requête en attente). */
     var elements = [];
     var rafId    = null;
 
-    /* ── 9. BOUCLE DE MISE À JOUR ──────────────────────────────────────────
+    /* ── 10. BOUCLE DE MISE À JOUR ──────────────────────────────────────────
        Appelée via rAF. Recalcule p pour chaque titre et applique l'état. */
     function updateAll() {
         rafId = null; /* libère le slot pour la prochaine requête */
@@ -333,7 +478,7 @@
         }
     }
 
-    /* ── 10. LISTENER SCROLL (throttle via rAF) ─────────────────────────────
+    /* ── 11. LISTENER SCROLL (throttle via rAF) ─────────────────────────────
        Le listener scroll peut se déclencher des dizaines de fois par seconde.
        On planifie un rAF à la place : au plus une mise à jour par frame
        de rendu (60fps max), et jamais entre deux frames. */
@@ -343,20 +488,22 @@
         }
     }
 
-    /* ── 11. LISTENER RESIZE ────────────────────────────────────────────────
+    /* ── 12. LISTENER RESIZE ────────────────────────────────────────────────
        Quand la fenêtre est redimensionnée, les positions relatives des titres
-       changent. On recalcule immédiatement. */
+       changent et la détection mobile peut changer.
+       On met à jour isMobile et on recalcule immédiatement. */
     function onResize() {
+        isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
         onScroll();
     }
 
-    /* ── 12. POINT D'ENTRÉE PRINCIPAL ──────────────────────────────────────
+    /* ── 13. POINT D'ENTRÉE PRINCIPAL ──────────────────────────────────────
        Appelé une seule fois au DOMContentLoaded (ou immédiatement si DOM prêt). */
     function init() {
 
         /* ÉTAPE A : signaler au CSS que le JS est prêt.
            La classe .js-title-reveal-ready sur <html> ACTIVE les règles CSS
-           d'armement (will-change, etc.) sur .tr-word et .tr-fade.
+           d'armement (will-change, overflow:hidden, etc.) sur les blocs.
            Si on ne la pose pas, les titres restent visibles normalement.
            IMPORTANT : on la pose AVANT d'armer les titres. */
         document.documentElement.classList.add('js-title-reveal-ready');
@@ -384,17 +531,11 @@
         if (collected.length === 0) { return; }
 
         /* ÉTAPE D : armer chaque titre.
-           L'armement prépare le DOM pour l'animation :
-           - variante simple : découpe en mots + stores _trWords
-           - variante complexe : ajoute la classe .tr-fade
-           L'état visuel initial (p=0 ou p=1 selon la position courante)
-           sera appliqué par le premier updateAll(). */
+           armTwoBlocks() découpe le titre en 2 blocs (ou 1 si markup en premier)
+           et stocke les références dans el._trBlocks pour applyState().
+           L'état visuel initial est appliqué par le premier updateAll(). */
         collected.forEach(function (el) {
-            if (isSimpleTitle(el)) {
-                armSimple(el);
-            } else {
-                armFade(el);
-            }
+            armTwoBlocks(el);
             elements.push(el);
         });
 

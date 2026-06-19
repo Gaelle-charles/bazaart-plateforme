@@ -5,26 +5,48 @@
  * Il est chargé dans base.html.twig pour s'appliquer à toutes les
  * pages publiques qui étendent ce template.
  *
- * NOUVEAU FONCTIONNEMENT (scroll-driven, réversible)
- * ---------------------------------------------------
+ * FONCTIONNEMENT UNIFIÉ SUR LE MODÈLE DU HERO
+ * ---------------------------------------------
+ * Tous les titres ciblés utilisent désormais la même mécanique que le
+ * hero de la page d'accueil : deux blocs (premier mot / reste du titre)
+ * qui s'écartent via translateX opposés.
+ *
  * Le JS (title-reveal.js) calcule une progression p (0..1) à chaque
  * frame de scroll et applique DIRECTEMENT des valeurs inline :
- *   el.style.transform = 'translateX(...)';
- *   el.style.opacity   = ...;
- * Il n'y a donc PLUS de transitions CSS pour les animations principales.
- * Le JS est seul maître de l'état visuel, ce qui rend l'animation
- * totalement réversible (scroll up = animation à l'envers).
+ *   block.el.style.transform = 'translateX(...)';
+ *   block.el.style.opacity   = ...;
+ * Il n'y a donc PAS de transitions CSS — le JS est seul maître de l'état
+ * visuel, ce qui rend l'animation totalement réversible (scroll up = envers).
  *
- * CE QUE CE CSS FAIT :
- * 1. Structure les .tr-word-wrap et .tr-word (layout des mots découpés).
- * 2. Pose will-change uniquement quand le JS est actif (.js-title-reveal-ready).
- * 3. Gère prefers-reduced-motion (retire tout, titres visibles normalement).
+ * STRUCTURE DOM PRODUITE PAR LE JS
+ * ----------------------------------
+ * Pour chaque titre :
+ *
+ *   <h2 class="le-titre-animé">
+ *     <span class="tr-block-wrap tr-block-wrap--left">
+ *       <span class="tr-block" data-tr-side="-1">PREMIER</span>
+ *     </span>
+ *     [espace texte]
+ *     <span class="tr-block-wrap tr-block-wrap--right">
+ *       <span class="tr-block" data-tr-side="1">reste du titre...</span>
+ *     </span>
+ *   </h2>
+ *
+ *   - .tr-block-wrap : conteneur overflow:hidden (évite le scroll horizontal)
+ *   - .tr-block      : élément animé (transform + opacity via JS inline)
+ *
+ * PREVENTION DU SCROLL HORIZONTAL
+ * --------------------------------
+ * Les translateX peuvent atteindre 160px (desktop) ou 70px (mobile).
+ * overflow:hidden sur .tr-block-wrap contient les débordements.
+ * IMPORTANT : le titre parent (h1, h2...) doit lui aussi avoir
+ * overflow:hidden si nécessaire — ou la page doit avoir overflow-x:hidden.
  *
  * PRINCIPE DE PROGRESSIVE ENHANCEMENT
  * ------------------------------------
  * Par défaut (sans JS), les titres sont visibles normalement.
  * Le JS (title-reveal.js) ajoute la classe .js-title-reveal-ready
- * sur <html> AVANT de poser les classes d'animation sur les titres.
+ * sur <html> AVANT de modifier le DOM des titres.
  * Tant que cette classe n'est pas là, aucune règle CSS ici n'est
  * activée => titres toujours lisibles même si le JS plante.
  *
@@ -35,69 +57,70 @@
  * - opacity   : composited layer, très peu coûteux
  * will-change est posé uniquement sur les éléments actifs (via
  * .js-title-reveal-ready), jamais globalement.
- *
- * PREVENTION DU SCROLL HORIZONTAL
- * --------------------------------
- * Les translateX sont bornés à des valeurs raisonnables (28px max).
- * L'overflow:hidden sur .tr-word-wrap contient les débordements.
  */
 
 
 /* ──────────────────────────────────────────────────────────────────────
-   VARIANTE SIMPLE : écartement des mots (titres courts, texte brut)
+   STRUCTURE : .tr-block-wrap et .tr-block
    ------------------------------------------------------------------
-   Le JS découpe le titre en mots, enveloppe chaque mot dans un
-   .tr-word-wrap (overflow:hidden) + un .tr-word (l'élément animé).
+   Le JS découpe chaque titre en deux blocs (premier mot / reste)
+   et enveloppe chacun dans un .tr-block-wrap (overflow:hidden)
+   + un .tr-block (l'élément animé par JS).
 
-   Le JS applique directement les valeurs de transform et opacity
-   en inline style. Le CSS ne pose que la structure de layout.
+   Modèle du hero : .lp-hero__title-row (overflow:hidden)
+                    .lp-hero__title-left / .lp-hero__title-right (inline-block, transform)
 ────────────────────────────────────────────────────────────────────── */
 
-/* Wrapper de chaque mot : masque le débordement pendant l'animation
-   pour éviter l'apparition de barres de défilement horizontales */
-.tr-word-wrap {
-    /* display:inline-block pour que overflow:hidden fonctionne
-       sur des éléments inline (les mots dans un titre) */
-    display:   inline-block;
-    overflow:  hidden;
-    /* vertical-align:bottom évite le "saut" lié au line-box alignment */
+/*
+ * Wrapper de chaque bloc : masque le débordement pendant l'animation
+ * translateX pour éviter l'apparition de barres de défilement horizontales.
+ *
+ * display:inline-block est nécessaire pour que overflow:hidden fonctionne
+ * sur des éléments inline (dans un titre h1/h2 qui est un block container,
+ * les enfants span sont inline par défaut).
+ *
+ * vertical-align:bottom évite le "saut" de baseline lié au inline-block
+ * (les inline-block s'alignent sur leur baseline par défaut, ce qui peut
+ * créer un décalage vertical visible entre le bloc gauche et le bloc droit).
+ */
+.tr-block-wrap {
+    display:        inline-block;
+    overflow:       hidden;
     vertical-align: bottom;
 }
 
-/* Espace entre les mots (remplace l'espace naturel perdu par inline-block) */
-.tr-word-wrap + .tr-word-wrap {
-    margin-left: 0.28em;
-}
+/*
+ * Espace entre les deux blocs.
+ * Le JS insère un nœud texte " " (un espace simple) entre les deux .tr-block-wrap.
+ * Cette règle n'est pas nécessaire dans ce cas car l'espace est un nœud texte,
+ * mais on la conserve comme documentation.
+ * (margin-left n'est PAS posé ici car l'espace texte suffit)
+ */
 
-/* L'élément animé — chaque mot individuel.
-   Le JS applique transform et opacity en inline style.
-   Le CSS ne pose que display:inline-block (nécessaire pour transform). */
-.tr-word {
+/*
+ * L'élément animé — le bloc proprement dit.
+ * Le JS applique transform et opacity en inline style.
+ * display:inline-block est nécessaire pour que transform fonctionne
+ * sur un élément inline.
+ *
+ * Note : on n'initialise PAS opacity:0 ici en CSS.
+ * C'est le JS qui pose la valeur initiale au premier updateAll().
+ * Sans JS : .tr-block n'existe pas => les titres sont lisibles normalement.
+ */
+.tr-block {
     display: inline-block;
 }
 
-/* will-change pré-alloue les layers GPU seulement quand le JS est actif.
-   On l'active uniquement sous .js-title-reveal-ready pour ne pas gaspiller
-   des ressources GPU sur des pages où le JS n'est pas chargé. */
-.js-title-reveal-ready .tr-word {
-    will-change: transform, opacity;
-}
-
-
-/* ──────────────────────────────────────────────────────────────────────
-   VARIANTE COMPLEXE : fondu + glissement vertical
-   ------------------------------------------------------------------
-   Utilisée pour les titres longs, multi-lignes, ou contenant du
-   markup interne (icônes, <br>, <span> colorés, etc.).
-   Le JS ajoute la classe .tr-fade directement sur l'élément titre.
-   Pas de découpe en mots => le markup HTML interne est préservé intact.
-
-   Le JS applique directement transform (translateY) et opacity.
-   Le CSS ne pose que will-change.
-────────────────────────────────────────────────────────────────────── */
-
-/* will-change pré-alloue les layers GPU pour cette variante */
-.js-title-reveal-ready .tr-fade {
+/*
+ * will-change pré-alloue les layers GPU uniquement quand le JS est actif.
+ * On l'active uniquement sous .js-title-reveal-ready pour ne pas gaspiller
+ * des ressources GPU sur des pages où le JS n'est pas chargé.
+ *
+ * IMPORTANT : will-change doit être posé sur l'élément qui reçoit la
+ * transformation (le .tr-block, pas le wrapper). Même logique que le hero
+ * qui pose will-change sur .lp-hero__title-left / .lp-hero__title-right.
+ */
+.js-title-reveal-ready .tr-block {
     will-change: transform, opacity;
 }
 
@@ -106,8 +129,8 @@
    PREFERS-REDUCED-MOTION
    ------------------------------------------------------------------
    Si l'OS de l'utilisateur a activé "Réduire les animations",
-   le JS sort immédiatement (sans rien armer) et les titres restent
-   dans leur état HTML naturel (visibles, pas d'animation).
+   le JS sort immédiatement (sans modifier le DOM des titres).
+   Les titres restent donc dans leur état HTML naturel (visibles).
 
    On ajoute quand même des règles CSS de sécurité pour le cas où
    .js-title-reveal-ready aurait quand même été posée (cas théorique,
@@ -119,12 +142,16 @@
    Sans !important, ces surcharges seraient inefficaces.
 ────────────────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-    /* Force la visibilité totale des deux variantes.
-       !important est nécessaire pour surcharger les valeurs inline du JS. */
-    .tr-word,
+    /*
+     * Force la visibilité totale des blocs animés.
+     * !important est nécessaire pour surcharger les valeurs inline du JS.
+     * Couvre aussi bien le nouveau .tr-block que l'ancienne .tr-fade
+     * (au cas où une page cacherait encore l'ancienne classe).
+     */
+    .tr-block,
     .tr-fade {
-        transform:  none !important;
-        opacity:    1    !important;
+        transform:   none !important;
+        opacity:     1    !important;
         will-change: auto !important;
     }
 }
