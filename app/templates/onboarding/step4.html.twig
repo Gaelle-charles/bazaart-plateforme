@@ -1,31 +1,26 @@
 {% extends 'base_app.html.twig' %}
 
 {#
- # onboarding/step4.html.twig — Étape 4 : Alertes ressources
+ # onboarding/step4.html.twig — Étape 4 : Statut juridique (Lot A matching)
  #
  # Variables transmises par OnboardingController::step4() :
- #   - disciplines             : Discipline[]   — toutes les disciplines
- #   - resource_types          : ResourceType[] — tous les types de ressources
- #   - preselected_type_ids    : int[]          — types pré-cochés (déduits de l'étape 3)
- #   - preselected_disc_ids    : int[]          — disciplines pré-cochées (depuis le profil)
- #   - alert_frequency_options : AlertFrequency[] — options de fréquence
- #   - error                   : string|null    — message d'erreur
+ #   - legal_status_options  : LegalStatus[]   — tous les cas de l'enum
+ #   - selected_legal_status : LegalStatus|null — valeur déjà choisie (retour en arrière)
  #
- # Pré-sélection intelligente :
- #   - Les disciplines sont pré-cochées depuis le profil artiste (étape 2)
- #   - Les types de ressources sont pré-cochés depuis les objectifs (étape 3)
- #   Mapping : RESSOURCES_AIDES → Bourse & Financement
- #             RESSOURCES_APPELS → Appel à projets + Résidence + Prix & Concours
- #             FORMATIONS → Formation
+ # Cette étape est la DERNIÈRE du parcours d'onboarding.
+ # Le statut juridique est OPTIONNEL : l'artiste peut finaliser sans le choisir.
+ #
+ # Changement Lot A : l'ancienne étape 4 "alertes ressources" est supprimée.
+ # Les alertes deviendront un opt-in avec consentement dans le module matching (Lot C).
 #}
 
-{% block title %}Tes alertes — Étape 4{% endblock %}
-{% block page_title %}Tes alertes{% endblock %}
+{% block title %}Ton statut juridique — Étape 4{% endblock %}
+{% block page_title %}Finalisation{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
 <style>
-.ob-wrap { max-width: 680px; margin: 40px auto; padding: 0 16px; }
+.ob-wrap { max-width: 620px; margin: 40px auto; padding: 0 16px; }
 
 /* Progression */
 .ob-progress { display: flex; align-items: center; gap: 6px; margin-bottom: 36px; }
@@ -43,72 +38,56 @@
     text-transform: uppercase; letter-spacing: -.02em; line-height: .95;
     color: var(--ink); margin: 0 0 8px;
 }
-.ob-title .it { font-family: var(--serif); font-style: italic; text-transform: none; font-weight: 400; color: var(--accent-2, #FF6B2C); }
+.ob-title .it {
+    font-family: var(--serif); font-style: italic;
+    text-transform: none; font-weight: 400; color: var(--accent-2, #FF6B2C);
+}
 .ob-subtitle { font-size: 14px; color: var(--ink-mute); margin: 0 0 32px; line-height: 1.5; }
 
-/* Section */
-.ob-section {
+/* Liste des options de statut (radio buttons stylisés) */
+.ob-options { display: flex; flex-direction: column; gap: 0; margin-bottom: 24px; }
+
+.ob-option-item input[type="radio"] {
+    position: absolute; opacity: 0; width: 0; height: 0;
+}
+.ob-option-item label {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 16px 20px;
     border: 1px solid var(--line-soft);
-    margin-bottom: 20px;
+    border-bottom: none;
+    cursor: pointer; font-size: 14px; color: var(--ink); line-height: 1.4;
+    transition: background .10s;
 }
-.ob-section__head {
-    padding: 14px 18px;
-    background: var(--bg-alt);
-    border-bottom: 1px solid var(--line-soft);
-    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+.ob-option-item:last-child label { border-bottom: 1px solid var(--line-soft); }
+.ob-option-item label:hover { background: var(--bg-alt); }
+.ob-option-item input:checked + label {
+    background: var(--accent); border-color: var(--ink); font-weight: 600;
 }
-.ob-section__title {
-    font-family: var(--display); font-size: 13px; font-weight: 400;
-    text-transform: uppercase; letter-spacing: .04em; color: var(--ink);
-}
-.ob-section__hint {
-    font-family: var(--mono); font-size: 10px; color: var(--ink-mute);
-    text-transform: uppercase; letter-spacing: .04em;
-}
-.ob-section__body { padding: 16px 18px; }
 
-/* Grille de cases à cocher */
-.ob-check-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px;
-}
-.ob-check-item input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
-.ob-check-item label {
-    display: flex; align-items: center; gap: 8px;
-    padding: 9px 12px; border: 1px solid var(--line-soft); cursor: pointer;
-    font-size: 12px; color: var(--ink); transition: background .10s;
-}
-.ob-check-item label:hover { background: var(--bg-alt); }
-.ob-check-item input:checked + label { background: var(--accent); border-color: var(--ink); font-weight: 600; }
-
-/* Badge "pré-sélectionné" */
-.ob-preselect-note {
-    font-family: var(--mono); font-size: 10px; color: var(--ink-mute);
-    margin-top: 10px; letter-spacing: .04em;
-}
-.ob-preselect-note strong { color: var(--ink); }
-
-/* Options de fréquence */
-.ob-freq-list { display: flex; flex-direction: column; gap: 8px; }
-.ob-freq-item input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
-.ob-freq-item label {
-    display: flex; align-items: flex-start; gap: 12px;
-    padding: 14px 16px; border: 1px solid var(--line-soft); cursor: pointer;
-    font-size: 13px; color: var(--ink); transition: background .10s;
-}
-.ob-freq-item label:hover { background: var(--bg-alt); }
-.ob-freq-item input:checked + label { background: var(--accent); border-color: var(--ink); font-weight: 600; }
-
-/* Radio visuel */
+/* Radio visuel personnalisé (cercle) */
 .ob-radio-visual {
-    width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px;
-    border: 2px solid var(--ink); border-radius: 50%;
+    width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px;
+    border: 2px solid var(--ink); border-radius: 50%; background: var(--bg);
     display: flex; align-items: center; justify-content: center;
 }
-.ob-radio-dot { display: none; width: 8px; height: 8px; background: var(--ink); border-radius: 50%; }
-.ob-freq-item input:checked + label .ob-radio-dot { display: block; }
-.ob-freq-item input:checked + label .ob-radio-visual { background: var(--bg); }
+.ob-radio-dot {
+    display: none; width: 8px; height: 8px;
+    background: var(--ink); border-radius: 50%;
+}
+.ob-option-item input:checked + label .ob-radio-dot { display: block; }
+.ob-option-item input:checked + label .ob-radio-visual { background: var(--bg); }
 
-/* Bouton final (style distinct = action de finalisation) */
+/* Bouton "passer" (skip) — discret */
+.ob-skip-link {
+    display: block; text-align: center; margin-bottom: 16px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-mute);
+    text-decoration: underline; cursor: pointer;
+    background: none; border: none; padding: 0; width: 100%;
+    letter-spacing: .04em; text-transform: uppercase;
+}
+.ob-skip-link:hover { color: var(--ink); }
+
+/* Bouton de finalisation (style distinct = action principale) */
 .ob-btn-finish {
     font-family: var(--display); font-size: 14px; font-weight: 400;
     text-transform: uppercase; letter-spacing: .06em;
@@ -118,7 +97,7 @@
 }
 .ob-btn-finish:hover { background: var(--ink); color: var(--accent); }
 
-.ob-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 32px; }
+/* Bouton retour */
 .ob-btn-back {
     font-family: var(--mono); font-size: 11px; font-weight: 700;
     letter-spacing: .06em; text-transform: uppercase;
@@ -128,16 +107,26 @@
 }
 .ob-btn-back:hover { color: var(--ink); border-color: var(--ink); }
 
-.ob-error {
-    background: #fff0f0; border: 1px solid #c00; color: #c00;
-    padding: 10px 14px; font-size: 13px; margin-bottom: 20px; border-radius: 0;
+.ob-actions {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-top: 24px;
 }
 
-/* Note de bienvenue en bas */
-.ob-welcome-note {
-    text-align: center; margin-top: 24px; padding: 20px;
+/* Note finale */
+.ob-final-note {
+    text-align: center; margin-top: 20px; padding: 18px;
     background: var(--bg-alt); border: 1px solid var(--line-soft);
     font-size: 13px; color: var(--ink-mute); line-height: 1.6;
+}
+
+/* Badge optionnel */
+.ob-optional-badge {
+    display: inline-block;
+    font-family: var(--mono); font-size: 9px; font-weight: 700;
+    letter-spacing: .08em; text-transform: uppercase;
+    background: var(--bg-alt); border: 1px solid var(--line-soft);
+    color: var(--ink-mute); padding: 2px 7px; vertical-align: middle;
+    margin-left: 8px;
 }
 </style>
 {% endblock %}
@@ -145,147 +134,114 @@
 {% block content %}
 <div class="ob-wrap">
 
+    {# Progression — étape 4 active (dernière) #}
     <div class="ob-progress" aria-label="Étape 4 sur 4 — Dernière étape">
-        <div class="ob-step-dot ob-step-dot--done"></div>
-        <div class="ob-step-dot ob-step-dot--done"></div>
-        <div class="ob-step-dot ob-step-dot--done"></div>
-        <div class="ob-step-dot ob-step-dot--active"></div>
+        <div class="ob-step-dot ob-step-dot--done" title="Étape 1 : Type de compte"></div>
+        <div class="ob-step-dot ob-step-dot--done" title="Étape 2 : Profil"></div>
+        <div class="ob-step-dot ob-step-dot--done" title="Étape 3 : Que recherches-tu ?"></div>
+        <div class="ob-step-dot ob-step-dot--active" title="Étape 4 : Statut juridique"></div>
         <span class="ob-progress__label">Étape 4 / 4</span>
     </div>
 
-    <h1 class="ob-title">Tes <span class="it">alertes</span></h1>
+    <h1 class="ob-title">
+        Ton <span class="it">statut</span>
+        <span class="ob-optional-badge">optionnel</span>
+    </h1>
     <p class="ob-subtitle">
-        Nous te notifions par email quand de nouvelles ressources correspondent a tes centres d'interet.
-        Tu peux modifier ces preferences a tout moment depuis ton profil.
+        Ton statut juridique nous permet de te proposer les opportunites auxquelles tu es eligible
+        (certaines bourses ou residences sont reservees a un statut precis).
+        Tu peux passer cette etape et la renseigner plus tard.
     </p>
-
-    {% if error %}
-        <div class="ob-error" role="alert">{{ error }}</div>
-    {% endif %}
 
     <form method="POST" action="{{ path('app_onboarding_step4') }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token('onboarding_step4') }}">
 
-        {# ── Section : Disciplines filtrées ─────────────────────────────── #}
-        <div class="ob-section">
-            <div class="ob-section__head">
-                <span class="ob-section__title">Disciplines</span>
-                <span class="ob-section__hint">Vide = toutes les disciplines</span>
-            </div>
-            <div class="ob-section__body">
-                <div class="ob-check-grid">
-                    {% for discipline in disciplines %}
-                        {% set isPreselected = discipline.id in preselected_disc_ids %}
-                        <div class="ob-check-item">
-                            <input
-                                type="checkbox"
-                                id="ad_{{ discipline.id }}"
-                                name="alert_disciplines[]"
-                                value="{{ discipline.id }}"
-                                {% if isPreselected %}checked{% endif %}
-                            >
-                            <label for="ad_{{ discipline.id }}">
-                                {% if discipline.icon %}
-                                    <span aria-hidden="true">{{ discipline.icon }}</span>
-                                {% endif %}
-                                {{ discipline.name|e }}
-                            </label>
-                        </div>
-                    {% endfor %}
+        {# ── Liste des statuts juridiques (radio) ───────────────────────── #}
+        <div class="ob-options" role="group" aria-label="Ton statut juridique">
+            {% for option in legal_status_options %}
+                {#
+                    Pré-sélection si l'artiste avait déjà choisi un statut
+                    (ex: retour en arrière depuis le dashboard).
+                    selected_legal_status est une instance de LegalStatus ou null.
+                #}
+                {% set isSelected = selected_legal_status is not null and selected_legal_status.value == option.value %}
+
+                <div class="ob-option-item">
+                    <input
+                        type="radio"
+                        id="ls_{{ option.value }}"
+                        name="legal_status"
+                        value="{{ option.value }}"
+                        {% if isSelected %}checked{% endif %}
+                    >
+                    <label for="ls_{{ option.value }}">
+                        <span class="ob-radio-visual" aria-hidden="true">
+                            <span class="ob-radio-dot"></span>
+                        </span>
+                        {{ option.label()|e }}
+                    </label>
                 </div>
-                {% if preselected_disc_ids|length > 0 %}
-                    <p class="ob-preselect-note">
-                        <strong>Pre-selectionnees</strong> depuis ton profil artiste (étape 2).
-                    </p>
-                {% endif %}
-            </div>
+            {% endfor %}
         </div>
 
-        {# ── Section : Types de ressources ──────────────────────────────── #}
-        <div class="ob-section">
-            <div class="ob-section__head">
-                <span class="ob-section__title">Types de ressources</span>
-                <span class="ob-section__hint">Vide = tous les types</span>
-            </div>
-            <div class="ob-section__body">
-                <div class="ob-check-grid">
-                    {% for type in resource_types %}
-                        {% set isPreselected = type.id in preselected_type_ids %}
-                        <div class="ob-check-item">
-                            <input
-                                type="checkbox"
-                                id="at_{{ type.id }}"
-                                name="alert_types[]"
-                                value="{{ type.id }}"
-                                {% if isPreselected %}checked{% endif %}
-                            >
-                            <label for="at_{{ type.id }}">
-                                {% if type.icon %}
-                                    <span aria-hidden="true">{{ type.icon }}</span>
-                                {% endif %}
-                                {{ type.name|e }}
-                            </label>
-                        </div>
-                    {% endfor %}
-                </div>
-                {% if preselected_type_ids|length > 0 %}
-                    <p class="ob-preselect-note">
-                        <strong>Pre-selectionnees</strong> selon tes objectifs declares a l'etape 3.
-                        Tu peux les ajuster.
-                    </p>
-                {% endif %}
-            </div>
-        </div>
-
-        {# ── Section : Fréquence d'envoi ────────────────────────────────── #}
-        <div class="ob-section">
-            <div class="ob-section__head">
-                <span class="ob-section__title">Frequence des alertes</span>
-            </div>
-            <div class="ob-section__body">
-                <div class="ob-freq-list" role="group" aria-label="Frequence d'envoi des alertes email">
-                    {% for freq in alert_frequency_options %}
-                        <div class="ob-freq-item">
-                            <input
-                                type="radio"
-                                id="freq_{{ freq.value }}"
-                                name="frequency"
-                                value="{{ freq.value }}"
-                                {#
-                                    Défaut : DAILY est pré-sélectionné car c'est le meilleur
-                                    équilibre entre information et respect de la boîte mail.
-                                    (cf. AlertFrequency::Daily comme valeur par défaut dans l'entité)
-                                #}
-                                {% if freq.value == 'daily' %}checked{% endif %}
-                                required
-                            >
-                            <label for="freq_{{ freq.value }}">
-                                <span class="ob-radio-visual" aria-hidden="true">
-                                    <span class="ob-radio-dot"></span>
-                                </span>
-                                {{ freq.label()|e }}
-                            </label>
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-
-        {# Note de fin d'onboarding #}
-        <div class="ob-welcome-note">
-            C'est la derniere etape. En cliquant sur "Finaliser", ton profil sera
-            cree et tu recevras un email de bienvenue.
-            Tu pourras tout modifier depuis ton espace personnel.
-        </div>
-
-        {# ── Boutons ─────────────────────────────────────────────────────── #}
+        {# ── Navigation ────────────────────────────────────────────────── #}
         <div class="ob-actions">
-            <a href="{{ path('app_onboarding_step3') }}" class="ob-btn-back">Retour</a>
+            <a href="{{ path('app_onboarding_step3') }}" class="ob-btn-back">
+                Retour
+            </a>
             <button type="submit" class="ob-btn-finish">
-                Finaliser mon inscription
+                Finaliser mon profil
             </button>
         </div>
 
+        {#
+          Lien "passer cette etape" — réinitialise le champ radio avant de soumettre.
+          Implémenté en JS natif : on décoche tous les radios puis on soumet le formulaire.
+          Cela envoie un POST sans valeur legal_status, ce qui sera traité comme null
+          dans OnboardingStep4MatchingDTO::fromRequest() (statut non renseigné = OK).
+        #}
+        <button type="button" class="ob-skip-link" id="btn-skip-step4">
+            Passer cette etape (je ne sais pas encore)
+        </button>
+
     </form>
+
+    <div class="ob-final-note">
+        C'est la derniere etape. Tu pourras renseigner ou modifier ton statut juridique
+        a tout moment depuis ton espace personnel.
+    </div>
+
 </div>
+
+{% block javascripts %}
+{{ parent() }}
+<script>
+(function () {
+    'use strict';
+
+    // Bouton "passer cette étape" : décoche les radios et soumet le formulaire.
+    // On obtient ainsi un POST avec legal_status vide → null en PHP → stocké null en BDD.
+    var btnSkip = document.getElementById('btn-skip-step4');
+
+    if (!btnSkip) {
+        return;
+    }
+
+    btnSkip.addEventListener('click', function () {
+        // Décocher tous les radios du groupe legal_status
+        var radios = document.querySelectorAll('input[name="legal_status"]');
+        radios.forEach(function (radio) {
+            radio.checked = false;
+        });
+
+        // Soumettre le formulaire sans valeur sélectionnée
+        // Le formulaire parent du bouton est la balise <form> englobante
+        var form = btnSkip.closest('form');
+        if (form) {
+            form.submit();
+        }
+    });
+}());
+</script>
+{% endblock %}
 {% endblock %}

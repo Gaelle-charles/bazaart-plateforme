@@ -398,23 +398,23 @@ class AuthController extends AbstractController
         // Format : security.authenticator.form_login.<nom_du_firewall>
         $loginResponse = $this->security->login($user, 'security.authenticator.form_login.main', 'main');
 
-        // ── Lot 2 : Aiguillage post-vérification email ────────────────────────
+        // ── Lot A (ADR-0021/0022) : Redirection post-vérification email ──────
         //
-        // Si l'utilisateur n'a pas encore complété l'onboarding (nouveau compte),
-        // on le redirige vers l'étape 1 de l'onboarding.
-        // Sinon, on le redirige vers le dashboard (comportement habituel).
+        // Le gating onboarding global est désactivé en Lot A.
+        // Après confirmation d'email, on redirige toujours vers le dashboard.
+        // L'onboarding sera proposé à l'entrée du module matching (Lot C),
+        // pas forcé immédiatement après l'inscription.
         //
-        // Note : l'onboardingCompleted est false par défaut (cf. User::$onboardingCompleted).
-        // Les comptes existants ont été mis à true via la migration SQL UPDATE.
+        // Note : si Security a produit sa propre Response (cas rare, ex: remember_me),
+        // on l'utilise en priorité — sinon on redirige vers le dashboard.
         if ($loginResponse !== null) {
             // Security a produit sa propre réponse (cas rare avec des listeners spéciaux)
             return $loginResponse;
         }
 
-        // Redirige vers l'onboarding si pas encore complété, sinon vers le dashboard
-        return $user->isOnboardingCompleted()
-            ? $this->redirectToRoute('app_dashboard')
-            : $this->redirectToRoute('app_onboarding_step1');
+        // Redirection vers le dashboard (le gating onboarding est désactivé en Lot A).
+        // L'utilisateur trouvera une bannière lui proposant de compléter son profil.
+        return $this->redirectToRoute('app_dashboard');
     }
 
     // ─── Route : /verifier-email/renvoyer ─────────────────────────────────────

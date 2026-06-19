@@ -127,18 +127,19 @@
 {% block content %}
 <div class="ob-wrap">
 
+    {# Progression — 4 étapes ; étape 3 active #}
     <div class="ob-progress" aria-label="Étape 3 sur 4">
-        <div class="ob-step-dot ob-step-dot--done"></div>
-        <div class="ob-step-dot ob-step-dot--done"></div>
-        <div class="ob-step-dot ob-step-dot--active"></div>
-        <div class="ob-step-dot"></div>
+        <div class="ob-step-dot ob-step-dot--done" title="Étape 1 : Type de compte"></div>
+        <div class="ob-step-dot ob-step-dot--done" title="Étape 2 : Profil"></div>
+        <div class="ob-step-dot ob-step-dot--active" title="Étape 3 : Que recherches-tu ?"></div>
+        <div class="ob-step-dot" title="Étape 4 : Statut juridique"></div>
         <span class="ob-progress__label">Étape 3 / 4</span>
     </div>
 
     <h1 class="ob-title">Que <span class="it">recherches-tu</span> ?</h1>
     <p class="ob-subtitle">
         Coche tout ce qui correspond a tes besoins.
-        Ces informations nous permettront de personnaliser tes alertes et suggestions.
+        Ces informations permettront de personnaliser les opportunites qui te sont proposees.
     </p>
 
     {% if error %}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
+use App\Enum\LegalStatus;
 use App\Repository\ArtistProfileRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -76,6 +77,23 @@ class ArtistProfile
      */
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $avatarPath = null;
+
+    /**
+     * Statut juridique de l'artiste.
+     *
+     * Collecté à l'étape 4 de l'onboarding (reformulé pour le matching, Lot A).
+     * Utilisé par le moteur de matching (Lot C) pour filtrer les opportunités
+     * selon les critères d'éligibilité (ex : "réservé aux artistes-auteurs").
+     *
+     * nullable: true — non renseigné avant l'onboarding matching, ou pour les
+     * comptes créés avant la mise en place de ce champ (migration non destructive).
+     *
+     * On utilise enumType pour que Doctrine sérialise/désérialise automatiquement
+     * la valeur BDD ('artiste_auteur', etc.) en instance de l'enum LegalStatus.
+     * Cela évite un cast manuel dans les getters/setters.
+     */
+    #[ORM\Column(type: 'string', length: 30, nullable: true, enumType: LegalStatus::class)]
+    private ?LegalStatus $legalStatus = null;
 
     /**
      * Disciplines artistiques de l'artiste.
@@ -279,6 +297,29 @@ class ArtistProfile
     {
         $this->disciplines->removeElement($discipline);
 
+        return $this;
+    }
+
+    // --- Statut juridique (Lot A matching) ---
+
+    /**
+     * Retourne le statut juridique de l'artiste, ou null si non encore renseigné.
+     * Null = compte créé avant la mise en place du champ, ou onboarding non complété.
+     */
+    public function getLegalStatus(): ?LegalStatus
+    {
+        return $this->legalStatus;
+    }
+
+    /**
+     * Définit le statut juridique de l'artiste.
+     * Appelé par OnboardingService::saveStep4AndComplete() à la dernière étape.
+     *
+     * @param LegalStatus|null $legalStatus Instance de l'enum, ou null pour réinitialiser
+     */
+    public function setLegalStatus(?LegalStatus $legalStatus): static
+    {
+        $this->legalStatus = $legalStatus;
         return $this;
     }
 }

@@ -6,14 +6,11 @@ namespace App\Service;
 
 use App\DTO\Onboarding\OnboardingStep2DTO;
 use App\DTO\Onboarding\OnboardingStep3DTO;
-use App\DTO\Onboarding\OnboardingStep4DTO;
+use App\DTO\Onboarding\OnboardingStep4MatchingDTO;
 use App\Entity\ArtistProfile;
-use App\Entity\ResourceAlert;
 use App\Entity\User;
 use App\Enum\ArtistLookingFor;
 use App\Repository\DisciplineRepository;
-use App\Repository\ResourceAlertRepository;
-use App\Repository\ResourceTypeRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
@@ -22,20 +19,27 @@ use Symfony\Component\Mime\Address;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
- * OnboardingService — Logique métier du parcours d'onboarding artiste.
+ * OnboardingService — Logique métier du parcours d'onboarding artiste (reformulé Lot A matching).
  *
  * Ce service centralise toutes les opérations du parcours en 4 étapes :
  *   - Étape 1 : aiguillage artiste/structure (pas de traitement ici, juste navigation)
- *   - Étape 2 : création / mise à jour du profil ArtistProfile
- *   - Étape 3 : enregistrement de lookingFor + lookingForOther sur User
- *   - Étape 4 : création / mise à jour du ResourceAlert + finalisation
+ *   - Étape 2 : création / mise à jour du profil ArtistProfile (nom + discipline + localisation)
+ *   - Étape 3 : enregistrement de lookingFor + lookingForOther sur User ("que recherches-tu ?")
+ *   - Étape 4 : statut juridique + finalisation (marque l'onboarding complété)
+ *
+ * Changements Lot A (ADR-0021/0022) :
+ *   - L'ancienne étape 4 "alertes" est SUPPRIMÉE de l'onboarding.
+ *     La configuration des alertes deviendra un opt-in avec consentement dans le
+ *     module matching (Lot C). On ne crée plus de ResourceAlert automatiquement.
+ *   - La nouvelle étape 4 collecte le statut juridique (LegalStatus) pour le matching.
+ *   - L'email de bienvenue est envoyé à la fin de la nouvelle étape 4.
  *
  * Convention de code :
  *   - Toute la logique Doctrine est ici, jamais dans les controllers.
  *   - Les controllers appellent les méthodes de ce service et se contentent
  *     de rediriger ou de rendre un template selon le résultat.
  *   - Les erreurs de validation retournent une string (message d'erreur),
- *     les succès retournent true ou l'entité créée.
+ *     les succès retournent null.
  */
 final class OnboardingService
 {
@@ -43,45 +47,18 @@ final class OnboardingService
     private const FROM_EMAIL = 'noreply@bazaart.fr';
     private const FROM_NAME  = 'Bazaart';
 
-    /**
-     * Mapping : valeurs ArtistLookingFor → noms de ResourceType à pré-cocher.
-     *
-     * Ce mapping est utilisé à l'étape 4 pour pré-cocher les types de ressources
-     * en fonction de ce que l'artiste a sélectionné à l'étape 3.
-     * Les noms doivent correspondre exactement aux noms créés dans les fixtures.
-     *
-     * RESSOURCES_AIDES  → aides financières, donc "Bourse & Financement"
-     * RESSOURCES_APPELS → opportunités de visibilité : appels, résidences, prix
-     * FORMATIONS        → "Formation" (catégorie dédiée dans la Ressourcerie)
-     * AUTRE             → pas de pré-sélection automatique
-     */
-    private const LOOKING_FOR_TO_RESOURCE_TYPES = [
-        ArtistLookingFor::RESSOURCES_AIDES->value  => ['Bourse & Financement'],
-        ArtistLookingFor::RESSOURCES_APPELS->value => [
-            'Appel a projets',
-            'Appel à projets',   // avec accent, pour robustesse
-            'Résidence artistique',
-            'Prix & Concours',
-        ],
-        ArtistLookingFor::FORMATIONS->value => ['Formation'],
-        ArtistLookingFor::AUTRE->value      => [], // pas de mapping automatique
-    ];
-
     public function __construct(
-        private readonly EntityManagerInterface  $em,
-        private readonly DisciplineRepository    $disciplineRepository,
-        private readonly ResourceTypeRepository  $resourceTypeRepository,
-        private readonly ResourceAlertRepository $resourceAlertRepository,
-        private readonly MailerInterface         $mailer,
-        private readonly LoggerInterface         $logger,
-        // A4 : Router injecté pour générer l'URL absolue du dashboard dans l'email de bienvenue.
+        private readonly EntityManagerInterface $em,
+        private readonly DisciplineRepository   $disciplineRepository,
+        private readonly MailerInterface        $mailer,
+        private readonly LoggerInterface        $logger,
+        // Router injecté pour générer l'URL absolue du dashboard dans l'email de bienvenue.
         // On évite le hardcode 'https://bazaart.fr/dashboard' qui casse en dev/staging.
-        // Symfony autowire UrlGeneratorInterface vers le routeur par défaut.
-        private readonly UrlGeneratorInterface   $router,
+        private readonly UrlGeneratorInterface  $router,
     ) {}
 
     // ═════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 2 — Profil artiste
+    // ÉTAPE 2 — Profil artiste (nom, discipline, localisation)
     // ═════════════════════════════════════════════════════════════════════════
 
     /**
@@ -90,27 +67,29 @@ final class OnboardingService
      * Si l'utilisateur n'a pas encore de profil artiste, on en crée un nouveau.
      * Si il en a déjà un (retour en arrière dans l'onboarding), on met à jour.
      *
+     * Champs obligatoires pour le matching : displayName + au moins une discipline.
+     * La localisation est collectée ici mais reste optionnelle.
+     *
      * @return string|null Null si succès, message d'erreur si échec validation
      */
     public function saveStep2(User $user, OnboardingStep2DTO $dto): ?string
     {
-        // ── Validation manuelle du champ obligatoire ──────────────────────────
-        // (Le Validator symfony ne valide pas les DTOs automatiquement ici ;
+        // ── Validation manuelle des champs obligatoires ───────────────────────
+        // (Le Validator Symfony ne valide pas les DTOs automatiquement ici ;
         //  on le fait manuellement pour rester cohérent avec le reste du projet
-        //  qui utilise des messages d'erreur inline.)
+        //  qui utilise des messages d'erreur inline plutôt que des flash bags.)
+
         if (trim($dto->displayName) === '') {
             return 'Le nom d\'affichage est obligatoire.';
         }
 
-        // A3 : Validation de la longueur max du displayName.
-        // Sans cette vérification, un POST direct avec une valeur > 100 caractères
-        // déclencherait une exception Doctrine (colonne VARCHAR(100) en BDD).
-        // mb_strlen() est utilisé plutôt que strlen() pour compter les caractères Unicode
-        // correctement (les accents, caractères arabes, etc. comptent chacun pour 1).
+        // mb_strlen() pour compter correctement les caractères Unicode
+        // (accents, caractères arabes, etc. comptent chacun pour 1 caractère)
         if (mb_strlen($dto->displayName) > 100) {
             return 'Le nom d\'affichage ne peut pas dépasser 100 caractères.';
         }
 
+        // Au moins une discipline est obligatoire pour le matching (Lot A)
         if (empty($dto->disciplineIds)) {
             return 'Choisis au moins une discipline artistique.';
         }
@@ -121,8 +100,7 @@ final class OnboardingService
         if ($profile === null) {
             // Premier passage à l'étape 2 : création d'un nouveau profil
             $profile = new ArtistProfile();
-            // setUser() sur ArtistProfile et setArtistProfile() sur User
-            // synchronisent les deux côtés de la relation OneToOne.
+            // setUser() synchronise les deux côtés de la relation OneToOne.
             $user->setArtistProfile($profile);
         }
 
@@ -163,11 +141,12 @@ final class OnboardingService
         //
         // L'artiste qui complète l'étape 2 reçoit automatiquement ROLE_ARTIST.
         // On vérifie d'abord qu'il ne l'a pas déjà (pas de doublon dans le tableau).
+        //
+        // getRoles() ajoute dynamiquement ROLE_USER, mais les roles stockés
+        // en BDD ne contiennent que les rôles supplémentaires.
+        // On ne stocke PAS ROLE_USER dans le tableau (il est ajouté automatiquement).
         $roles = $user->getRoles();
         if (!in_array('ROLE_ARTIST', $roles, true)) {
-            // getRoles() ajoute dynamiquement ROLE_USER, mais les roles stockés
-            // en BDD ne contiennent que les rôles supplémentaires.
-            // On ne stocke PAS ROLE_USER dans le tableau (il est ajouté automatiquement).
             $storedRoles = array_unique(array_filter(
                 $roles,
                 static fn (string $r) => $r !== 'ROLE_USER'
@@ -190,7 +169,10 @@ final class OnboardingService
     // ═════════════════════════════════════════════════════════════════════════
 
     /**
-     * Enregistre les objectifs de l'artiste (lookingFor + lookingForOther).
+     * Enregistre les objectifs de l'artiste (lookingFor + lookingForOther) sur User.
+     *
+     * Ces données alimentent le moteur de matching (Lot C) pour personnaliser
+     * les suggestions d'opportunités selon les besoins déclarés.
      *
      * @return string|null Null si succès, message d'erreur si validation échoue
      */
@@ -208,7 +190,7 @@ final class OnboardingService
             return 'Précise ce que tu recherches d\'autre dans le champ texte.';
         }
 
-        // Validation des valeurs : on vérifie que chaque valeur correspond à l'enum
+        // Validation des valeurs : chaque valeur doit correspondre à l'enum
         $validValues = array_column(ArtistLookingFor::cases(), 'value');
         foreach ($dto->lookingForValues as $val) {
             if (!in_array($val, $validValues, true)) {
@@ -232,127 +214,59 @@ final class OnboardingService
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 4 — Alertes ressources
+    // ÉTAPE 4 — Statut juridique + finalisation (Lot A matching)
     // ═════════════════════════════════════════════════════════════════════════
 
     /**
-     * Crée ou met à jour le profil d'alertes (ResourceAlert) de l'utilisateur.
+     * Enregistre le statut juridique de l'artiste et finalise l'onboarding.
      *
-     * Appelé à l'étape 4. Après succès :
-     *   - ResourceAlert persisté en base
+     * Appelé à l'étape 4 (nouvelle). Après succès :
+     *   - ArtistProfile::legalStatus mis à jour (nullable, l'artiste peut passer)
      *   - User::onboardingCompleted = true
      *   - Email de bienvenue envoyé
      *
-     * L'étape 4 ne fait pas de validation bloquante (les filtres sont tous optionnels,
-     * la fréquence a un fallback Daily si invalide). Elle retourne toujours null.
-     * Signature cohérente avec saveStep2() et saveStep3() pour le controller.
+     * NOTE : L'ancienne étape 4 "alertes" (ResourceAlert) est supprimée de l'onboarding.
+     * La configuration des alertes deviendra un opt-in explicite avec consentement
+     * dans le module matching (Lot C). On ne crée donc plus de ResourceAlert ici.
+     *
+     * Le statut juridique est optionnel (l'artiste peut finaliser sans le renseigner).
+     * Cette méthode retourne toujours null (pas de validation bloquante).
+     *
+     * @return null Toujours null pour cohérence de signature avec saveStep2/saveStep3
      */
-    public function saveStep4AndComplete(User $user, OnboardingStep4DTO $dto): null
+    public function saveStep4AndComplete(User $user, OnboardingStep4MatchingDTO $dto): null
     {
-        // ── Récupérer ou créer le ResourceAlert ───────────────────────────────
-        $alert = $this->resourceAlertRepository->findOneBy(['user' => $user]);
-
-        if ($alert === null) {
-            $alert = new ResourceAlert();
-            $alert->setUser($user);
-        }
-
-        // ── Configurer les préférences d'alerte ──────────────────────────────
-        $alert->setFrequency($dto->getFrequencyEnum());
-        $alert->setNotifyOnNewResource(true); // Toujours actif depuis l'onboarding
-
-        // ── Disciplines filtrées ──────────────────────────────────────────────
+        // ── Mettre à jour le statut juridique sur le profil artiste ──────────
         //
-        // On vide d'abord les disciplines existantes (au cas où l'utilisateur
-        // revient à l'étape 4), puis on ré-attache celles du formulaire.
-        foreach ($alert->getFilterDisciplines()->toArray() as $existing) {
-            $alert->removeFilterDiscipline($existing);
-        }
+        // Le profil doit exister (l'étape 2 l'a créé) — on vérifie par sécurité.
+        // Si le profil est null (cas improbable : saut d'étape par URL directe),
+        // on finalise quand même l'onboarding sans planter.
+        $profile = $user->getArtistProfile();
 
-        foreach ($dto->disciplineIds as $disciplineId) {
-            $discipline = $this->disciplineRepository->find($disciplineId);
-            if ($discipline !== null) {
-                $alert->addFilterDiscipline($discipline);
-            }
-        }
-
-        // ── Types de ressources filtrés ───────────────────────────────────────
-        foreach ($alert->getFilterResourceTypes()->toArray() as $existing) {
-            $alert->removeFilterResourceType($existing);
-        }
-
-        foreach ($dto->resourceTypeIds as $typeId) {
-            $type = $this->resourceTypeRepository->find($typeId);
-            if ($type !== null) {
-                $alert->addFilterResourceType($type);
-            }
+        if ($profile !== null) {
+            // getLegalStatusEnum() retourne null si non renseigné ou valeur invalide
+            // → null est une valeur valide pour ce champ (optionnel)
+            $profile->setLegalStatus($dto->getLegalStatusEnum());
+            $this->em->persist($profile);
         }
 
         // ── Finalisation de l'onboarding ─────────────────────────────────────
+        //
+        // On marque l'onboarding comme complété. Le gating (OnboardingGatingListener)
+        // est désactivé en Lot A, mais ce flag reste utile pour :
+        //   - La bannière "complète ton profil" dans le dashboard
+        //   - Le module matching (Lot C) qui vérifie si le profil est complet
         $user->setOnboardingCompleted(true);
 
-        // On persiste explicitement le ResourceAlert (pas de cascade depuis User)
-        $this->em->persist($alert);
         $this->em->persist($user);
         $this->em->flush();
 
         // ── Email de bienvenue ────────────────────────────────────────────────
+        // Envoyé APRÈS le flush pour garantir que l'onboarding est bien persisté
+        // même si l'email échoue.
         $this->sendWelcomeEmail($user);
 
-        return null; // Succès
-    }
-
-    // ═════════════════════════════════════════════════════════════════════════
-    // PRÉ-SÉLECTION DES TYPES DE RESSOURCES (pour l'affichage de l'étape 4)
-    // ═════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Calcule les IDs de ResourceType à pré-cocher à l'étape 4,
-     * en fonction des réponses de l'étape 3.
-     *
-     * Logique de mapping définie dans la constante LOOKING_FOR_TO_RESOURCE_TYPES.
-     * On cherche en base les types par leur nom (insensible à la casse pour robustesse).
-     *
-     * @return list<int> IDs des ResourceType à pré-cocher
-     */
-    public function getPreselectedResourceTypeIds(User $user): array
-    {
-        $lookingFor = $user->getLookingFor();
-
-        // Si l'utilisateur n'a pas encore rempli l'étape 3 → pas de pré-sélection
-        if ($lookingFor === null || empty($lookingFor)) {
-            return [];
-        }
-
-        // Collect les noms des types à pré-cocher selon le mapping
-        $typeNamesToPreselect = [];
-        foreach ($lookingFor as $value) {
-            $names = self::LOOKING_FOR_TO_RESOURCE_TYPES[$value] ?? [];
-            foreach ($names as $name) {
-                $typeNamesToPreselect[] = $name;
-            }
-        }
-
-        if (empty($typeNamesToPreselect)) {
-            return [];
-        }
-
-        // Charger tous les ResourceType en base (petit nombre, pas de N+1 ici)
-        $allTypes = $this->resourceTypeRepository->findAll();
-
-        $preselectedIds = [];
-        foreach ($allTypes as $type) {
-            // Comparaison normalisée (minuscules, sans accents potentiels)
-            // On teste si le nom du type correspond à l'un des noms à pré-cocher
-            foreach ($typeNamesToPreselect as $targetName) {
-                if (mb_strtolower($type->getName()) === mb_strtolower($targetName)) {
-                    $preselectedIds[] = $type->getId();
-                    break;
-                }
-            }
-        }
-
-        return array_values(array_unique($preselectedIds));
+        return null; // Succès (signature cohérente avec les autres méthodes)
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -368,15 +282,14 @@ final class OnboardingService
      */
     private function sendWelcomeEmail(User $user): void
     {
-        // Récupère le nom d'affichage — fallback sur l'email si pas de profil artiste
+        // Récupère le nom d'affichage — fallback sur la partie locale de l'email si pas de profil
         $displayName = $user->getArtistProfile()?->getDisplayName()
             ?? explode('@', $user->getEmail())[0];
 
         try {
-            // A4 : Génération de l'URL absolue du dashboard.
+            // Génération de l'URL absolue du dashboard.
             // ABSOLUTE_URL produit 'https://bazaart.fr/dashboard' en prod,
-            // 'http://localhost:8080/dashboard' en dev — selon APP_URL / trusted_hosts.
-            // On ne hardcode plus l'URL en dur pour éviter de casser en dev et staging.
+            // 'http://localhost:8080/dashboard' en dev.
             $dashboardUrl = $this->router->generate(
                 'app_dashboard',
                 [],
@@ -386,13 +299,12 @@ final class OnboardingService
             $email = (new TemplatedEmail())
                 ->from(new Address(self::FROM_EMAIL, self::FROM_NAME))
                 ->to($user->getEmail())
-                ->subject('[Bazaart] Bienvenue dans la communaute !')
+                ->subject('[Bazaart] Bienvenue dans la communauté !')
                 ->htmlTemplate('emails/welcome_onboarding.html.twig')
                 ->textTemplate('emails/welcome_onboarding.txt.twig')
                 ->context([
                     'user'         => $user,
                     'displayName'  => $displayName,
-                    // A4 : URL générée dynamiquement (plus de hardcode)
                     'dashboardUrl' => $dashboardUrl,
                 ]);
 
@@ -406,6 +318,7 @@ final class OnboardingService
         } catch (\Throwable $e) {
             // On attrape toute erreur (SMTP, rendu Twig) pour ne pas faire échouer
             // l'onboarding si l'envoi de l'email échoue.
+            // L'utilisateur peut toujours accéder au site — ce n'est pas bloquant.
             $this->logger->error(
                 sprintf('Echec envoi email bienvenue onboarding a %s : %s', $user->getEmail(), $e->getMessage()),
                 ['user_id' => $user->getId(), 'exception' => $e]
