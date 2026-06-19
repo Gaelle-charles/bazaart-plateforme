@@ -286,7 +286,15 @@ class ListingUrlDiscoverer
             // On soumet l'URL suggérée à scoreUrl() : si la page répond en HTTP 200 HTML
             // et passe la garde SSRF, on la considère valide pour persistance.
             // Sinon on ignore la suggestion LLM et on retourne "aucune URL trouvée".
-            $llmScore = $this->scoreUrl($listingUrl);
+            //
+            // POURQUOI allowApiFallback: true ici ?
+            //   La page d'accueil a déjà été récupérée via ScraperAPI (dans doFetch) car
+            //   le fetch direct était bloqué par le site. L'URL choisie par le LLM est sur
+            //   le MÊME domaine bloqué → le fetch direct de vérification échouera aussi.
+            //   On autorise donc le repli API pour cette vérification unique — un seul appel
+            //   API supplémentaire, pas 30 comme dans la boucle heuristique.
+            //   Le repli n'est déclenché que si scraper_api_enabled=true ET clé configurée.
+            $llmScore = $this->scoreUrl($listingUrl, allowApiFallback: true);
 
             if ($llmScore === null) {
                 // URL injoignable, non sûre, ou non-HTML — on rejette la suggestion LLM
@@ -408,10 +416,19 @@ class ListingUrlDiscoverer
      * Retourne 0..N si la page répond en HTTP 200 HTML (même si aucun mot-clé trouvé).
      * Un score de 0 signifie "répond mais ne ressemble pas à une page-liste".
      *
-     * @param string $url URL à tester
+     * PARAMÈTRE $allowApiFallback :
+     *   Quand false (défaut) : fetch direct uniquement — comportement d'origine.
+     *   Quand true  : si le fetch direct échoue, tente le repli via ScraperAPI
+     *                 (même logique que doFetch via fetchHtmlRobust).
+     *   On n'active le repli QUE pour la vérification de l'URL unique choisie par le LLM
+     *   (un seul appel API). On ne l'active PAS dans la boucle heuristique (~30 URLs)
+     *   pour éviter de consommer 30 crédits API par site.
+     *
+     * @param string $url              URL à tester
+     * @param bool   $allowApiFallback Si true, active le repli ScraperAPI en cas d'échec direct
      * @return int|null Score de mots-clés détectés, ou null si la page est inaccessible/non sûre/non-HTML
      */
-    private function scoreUrl(string $url): ?int
+    private function scoreUrl(string $url, bool $allowApiFallback = false): ?int
     {
         // ── Garde SSRF : vérifier l'hôte AVANT toute requête ─────────────────
         // On bloque localhost, IPs privées, link-local (169.254.x.x — métadonnées cloud)
@@ -423,93 +440,156 @@ class ListingUrlDiscoverer
             return null;
         }
 
-        try {
-            // En-têtes navigateur Chrome 124 complets via buildBrowserHeaders() (trait).
-            // Note : PAS de retry ici car scoreUrl() est appelé sur ~30 URLs en heuristique.
-            // Retenter chaque URL multiplierait le temps total par 3 — trop lent pour un batch.
-            // Le retry est réservé aux fetches unitaires (doFetch, fetchPage) sur une seule URL.
-            $browserHeaders = $this->buildBrowserHeaders();
-
-            $response = $this->httpClient->request('GET', $url, [
-                'headers'       => $browserHeaders,
-                'timeout'       => self::HEURISTIC_TIMEOUT,
-                // Désactiver la vérification SSL pour les sites avec certificats problématiques
-                // (fréquent sur les petites structures culturelles)
-                'verify_peer'   => false,
-                'verify_host'   => false,
-                // Réduit à MAX_REDIRECTS (3) pour limiter la surface SSRF :
-                // une longue chaîne de redirections pourrait aboutir sur une IP interne.
-                'max_redirects' => self::MAX_REDIRECTS,
-            ]);
-
-            // ── Vérification du code HTTP ─────────────────────────────────────
-            $statusCode = $response->getStatusCode();
-            if ($statusCode !== 200) {
-                // 404 = chemin inexistant (le plus fréquent), 403/401 = accès refusé, etc.
-                return null;
-            }
-
-            // ── Contrôle anti-SSRF sur l'URL EFFECTIVE (après redirections) ───
-            // Le client HTTP suit automatiquement les redirections (max MAX_REDIRECTS).
-            // Un domaine public pourrait rediriger vers 169.254.x.x (métadonnées cloud)
-            // ou vers une IP RFC1918. On vérifie l'URL finale résolue.
-            $effectiveUrl = (string) ($response->getInfo('url') ?? '');
-            if ($effectiveUrl !== '' && !$this->isSafeHost($effectiveUrl)) {
-                $this->logger->warning('[ListingDiscoverer] SSRF bloqué : redirection vers hôte non sûr.', [
-                    'original'     => $url,
-                    'effectiveUrl' => $effectiveUrl,
+        // ── Fetch du HTML : direct ou avec repli API selon $allowApiFallback ─
+        // On extrait la logique de fetch dans une closure pour pouvoir la passer
+        // à fetchHtmlRobust() si le repli est activé, sans dupliquer le code.
+        //
+        // POURQUOI une closure ici plutôt que réutiliser doFetch() ?
+        //   doFetch() est dimensionné pour la page d'accueil (HOMEPAGE_TIMEOUT = 20s,
+        //   HOMEPAGE_FETCH_BYTES = 400 Ko) et inclut un retry 3×. scoreUrl() est appelé
+        //   sur des URLs candidates (heuristique ou LLM) où on veut :
+        //   - Timeout court (HEURISTIC_TIMEOUT = 8s) — on veut une réponse rapide
+        //   - Lecture limitée à BODY_INSPECT_BYTES (30 Ko) — on cherche des mots-clés,
+        //     pas à rendre la page complète
+        //   - PAS de retry (trop lent en boucle heuristique sur ~30 URLs)
+        //   Le repli API est déclenché par fetchHtmlRobust() UNIQUEMENT si $allowApiFallback=true.
+        $directFetchFn = function () use ($url): ?string {
+            try {
+                // En-têtes navigateur Chrome 124 complets via buildBrowserHeaders() (trait).
+                // Note : PAS de retry ici car scoreUrl() est appelé sur ~30 URLs en heuristique.
+                // Retenter chaque URL multiplierait le temps total par 3 — trop lent pour un batch.
+                // Le retry est réservé aux fetches unitaires (doFetch, fetchPage) sur une seule URL.
+                $response = $this->httpClient->request('GET', $url, [
+                    'headers'       => $this->buildBrowserHeaders(),
+                    'timeout'       => self::HEURISTIC_TIMEOUT,
+                    // Désactiver la vérification SSL pour les sites avec certificats problématiques
+                    // (fréquent sur les petites structures culturelles)
+                    'verify_peer'   => false,
+                    'verify_host'   => false,
+                    // Réduit à MAX_REDIRECTS (3) pour limiter la surface SSRF :
+                    // une longue chaîne de redirections pourrait aboutir sur une IP interne.
+                    'max_redirects' => self::MAX_REDIRECTS,
                 ]);
+
+                // ── Vérification du code HTTP ─────────────────────────────────────
+                $statusCode = $response->getStatusCode();
+                if ($statusCode !== 200) {
+                    // 404 = chemin inexistant (le plus fréquent), 403/401 = accès refusé, etc.
+                    return null;
+                }
+
+                // ── Contrôle anti-SSRF sur l'URL EFFECTIVE (après redirections) ───
+                // Le client HTTP suit automatiquement les redirections (max MAX_REDIRECTS).
+                // Un domaine public pourrait rediriger vers 169.254.x.x (métadonnées cloud)
+                // ou vers une IP RFC1918. On vérifie l'URL finale résolue.
+                $effectiveUrl = (string) ($response->getInfo('url') ?? '');
+                if ($effectiveUrl !== '' && !$this->isSafeHost($effectiveUrl)) {
+                    $this->logger->warning('[ListingDiscoverer] SSRF bloqué : redirection vers hôte non sûr.', [
+                        'original'     => $url,
+                        'effectiveUrl' => $effectiveUrl,
+                    ]);
+                    return null;
+                }
+
+                // ── Vérification du Content-Type ──────────────────────────────────
+                // On ne veut que des pages HTML — pas des PDFs, images, feeds XML, etc.
+                $headers     = $response->getHeaders(false);
+                $contentType = implode(' ', $headers['content-type'] ?? []);
+
+                if (!str_contains($contentType, 'html')) {
+                    // Content-Type non-HTML : le chemin pointe vers un asset, un feed, etc.
+                    return null;
+                }
+
+                // ── Lecture partielle du body via stream (AV-3) ───────────────────
+                // On utilise $this->httpClient->stream($response) pour lire chunk par chunk
+                // et s'arrêter à BODY_INSPECT_BYTES octets maximum.
+                // Évite de charger la page entière en mémoire (certaines pages dépassent
+                // 5 Mo avec les scripts inline) alors qu'on ne regarde que du texte.
+                // cancel() stoppe le téléchargement dès qu'on a assez de données.
+                $bodyChunk = '';
+                foreach ($this->httpClient->stream($response) as $chunk) {
+                    $bodyChunk .= $chunk->getContent();
+                    if (strlen($bodyChunk) >= self::BODY_INSPECT_BYTES) {
+                        // On a lu assez — on annule le reste du téléchargement
+                        $response->cancel();
+                        break;
+                    }
+                }
+
+                // Tronquer au cas où le dernier chunk dépasserait légèrement la limite
+                $bodyChunk = substr($bodyChunk, 0, self::BODY_INSPECT_BYTES);
+
+                // On retourne null si le body est vide (page blanche, CAPTCHA pur JS…)
+                return trim($bodyChunk) === '' ? null : $bodyChunk;
+
+            } catch (\Throwable) {
+                // Timeout, DNS, SSL, erreur réseau → silencieux
+                // On retourne null : cette URL est considérée comme inaccessible
                 return null;
             }
+        };
 
-            // ── Vérification du Content-Type ──────────────────────────────────
-            // On ne veut que des pages HTML — pas des PDFs, images, feeds XML, etc.
-            $headers     = $response->getHeaders(false);
-            $contentType = implode(' ', $headers['content-type'] ?? []);
+        // ── Récupérer le HTML : direct OU direct + repli API ──────────────────
+        // Si $allowApiFallback = false (boucle heuristique) : on appelle la closure
+        // directement, sans passer par fetchHtmlRobust() — pas de repli API.
+        // Si $allowApiFallback = true (vérification URL LLM) : on passe par
+        // fetchHtmlRobust() qui déclenche le repli ScraperAPI si le direct échoue.
+        if ($allowApiFallback) {
+            // Un seul appel API possible ici (URL unique choisie par le LLM).
+            // Les gardes SSRF sont maintenues dans $directFetchFn (URL initiale)
+            // et dans ScraperApiClient::fetchViaApi() (URL effective via API).
+            $html = $this->fetchHtmlRobust(
+                $url,
+                $directFetchFn,
+                $this->scraperApiClient,
+                fn(string $u): bool => $this->isSafeHost($u),
+                $this->logger,
+            );
+        } else {
+            // Boucle heuristique : fetch direct uniquement, sans quota API
+            $html = $directFetchFn();
+        }
 
-            if (!str_contains($contentType, 'html')) {
-                // Content-Type non-HTML : le chemin pointe vers un asset, un feed, etc.
-                return null;
-            }
-
-            // ── Lecture partielle du body via stream (AV-3) ───────────────────
-            // On utilise $this->httpClient->stream($response) pour lire chunk par chunk
-            // et s'arrêter à BODY_INSPECT_BYTES octets maximum.
-            // Évite de charger la page entière en mémoire (certaines pages dépassent
-            // 5 Mo avec les scripts inline) alors qu'on ne regarde que du texte.
-            // cancel() stoppe le téléchargement dès qu'on a assez de données.
-            $bodyChunk = '';
-            foreach ($this->httpClient->stream($response) as $chunk) {
-                $bodyChunk .= $chunk->getContent();
-                if (strlen($bodyChunk) >= self::BODY_INSPECT_BYTES) {
-                    // On a lu assez — on annule le reste du téléchargement
-                    $response->cancel();
-                    break;
-                }
-            }
-            // Tronquer au cas où le dernier chunk dépasserait légèrement la limite
-            $bodyChunk = substr($bodyChunk, 0, self::BODY_INSPECT_BYTES);
-            $bodyLower = mb_strtolower($bodyChunk);
-
-            // ── Comptage des mots-clés "listing" ──────────────────────────────
-            // On compte combien de mots-clés DIFFÉRENTS de LISTING_KEYWORDS apparaissent.
-            // Chaque mot-clé compte pour 1, même s'il apparaît plusieurs fois.
-            // Cela pénalise les pages qui répètent "deadline" dans un seul article
-            // plutôt qu'une vraie liste avec plusieurs mots-clés de types différents.
-            $score = 0;
-            foreach (self::LISTING_KEYWORDS as $keyword) {
-                if (str_contains($bodyLower, $keyword)) {
-                    $score++;
-                }
-            }
-
-            return $score;
-
-        } catch (\Throwable) {
-            // Timeout, DNS, SSL, erreur réseau → silencieux
-            // On retourne null : cette URL est considérée comme inaccessible
+        // HTML null = page inaccessible (toutes voies épuisées)
+        if ($html === null) {
             return null;
         }
+
+        // ── Vérification du Content-Type (cas repli API) ──────────────────────
+        // Quand le repli ScraperAPI est utilisé, le HTML est déjà décodé par
+        // ScraperApiClient::fetchViaApi() — on vérifie simplement que c'est du HTML.
+        // Pour le fetch direct, la vérification Content-Type est déjà faite dans
+        // $directFetchFn ci-dessus (retourne null si non-HTML).
+        // On ajoute une garde minimale sur le contenu pour le cas API :
+        // si le body ne ressemble pas du tout à du HTML (< 50 chars ou pas de '<'),
+        // on le rejette comme non-HTML.
+        if ($allowApiFallback && !str_contains($html, '<')) {
+            // Réponse API non-HTML (JSON d'erreur, texte brut, etc.) — on rejette
+            $this->logger->debug('[ListingDiscoverer] scoreUrl(API) : body sans balise HTML, rejeté.', [
+                'url' => $url,
+            ]);
+            return null;
+        }
+
+        // ── Comptage des mots-clés "listing" ──────────────────────────────────
+        // On compte combien de mots-clés DIFFÉRENTS de LISTING_KEYWORDS apparaissent.
+        // Chaque mot-clé compte pour 1, même s'il apparaît plusieurs fois.
+        // Cela pénalise les pages qui répètent "deadline" dans un seul article
+        // plutôt qu'une vraie liste avec plusieurs mots-clés de types différents.
+        // On travaille sur les premiers BODY_INSPECT_BYTES pour rester constant
+        // même quand le repli API retourne un HTML plus complet.
+        $bodyChunk = substr($html, 0, self::BODY_INSPECT_BYTES);
+        $bodyLower = mb_strtolower($bodyChunk);
+
+        $score = 0;
+        foreach (self::LISTING_KEYWORDS as $keyword) {
+            if (str_contains($bodyLower, $keyword)) {
+                $score++;
+            }
+        }
+
+        return $score;
     }
 
     // ════════════════════════════════════════════════════════════════════════════

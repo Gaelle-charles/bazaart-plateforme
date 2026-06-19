@@ -189,15 +189,32 @@ class SeedSettingsCommand extends Command
                 //   {key} → remplacé par la valeur de scraper_api_key (URL-encodé)
                 //   {url} → remplacé par l'URL cible à scraper (URL-encodé avec rawurlencode)
                 // Ce template permet de changer de provider sans modifier le code.
-                // ScraperAPI (défaut) : https://api.scraperapi.com/?api_key={key}&url={url}&render=true
-                // ScrapingAnt         : https://api.scrapingant.com/v2/general?api_key={key}&url={url}
+                //
+                // POURQUOI sans &render=true par défaut ?
+                //   &render=true active le rendu JavaScript côté ScraperAPI (navigateur headless).
+                //   Inconvénients du rendu JS :
+                //     - Plus lent (~5-15s au lieu de ~1-3s)
+                //     - Consomme 5 crédits API au lieu de 1 (coût x5)
+                //     - Peut échouer ou timeout sur certains sites avec animations lourdes
+                //   Pour Bazaart, le cas d'usage principal est le contournement de blocage IP,
+                //   PAS le rendu de SPAs JavaScript (les pages-listes cibles ont du HTML statique).
+                //   Le proxy simple (sans render) suffit largement pour les blocages d'IP.
+                //   Si un site nécessite vraiment le rendu JS, ajouter un 2e setting
+                //   'scraper_api_url_template_js' avec &render=true depuis /admin/settings.
+                //
+                // Valeurs par défaut :
+                //   ScraperAPI (proxy simple) : https://api.scraperapi.com/?api_key={key}&url={url}
+                //   ScraperAPI (avec rendu JS) : https://api.scraperapi.com/?api_key={key}&url={url}&render=true
+                //   ScrapingAnt               : https://api.scrapingant.com/v2/general?api_key={key}&url={url}
                 'key'         => 'scraper_api_url_template',
-                'value'       => 'https://api.scraperapi.com/?api_key={key}&url={url}&render=true',
+                'value'       => 'https://api.scraperapi.com/?api_key={key}&url={url}',
                 'is_secret'   => false, // Template visible — la clé reste dans scraper_api_key
                 'label'       => 'Template URL de l\'API de scraping',
                 'description' => 'Template provider-agnostique pour l\'appel à l\'API de scraping. '
                     . 'Placeholders : {key} = clé API, {url} = URL cible (URL-encodée). '
-                    . 'ScraperAPI (défaut) : https://api.scraperapi.com/?api_key={key}&url={url}&render=true '
+                    . 'Défaut ScraperAPI (proxy simple, sans rendu JS) : '
+                    . 'https://api.scraperapi.com/?api_key={key}&url={url} '
+                    . 'Avec rendu JS (x5 crédits, pour SPAs) : ajouter &render=true à la fin. '
                     . 'ScrapingAnt : https://api.scrapingant.com/v2/general?api_key={key}&url={url} '
                     . 'Modifier uniquement si vous changez de provider.',
             ],
