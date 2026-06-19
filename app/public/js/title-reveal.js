@@ -143,7 +143,8 @@
         '.lp-hero__h1',                /* H1 hero — déclenché au chargement */
         '.lp-section-header__title',   /* titres de sections (h2) */
         '.lp-saas__h2',                /* "Tout ce dont tu as besoin..." */
-        '.lp-hub__name',               /* noms des hubs */
+        /* .lp-hub__name EXCLU volontairement : pas d'animation sur les cartes
+           des 3 hubs (le titre de section reste animé, lui). */
 
         /* === RESSOURCERIE === */
         '.opp-title',
