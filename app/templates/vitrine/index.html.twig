@@ -223,9 +223,14 @@
    en blanc / blanc semi-transparent. Seules les classes DANS .lp-hero
    sont affectées : les autres sections restent inchangées. */
 
-/* Eyebrow dans le hero : blanc cassé semi-transparent */
+/* Eyebrow dans le hero : blanc cassé semi-transparent.
+   margin-bottom : espace discret entre l'eyebrow et la ligne du titre.
+   On utilise --eyebrow-gap s'il existe (défini dans design-tokens.css),
+   avec un fallback à 10px (valeur médiane dans la fourchette demandée 8-12px). */
 .lp-hero .lp-eyebrow {
-    color: rgba(255, 255, 255, 0.75);
+    color:         rgba(255, 255, 255, 0.75);
+    margin-bottom: var(--eyebrow-gap, 10px);
+    display:       block;  /* block pour que margin-bottom soit effective */
 }
 /* Le carré lime ::before reste lime — il est déjà contrasté sur fond sombre */
 
@@ -377,14 +382,24 @@
     background:    #0D0D0D;
 }
 
-/* ── Ancien .lp-hero__sticky : conservé comme div wrapper mais sans sticky ──
-   La div .lp-hero__sticky est encore dans le HTML. On lui retire le comportement
-   sticky et on la fait couvrir toute la section. */
+/* ── .lp-hero__sticky : colonne flex centrée verticalement, alignée à gauche ──
+   Auparavant en position:absolute avec les enfants positionnés en absolute.
+   Nouvelle disposition : flex-column + justify-content:center pour centrer
+   verticalement le bloc [eyebrow → titre → sous-titre → CTAs] dans le hero.
+   align-items:flex-start = alignement gauche (texte reste justifié à gauche).
+   Le padding-inline applique le même retrait horizontal que .lp-container. */
 .lp-hero__sticky {
-    /* Plus de position:sticky. Simple conteneur qui couvre toute la section. */
-    position: absolute;
-    inset:    0;
-    overflow: hidden;
+    /* Couvre toute la section hero (100vh) */
+    position:        absolute;
+    inset:           0;
+    overflow:        hidden;
+    /* Flex colonne : centre verticalement le contenu dans la section */
+    display:         flex;
+    flex-direction:  column;
+    justify-content: center;
+    align-items:     flex-start;
+    /* Padding horizontal identique au conteneur global */
+    padding-inline:  var(--container-px, 32px);
 }
 
 /* ── Couche 1 : image de fond (hero-bazaart.jpg) ────────────────────── */
@@ -413,16 +428,20 @@
     );
 }
 
-/* ── Couche 2 : texte du hero (titre + sous-titre) ─────────────────────
-   Ancré en bas de la section. Plus d'animation JS scroll-expand :
-   le H1 est animé par title-reveal.js (effet par caractère). */
+/* ── Couche 2 : texte du hero (eyebrow + titre + sous-titre) ────────────
+   Auparavant en position:absolute, ancré en bas à 15%.
+   Désormais dans le flux flex de .lp-hero__sticky :
+   le parent flex (justify-content:center) gère le centrage vertical.
+   z-index:3 conservé pour passer devant .lp-hero__bg (z-index:0).
+   Le padding-inline est porté par .lp-hero__sticky (parent).
+   width:100% garantit l'alignement gauche des enfants.
+   max-width : limite la largeur du texte sur très grands écrans (> 1200px)
+   pour garder une longueur de ligne lisible et un effet éditorial resserré. */
 .lp-hero__text {
-    position:       absolute;
-    bottom:         15%;
-    left:           0;
-    right:          0;
-    z-index:        3;
-    padding-inline: var(--container-px, 32px);
+    position:  relative;   /* contexte d'empilement, plus d'absolu */
+    z-index:   3;
+    width:     100%;
+    max-width: 860px;      /* plafond de lisibilité sur grand écran */
 }
 
 /* Ligne du titre : overflow:hidden conservé pour l'animation title-reveal
@@ -456,38 +475,37 @@
 }
 
 /* Couche 3 : CTAs du hero.
-   Toujours visibles et cliquables, dès le chargement et pendant tout
-   le scroll (Option 1 validée : pas de masquage progressif).
-   will-change:opacity supprimé : aucune animation sur l'opacité des CTAs. */
+   Auparavant en position:absolute, ancré à 7% du bas.
+   Désormais dans le flux flex de .lp-hero__sticky :
+   s'affiche juste sous le sous-titre, grâce au flux de la colonne.
+   Le margin-top crée l'espace entre .lp-hero__desc et les CTAs.
+   z-index:4 conservé pour passer devant le texte (z-index:3).
+   Option 1 validée : pas de masquage progressif, toujours visibles. */
 .lp-hero__ctas-reveal {
-    position:       absolute;
-    bottom:         7%;
-    left:           0;
-    right:          0;
-    z-index:        4;
-    padding-inline: var(--container-px, 32px);
-    display:        flex;
-    gap:            12px;
+    position:   relative;
+    z-index:    4;
+    display:    flex;
+    gap:        12px;
+    margin-top: 28px;  /* espace entre le sous-titre et les CTAs */
+    flex-wrap:  wrap;  /* évite le débordement sur petits écrans */
 }
 
 /* NOTE : la règle .js-hero-scroll-active .lp-hero__ctas-reveal (opacity:0)
    a été supprimée. Les CTAs ne sont plus jamais masqués par le JS. */
 
-/* ── Bandeau métadonnées (eyebrow + coordonnées) ────────────────────── */
+/* ── Coordonnées géographiques : discret en haut à droite ───────────────
+   Auparavant .lp-hero__meta contenait eyebrow + coordonnées (flex row).
+   Désormais l'eyebrow est dans le flux du bloc de contenu centré.
+   .lp-hero__meta ne contient plus que les coordonnées, positionnées en
+   absolu dans le coin haut-droit, sous la navbar, de façon discrète.
+   top = hauteur navbar (--nav-height 64px) + 16px d'air.
+   right = même padding horizontal que le conteneur global.
+   z-index:5 pour être devant tous les autres éléments du hero. */
 .lp-hero__meta {
-    position:        absolute;
-    top:             0;
-    left:            0;
-    right:           0;
-    z-index:         5;
-    display:         flex;
-    justify-content: space-between;
-    align-items:     center;
-    /* padding-top = hauteur de la navbar (token CSS --nav-height = 64px dans Street).
-       On ajoute 16px de marge pour aérer le contenu sous la navbar.
-       Plus de calcul JS nécessaire (le JS scroll-expand a été supprimé). */
-    padding-top:     calc(var(--nav-height, 64px) + 16px);
-    padding-inline:  var(--container-px, 32px);
+    position: absolute;
+    top:      calc(var(--nav-height, 64px) + 16px);
+    right:    var(--container-px, 32px);
+    z-index:  5;
 }
 
 /* ── Coordonnées géographiques ──────────────────────────────────────── */
@@ -551,10 +569,15 @@
     .lp-hero__h1 {
         overflow-wrap: break-word;
     }
+    /* .lp-hero__meta ne contient plus que les coordonnées (span unique).
+       Sur mobile, on le place en bas à droite pour libérer le haut,
+       ou on le masque si l'espace est trop contraint — ici on le garde
+       en haut à droite mais avec un font-size réduit. */
     .lp-hero__meta {
-        flex-direction: column;
-        align-items:    flex-start;
-        gap:            8px;
+        right: 16px;  /* padding réduit sur mobile */
+    }
+    .lp-hero__coords {
+        font-size: 10px;  /* légèrement plus petit sur mobile */
     }
 }
 
@@ -564,12 +587,16 @@
         letter-spacing: -.01em;
         line-height:    .92;
     }
-    .lp-hero__text {
-        bottom: 20%;
-    }
+    /* .lp-hero__text : plus de bottom:20% (désormais dans le flux flex) */
     .lp-hero__ctas-reveal {
+        /* Sur petit mobile : empile les deux CTAs en colonne */
         flex-direction: column;
-        bottom:         6%;
+        /* margin-top légèrement réduit pour économiser l'espace vertical */
+        margin-top:     20px;
+    }
+    /* Réduire légèrement le padding du sticky sur très petit écran */
+    .lp-hero__sticky {
+        padding-inline: 16px;
     }
 }
 
@@ -1612,13 +1639,18 @@
         {# ════════════════════════════════════════════════════════════════
            2. HERO — Photo fixe 100vh
 
-           Architecture simplifiée (plus de scroll-expand) :
-           - .lp-hero          : section 100vh, photo de fond statique
-           - .lp-hero__sticky  : div wrapper plein écran (plus de sticky)
-           - .lp-hero__bg      : photo hero-bazaart.jpg + voile sombre ::after
-           - .lp-hero__text    : titre H1 + sous-titre (positionnés en bas)
-           - .lp-hero__ctas-reveal : CTAs toujours visibles
-           - .lp-hero__meta    : eyebrow + coordonnées (en haut)
+           Architecture (disposition flex centrée verticalement) :
+           - .lp-hero             : section 100vh, photo de fond statique
+           - .lp-hero__sticky     : flex-column, justify-content:center,
+                                    align-items:flex-start — centre le bloc
+                                    [eyebrow/titre/sous-titre/CTAs] verticalement
+                                    dans le hero, aligné à gauche
+           - .lp-hero__bg         : photo hero-bazaart.jpg + voile sombre ::after
+                                    (position:absolute, hors flux flex)
+           - .lp-hero__meta       : coordonnées seules en position:absolute
+                                    haut-droit, hors flux (discret)
+           - .lp-hero__text       : eyebrow + titre H1 + sous-titre (dans le flux)
+           - .lp-hero__ctas-reveal : CTAs (dans le flux, sous le texte)
 
            Le H1 est animé par title-reveal.js (effet par caractère : fondu
            + blur + bandes lime). Il se déclenche AU CHARGEMENT de la page
@@ -1636,20 +1668,36 @@
                    Le voile sombre est géré via ::after dans le CSS. #}
                 <div class="lp-hero__bg" aria-hidden="true"></div>
 
-                {# Zone de texte : titre + sous-titre.
-                   Le H1 est animé par title-reveal.js (effet par caractère)
-                   et se déclenche au chargement de la page. #}
+                {#
+                    Coordonnées géographiques : détail discret en haut à droite.
+                    Positionnées en absolute via .lp-hero__meta (voir CSS).
+                    Séparées du bloc de contenu centré pour ne pas alourdir
+                    la lecture principale [eyebrow -> titre -> sous-titre -> CTAs].
+                #}
+                <div class="lp-hero__meta" aria-hidden="true">
+                    <span class="lp-hero__coords">
+                        48&deg;&nbsp;51&prime;&nbsp;N&nbsp;Paris, France
+                    </span>
+                </div>
+
+                {# Zone de texte : eyebrow + titre + sous-titre.
+                   Dans le flux flex de .lp-hero__sticky, ce bloc est centré
+                   verticalement dans le hero (justify-content:center sur le parent).
+                   L'eyebrow est désormais ICI, juste au-dessus du titre, et non
+                   plus dans .lp-hero__meta — pour qu'il forme un groupe visuel
+                   cohérent avec le titre (petite marge entre eyebrow et H1). #}
                 <div class="lp-hero__text">
 
-                    {# Bandeau méta : eyebrow + coordonnées géographiques #}
-                    <div class="lp-hero__meta">
-                        <span class="lp-eyebrow" aria-hidden="true">
-                            Association &middot; Plateforme &middot; Fr &middot; 2026
-                        </span>
-                        <span class="lp-hero__coords" aria-hidden="true">
-                            48&deg;&nbsp;51&prime;&nbsp;N&nbsp;Paris, France
-                        </span>
-                    </div>
+                    {#
+                        Eyebrow — "Association · Plateforme · Fr · 2026"
+                        Placé juste avant .lp-hero__title-row pour être
+                        visuellement collé au titre (espace ~10px via margin-bottom
+                        défini dans .lp-hero .lp-eyebrow).
+                        aria-hidden : purement décoratif, le H1 fournit le contexte.
+                    #}
+                    <span class="lp-eyebrow" aria-hidden="true">
+                        Association &middot; Plateforme &middot; Fr &middot; 2026
+                    </span>
 
                     {#
                         H1 — animé par title-reveal.js (effet par caractère).
@@ -1663,10 +1711,6 @@
                         maintenant pris en charge par le mécanisme commun.
                         Il est identifié comme hero (classe .lp-hero__h1) et
                         déclenche l'animation AU CHARGEMENT (sans scroll).
-
-                        Suppression des <span class="lp-hero__title-left/right"> :
-                        l'ancien système JS scroll-expand a été retiré.
-                        Le H1 contient désormais le texte directement.
 
                         overflow:hidden sur .lp-hero__title-row : toujours
                         nécessaire pour contenir les bandes translateX des slices.
