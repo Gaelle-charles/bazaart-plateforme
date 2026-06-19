@@ -122,10 +122,8 @@
  * navigateurs peuvent avoir un "flicker" sur les animations de blur.
  */
 @keyframes tr-char-main {
-    /* opacité de départ remontée à 0.4 (au lieu de 0) : fondu plus léger,
-       les lettres restent partiellement visibles pendant l'animation. */
-    0%   { opacity: 0.4; filter: blur(10px); }
-    100% { opacity: 1;   filter: blur(0px); }
+    0%   { opacity: 0; filter: blur(10px); }
+    100% { opacity: 1; filter: blur(0px); }
 }
 
 /*
@@ -312,8 +310,7 @@
  * .is-revealing sur l'élément parent titre.
  */
 .js-title-reveal-ready .tr-char__main {
-    /* opacité de départ 0.4 (au lieu de 0) : fondu plus léger demandé par Gaëlle. */
-    opacity:    0.4;
+    opacity:    0;
     filter:     blur(10px);
     will-change: opacity, filter;
 }
