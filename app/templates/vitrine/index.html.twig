@@ -2188,11 +2188,8 @@
                     <span class="lp-section-header__sub">forum &amp; lives</span>
                 </div>
                 <div class="lp-section-header__action">
-                    {#
-                        BACK : remplacer href="#" par path('app_forum_index')
-                        quand le module Forum sera livré.
-                    #}
-                    <a href="#" class="lp-btn lp-btn--outline" style="font-size:11px;padding:7px 11px;">
+                    {# Le module Forum est livré : on pointe vers la vraie page. #}
+                    <a href="{{ path('app_forum_index') }}" class="lp-btn lp-btn--outline" style="font-size:11px;padding:7px 11px;">
                         Aller au forum
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M5 12h14M13 5l7 7-7 7"/>
