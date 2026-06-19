@@ -59,6 +59,92 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 trait HttpBrowserFetchTrait
 {
     /**
+     * Télécharge une page HTML en tentant d'abord le fetch direct, puis en se repliant
+     * sur une API de scraping tierce si le fetch direct échoue.
+     *
+     * PRINCIPE D'ÉCONOMIE DE QUOTA :
+     *   On tente TOUJOURS le fetch direct en premier.
+     *   Le repli API n'est déclenché QUE si le fetch direct échoue (non-200, HTML vide,
+     *   timeout réseau). Cela préserve le quota gratuit de l'API de scraping.
+     *
+     * DÉFINITION D'"ÉCHEC" DU FETCH DIRECT :
+     *   - null retourné par $directFetchFn (timeout, DNS, exception réseau)
+     *   - HTTP non-200 (403 Cloudflare, 429 rate limit persistant, etc.)
+     *   - HTML vide ou uniquement des espaces après trim()
+     *
+     * REPLI API :
+     *   - Appelé UNIQUEMENT si $scraperApiClient !== null ET isAvailable() === true
+     *   - $isSafeHostFn est passé au client pour la garde SSRF (obligation de sécurité)
+     *   - Un seul niveau de repli — pas de boucle infinie
+     *
+     * USAGE TYPIQUE (dans un service qui utilise ce trait) :
+     *   $html = $this->fetchHtmlRobust(
+     *       $url,
+     *       fn() => $this->doFetch($url),   // votre méthode de fetch direct
+     *       $this->scraperApiClient,          // peut être null si non injecté
+     *       fn(string $u) => $this->listingUrlDiscoverer->isSafeHost($u),
+     *       $this->logger,
+     *   );
+     *
+     * COMPATIBILITÉ :
+     *   Cette méthode est optionnelle. Si $scraperApiClient est null, elle se comporte
+     *   exactement comme l'ancien code (juste le fetch direct).
+     *
+     * @param string                  $url               URL cible à télécharger
+     * @param callable(): ?string     $directFetchFn     Fonction qui effectue le fetch direct
+     *                                                    et retourne le HTML ou null si échec
+     * @param ScraperApiClient|null   $scraperApiClient  Client API de scraping (null = pas de repli)
+     * @param callable(string): bool  $isSafeHostFn      Callback de garde SSRF (url → bool)
+     * @param LoggerInterface|null    $logger             Logger pour tracer le chemin emprunté
+     * @return string|null HTML téléchargé (depuis le direct ou l'API), ou null si tout a échoué
+     */
+    private function fetchHtmlRobust(
+        string $url,
+        callable $directFetchFn,
+        ?ScraperApiClient $scraperApiClient,
+        callable $isSafeHostFn,
+        ?LoggerInterface $logger = null,
+    ): ?string {
+        // ── Tentative 1 : fetch direct ────────────────────────────────────────────
+        // On appelle la fonction de fetch direct fournie par le service consommateur.
+        // Elle encapsule déjà les en-têtes Chrome 124 + retry (requestWithRetry).
+        $html = $directFetchFn();
+
+        // ── Vérification du résultat direct ──────────────────────────────────────
+        // On considère que le fetch direct a "réussi" si on obtient du HTML non vide.
+        // Un HTML vide (page blanche, body="") est traité comme un échec car le site
+        // a peut-être répondu 200 mais avec une page de CAPTCHA ou un JS challenge.
+        $directFailed = ($html === null || trim($html) === '');
+
+        if (!$directFailed) {
+            // Fetch direct réussi — on retourne le HTML sans toucher au quota API
+            return $html;
+        }
+
+        // ── Tentative 2 : repli via API de scraping ───────────────────────────────
+        // On ne déclenche le repli que si :
+        //   a) Un client API est injecté (service disponible)
+        //   b) Le client est "disponible" : enabled=true ET clé configurée en BDD
+        if ($scraperApiClient === null || !$scraperApiClient->isAvailable()) {
+            // Pas de repli disponible → on retourne null (comportement identique à avant)
+            // Pas de log ici : si le fetch direct a déjà logué, pas besoin de rajouter du bruit
+            return null;
+        }
+
+        // On trace le basculement vers le repli pour suivre la consommation API
+        if ($logger !== null) {
+            $logger->info('[HttpBrowserFetch] Fetch direct échoué, tentative via API de scraping.', [
+                'url' => $url,
+            ]);
+        }
+
+        // fetchViaApi() gère en interne : SSRF, timeout, log succès/erreur
+        // On lui passe la fonction isSafeHost de l'appelant (pas de couplage à ListingUrlDiscoverer)
+        return $scraperApiClient->fetchViaApi($url, $isSafeHostFn);
+    }
+
+
+    /**
      * Construit un bloc d'en-têtes HTTP imitant Chrome 124 sur Windows 11.
      *
      * POURQUOI CES EN-TÊTES SPÉCIFIQUES ?

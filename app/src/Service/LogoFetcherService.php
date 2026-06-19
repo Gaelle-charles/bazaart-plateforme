@@ -78,6 +78,11 @@ class LogoFetcherService
         // On injecte le service complet plutôt que de dupliquer la logique isSafeHost.
         // C'est le seul point de couplage avec ListingUrlDiscoverer — acceptable.
         private readonly ListingUrlDiscoverer $listingUrlDiscoverer,
+
+        // ScraperApiClient — repli API de scraping si fetchPage() échoue.
+        // Null acceptable : si absent ou non configuré, comportement identique à avant.
+        // Les logos ne sont pas critiques — le repli est un bonus, pas une nécessité.
+        private readonly ?ScraperApiClient $scraperApiClient = null,
     ) {
     }
 
@@ -203,79 +208,95 @@ class LogoFetcherService
      */
     private function fetchPage(string $siteRoot): ?string
     {
-        // Options : en-têtes navigateur complets + timeout court (on ne lit que le <head>)
-        $options = [
-            'timeout'       => self::FETCH_TIMEOUT,
-            // 3 redirections couvrent http->https->www — limité pour réduire la surface SSRF.
-            'max_redirects' => self::MAX_REDIRECTS,
-            // En-têtes Chrome 124 complets (via trait HttpBrowserFetchTrait).
-            // Incluent Sec-Fetch-* qui réduisent les faux positifs anti-bot.
-            'headers'       => $this->buildBrowserHeaders(),
-        ];
+        // ── Fetch via fetchHtmlRobust() (trait) ───────────────────────────────────
+        // 1. Tente le fetch direct (closure ci-dessous)
+        // 2. Si le direct échoue ET l'API de scraping est disponible → repli API
+        // Pour les logos, le repli est un bonus : si l'API est trop lente ou indisponible,
+        // on affiche simplement le badge "B" par défaut.
+        return $this->fetchHtmlRobust(
+            $siteRoot,
+            // Closure : fetch direct (logique inchangée, refactorisée ici)
+            function () use ($siteRoot): ?string {
+                // Options : en-têtes navigateur complets + timeout court (on ne lit que le <head>)
+                $options = [
+                    'timeout'       => self::FETCH_TIMEOUT,
+                    // 3 redirections couvrent http->https->www — limité pour réduire la surface SSRF.
+                    'max_redirects' => self::MAX_REDIRECTS,
+                    // En-têtes Chrome 124 complets (via trait HttpBrowserFetchTrait).
+                    // Incluent Sec-Fetch-* qui réduisent les faux positifs anti-bot.
+                    'headers'       => $this->buildBrowserHeaders(),
+                ];
 
-        // requestWithRetry() relance sur timeout / 429 / 5xx (3 tentatives, backoff 1s/2s).
-        // Le logger est fourni pour tracer les retries en niveau INFO.
-        $response = $this->requestWithRetry($this->httpClient, $this->logger, 'GET', $siteRoot, $options);
+                // requestWithRetry() relance sur timeout / 429 / 5xx (3 tentatives, backoff 1s/2s).
+                // Le logger est fourni pour tracer les retries en niveau INFO.
+                $response = $this->requestWithRetry($this->httpClient, $this->logger, 'GET', $siteRoot, $options);
 
-        if ($response === null) {
-            // Toutes les tentatives ont échoué (timeout, DNS, SSL, etc.)
-            return null;
-        }
+                if ($response === null) {
+                    // Toutes les tentatives ont échoué (timeout, DNS, SSL, etc.)
+                    return null;
+                }
 
-        // ── Garde SSRF post-redirection (C1) ──────────────────────────────────
-        // getInfo('url') retourne l'URL finale après que Symfony HttpClient a suivi
-        // toutes les redirections (HTTP 301/302/307/308). C'est cette URL réelle
-        // qu'on doit valider, pas l'URL initiale (déjà vérifiée dans fetchLogoUrl).
-        //
-        // Scénario d'attaque : le site cible redirige vers http://169.254.169.254/...
-        // (métadonnées AWS/DigitalOcean). Sans cette garde, Symfony lirait l'IP interne.
-        //
-        // Note : on appelle getInfo() AVANT getStatusCode() / getContent() pour ne pas
-        // déclencher la lecture du body si l'URL effective est dangereuse.
-        $effectiveUrl = $response->getInfo('url');
-        if (is_string($effectiveUrl) && $effectiveUrl !== '' && $effectiveUrl !== $siteRoot) {
-            if (!$this->listingUrlDiscoverer->isSafeHost($effectiveUrl)) {
-                $this->logger->warning(
-                    '[LogoFetcher] SSRF bloqué : URL effective après redirection rejetée par isSafeHost().',
-                    [
-                        'url_initiale'  => $siteRoot,
-                        'url_effective' => $effectiveUrl,
-                    ]
-                );
-                return null;
-            }
-        }
+                // ── Garde SSRF post-redirection (C1) ──────────────────────────────────
+                // getInfo('url') retourne l'URL finale après que Symfony HttpClient a suivi
+                // toutes les redirections (HTTP 301/302/307/308). C'est cette URL réelle
+                // qu'on doit valider, pas l'URL initiale (déjà vérifiée dans fetchLogoUrl).
+                //
+                // Scénario d'attaque : le site cible redirige vers http://169.254.169.254/...
+                // (métadonnées AWS/DigitalOcean). Sans cette garde, Symfony lirait l'IP interne.
+                //
+                // Note : on appelle getInfo() AVANT getStatusCode() / getContent() pour ne pas
+                // déclencher la lecture du body si l'URL effective est dangereuse.
+                $effectiveUrl = $response->getInfo('url');
+                if (is_string($effectiveUrl) && $effectiveUrl !== '' && $effectiveUrl !== $siteRoot) {
+                    if (!$this->listingUrlDiscoverer->isSafeHost($effectiveUrl)) {
+                        $this->logger->warning(
+                            '[LogoFetcher] SSRF bloqué : URL effective après redirection rejetée par isSafeHost().',
+                            [
+                                'url_initiale'  => $siteRoot,
+                                'url_effective' => $effectiveUrl,
+                            ]
+                        );
+                        return null;
+                    }
+                }
 
-        $statusCode = $response->getStatusCode();
-        if ($statusCode < 200 || $statusCode >= 300) {
-            $this->logger->debug('[LogoFetcher] HTTP non-2xx lors du fetch de la page d\'accueil.', [
-                'site'   => $siteRoot,
-                'status' => $statusCode,
-            ]);
-            return null;
-        }
+                $statusCode = $response->getStatusCode();
+                if ($statusCode < 200 || $statusCode >= 300) {
+                    $this->logger->debug('[LogoFetcher] HTTP non-2xx lors du fetch de la page d\'accueil.', [
+                        'site'   => $siteRoot,
+                        'status' => $statusCode,
+                    ]);
+                    return null;
+                }
 
-        try {
-            // Lecture du contenu, bornée à MAX_BODY_BYTES.
-            // getContent() lit tout le body en mémoire — pour des pages ordinaires
-            // (<< 1 Mo), c'est acceptable ; on tronque après.
-            $content = $response->getContent();
+                try {
+                    // Lecture du contenu, bornée à MAX_BODY_BYTES.
+                    // getContent() lit tout le body en mémoire — pour des pages ordinaires
+                    // (<< 1 Mo), c'est acceptable ; on tronque après.
+                    $content = $response->getContent();
 
-            // Tronquage en octets bruts (pas en chars multibytes) pour respecter
-            // la limite mémoire. Le parsing HTML qui suit tolère un HTML incomplet.
-            if (mb_strlen($content, '8bit') > self::MAX_BODY_BYTES) {
-                $content = substr($content, 0, self::MAX_BODY_BYTES);
-            }
+                    // Tronquage en octets bruts (pas en chars multibytes) pour respecter
+                    // la limite mémoire. Le parsing HTML qui suit tolère un HTML incomplet.
+                    if (mb_strlen($content, '8bit') > self::MAX_BODY_BYTES) {
+                        $content = substr($content, 0, self::MAX_BODY_BYTES);
+                    }
 
-            return $content;
+                    return $content;
 
-        } catch (\Exception $e) {
-            $this->logger->debug('[LogoFetcher] Erreur lors de la lecture du body.', [
-                'site'      => $siteRoot,
-                'exception' => $e->getMessage(),
-            ]);
-            return null;
-        }
+                } catch (\Exception $e) {
+                    $this->logger->debug('[LogoFetcher] Erreur lors de la lecture du body.', [
+                        'site'      => $siteRoot,
+                        'exception' => $e->getMessage(),
+                    ]);
+                    return null;
+                }
+            },
+            // Client API de scraping (null si non injecté → pas de repli)
+            $this->scraperApiClient,
+            // Callback SSRF — délègue à isSafeHost() de ListingUrlDiscoverer
+            fn(string $u): bool => $this->listingUrlDiscoverer->isSafeHost($u),
+            $this->logger,
+        );
     }
 
     /**

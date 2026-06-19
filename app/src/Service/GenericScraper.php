@@ -59,7 +59,28 @@ class GenericScraper
         private readonly LlmExtractorService $llmExtractor,
         // Logger PSR-3 — logs des erreurs sans lever d'exception
         private readonly LoggerInterface $logger,
+        // ScraperApiClient — repli API de scraping si le fetch direct échoue.
+        // Null acceptable : comportement identique à avant si absent ou non configuré.
+        private readonly ?ScraperApiClient $scraperApiClient = null,
+        // ListingUrlDiscoverer — utilisé UNIQUEMENT pour isSafeHost() (garde SSRF).
+        // Injecté pour le callback SSRF du repli API.
+        private readonly ?ListingUrlDiscoverer $listingUrlDiscoverer = null,
     ) {
+        // ── Invariant SSRF (AV-1) ─────────────────────────────────────────────
+        // Si le repli API est configuré mais que ListingUrlDiscoverer est absent,
+        // le callback SSRF dans scrapeHtmlLlm() retournerait toujours true,
+        // ce qui autoriserait l'envoi de n'importe quelle URL (y compris des IP internes)
+        // à l'API de scraping tierce.
+        //
+        // On détecte ce cas dès la construction pour un crash immédiat et explicite
+        // plutôt qu'un bypass silencieux en production.
+        // Fix : injecter les deux services ensemble, ou n'injecter ni l'un ni l'autre.
+        if ($this->scraperApiClient !== null && $this->listingUrlDiscoverer === null) {
+            throw new \LogicException(
+                'GenericScraper : ScraperApiClient nécessite ListingUrlDiscoverer pour la garde SSRF. '
+                . 'Injectez les deux services ensemble ou aucun des deux.'
+            );
+        }
     }
 
     /**
@@ -115,6 +136,25 @@ class GenericScraper
         $opportunities = [];
 
         try {
+            // ── Garde SSRF (AV-2) ─────────────────────────────────────────────────
+            // scrapeHtmlLlm() passe par fetchHtmlRobust() qui applique isSafeHost().
+            // scrapeRss() faisait un httpClient->request() direct sans cette vérification,
+            // ce qui aurait permis de scraper des URLs internes (localhost, 192.168.x.x...)
+            // si une ScrapingSource mal configurée pointait vers une IP privée.
+            //
+            // On applique la même logique que scrapeHtmlLlm() : si ListingUrlDiscoverer
+            // est disponible, on vérifie l'hôte avant tout accès réseau.
+            // Note : pour les sources RSS, le repli ScraperApiClient n'est pas utilisé
+            // (le repli est prévu pour du HTML, pas pour du XML/RSS).
+            if ($this->listingUrlDiscoverer !== null
+                && !$this->listingUrlDiscoverer->isSafeHost($source->getUrl())
+            ) {
+                $this->logger->warning('[GenericScraper] SSRF bloqué : URL RSS rejetée par isSafeHost().', [
+                    'url' => $source->getUrl(),
+                ]);
+                return [];
+            }
+
             $response = $this->httpClient->request('GET', $source->getUrl(), [
                 'headers' => [
                     // User-Agent bot identifié — transparent sur qui fait la requête
@@ -260,44 +300,69 @@ class GenericScraper
      */
     private function scrapeHtmlLlm(ScrapingSource $source): array
     {
-        // Options : en-têtes Chrome 124 + timeout généreux pour les sites lents
-        $options = [
-            // En-têtes Chrome 124 complets — via trait HttpBrowserFetchTrait.
-            // Incluent Sec-Fetch-* qui réduisent les faux positifs anti-bot.
-            'headers'       => $this->buildBrowserHeaders(),
-            // 25s : plus généreux que l'ancien 20s pour les CMS lents
-            'timeout'       => 25,
-            // On suit les redirections courantes (http->https, etc.)
-            'max_redirects' => 5,
-        ];
+        $sourceUrl = $source->getUrl();
 
-        // requestWithRetry() : 3 tentatives avec backoff 1s/2s sur timeout/429/5xx.
-        $response = $this->requestWithRetry($this->httpClient, $this->logger, 'GET', $source->getUrl(), $options);
+        // ── Fetch HTML via fetchHtmlRobust() (trait) ──────────────────────────────
+        // 1. Tente d'abord le fetch direct avec en-têtes Chrome 124 + retry
+        // 2. Si le direct échoue ET l'API de scraping est disponible → repli API
+        // C'est le point central où le repli est déclenché pour le scraping HTML.
+        $html = $this->fetchHtmlRobust(
+            $sourceUrl,
+            // Closure : fetch direct (logique inchangée)
+            function () use ($sourceUrl): ?string {
+                // Options : en-têtes Chrome 124 + timeout généreux pour les sites lents
+                $options = [
+                    // En-têtes Chrome 124 complets — via trait HttpBrowserFetchTrait.
+                    // Incluent Sec-Fetch-* qui réduisent les faux positifs anti-bot.
+                    'headers'       => $this->buildBrowserHeaders(),
+                    // 25s : plus généreux que l'ancien 20s pour les CMS lents
+                    'timeout'       => 25,
+                    // On suit les redirections courantes (http->https, etc.)
+                    'max_redirects' => 5,
+                ];
 
-        if ($response === null) {
-            // Toutes les tentatives ont échoué — le message de log est déjà tracé par le trait.
+                // requestWithRetry() : 3 tentatives avec backoff 1s/2s sur timeout/429/5xx.
+                $response = $this->requestWithRetry($this->httpClient, $this->logger, 'GET', $sourceUrl, $options);
+
+                if ($response === null) {
+                    // Toutes les tentatives ont échoué — message déjà loggé par le trait.
+                    return null;
+                }
+
+                try {
+                    if ($response->getStatusCode() !== 200) {
+                        return null;
+                    }
+
+                    return $response->getContent();
+
+                } catch (\Exception $e) {
+                    $this->logger->warning('[GenericScraper] Erreur lecture HTML', [
+                        'url'   => $sourceUrl,
+                        'error' => $e->getMessage(),
+                    ]);
+                    return null;
+                }
+            },
+            // Client API de scraping (null si non injecté → pas de repli)
+            $this->scraperApiClient,
+            // Callback SSRF — délègue à isSafeHost() si ListingUrlDiscoverer est disponible
+            fn(string $u): bool => $this->listingUrlDiscoverer !== null
+                ? $this->listingUrlDiscoverer->isSafeHost($u)
+                : true,
+            $this->logger,
+        );
+
+        if ($html === null) {
+            // fetch direct ET repli API ont tous les deux échoué
             return [];
         }
 
-        try {
-            if ($response->getStatusCode() !== 200) {
-                return [];
-            }
+        // Le nom du site source = domaine de l'URL, fallback sur le nom BDD
+        $sourceSite = parse_url($sourceUrl, PHP_URL_HOST) ?: $source->getNom();
 
-            $html = $response->getContent();
-            // Le nom du site source = domaine de l'URL, fallback sur le nom BDD
-            $sourceSite = parse_url($source->getUrl(), PHP_URL_HOST) ?: $source->getNom();
-
-            // Délégation complète au LlmExtractorService.
-            // Il gère : nettoyage HTML, appel API, parsing JSON, mapping vers ScrapedOpportunity[]
-            return $this->llmExtractor->extractFromHtml($html, $source->getUrl(), $sourceSite);
-
-        } catch (\Exception $e) {
-            $this->logger->warning('[GenericScraper] Erreur lecture HTML/LLM', [
-                'url'   => $source->getUrl(),
-                'error' => $e->getMessage(),
-            ]);
-            return [];
-        }
+        // Délégation complète au LlmExtractorService.
+        // Il gère : nettoyage HTML, appel API, parsing JSON, mapping vers ScrapedOpportunity[]
+        return $this->llmExtractor->extractFromHtml($html, $sourceUrl, $sourceSite);
     }
 }

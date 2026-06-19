@@ -192,6 +192,10 @@ class ListingUrlDiscoverer
         // (correctif ADR-0017 : le LLM reçoit une liste de liens, pas du texte nettoyé ;
         //  on utilise extractInternalLinks() et normalizeUrl())
         private readonly LinkExtractorService $linkExtractorService,
+        // ScraperApiClient — repli API de scraping quand le fetch direct échoue.
+        // Null acceptable (autowiring optionnel) pour ne pas casser si non configuré.
+        // Le repli n'est déclenché que si scraper_api_enabled=true ET clé configurée en BDD.
+        private readonly ?ScraperApiClient $scraperApiClient = null,
     ) {
     }
 
@@ -689,66 +693,84 @@ class ListingUrlDiscoverer
             return null;
         }
 
-        // Options communes : en-têtes Chrome 124 + SSL souple + redirections limitées.
-        // verify_peer/verify_host = false : certaines petites structures culturelles ont
-        // des certificats problématiques (auto-signés ou CA non reconnue dans Docker).
-        $options = [
-            'headers'       => $this->buildBrowserHeaders(),
-            'timeout'       => self::HOMEPAGE_TIMEOUT,
-            'verify_peer'   => false,
-            'verify_host'   => false,
-            // Réduit à MAX_REDIRECTS (3) — limite la surface SSRF par redirection en chaîne.
-            'max_redirects' => self::MAX_REDIRECTS,
-        ];
+        // ── Fetch direct via fetchHtmlRobust() (trait) ─────────────────────────
+        // fetchHtmlRobust() tente d'abord le fetch direct, puis déclenche le repli
+        // API de scraping si le direct échoue ET que scraper_api_enabled=true + clé présente.
+        //
+        // On passe une closure qui encapsule la logique de fetch direct déjà en place :
+        // en-têtes Chrome 124, retry 3 tentatives, stream borné à $maxBytes, check SSRF.
+        // La closure capture $url et $maxBytes par référence pour être auto-portante.
+        return $this->fetchHtmlRobust(
+            $url,
+            // Closure : fetch direct (logique inchangée, refactorisée ici)
+            function () use ($url, $maxBytes): ?string {
+                // Options communes : en-têtes Chrome 124 + SSL souple + redirections limitées.
+                // verify_peer/verify_host = false : certaines petites structures culturelles ont
+                // des certificats problématiques (auto-signés ou CA non reconnue dans Docker).
+                $options = [
+                    'headers'       => $this->buildBrowserHeaders(),
+                    'timeout'       => self::HOMEPAGE_TIMEOUT,
+                    'verify_peer'   => false,
+                    'verify_host'   => false,
+                    // Réduit à MAX_REDIRECTS (3) — limite la surface SSRF par redirection en chaîne.
+                    'max_redirects' => self::MAX_REDIRECTS,
+                ];
 
-        // requestWithRetry() : 3 tentatives avec backoff 1s/2s sur timeout/429/5xx.
-        // doFetch() n'est appelé que sur la page d'accueil (1 URL par site) — le retry
-        // est acceptable ici contrairement à scoreUrl() qui teste ~30 URLs.
-        $response = $this->requestWithRetry($this->httpClient, $this->logger, 'GET', $url, $options);
+                // requestWithRetry() : 3 tentatives avec backoff 1s/2s sur timeout/429/5xx.
+                // doFetch() n'est appelé que sur la page d'accueil (1 URL par site) — le retry
+                // est acceptable ici contrairement à scoreUrl() qui teste ~30 URLs.
+                $response = $this->requestWithRetry($this->httpClient, $this->logger, 'GET', $url, $options);
 
-        if ($response === null) {
-            // Toutes les tentatives ont échoué (timeout, DNS, SSL, etc.)
-            return null;
-        }
-
-        try {
-            if ($response->getStatusCode() !== 200) {
-                return null;
-            }
-
-            // ── Contrôle anti-SSRF sur l'URL EFFECTIVE (après redirections) ───
-            // Même logique que dans scoreUrl() : un site public pourrait rediriger
-            // vers une IP interne (ex: 169.254.169.254 pour les métadonnées cloud AWS/DO).
-            $effectiveUrl = (string) ($response->getInfo('url') ?? '');
-            if ($effectiveUrl !== '' && !$this->isSafeHost($effectiveUrl)) {
-                $this->logger->warning('[ListingDiscoverer] SSRF bloqué (doFetch) : redirection vers hôte non sûr.', [
-                    'original'     => $url,
-                    'effectiveUrl' => $effectiveUrl,
-                ]);
-                return null;
-            }
-
-            // ── Lecture partielle via stream ───────────────────────────────────
-            // On lit jusqu'à $maxBytes octets maximum.
-            // stream() lit chunk par chunk → la mémoire consommée est bornée même
-            // si la page fait plusieurs Mo (images inline, scripts).
-            // cancel() stoppe le téléchargement réseau dès qu'on a assez.
-            $html = '';
-            foreach ($this->httpClient->stream($response) as $chunk) {
-                $html .= $chunk->getContent();
-                if (strlen($html) >= $maxBytes) {
-                    $response->cancel();
-                    break;
+                if ($response === null) {
+                    // Toutes les tentatives ont échoué (timeout, DNS, SSL, etc.)
+                    return null;
                 }
-            }
-            // Tronquer au cas où le dernier chunk dépasserait légèrement $maxBytes
-            $html = substr($html, 0, $maxBytes);
 
-            return empty(trim($html)) ? null : $html;
+                try {
+                    if ($response->getStatusCode() !== 200) {
+                        return null;
+                    }
 
-        } catch (\Throwable) {
-            return null;
-        }
+                    // ── Contrôle anti-SSRF sur l'URL EFFECTIVE (après redirections) ───
+                    // Même logique que dans scoreUrl() : un site public pourrait rediriger
+                    // vers une IP interne (ex: 169.254.169.254 pour les métadonnées cloud AWS/DO).
+                    $effectiveUrl = (string) ($response->getInfo('url') ?? '');
+                    if ($effectiveUrl !== '' && !$this->isSafeHost($effectiveUrl)) {
+                        $this->logger->warning('[ListingDiscoverer] SSRF bloqué (doFetch) : redirection vers hôte non sûr.', [
+                            'original'     => $url,
+                            'effectiveUrl' => $effectiveUrl,
+                        ]);
+                        return null;
+                    }
+
+                    // ── Lecture partielle via stream ───────────────────────────────────
+                    // On lit jusqu'à $maxBytes octets maximum.
+                    // stream() lit chunk par chunk → la mémoire consommée est bornée même
+                    // si la page fait plusieurs Mo (images inline, scripts).
+                    // cancel() stoppe le téléchargement réseau dès qu'on a assez.
+                    $html = '';
+                    foreach ($this->httpClient->stream($response) as $chunk) {
+                        $html .= $chunk->getContent();
+                        if (strlen($html) >= $maxBytes) {
+                            $response->cancel();
+                            break;
+                        }
+                    }
+                    // Tronquer au cas où le dernier chunk dépasserait légèrement $maxBytes
+                    $html = substr($html, 0, $maxBytes);
+
+                    return empty(trim($html)) ? null : $html;
+
+                } catch (\Throwable) {
+                    return null;
+                }
+            },
+            // Client API de scraping injecté (null si non configuré → pas de repli)
+            $this->scraperApiClient,
+            // Callback SSRF — on réutilise isSafeHost() définie dans ce même service
+            fn(string $u): bool => $this->isSafeHost($u),
+            $this->logger,
+        );
     }
 
     /**

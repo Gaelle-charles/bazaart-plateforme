@@ -147,6 +147,60 @@ class SeedSettingsCommand extends Command
                     . 'Valeur recommandée : 30 (évite de surcharger la file de validation admin). '
                     . 'La commande s\'arrête proprement dès que ce plafond est atteint.',
             ],
+
+            // ── REPLI API DE SCRAPING ─────────────────────────────────────────────────
+            // Ces 3 réglages contrôlent le repli sur une API de scraping tierce quand
+            // le fetch direct est bloqué (IP droplet bannie, Cloudflare Challenge, JS lourd).
+            // PRINCIPE D'ÉCONOMIE : le repli n'est déclenché QUE si le fetch direct échoue.
+            // La clé ne vit PAS dans .env — elle est éditée depuis /admin/settings.
+            [
+                // Interrupteur global du repli API de scraping.
+                // "true" = le repli est autorisé (déclenché seulement en cas d'échec direct)
+                // "false" = pas de repli (comportement identique à avant l'implémentation du repli)
+                // Désactivé par défaut pour ne pas consommer de quota sans décision explicite.
+                'key'         => 'scraper_api_enabled',
+                'value'       => 'false', // Désactivé par défaut — activer depuis /admin/settings
+                'is_secret'   => false,
+                'label'       => 'Repli API de scraping activé',
+                'description' => 'Active le repli sur une API de scraping tierce (ScraperAPI, ScrapingAnt, etc.) '
+                    . 'quand le fetch direct est bloqué par le site cible (IP bannie, Cloudflare, JS lourd). '
+                    . '"true" = repli autorisé (déclenché uniquement en cas d\'échec direct). '
+                    . '"false" = comportement inchangé (pas de repli). '
+                    . 'Nécessite que scraper_api_key soit configurée.',
+            ],
+            [
+                // Clé API du service de scraping tiers.
+                // Obtenir sur https://www.scraperapi.com (compte gratuit = 1000 requêtes/mois)
+                // ou chez un autre provider (ScrapingAnt, BrightData, etc.).
+                // Cette clé ne doit jamais apparaître dans les logs — le service ScraperApiClient
+                // garantit qu'elle n'est jamais loggée.
+                'key'         => 'scraper_api_key',
+                'value'       => null, // À renseigner par l'admin depuis /admin/settings
+                'is_secret'   => true, // Masqué dans l'UI (champ type="password")
+                'label'       => 'Clé API du service de scraping (ScraperAPI, etc.)',
+                'description' => 'Clé d\'authentification pour l\'API de scraping tierce. '
+                    . 'Obtenir sur https://www.scraperapi.com (1000 req./mois gratuites) '
+                    . 'ou chez un autre provider (configurer scraper_api_url_template en conséquence). '
+                    . 'La clé n\'est jamais loggée ni affichée en clair.',
+            ],
+            [
+                // Template d'URL pour l'appel à l'API de scraping.
+                // PLACEHOLDERS disponibles :
+                //   {key} → remplacé par la valeur de scraper_api_key (URL-encodé)
+                //   {url} → remplacé par l'URL cible à scraper (URL-encodé avec rawurlencode)
+                // Ce template permet de changer de provider sans modifier le code.
+                // ScraperAPI (défaut) : https://api.scraperapi.com/?api_key={key}&url={url}&render=true
+                // ScrapingAnt         : https://api.scrapingant.com/v2/general?api_key={key}&url={url}
+                'key'         => 'scraper_api_url_template',
+                'value'       => 'https://api.scraperapi.com/?api_key={key}&url={url}&render=true',
+                'is_secret'   => false, // Template visible — la clé reste dans scraper_api_key
+                'label'       => 'Template URL de l\'API de scraping',
+                'description' => 'Template provider-agnostique pour l\'appel à l\'API de scraping. '
+                    . 'Placeholders : {key} = clé API, {url} = URL cible (URL-encodée). '
+                    . 'ScraperAPI (défaut) : https://api.scraperapi.com/?api_key={key}&url={url}&render=true '
+                    . 'ScrapingAnt : https://api.scrapingant.com/v2/general?api_key={key}&url={url} '
+                    . 'Modifier uniquement si vous changez de provider.',
+            ],
         ];
 
         $inserted = 0; // Paramètres créés pour la première fois

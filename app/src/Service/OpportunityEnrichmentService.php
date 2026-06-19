@@ -202,7 +202,30 @@ class OpportunityEnrichmentService
         // LogoFetcherService — récupère l'URL du logo par parsing HTML (sans LLM)
         // ADR-0019 : appelé après l'appel Mistral pour compléter le DTO avec logoUrl.
         private readonly LogoFetcherService $logoFetcher,
+
+        // ScraperApiClient — repli API de scraping si fetchPage() échoue.
+        // Null acceptable : si absent ou non configuré, le comportement est inchangé.
+        // Injecté en dernier pour ne pas casser les tests existants (paramètre optionnel).
+        private readonly ?ScraperApiClient $scraperApiClient = null,
+
+        // ListingUrlDiscoverer — utilisé UNIQUEMENT pour isSafeHost() (garde SSRF).
+        // Injecté ici pour éviter de dupliquer la logique isSafeHost dans ce service.
+        // Si null, le repli API ne vérifie pas l'hôte (safe car scraperApiClient sera aussi null).
+        private readonly ?ListingUrlDiscoverer $listingUrlDiscoverer = null,
     ) {
+        // ── Invariant SSRF (AV-1) ─────────────────────────────────────────────
+        // Si le repli API est configuré mais que ListingUrlDiscoverer est absent,
+        // le callback SSRF dans fetchPage() retournerait toujours true, autorisant
+        // l'envoi de toute URL (y compris des adresses internes) à l'API tierce.
+        //
+        // Crash explicite à la construction plutôt qu'un bypass silencieux en prod.
+        // Fix : injecter les deux services, ou aucun des deux.
+        if ($this->scraperApiClient !== null && $this->listingUrlDiscoverer === null) {
+            throw new \LogicException(
+                'OpportunityEnrichmentService : ScraperApiClient nécessite ListingUrlDiscoverer '
+                . 'pour la garde SSRF. Injectez les deux services ensemble ou aucun des deux.'
+            );
+        }
     }
 
     /**
@@ -339,70 +362,91 @@ class OpportunityEnrichmentService
      */
     private function fetchPage(string $url): ?string
     {
-        // Options de la requête : en-têtes navigateur complets + timeout généreux
-        $options = [
-            // Timeout 22s — un peu plus généreux que l'ancien 15s pour les sites lents.
-            // Certains sites culturels ont des pages qui mettent 10-15s à se charger
-            // (CMS vieillissants, serveurs mutualisés surchargés).
-            'timeout'       => 22,
-            // On suit jusqu'à 5 redirections (http->https, slug canonique, etc.)
-            'max_redirects' => 5,
-            // En-têtes navigateur Chrome 124 complets — via le trait HttpBrowserFetchTrait.
-            // Plus complets que l'ancien User-Agent Firefox seul : les Sec-Fetch-*
-            // réduisent les faux positifs anti-bot (Cloudflare, protections custom).
-            'headers'       => $this->buildBrowserHeaders(),
-        ];
+        // ── Fetch via fetchHtmlRobust() (trait) ───────────────────────────────────
+        // On délègue à fetchHtmlRobust() qui :
+        //   1. Tente d'abord le fetch direct (closure ci-dessous)
+        //   2. Si le direct échoue ET que l'API de scraping est disponible → repli API
+        //
+        // Cela permet de débloquer les sites qui bloquent l'IP du droplet,
+        // tout en économisant le quota API (le repli n'est déclenché qu'en cas d'échec).
+        return $this->fetchHtmlRobust(
+            $url,
+            // Closure : fetch direct (logique inchangée, refactorisée ici)
+            function () use ($url): ?string {
+                // Options de la requête : en-têtes navigateur complets + timeout généreux
+                $options = [
+                    // Timeout 22s — un peu plus généreux que l'ancien 15s pour les sites lents.
+                    // Certains sites culturels ont des pages qui mettent 10-15s à se charger
+                    // (CMS vieillissants, serveurs mutualisés surchargés).
+                    'timeout'       => 22,
+                    // On suit jusqu'à 5 redirections (http->https, slug canonique, etc.)
+                    'max_redirects' => 5,
+                    // En-têtes navigateur Chrome 124 complets — via le trait HttpBrowserFetchTrait.
+                    // Plus complets que l'ancien User-Agent Firefox seul : les Sec-Fetch-*
+                    // réduisent les faux positifs anti-bot (Cloudflare, protections custom).
+                    'headers'       => $this->buildBrowserHeaders(),
+                ];
 
-        // requestWithRetry() relance automatiquement sur timeout / 429 / 5xx.
-        // 3 tentatives avec backoff exponentiel 1s / 2s.
-        // Retourne null si toutes les tentatives ont échoué.
-        $response = $this->requestWithRetry($this->httpClient, $this->logger, 'GET', $url, $options);
+                // requestWithRetry() relance automatiquement sur timeout / 429 / 5xx.
+                // 3 tentatives avec backoff exponentiel 1s / 2s.
+                // Retourne null si toutes les tentatives ont échoué.
+                $response = $this->requestWithRetry($this->httpClient, $this->logger, 'GET', $url, $options);
 
-        if ($response === null) {
-            // Toutes les tentatives ont échoué (timeout, DNS, SSL, etc.)
-            // requestWithRetry() a déjà loggé le message d'erreur final.
-            return null;
-        }
+                if ($response === null) {
+                    // Toutes les tentatives ont échoué (timeout, DNS, SSL, etc.)
+                    // requestWithRetry() a déjà loggé le message d'erreur final.
+                    return null;
+                }
 
-        // Vérification du code HTTP AVANT de lire le corps.
-        $statusCode = $response->getStatusCode();
-        if ($statusCode < 200 || $statusCode >= 300) {
-            $this->logger->warning(
-                '[EnrichmentService] HTTP non-2xx lors du fetch de la page.',
-                ['url' => $url, 'status' => $statusCode]
-            );
-            return null;
-        }
+                // Vérification du code HTTP AVANT de lire le corps.
+                $statusCode = $response->getStatusCode();
+                if ($statusCode < 200 || $statusCode >= 300) {
+                    $this->logger->warning(
+                        '[EnrichmentService] HTTP non-2xx lors du fetch de la page.',
+                        ['url' => $url, 'status' => $statusCode]
+                    );
+                    return null;
+                }
 
-        try {
-            // Lecture du contenu, limitée à MAX_BODY_BYTES.
-            // getContent() retourne le corps entier en string.
-            $content = $response->getContent();
+                try {
+                    // Lecture du contenu, limitée à MAX_BODY_BYTES.
+                    // getContent() retourne le corps entier en string.
+                    $content = $response->getContent();
 
-            if (mb_strlen($content, '8bit') > self::MAX_BODY_BYTES) {
-                // Tronquage en octets bruts (pas en chars multi-octets) pour respecter
-                // la limite mémoire. Le nettoyage HTML qui suit n'est pas sensible à
-                // une coupure en milieu de balise.
-                $content = substr($content, 0, self::MAX_BODY_BYTES);
-            }
+                    if (mb_strlen($content, '8bit') > self::MAX_BODY_BYTES) {
+                        // Tronquage en octets bruts (pas en chars multi-octets) pour respecter
+                        // la limite mémoire. Le nettoyage HTML qui suit n'est pas sensible à
+                        // une coupure en milieu de balise.
+                        $content = substr($content, 0, self::MAX_BODY_BYTES);
+                    }
 
-            return $content;
+                    return $content;
 
-        } catch (HttpException $e) {
-            // Erreur lors de la lecture du corps (stream interrompu, etc.)
-            $this->logger->warning(
-                '[EnrichmentService] Erreur réseau lors de la lecture du body.',
-                ['url' => $url, 'exception' => $e->getMessage()]
-            );
-            return null;
-        } catch (\Exception $e) {
-            // Filet de sécurité : toute autre exception inattendue
-            $this->logger->warning(
-                '[EnrichmentService] Erreur inattendue lors du fetch de la page.',
-                ['url' => $url, 'exception' => $e->getMessage()]
-            );
-            return null;
-        }
+                } catch (HttpException $e) {
+                    // Erreur lors de la lecture du corps (stream interrompu, etc.)
+                    $this->logger->warning(
+                        '[EnrichmentService] Erreur réseau lors de la lecture du body.',
+                        ['url' => $url, 'exception' => $e->getMessage()]
+                    );
+                    return null;
+                } catch (\Exception $e) {
+                    // Filet de sécurité : toute autre exception inattendue
+                    $this->logger->warning(
+                        '[EnrichmentService] Erreur inattendue lors du fetch de la page.',
+                        ['url' => $url, 'exception' => $e->getMessage()]
+                    );
+                    return null;
+                }
+            },
+            // Client API de scraping (null si non injecté → pas de repli)
+            $this->scraperApiClient,
+            // Callback SSRF — délègue à ListingUrlDiscoverer si disponible,
+            // sinon laisse passer (le scraperApiClient sera null dans ce cas de toute façon)
+            fn(string $u): bool => $this->listingUrlDiscoverer !== null
+                ? $this->listingUrlDiscoverer->isSafeHost($u)
+                : true,
+            $this->logger,
+        );
     }
 
     /**
