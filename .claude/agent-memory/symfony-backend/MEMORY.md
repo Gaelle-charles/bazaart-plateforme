@@ -7,3 +7,5 @@
 - [Onboarding artiste Lot 2](project_onboarding_artiste.md) — ADR-0015 Lot 2 livré : gating listener, parcours 4 étapes, migration non-destructive, email bienvenue
 - [Ressourcerie ADR-0016 Lot 1](project_ressourcerie_adr0016_lot1.md) — ExperienceLevel enum, city/country sur Resource+ScrapedResource, LLM prompt enrichi, DisciplineMapperService
 - [ADR-0017 ListingUrlDiscoverer](project_listing_url_discoverer.md) — Découverte URL-liste par heuristique (30 chemins FR/EN) + fallback LLM Mistral, commande app:discover-listing-urls
+- [ADR-0018 Candidature & Financement](project_adr0018_candidature_financement.md) — howToApply/fundingAmount/fundingType sur Resource+ScrapedResource, prompts enrichis, bloc "En un coup d'oeil" page détail
+- [ADR-0019 Lien candidature & logo](project_adr0019_lien_candidature_logo.md) — applicationUrl (LLM+anti-hallucination) + logoUrl (HTML parsing SSRF-safe), LogoFetcherService, badge "B" fallback, CTA split show.html.twig
