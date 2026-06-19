@@ -12,6 +12,7 @@ use App\Repository\CoursePaymentRepository;
 use App\Repository\CourseRepository;
 use App\Repository\SubscriptionRepository;
 use App\Repository\UserRepository;
+use App\Service\EventRegistrationService;
 use App\Service\StripeService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -66,6 +67,7 @@ class StripeWebhookController extends AbstractController
         private readonly SubscriptionRepository     $subscriptionRepository,
         private readonly CoursePaymentRepository    $coursePaymentRepository,
         private readonly CourseEnrollmentRepository $enrollmentRepository,
+        private readonly EventRegistrationService   $eventRegistrationService,
         private readonly EntityManagerInterface     $em,
         private readonly LoggerInterface            $logger,
     ) {}
@@ -117,6 +119,11 @@ class StripeWebhookController extends AbstractController
                 'customer.subscription.updated'    => $this->handleSubscriptionUpdated($event),
                 'customer.subscription.deleted'    => $this->handleSubscriptionDeleted($event),
                 'invoice.payment_failed'           => $this->handleInvoicePaymentFailed($event),
+                // Phase 3 : fiabilisation du statut "refunded" via le webhook Stripe.
+                // Géré ici pour les remboursements initiés DIRECTEMENT depuis le dashboard Stripe
+                // (hors de la plateforme). Les remboursements initiés via EventCancellationService
+                // sont déjà marqués 'refunded' en base avant même l'arrivée de ce webhook.
+                'charge.refunded'                  => $this->handleChargeRefunded($event),
                 // Les événements non gérés sont ignorés silencieusement (comportement recommandé par Stripe)
                 default                            => $this->logger->debug('Événement Stripe non géré.', ['type' => $event->type]),
             };
@@ -339,14 +346,50 @@ class StripeWebhookController extends AbstractController
         // + rachat), on vérifie l'inscription existante avant d'en créer une nouvelle.
         $existingEnrollment = $this->enrollmentRepository->findByUserAndCourse($user, $course);
 
+        $enrollmentCreated = false; // flag pour savoir si l'email de confirmation doit être envoyé
+
         if ($existingEnrollment === null) {
-            // Pas encore inscrit : on crée l'inscription
+            // ── Contrôle anti-survente pour les événements ─────────────────────
+            // On re-vérifie la capacité au moment du webhook (après paiement réussi).
+            // C'est la vérification "ultime" : si deux paiements quasi-simultanés ont
+            // abouti pour la dernière place, on ne crée qu'une seule inscription.
+            //
+            // Que faire si l'événement est complet à ce moment ?
+            //   - On NE crée pas l'inscription → l'utilisateur a payé mais n'a pas de place.
+            //   - On log l'erreur clairement pour que l'équipe Bazaart puisse gérer
+            //     manuellement (remboursement via le dashboard Stripe, ou trouver une place).
+            //   - On ne tente PAS le remboursement automatiquement (Phase 3).
+            //   - Le CoursePayment (preuve d'achat) est quand même créé et enregistré
+            //     — l'équipe en a besoin pour retrouver la transaction Stripe.
+            if ($course->isEvent() && !$this->eventRegistrationService->hasAvailableSeats($course)) {
+                $this->logger->error(
+                    'Survente détectée : paiement accepté mais événement complet. '
+                    . 'Action requise : rembourser manuellement via le dashboard Stripe.',
+                    [
+                        'user_id'         => $user->getId(),
+                        'course_id'       => $course->getId(),
+                        'course_title'    => $course->getTitle(),
+                        'payment_intent'  => $paymentIntentId,
+                        'capacity'        => $course->getCapacity(),
+                    ]
+                );
+                // On flush() le CoursePayment seul (sans inscription)
+                $this->em->flush();
+                $this->logger->info('Paiement enregistré (sans inscription — survente).', [
+                    'user_id'   => $user->getId(),
+                    'course_id' => $course->getId(),
+                ]);
+                return;
+            }
+
+            // Pas de survente → on crée l'inscription normalement
             $enrollment = new CourseEnrollment();
             $enrollment->setUser($user);
             $enrollment->setCourse($course);
             // progressPercent démarre à 0 (défaut défini dans l'entité)
 
             $this->em->persist($enrollment);
+            $enrollmentCreated = true;
 
             $this->logger->info('CourseEnrollment créé après paiement.', [
                 'user_id'   => $user->getId(),
@@ -368,6 +411,31 @@ class StripeWebhookController extends AbstractController
             'user_id'   => $user->getId(),
             'course_id' => $course->getId(),
         ]);
+
+        // ── Email de confirmation pour les événements payants ─────────────────
+        // Envoyé uniquement si une nouvelle inscription a été créée (pas en cas
+        // d'achat en double ou de survente).
+        // On récupère l'enrollment fraîchement créé pour l'email.
+        if ($enrollmentCreated && $course->isEvent()) {
+            // Re-chercher l'enrollment persisté pour avoir l'entité avec son ID
+            $freshEnrollment = $this->enrollmentRepository->findByUserAndCourse($user, $course);
+            if ($freshEnrollment !== null) {
+                try {
+                    $this->eventRegistrationService->sendConfirmationEmail($freshEnrollment);
+                    $this->logger->info('Email de confirmation événement payant envoyé.', [
+                        'user_id'   => $user->getId(),
+                        'course_id' => $course->getId(),
+                    ]);
+                } catch (\Throwable $e) {
+                    // L'email échoue → on log mais on ne fait pas échouer le webhook
+                    // (Stripe retentera sinon, créant potentiellement un doublon de paiement)
+                    $this->logger->warning('Impossible d\'envoyer l\'email de confirmation.', [
+                        'user_id' => $user->getId(),
+                        'error'   => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
     }
 
     /**
@@ -456,6 +524,81 @@ class StripeWebhookController extends AbstractController
         $this->logger->info('Abonnement annulé.', [
             'subscription_id' => $subscription->getId(),
             'canceled_at'     => $canceledAt->format('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * Traite l'événement charge.refunded.
+     *
+     * Envoyé par Stripe quand un charge est remboursé, qu'il s'agisse d'un
+     * remboursement initié via la plateforme (EventCancellationService) ou
+     * directement depuis le dashboard Stripe.
+     *
+     * Rôle de ce handler : FIABILISATION IDEMPOTENTE.
+     *   - Si le remboursement a été initié par EventCancellationService, le CoursePayment
+     *     est déjà marqué 'refunded' en base → ce webhook est ignoré (idempotence).
+     *   - Si le remboursement a été fait depuis le dashboard Stripe directement (hors
+     *     plateforme), ce webhook est le seul moyen de mettre à jour la BDD.
+     *
+     * On ne tente PAS d'annuler l'inscription ici : on ne sait pas pourquoi Stripe
+     * a remboursé (erreur, demande externe, test...). La mise à jour du statut
+     * comptable (CoursePayment → 'refunded') suffit.
+     *
+     * @param \Stripe\Event $event L'événement Stripe (déjà vérifié)
+     */
+    private function handleChargeRefunded(\Stripe\Event $event): void
+    {
+        /** @var \Stripe\Charge $charge */
+        $charge = $event->data->object;
+
+        // L'ID du PaymentIntent est accessible depuis le Charge
+        // payment_intent peut être null si le charge n'est pas associé à un PaymentIntent
+        // (rare en mode payment, jamais en mode subscription)
+        $paymentIntentId = $charge->payment_intent;
+
+        if ($paymentIntentId === null) {
+            $this->logger->info('charge.refunded : pas de PaymentIntent associé — ignoré.', [
+                'charge_id' => $charge->id,
+            ]);
+            return;
+        }
+
+        // ── Recherche du CoursePayment en base ────────────────────────────────
+        $payment = $this->coursePaymentRepository->findByStripePaymentIntentId((string) $paymentIntentId);
+
+        if ($payment === null) {
+            // Aucun CoursePayment associé → ce remboursement concerne peut-être un abonnement
+            // ou une transaction externe. On ignore silencieusement.
+            $this->logger->debug('charge.refunded : aucun CoursePayment trouvé pour ce PaymentIntent.', [
+                'payment_intent_id' => $paymentIntentId,
+            ]);
+            return;
+        }
+
+        // ── Idempotence : déjà marqué 'refunded' ? ────────────────────────────
+        if ($payment->isRefunded()) {
+            // Déjà traité (via EventCancellationService ou webhook précédent) → on ignore
+            $this->logger->info('charge.refunded : CoursePayment déjà "refunded" — webhook ignoré.', [
+                'payment_id'       => $payment->getId(),
+                'payment_intent_id' => $paymentIntentId,
+            ]);
+            return;
+        }
+
+        // ── Mise à jour du statut de remboursement ────────────────────────────
+        // On met à jour le CoursePayment pour refléter le remboursement Stripe.
+        // On ne cherche pas l'ID du remboursement ici (le charge.refunded ne le
+        // contient pas directement — il faudrait aller chercher dans charge.refunds).
+        // En V2, on pourrait parser charge.refunds.data[0].id.
+        $payment->setStatus('refunded');
+        $payment->setRefundedAt(new \DateTime());
+
+        $this->em->flush();
+
+        $this->logger->info('CoursePayment marqué "refunded" via webhook charge.refunded.', [
+            'payment_id'        => $payment->getId(),
+            'payment_intent_id' => $paymentIntentId,
+            'charge_id'         => $charge->id,
         ]);
     }
 

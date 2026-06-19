@@ -525,6 +525,40 @@
         opacity: .35;
         pointer-events: none;
     }
+
+    /* ── Chips compacts (ADR-0016 Lot 3 — pays et niveau) ───────────────────
+       Utilisés dans les cartes liste ET grille pour afficher des métadonnées
+       supplémentaires sans surcharger visuellement.
+       Taille légèrement plus petite que les chips hero (.hero-badge-disc)
+       pour rester discrets en contexte catalogue. */
+
+    /* Chip pays : fond sable, bordure encre douce, texte gris */
+    .badge-country {
+        display: inline-block;
+        padding: 2px 7px;
+        background: transparent;
+        border: 1px solid var(--line-soft);
+        color: var(--ink-mute);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    /* Chip niveau : variante subtile — fond lime très atténué = info positive */
+    .badge-level {
+        display: inline-block;
+        padding: 2px 7px;
+        background: transparent;
+        border: 1px solid var(--line-soft);
+        color: var(--ink-mute);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
 </style>
 {% endblock %}
 
@@ -758,15 +792,46 @@
                     <h2 class="list-card__title">{{ resource.title }}</h2>
 
                     {#
-                        Méta : nom de l'organisation + lieu séparés par " · "
-                        On utilise ?? pour le fallback null (PHP 8 null coalescing en Twig).
-                        Condition : affiche le bloc seulement s'il y a au moins une info.
+                        Méta : organisation + localisation (ADR-0016 Lot 3).
+                        Priorité localisation : city+country > city > country > location.
+                        On construit `listLocLabel` pour factoriser la logique.
                     #}
-                    {% if resource.organization or resource.location %}
+                    {% set listLocLabel = '' %}
+                    {% if resource.city and resource.country %}
+                        {% set listLocLabel = resource.city ~ ', ' ~ resource.country %}
+                    {% elseif resource.city %}
+                        {% set listLocLabel = resource.city %}
+                    {% elseif resource.country %}
+                        {% set listLocLabel = resource.country %}
+                    {% elseif resource.location %}
+                        {% set listLocLabel = resource.location %}
+                    {% endif %}
+
+                    {% if resource.organization or listLocLabel %}
                         <div class="list-card__meta">
                             {{ resource.organization ? resource.organization.name : '' }}
-                            {%- if resource.organization and resource.location %} &middot; {% endif -%}
-                            {{ resource.location ?? '' }}
+                            {%- if resource.organization and listLocLabel %} &middot; {% endif -%}
+                            {{ listLocLabel }}
+                        </div>
+                    {% endif %}
+
+                    {#
+                        Chips compacts pays + niveau (ADR-0016 Lot 3).
+                        Affichés sur une ligne séparée, sous la méta organisation/lieu,
+                        pour ne pas surcharger le texte de la méta existante.
+                        On affiche le pays (plus compact que "Ville, Pays") et le niveau.
+                        Le pays seul suffit dans un contexte catalogue — la ville s'affiche
+                        sur la page de détail où l'espace est plus généreux.
+                        Condition : au moins l'un des deux doit exister pour afficher la ligne.
+                    #}
+                    {% if resource.country or resource.experienceLevel %}
+                        <div class="list-card__badges" style="margin-top:2px;">
+                            {% if resource.country %}
+                                <span class="badge-country">{{ resource.country }}</span>
+                            {% endif %}
+                            {% if resource.experienceLevel %}
+                                <span class="badge-level">{{ resource.experienceLevel.label() }}</span>
+                            {% endif %}
                         </div>
                     {% endif %}
 
@@ -829,6 +894,23 @@
 
                 {# Titre : display Archivo Black, 3 lignes max, prend l'espace disponible #}
                 <h2 class="grid-card__title">{{ resource.title }}</h2>
+
+                {#
+                    Chips compacts pays + niveau (ADR-0016 Lot 3) dans la vue grille.
+                    Mêmes chips que dans la vue liste mais sans la méta organisation
+                    (pas assez de place en grille pour tout afficher).
+                    Condition : au moins l'un des deux doit être renseigné.
+                #}
+                {% if resource.country or resource.experienceLevel %}
+                    <div class="list-card__badges" style="margin-top:auto; padding-top:4px;">
+                        {% if resource.country %}
+                            <span class="badge-country">{{ resource.country }}</span>
+                        {% endif %}
+                        {% if resource.experienceLevel %}
+                            <span class="badge-level">{{ resource.experienceLevel.label() }}</span>
+                        {% endif %}
+                    </div>
+                {% endif %}
 
                 {# Deadline en bas de card, mono discret. |date() formate le DateTimeInterface. #}
                 {% if resource.deadline %}

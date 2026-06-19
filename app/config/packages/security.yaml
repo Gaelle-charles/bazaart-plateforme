@@ -88,6 +88,14 @@ security:
         # Placées AVANT la règle catch-all ^/ pour ne pas être interceptées.
         - { path: ^/mot-de-passe-oublie, roles: PUBLIC_ACCESS }
         - { path: ^/reinitialiser-mot-de-passe, roles: PUBLIC_ACCESS }
+        # ── Vérification d'email — PUBLIQUE ──────────────────────────────────
+        # Ces routes doivent être accessibles sans être connecté :
+        #   - /verifier-email/confirmation : page "vérifie ta boîte mail" après inscription
+        #   - /verifier-email              : route cliquée depuis l'email (lien signé)
+        #   - /verifier-email/renvoyer     : renvoi de l'email de confirmation
+        # Sans PUBLIC_ACCESS, l'utilisateur serait redirigé vers /login alors
+        # qu'il essaie précisément de confirmer son email pour SE connecter.
+        - { path: ^/verifier-email, roles: PUBLIC_ACCESS }
         # Page d'accueil et formulaire de contact — accessibles sans être connecté
         - { path: ^/$, roles: PUBLIC_ACCESS }
         - { path: ^/contact, roles: PUBLIC_ACCESS }

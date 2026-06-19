@@ -17,7 +17,9 @@ use App\Repository\ResourceRepository;
 use App\Repository\ResourceTypeRepository;
 use App\Repository\ScrapedResourceRepository;
 use App\Repository\UserRepository;
+use App\Repository\DisciplineRepository;
 use App\Service\AuthService;
+use App\Service\DisciplineMapperService;
 use App\Service\NotificationService;
 use App\Service\StructureService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -59,6 +61,10 @@ class AdminController extends AbstractController
         // KernelInterface : nécessaire pour instancier l'Application Console
         // et exécuter la commande de scraping dans le même processus PHP.
         private readonly KernelInterface $kernel,
+        // DisciplineMapperService : mappe les libellés disciplines (texte libre) vers
+        // les entités Discipline BDD lors de la propagation ScrapedResource → Resource.
+        // ADR-0016 Lot 1.
+        private readonly DisciplineMapperService $disciplineMapper,
     ) {}
 
     /**
@@ -69,7 +75,13 @@ class AdminController extends AbstractController
     {
         // Compteurs pour les statistiques
         $pendingCount      = count($this->resourceRepository->findPending());
-        $publishedCount    = count($this->resourceRepository->findPublished());
+        // A3 : countPublished() à la place de count(findPublished()).
+        // findPublished() sans pagination charge TOUTES les entités Resource en mémoire
+        // juste pour compter — O(n) objets Doctrine hydratés inutilement.
+        // countPublished() fait un SELECT COUNT(r.id) SQL → un seul scalaire, O(1).
+        // hideExpired: false → l'admin voit TOUTES les publiées, même celles expirées
+        // (seul le catalogue public masque les deadlines passées via hideExpired: true).
+        $publishedCount    = $this->resourceRepository->countPublished(hideExpired: false);
         $totalUsers        = count($this->userRepository->findAll());
         $totalOrgs         = count($this->orgRepository->findAll());
         $verifiedOrgs      = count($this->orgRepository->findVerified());
@@ -516,6 +528,37 @@ class AdminController extends AbstractController
         $resource->setPublishedAt($now);
         $resource->setValidatedAt($now);
         $resource->setValidatedBy($admin);
+
+        // ── ADR-0016 Lot 1 : propagation des champs enrichis ─────────────────
+        //
+        // On recopie city, country et experienceLevel depuis la ScrapedResource
+        // vers la Resource publiée. Ces champs ont été remplis par le LLM
+        // lors du scraping (LlmExtractorService → ScrapedResourcePersister).
+        // Ils sont tous nullable : si vides (ancienne ScrapedResource sans LLM),
+        // la Resource aura simplement ces champs à null.
+        $resource->setCity($scraped->getCity());
+        $resource->setCountry($scraped->getCountry());
+        $resource->setExperienceLevel($scraped->getExperienceLevel());
+
+        // ── ADR-0016 Lot 1 : mapping disciplines texte → entités Discipline ──
+        //
+        // ScrapedResource::$disciplines est une chaîne CSV libre (ex: "Musique, Danse").
+        // DisciplineMapperService la convertit en entités Discipline BDD pour la
+        // relation ManyToMany Resource::$disciplines.
+        //
+        // On explose le CSV pour obtenir un tableau de libellés, puis on délègue
+        // le matching au service (normalisation casse/accents, synonymes, sous-chaîne).
+        // Les libellés sans correspondance sont ignorés — on ne crée pas de nouvelle discipline.
+        if ($scraped->getDisciplines() !== null && $scraped->getDisciplines() !== '') {
+            $disciplineLabels = array_map(
+                'trim',
+                explode(',', $scraped->getDisciplines())
+            );
+            $matchedDisciplines = $this->disciplineMapper->mapLabelsToEntities($disciplineLabels);
+            foreach ($matchedDisciplines as $discipline) {
+                $resource->addDiscipline($discipline);
+            }
+        }
 
         $this->em->persist($resource);
 

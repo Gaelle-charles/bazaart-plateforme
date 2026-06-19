@@ -6,6 +6,7 @@ namespace App\Repository;
 
 use App\Entity\ScrapedResource;
 use App\Enum\ScrapedResourceStatus;
+use App\Service\TitleNormalizerService;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -14,8 +15,13 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class ScrapedResourceRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
+    public function __construct(
+        ManagerRegistry $registry,
+        // TitleNormalizerService : remplace la méthode normalizeTitle() privée locale (S1).
+        // Un seul service partagé garantit que tous les points de dédup utilisent
+        // EXACTEMENT le même algorithme — divergence = doublons non détectés ou faux positifs.
+        private readonly TitleNormalizerService $titleNormalizer,
+    ) {
         parent::__construct($registry, ScrapedResource::class);
     }
 
@@ -26,6 +32,103 @@ class ScrapedResourceRepository extends ServiceEntityRepository
     public function findByUrl(string $url): ?ScrapedResource
     {
         return $this->findOneBy(['url' => $url]);
+    }
+
+    /**
+     * Cherche une ScrapedResource existante par clé de contenu (titre normalisé + deadline).
+     *
+     * Cette méthode implémente la DÉDUPLICATION PAR CONTENU, en complément de la
+     * déduplication par URL déjà existante.
+     *
+     * Cas d'usage : une même opportunité publiée sur deux sites différents (ex: On The Move
+     * ET Wooloo) aurait deux URLs distinctes mais un contenu identique → doublon non détecté
+     * par la dédup URL. Cette méthode le rattrape.
+     *
+     * ── CLÉ DE DÉDUPLICATION ───────────────────────────────────────────────────
+     *
+     * La clé est composée de :
+     *   1. titleNormalized : titre normalisé PHP (minuscules, sans accents, sans ponctu.,
+     *                         espaces compressés). On compare en PHP — pas de fonction SQL
+     *                         de normalisation d'accents portable sur toutes les BDD.
+     *   2. deadlineDate    : date de clôture parsée (DateTimeImmutable, ou null).
+     *
+     * Pourquoi inclure la deadline dans la clé ?
+     *   → Deux bourses distinctes peuvent porter le même titre "Bourse de création"
+     *     mais avoir des deadlines différentes : ce sont des opportunités DIFFÉRENTES.
+     *     La deadline dans la clé évite la sur-déduplication.
+     *
+     * Cas null+null (deux opportunités sans deadline, même titre normalisé) :
+     *   → On considère quand même comme doublon probable (voir docblock de persistBatch()).
+     *   → Un log de traçabilité est émis dans ScrapedResourcePersister.
+     *   → On reste PRUDENT : si trop de faux-positifs, on peut désactiver ce cas.
+     *
+     * ── STRATÉGIE SQL ──────────────────────────────────────────────────────────
+     *
+     * On charge tous les candidats dont le deadlineDate correspond (ou IS NULL des deux
+     * côtés), puis on filtre par titre normalisé EN PHP pour éviter de dépendre d'une
+     * fonction SQL de normalisation (accents, casse) non portable.
+     *
+     * Performance : la comparaison PHP porte sur quelques dizaines de candidats au pire
+     * (même deadline) — pas de risque de scan complet de la table.
+     *
+     * @param string                    $titleNormalized Titre normalisé (voir normalizeTitle() dans le persister)
+     * @param \DateTimeImmutable|null   $deadlineDate    Date parsée de la deadline, ou null
+     * @return ScrapedResource|null     Le premier doublon trouvé, ou null
+     */
+    public function findByContentKey(
+        string $titleNormalized,
+        ?\DateTimeImmutable $deadlineDate,
+    ): ?ScrapedResource {
+        // On construit le QueryBuilder selon la présence ou non d'une deadlineDate.
+        // IS NULL vs = :deadlineDate nécessitent deux chemins distincts en DQL
+        // (IS NULL n'accepte pas de paramètre lié).
+        $qb = $this->createQueryBuilder('s');
+
+        if ($deadlineDate !== null) {
+            // Cas standard : on filtre les candidats qui ont exactement la même deadlineDate.
+            //
+            // Stratégie : on filtre par plage de 24h (minuit → minuit+1 jour) en DQL pur,
+            // sans recourir à DATE() qui n'est pas une fonction DQL native (Doctrine rejette
+            // les fonctions SQL non enregistrées dans le DQL parser).
+            //
+            // "Même jour" = deadlineDate >= minuit de ce jour ET < minuit du lendemain.
+            // Ce critère est équivalent à DATE(deadlineDate) = la date donnée, de manière
+            // portable sur toutes les bases de données supportées par Doctrine.
+            $dayStart = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $deadlineDate->format('Y-m-d') . ' 00:00:00');
+            $dayEnd   = $dayStart !== false ? $dayStart->modify('+1 day') : null;
+
+            if ($dayStart !== false && $dayEnd !== null) {
+                $qb->where('s.deadlineDate IS NOT NULL')
+                   ->andWhere('s.deadlineDate >= :dayStart')
+                   ->andWhere('s.deadlineDate < :dayEnd')
+                   ->setParameter('dayStart', $dayStart)
+                   ->setParameter('dayEnd', $dayEnd);
+            } else {
+                // Fallback si le parsing échoue (très improbable) : pas de filtre date → PHP filtre tout
+                $qb->where('s.deadlineDate IS NOT NULL');
+            }
+        } else {
+            // Cas null : on cherche dans les entrées qui n'ont pas non plus de deadlineDate.
+            // Ce cas est plus risqué (sur-déduplication possible) — on reste prudent.
+            $qb->where('s.deadlineDate IS NULL');
+        }
+
+        // On charge les candidats (potentiellement quelques-uns avec la même deadline)
+        /** @var ScrapedResource[] $candidates */
+        $candidates = $qb->getQuery()->getResult();
+
+        // Filtrage PHP par titre normalisé.
+        // On ne peut pas faire LOWER() + strip_accents() portable en SQL pur (pas de
+        // fonction standard cross-BDD). Le filtrage PHP est suffisant car on travaille
+        // sur un sous-ensemble déjà filtré par deadlineDate (quelques lignes au plus).
+        foreach ($candidates as $candidate) {
+            // Normalisation via le service centralisé (S1) — même algorithme que le persister.
+            if ($this->titleNormalizer->normalize($candidate->getTitle()) === $titleNormalized) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -158,9 +261,25 @@ class ScrapedResourceRepository extends ServiceEntityRepository
      */
     public function archiveExpired(): int
     {
-        // Référence temporelle : minuit aujourd'hui
-        // Une deadline "aujourd'hui" n'est pas encore expirée (dernier jour pour candidater)
-        $today = new \DateTimeImmutable('today');
+        // Référence temporelle : minuit aujourd'hui EN HEURE DE PARIS (correction C1).
+        //
+        // PROBLÈME SANS CE CORRECTIF :
+        //   Le container Docker tourne en UTC. Sans timezone explicite,
+        //   new \DateTimeImmutable('today') retourne minuit UTC.
+        //   Or minuit UTC = 2h du matin à Paris : entre minuit et 2h heure de Paris,
+        //   une opportunité dont la deadline est "aujourd'hui" (dernier jour valide)
+        //   serait archivée prématurément — les artistes ne pourraient plus candidater.
+        //
+        // SOLUTION :
+        //   Europe/Paris comme timezone → 'today' = minuit heure de Paris → correct.
+        //   La décision de ne PAS modifier la timezone globale du container est réservée
+        //   à l'infra (Gaëlle) — on corrige localement sans toucher au Dockerfile.
+        //
+        // Note : deadlineDate est de type DATETIME (champ structuré dans l'entité).
+        // La comparaison DQL < :today utilise le timestamp complet.
+        // Minuit Paris = 22h UTC la veille → une deadline au 18 juin 2026 00:00:00 Paris
+        // est < :today (17 juin 2026 22:00:00 UTC) uniquement si elle date d'avant le 18 juin.
+        $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris'));
 
         // Grâce 48h : on ne touche jamais un item créé il y a moins de 48 heures
         $graceLimit = new \DateTimeImmutable('-48 hours');
@@ -207,8 +326,11 @@ class ScrapedResourceRepository extends ServiceEntityRepository
         // On charge uniquement les pending (les rejected et verified sont ignorés)
         $pending = $this->findPending();
 
-        // Référence temporelle : minuit aujourd'hui — une deadline "aujourd'hui" n'est pas expirée
-        $today = new \DateTimeImmutable('today');
+        // Référence temporelle : minuit aujourd'hui EN HEURE DE PARIS (correction C1).
+        // Même logique que archiveExpired() — voir son commentaire pour l'explication complète.
+        // Sans la timezone Europe/Paris, le container UTC archiverait les deadlines
+        // "d'aujourd'hui" entre minuit et 2h du matin heure de Paris → archivage prématuré.
+        $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris'));
         $count = 0;
 
         // Mapping des noms de mois français vers leurs numéros (pour le format "31 mai 2026")

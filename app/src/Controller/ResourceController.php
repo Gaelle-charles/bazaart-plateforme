@@ -75,7 +75,11 @@ class ResourceController extends AbstractController
         // ── Comptage du total de ressources correspondant aux filtres ─────────────
         // On compte AVANT de charger la page pour calculer totalPages.
         // countPublished() fait un SELECT COUNT — pas de chargement d'entités en mémoire.
-        $total = $this->resourceRepository->countPublished($typeId, $disciplineId, $search);
+        //
+        // hideExpired: true → on masque les ressources dont la deadline est passée.
+        // Ce paramètre doit être identique dans countPublished() ET findPublished() ci-dessous,
+        // sinon le compteur et la liste seraient incohérents (pagination cassée).
+        $total = $this->resourceRepository->countPublished($typeId, $disciplineId, $search, hideExpired: true);
 
         // ── Calcul du nombre total de pages ───────────────────────────────────────
         // ceil() arrondit au supérieur : 13 résultats / 12 par page = ceil(1.08) = 2 pages.
@@ -94,7 +98,10 @@ class ResourceController extends AbstractController
 
         // ── Chargement de la page courante uniquement ─────────────────────────────
         // findPublished() avec $page != null applique LIMIT + OFFSET → charge 12 entités max.
-        $resources   = $this->resourceRepository->findPublished($typeId, $disciplineId, $search, $page, $limit);
+        //
+        // hideExpired: true → catalogue public → on masque les ressources à deadline passée.
+        // Les ressources restent en BDD et visibles dans /admin/resources.
+        $resources   = $this->resourceRepository->findPublished($typeId, $disciplineId, $search, $page, $limit, hideExpired: true);
         $types       = $this->typeRepository->findAllOrdered();
         $disciplines = $this->disciplineRepository->findAllOrdered();
 

@@ -311,11 +311,14 @@ class ReadFeedsCommand extends Command
                         $totalInserted += $inserted;
 
                         $io->text(sprintf(
-                            'Persistance : %d nouvelle(s) | %d réactivée(s) | %d mise(s) à jour | %d ignorée(s)',
+                            // A2 : contentDedup ajouté pour tracer les doublons de contenu (même titre+deadline, URLs différentes).
+                            // Aide à détecter les flux RSS qui republient les mêmes opportunités sous des liens différents.
+                            'Persistance : %d nouvelle(s) | %d réactivée(s) | %d mise(s) à jour | %d ignorée(s) | %d doublon(s) contenu',
                             $persistResult->inserted,
                             $persistResult->reactivated,
                             $persistResult->updated,
                             $persistResult->skipped,
+                            $persistResult->contentDedup,
                         ));
                     }
 

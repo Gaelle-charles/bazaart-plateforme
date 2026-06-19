@@ -297,6 +297,33 @@
         border-radius: var(--chip-radius);
     }
 
+    /* ── Chip niveau d'expérience (ADR-0016 Lot 3) ───────────────────────────
+       Utilisé dans le tableau "Détails" de la sidebar.
+       Style mono uppercase cohérent avec les autres chips Street.
+       Variante par défaut (niveau précis) : fond bg-alt, encre douce.
+       Variante "tous niveaux" : fond accent lime discret = indication positive
+       (accès ouvert, pas de restriction). */
+    .chip-level {
+        display: inline-block;
+        padding: var(--chip-padding);
+        background: var(--bg-alt);
+        border: 1px solid var(--line-soft);
+        font-family: var(--mono);
+        font-size: var(--chip-font-size);
+        font-weight: var(--chip-font-weight);
+        letter-spacing: var(--chip-letter-spacing);
+        text-transform: uppercase;
+        color: var(--ink);
+        border-radius: var(--chip-radius);
+    }
+
+    /* Variante "Tous niveaux" : petite touche lime pour signaler l'ouverture */
+    .chip-level--all {
+        background: rgba(198, 242, 78, .18); /* accent lime atténué */
+        border-color: rgba(198, 242, 78, .5);
+        color: var(--ink);
+    }
+
     /* ── Sidebar (colonne droite) ──────────────────────────────────────── */
 
     .resource-sidebar {
@@ -630,7 +657,29 @@
             Publiée le {{ resource.createdAt|date('d/m/Y') }}
         </div>
 
-        {% if resource.location %}
+        {#
+            Localisation — logique de priorité (ADR-0016 Lot 3) :
+            1. Si city ET country sont renseignés  → "Ville, Pays"
+            2. Si city seule                       → "Ville"
+            3. Si country seul                     → "Pays"
+            4. Sinon : fallback sur l'ancien champ libre $location
+            5. Si tout est vide                    → bloc absent (pas de label vide)
+
+            On construit d'abord une variable Twig `locationLabel` pour éviter
+            de dupliquer la condition dans le SVG + le texte.
+        #}
+        {% set locationLabel = '' %}
+        {% if resource.city and resource.country %}
+            {% set locationLabel = resource.city ~ ', ' ~ resource.country %}
+        {% elseif resource.city %}
+            {% set locationLabel = resource.city %}
+        {% elseif resource.country %}
+            {% set locationLabel = resource.country %}
+        {% elseif resource.location %}
+            {% set locationLabel = resource.location %}
+        {% endif %}
+
+        {% if locationLabel %}
             <div class="resource-hero__meta-sep" aria-hidden="true"></div>
             <div class="resource-hero__meta-item">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -638,7 +687,7 @@
                     <path d="M12 22s-7-7-7-12a7 7 0 1 1 14 0c0 5-7 12-7 12z"/>
                     <circle cx="12" cy="10" r="2.5"/>
                 </svg>
-                {{ resource.location }}
+                {{ locationLabel }}
             </div>
         {% endif %}
     </div>
@@ -755,13 +804,43 @@
                     </div>
                 {% endif %}
 
-                {# Localisation si disponible #}
-                {% if resource.location %}
+                {#
+                    Localisation fine (ADR-0016 Lot 3) — même logique de priorité
+                    que dans la section héro ci-dessus :
+                    city+country > city > country > location > rien affiché.
+                    On réutilise la variable `locationLabel` calculée plus haut dans
+                    le template. Elle est visible ici car Twig partage le scope entre
+                    les blocs d'un même template.
+                #}
+                {% if locationLabel %}
                     <div class="details-row">
                         <div class="details-key">Lieu</div>
-                        <div class="details-val">{{ resource.location }}</div>
+                        <div class="details-val">{{ locationLabel }}</div>
                     </div>
                 {% endif %}
+
+                {#
+                    Niveau d'expérience (ADR-0016 Lot 3).
+                    experienceLevel est un enum nullable :
+                      - non null → on affiche son label FR via .label()
+                      - null     → l'opportunité s'adresse à tous niveaux : on l'indique
+                                   explicitement plutôt que de masquer la ligne, ce qui
+                                   est plus informatif pour l'utilisateur.
+
+                    Le chip `.chip-level` est stylisé en mono uppercase comme tous les
+                    badges Street, avec fond bg-alt et bordure douce (neutre, pas d'accent)
+                    pour ne pas le confondre avec un statut d'urgence.
+                #}
+                <div class="details-row">
+                    <div class="details-key">Niveau</div>
+                    <div class="details-val">
+                        {% if resource.experienceLevel %}
+                            <span class="chip-level">{{ resource.experienceLevel.label() }}</span>
+                        {% else %}
+                            <span class="chip-level chip-level--all">Tous niveaux</span>
+                        {% endif %}
+                    </div>
+                </div>
 
                 {# Date de publication #}
                 <div class="details-row">

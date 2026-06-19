@@ -14,16 +14,18 @@ use App\Repository\UserRepository;
  *
  * Scénarios testés :
  *   1. La page /register s'affiche correctement (GET 200)
- *   2. Un utilisateur peut s'inscrire avec des données valides (POST → redirect /login)
- *   3. Un mot de passe trop court est rejeté (formulaire ré-affiché avec erreur)
- *   4. La page /login s'affiche correctement (GET 200)
- *   5. Un utilisateur inscrit peut se connecter (POST /login → redirect dashboard)
+ *   2. Un utilisateur peut s'inscrire avec des données valides (POST → redirect /verifier-email/confirmation)
+ *   3. Un compte non vérifié (isVerified=false) ne peut PAS se connecter (ADR-0015 Lot 1)
+ *   4. Un mot de passe trop court est rejeté (formulaire ré-affiché avec erreur)
+ *   5. La page /login s'affiche correctement (GET 200)
+ *   6. Un utilisateur inscrit et VÉRIFIÉ peut se connecter (POST /login → redirect dashboard)
  *
  * Conventions testées :
  *   - Les pages publiques sont accessibles sans être connecté
  *   - Le CSRF token est requis sur les formulaires
  *   - Les erreurs de validation sont affichées dans le formulaire
- *   - L'inscription redirige vers /login (pas directement connecté en V1)
+ *   - L'inscription redirige vers /verifier-email/confirmation (ADR-0015 Lot 1)
+ *   - Les comptes non vérifiés sont bloqués par UserChecker::checkPreAuth()
  */
 class RegistrationTest extends AbstractE2ETestCase
 {
@@ -64,11 +66,16 @@ class RegistrationTest extends AbstractE2ETestCase
     /**
      * Vérifie qu'un utilisateur peut créer un compte avec des données valides.
      *
-     * Flux attendu :
-     *   POST /register → redirect 302 vers /login
+     * Flux attendu (ADR-0015 Lot 1 — confirmation d'email) :
+     *   POST /register → redirect 302 vers /verifier-email/confirmation
      *
-     * Après inscription, l'utilisateur n'est PAS connecté automatiquement en V1.
-     * Il doit se connecter manuellement via le formulaire de login.
+     * Après inscription, l'utilisateur n'est PAS connecté automatiquement.
+     * Il doit d'abord confirmer son email via le lien reçu par email.
+     *
+     * Points vérifiés :
+     *   - L'utilisateur est créé en BDD avec isVerified=false
+     *   - La redirection pointe vers la page "vérifie ta boîte mail"
+     *   - Le mot de passe est haché (jamais en clair)
      *
      * Note sur le CSRF :
      *   On utilise $this->client->getCrawler() pour récupérer le token CSRF
@@ -97,9 +104,10 @@ class RegistrationTest extends AbstractE2ETestCase
         ]);
 
         // ── Étape 3 : vérifier la redirection ────────────────────────────────
-        // Après une inscription réussie, le controller redirige vers /login
-        // avec un message flash de confirmation.
-        $this->assertResponseRedirects('/login');
+        // Depuis ADR-0015 Lot 1, l'inscription redirige vers /verifier-email/confirmation
+        // (page "vérifie ta boîte mail") et non plus vers /login.
+        // L'utilisateur doit confirmer son email AVANT de se connecter.
+        $this->assertResponseRedirects('/verifier-email/confirmation');
 
         // ── Étape 4 : vérifier que l'utilisateur est en BDD ──────────────────
         /** @var \App\Repository\UserRepository $userRepository */
@@ -108,8 +116,13 @@ class RegistrationTest extends AbstractE2ETestCase
 
         $this->assertNotNull($user, 'L\'utilisateur doit exister en BDD après inscription');
         $this->assertSame('nouvel.utilisateur@test.fr', $user->getEmail());
+
         // Le mot de passe doit être haché — jamais en clair en base
         $this->assertNotSame('MotDePasse123!', $user->getPassword(), 'Le mot de passe ne doit PAS être stocké en clair');
+
+        // ADR-0015 Lot 1 : le compte est créé avec isVerified=false.
+        // L'activation ne se fait qu'après clic sur le lien de confirmation.
+        $this->assertFalse($user->isVerified(), 'Un compte fraîchement inscrit doit avoir isVerified=false');
     }
 
     // ─── Test 1.3 : Mot de passe trop court ──────────────────────────────────
@@ -197,6 +210,65 @@ class RegistrationTest extends AbstractE2ETestCase
         $userRepository = static::getContainer()->get(UserRepository::class);
         $user = $userRepository->findOneBy(['email' => 'test.confirm@test.fr']);
         $this->assertNull($user, 'Aucun utilisateur ne doit être créé si les mots de passe ne correspondent pas');
+    }
+
+    // ─── Test 1.5 : Compte non vérifié bloqué à la connexion ─────────────────
+
+    /**
+     * Vérifie qu'un compte avec isVerified=false ne peut pas se connecter.
+     *
+     * ADR-0015 Lot 1 — Gating de la connexion :
+     *   UserChecker::checkPreAuth() lève une CustomUserMessageAccountStatusException
+     *   si l'utilisateur n'a pas encore confirmé son email.
+     *   Symfony Security intercepte cette exception et affiche le message d'erreur
+     *   sur la page de login.
+     *
+     * Ce test est critique : si le gating est silencieusement cassé par une régression,
+     * des comptes non vérifiés pourraient se connecter sans confirmation d'email.
+     *
+     * Flux attendu :
+     *   POST /login avec compte isVerified=false
+     *   → redirect 302 vers /login (authentification refusée)
+     *   → la page de login affiche un message contenant "confirmée"
+     */
+    public function testUnverifiedUserCannotLogin(): void
+    {
+        // ── Prépare un utilisateur avec isVerified=false ───────────────────────
+        // createTestUser() accepte $verified=false pour simuler un compte en attente
+        // de confirmation. C'est le cas d'un utilisateur qui vient de s'inscrire
+        // mais n'a pas encore cliqué sur le lien de confirmation.
+        $this->createTestUser(
+            email:    'nonverifie@test.fr',
+            password: 'TestPass12!',
+            verified: false,
+        );
+
+        // ── Charge la page de login pour récupérer le token CSRF ──────────────
+        $this->client->request('GET', '/login');
+        $this->assertResponseIsSuccessful();
+        $csrfToken = $this->getCsrfTokenFromHtml('input[name="_csrf_token"]');
+
+        // ── Tente de se connecter ─────────────────────────────────────────────
+        $this->client->request('POST', '/login', [
+            'email'       => 'nonverifie@test.fr',
+            'password'    => 'TestPass12!',
+            '_csrf_token' => $csrfToken,
+        ]);
+
+        // ── Vérification 1 : Symfony Security redirige vers /login en cas d'échec
+        // (comportement standard du firewall form_login : redirect vers login_path
+        // quand l'authentification échoue, quelle qu'en soit la raison)
+        $this->assertResponseRedirects('/login');
+
+        // ── Vérification 2 : le message d'erreur est affiché sur la page login
+        // On suit la redirection pour charger la page avec le message d'erreur.
+        $this->client->followRedirect();
+        $this->assertResponseIsSuccessful();
+
+        // Le message du UserChecker contient "confirmée" (voir UserChecker::checkPreAuth()).
+        // On vérifie ce mot-clé plutôt que le message complet pour être résistant
+        // aux retouches éditoriales futures du message.
+        $this->assertSelectorTextContains('body', 'confirmée');
     }
 
     // ─── Test 1.6 : Page /login accessible ───────────────────────────────────

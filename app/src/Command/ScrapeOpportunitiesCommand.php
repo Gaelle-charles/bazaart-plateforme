@@ -344,11 +344,16 @@ class ScrapeOpportunitiesCommand extends Command
             $result = $this->persister->persistBatch($allOpportunities);
 
             $io->success(sprintf(
-                '%d nouvelle(s) | %d réactivée(s) (archives) | %d mise(s) à jour | %d ignorée(s) (déjà validée par admin)',
+                // A2 : contentDedup ajouté au résumé pour tracer les doublons de contenu.
+                // Ce compteur est distinct de $skipped (doublons URL + déjà validés par admin).
+                // Exposer les deux facilite le diagnostic : si contentDedup est élevé,
+                // c'est que le même appel à projets circule sous plusieurs URLs.
+                '%d nouvelle(s) | %d réactivée(s) (archives) | %d mise(s) à jour | %d ignorée(s) (déjà validée par admin) | %d doublon(s) contenu',
                 $result->inserted,
                 $result->reactivated,
                 $result->updated,
                 $result->skipped,
+                $result->contentDedup,
             ));
         }
 

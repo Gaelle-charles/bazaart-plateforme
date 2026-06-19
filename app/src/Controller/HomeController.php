@@ -68,11 +68,16 @@ class HomeController extends AbstractController
         //   - $page = 1 avec un $limit petit = pagination : on borne au premier lot
         //   C'est la façon idiomatique pour obtenir "les N premiers" via ce repository.
         $opportunities = $this->resourceRepository->findPublished(
-            typeId:       null,       // Pas de filtre sur le type
-            disciplineId: null,       // Pas de filtre sur la discipline
-            search:       null,       // Pas de recherche textuelle
+            typeId:       null,        // Pas de filtre sur le type
+            disciplineId: null,        // Pas de filtre sur la discipline
+            search:       null,        // Pas de recherche textuelle
             page:         1,
             limit:        self::OPPORTUNITIES_COUNT,
+            // hideExpired: true → la vitrine est une surface publique.
+            // On n'y montre pas d'opportunités dont la deadline est passée :
+            // ce serait trompeur de proposer à un visiteur de "candidater" à quelque chose
+            // qui ne peut plus être fait. L'admin accède à /admin/resources pour tout voir.
+            hideExpired:  true,
         );
 
         return $this->render('vitrine/index.html.twig', [

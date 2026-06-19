@@ -160,13 +160,14 @@
         <span class="accent">Transmettre.</span>
     </h1>
     <p class="cf-hero__subtitle">
-        Des formations montées par Bazaart et des ateliers proposés par les artistes,
-        artisans et formateurs de la communauté.
+        Des formations et ateliers conçus par l'équipe Bazaart pour les artistes
+        de la communauté afro-atlantique.
     </p>
-    {# Le bouton « Proposer un atelier » mène au formulaire de proposition (ADR-0012) #}
-    <a href="{{ path('app_course_proposal_new') }}" class="cf-btn cf-btn--primary">
-        ↗ Proposer un atelier
-    </a>
+    {#
+     # Bouton « Proposer un atelier » retiré (ADR-0012 révisé, juin 2026).
+     # La création de formations est réservée à l'équipe admin.
+     # Texte du sous-titre mis à jour en cohérence (ADR-0013).
+     #}
 </section>
 
 {# ── CATALOGUE ────────────────────────────────────────────────────────────── #}
@@ -229,43 +230,10 @@
     </div>
 {% endif %}
 
-{# ── BANDE FINALE « TON SAVOIR A DE LA VALEUR. » ──────────────────────────── #}
-<section class="cf-cta">
-    <div class="cf-cta__inner">
-        <div>
-            <span class="cf-cta__eyebrow">Pour les artistes, artisans &amp; formateurs</span>
-            <h2 class="cf-cta__title">
-                Ton savoir
-                <span class="accent">a de la valeur.</span>
-            </h2>
-            <p class="cf-cta__text">
-                Propose ton atelier ou ta formation : on s'occupe des inscriptions, des
-                paiements et de la logistique. Toi, tu transmets.
-            </p>
-            <a href="{{ path('app_course_proposal_new') }}" class="cf-btn cf-btn--light">
-                ↗ Proposer un atelier
-            </a>
-        </div>
-
-        <div class="cf-points">
-            <div class="cf-point">
-                <h3 class="cf-point__title">Rémunéré</h3>
-                <p class="cf-point__text">Tu es rétribué·e quand des artistes s'inscrivent à ta formation.</p>
-            </div>
-            <div class="cf-point">
-                <h3 class="cf-point__title">Visible</h3>
-                <p class="cf-point__text">Ton atelier est mis en avant auprès de toute la communauté Bazaart.</p>
-            </div>
-            <div class="cf-point">
-                <h3 class="cf-point__title">Sans friction</h3>
-                <p class="cf-point__text">Inscriptions, paiements et rappels : on gère tout pour toi.</p>
-            </div>
-            <div class="cf-point">
-                <h3 class="cf-point__title">Encadré</h3>
-                <p class="cf-point__text">Un cadre clair et un accompagnement de l'équipe à chaque étape.</p>
-            </div>
-        </div>
-    </div>
-</section>
+{#
+ # Bande CTA « Proposer un atelier » supprimée (ADR-0012 révisé, juin 2026).
+ # La création de formations est désormais gérée directement par l'équipe Bazaart.
+ # Si un artiste souhaite proposer un contenu, il peut contacter l'équipe par email.
+ #}
 
 {% endblock %}

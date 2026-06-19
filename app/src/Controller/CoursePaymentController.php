@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Repository\CoursePaymentRepository;
 use App\Repository\CourseRepository;
+use App\Service\EventRegistrationService;
 use App\Service\StripeService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -35,9 +36,10 @@ use Stripe\Checkout\Session as StripeSession;
 class CoursePaymentController extends AbstractController
 {
     public function __construct(
-        private readonly StripeService          $stripeService,
-        private readonly CourseRepository       $courseRepository,
-        private readonly CoursePaymentRepository $coursePaymentRepository,
+        private readonly StripeService             $stripeService,
+        private readonly CourseRepository          $courseRepository,
+        private readonly CoursePaymentRepository   $coursePaymentRepository,
+        private readonly EventRegistrationService  $eventRegistrationService,
     ) {}
 
     // ─── Initiation du paiement d'une formation ───────────────────────────────
@@ -66,7 +68,7 @@ class CoursePaymentController extends AbstractController
         // {{ csrf_token('course_pay_' ~ course.slug) }}
         if (!$this->isCsrfTokenValid('course_pay_' . $slug, $request->request->get('_token'))) {
             $this->addFlash('error', 'Token de sécurité invalide. Veuillez réessayer.');
-            return $this->redirectToRoute('app_courses_show', ['slug' => $slug]);
+            return $this->redirectToRoute('app_course_show', ['slug' => $slug]);
         }
 
         /** @var \App\Entity\User $user */
@@ -83,21 +85,43 @@ class CoursePaymentController extends AbstractController
             throw $this->createNotFoundException('Cette formation n\'est pas encore disponible.');
         }
 
-        // ── Garde anti-double-achat ───────────────────────────────────────────
+        // ── Garde anti-double-achat / anti-double-inscription ────────────────
         // Si l'utilisateur a déjà un paiement confirmé pour cette formation,
         // on le redirige directement sans créer une nouvelle session Checkout.
         // Cela évite les doubles débits (deux onglets, double-clic, retour arrière).
         $existingPayment = $this->coursePaymentRepository->findCompletedByUserAndCourse($user, $course);
         if ($existingPayment !== null) {
             $this->addFlash('info', 'Tu as déjà accès à cette formation.');
+            // Pour un événement payant : le lien/adresse est sur le dashboard
+            // Pour une formation CONTENU : rediriger vers l'espace apprenant
+            if ($course->isEvent()) {
+                return $this->redirectToRoute('app_dashboard');
+            }
             return $this->redirectToRoute('app_course_learn', ['slug' => $slug]);
+        }
+
+        // ── Contrôle de capacité pour les événements payants ─────────────────
+        // On vérifie la capacité AVANT de lancer le checkout Stripe pour éviter
+        // qu'un utilisateur paye une place qui n'existe plus.
+        //
+        // Note sur la concurrence : dans le cas très rare où deux utilisateurs
+        // arrivent simultanément sur la dernière place, les deux sessions Checkout
+        // pourraient être créées. Le webhook Stripe gérera la situation en ne créant
+        // qu'une seule inscription (contrainte UNIQUE en base). La gestion du
+        // remboursement de l'inscription en surplus est reportée en Phase 3.
+        if ($course->isEvent() && !$this->eventRegistrationService->hasAvailableSeats($course)) {
+            $this->addFlash('error', sprintf(
+                'L\'événement "%s" est complet. Il ne reste plus de place disponible.',
+                $course->getTitle()
+            ));
+            return $this->redirectToRoute('app_course_show', ['slug' => $slug]);
         }
 
         // ── Vérification que la formation a un prix Stripe configuré ──────────
         // Si le prix n'est pas configuré, on ne peut pas initier le paiement.
         if ($course->getStripePriceId() === null || $course->getPriceInCents() === null || $course->getPriceInCents() === 0) {
             $this->addFlash('error', 'Cette formation n\'a pas encore de tarif configuré. Contactez l\'équipe Bazaart.');
-            return $this->redirectToRoute('app_courses_show', ['slug' => $slug]);
+            return $this->redirectToRoute('app_course_show', ['slug' => $slug]);
         }
 
         // ── Création de la session Checkout Stripe ────────────────────────────
@@ -122,11 +146,11 @@ class CoursePaymentController extends AbstractController
         } catch (\RuntimeException $e) {
             // Formation sans prix Stripe configuré (normalement attrapé plus haut)
             $this->addFlash('error', 'Impossible d\'initier le paiement. Contactez l\'équipe Bazaart.');
-            return $this->redirectToRoute('app_courses_show', ['slug' => $slug]);
+            return $this->redirectToRoute('app_course_show', ['slug' => $slug]);
         } catch (\Stripe\Exception\ApiErrorException $e) {
             // Erreur API Stripe
             $this->addFlash('error', 'Une erreur est survenue lors de la connexion au système de paiement. Veuillez réessayer dans quelques instants.');
-            return $this->redirectToRoute('app_courses_show', ['slug' => $slug]);
+            return $this->redirectToRoute('app_course_show', ['slug' => $slug]);
         }
 
         // ── Redirection vers la page de paiement Stripe ───────────────────────

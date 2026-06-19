@@ -1,0 +1,295 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # onboarding/step1.html.twig — Étape 1 : Artiste ou Structure ?
+ #
+ # Premier écran de l'onboarding obligatoire.
+ # L'utilisateur choisit entre :
+ #   - "Je suis artiste" → étape 2 (profil artiste)
+ #   - "Je suis une structure" → app_structure_register (Lot 3)
+ #
+ # Design : thème Street, cohérent avec le dashboard
+ #   fond --bg (#F2EFE6), encre --ink (#0D0D0D)
+ #   accent vert acide --accent (#C6F24E)
+ #   Typographie : Archivo Black (--display), Space Grotesk (--body)
+#}
+
+{% block title %}Bienvenue sur Bazaart — Étape 1{% endblock %}
+{% block page_title %}Bienvenue{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+/* ── Conteneur onboarding ──────────────────────────────────────── */
+.ob-wrap {
+    max-width: 620px;
+    margin: 48px auto;
+    padding: 0 16px;
+}
+
+/* Indicateur de progression (étapes 1/4, 2/4...) */
+.ob-progress {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 40px;
+}
+
+.ob-step-dot {
+    width: 28px;
+    height: 4px;
+    background: var(--line-soft, #ddd);
+}
+
+.ob-step-dot--active {
+    background: var(--accent);
+}
+
+.ob-step-dot--done {
+    background: var(--ink);
+}
+
+.ob-progress__label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-left: 8px;
+}
+
+/* Titre principal */
+.ob-title {
+    font-family: var(--display);
+    font-size: clamp(28px, 5vw, 44px);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: -.02em;
+    line-height: .95;
+    color: var(--ink);
+    margin: 0 0 12px;
+}
+
+.ob-title .it {
+    font-family: var(--serif);
+    font-style: italic;
+    text-transform: none;
+    font-weight: 400;
+    color: var(--accent-2, #FF6B2C);
+}
+
+/* Sous-titre */
+.ob-subtitle {
+    font-size: 15px;
+    color: var(--ink-mute);
+    margin: 0 0 40px;
+    line-height: 1.5;
+}
+
+/* Grille de choix (2 cards) */
+.ob-choices {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--ink);
+    margin-bottom: 32px;
+}
+
+/* Card de choix */
+.ob-choice {
+    padding: 0;
+}
+
+.ob-choice + .ob-choice {
+    border-left: 1px solid var(--ink);
+}
+
+/* Input radio caché — l'affordance est sur le label */
+.ob-choice input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+/* Label cliquable = toute la card */
+.ob-choice label {
+    display: flex;
+    flex-direction: column;
+    padding: 32px 24px;
+    cursor: pointer;
+    transition: background .12s;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.ob-choice label:hover {
+    background: var(--bg-alt);
+}
+
+/* Quand le radio correspondant est coché : fond acide + border visible */
+.ob-choice input[type="radio"]:checked + label {
+    background: var(--accent);
+}
+
+/* Icône / emoji de la card */
+.ob-choice__icon {
+    font-size: 36px;
+    margin-bottom: 16px;
+    display: block;
+}
+
+/* Titre de la card */
+.ob-choice__title {
+    font-family: var(--display);
+    font-size: 18px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: -.01em;
+    color: var(--ink);
+    margin-bottom: 8px;
+}
+
+/* Description de la card */
+.ob-choice__desc {
+    font-size: 13px;
+    color: var(--ink-mute);
+    line-height: 1.5;
+    flex: 1;
+}
+
+/* Bouton de soumission */
+.ob-btn {
+    display: inline-block;
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding: 14px 32px;
+    background: var(--ink);
+    color: var(--bg);
+    border: 1px solid var(--ink);
+    cursor: pointer;
+    transition: background .12s, color .12s;
+    border-radius: 0;
+    width: 100%;
+    text-align: center;
+}
+
+.ob-btn:hover {
+    background: var(--accent);
+    color: var(--ink);
+    border-color: var(--ink);
+}
+
+/* Message d'erreur */
+.ob-error {
+    background: #fff0f0;
+    border: 1px solid #c00;
+    color: #c00;
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-bottom: 20px;
+    border-radius: 0;
+}
+
+@media (max-width: 580px) {
+    .ob-choices {
+        grid-template-columns: 1fr;
+    }
+    .ob-choice + .ob-choice {
+        border-left: none;
+        border-top: 1px solid var(--ink);
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ob-wrap">
+
+    {# Indicateur de progression #}
+    <div class="ob-progress" aria-label="Étape 1 sur 4">
+        <div class="ob-step-dot ob-step-dot--active" title="Étape 1 : Type de compte"></div>
+        <div class="ob-step-dot" title="Étape 2 : Profil"></div>
+        <div class="ob-step-dot" title="Étape 3 : Objectifs"></div>
+        <div class="ob-step-dot" title="Étape 4 : Alertes"></div>
+        <span class="ob-progress__label">Étape 1 / 4</span>
+    </div>
+
+    {# Titre principal #}
+    <h1 class="ob-title">
+        Bienvenue<br>sur <span class="it">Bazaart.</span>
+    </h1>
+    <p class="ob-subtitle">
+        Pour personnaliser ton experience, dis-nous qui tu es.
+        Cela prend moins de 2 minutes.
+    </p>
+
+    {# Messages flash d'erreur #}
+    {% for message in app.flashes('error') %}
+        <div class="ob-error" role="alert">{{ message }}</div>
+    {% endfor %}
+
+    {# Formulaire de choix #}
+    <form method="POST" action="{{ path('app_onboarding_step1') }}">
+
+        {# Token CSRF : protection contre les soumissions externes malveillantes #}
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('onboarding_step1') }}">
+
+        <div class="ob-choices" role="group" aria-labelledby="ob-choices-label">
+            <span id="ob-choices-label" class="sr-only">Choisissez votre type de compte</span>
+
+            {# Choix 1 : Artiste #}
+            <div class="ob-choice">
+                <input type="radio" id="type_artiste" name="account_type" value="artiste" required>
+                <label for="type_artiste">
+                    <span class="ob-choice__icon" aria-hidden="true">
+                        {# SVG abstrait "pinceau / créativité" — pas d'emoji dans le code (convention projet) #}
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+                             stroke="var(--ink)" stroke-width="1.5"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 20h9"/>
+                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                        </svg>
+                    </span>
+                    <span class="ob-choice__title">Je suis artiste</span>
+                    <span class="ob-choice__desc">
+                        Musicien, plasticien, danseur, auteur, performer ou autre createur.
+                        Je veux trouver des opportunites et developper ma carriere.
+                    </span>
+                </label>
+            </div>
+
+            {# Choix 2 : Structure #}
+            <div class="ob-choice">
+                <input type="radio" id="type_structure" name="account_type" value="structure">
+                <label for="type_structure">
+                    <span class="ob-choice__icon" aria-hidden="true">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+                             stroke="var(--ink)" stroke-width="1.5"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                            <polyline points="9,22 9,12 15,12 15,22"/>
+                        </svg>
+                    </span>
+                    <span class="ob-choice__title">Je suis une structure</span>
+                    <span class="ob-choice__desc">
+                        Association, collectif, galerie, salle de spectacle ou autre organisation.
+                        Je veux publier des ressources et soutenir les artistes.
+                    </span>
+                </label>
+            </div>
+
+        </div>
+
+        <button type="submit" class="ob-btn">
+            Continuer
+        </button>
+
+    </form>
+
+</div>
+{% endblock %}

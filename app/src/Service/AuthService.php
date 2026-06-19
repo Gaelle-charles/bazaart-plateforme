@@ -21,6 +21,15 @@ class AuthService
     /**
      * Inscrit un nouvel utilisateur.
      * Retourne l'entité créée ou null si l'email est déjà utilisé.
+     *
+     * Le compte est créé avec isVerified = false (valeur par défaut de l'entité User).
+     * L'utilisateur devra cliquer sur le lien de confirmation envoyé par email
+     * avant de pouvoir se connecter.
+     *
+     * Note : l'envoi de l'email de confirmation est volontairement fait dans le
+     * contrôleur (AuthController::register) et non ici. Raison : le service email
+     * a besoin de l'URL signée, qui dépend du routeur Symfony — injecter le routeur
+     * ici coplerait trop ce service. La séparation des responsabilités est maintenue.
      */
     public function register(RegisterDTO $dto): ?User
     {
@@ -36,6 +45,9 @@ class AuthService
             $this->passwordHasher->hashPassword($user, $dto->password)
         );
 
+        // isVerified reste à false (valeur par défaut dans User::$isVerified).
+        // Le compte ne sera pleinement actif qu'après confirmation de l'email.
+        // Le contrôleur appelant enverra l'email de confirmation après ce persist.
         $this->em->persist($user);
         $this->em->flush();
 

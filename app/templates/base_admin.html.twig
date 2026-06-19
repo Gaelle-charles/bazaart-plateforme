@@ -328,6 +328,10 @@
 .flash--success { background: #d4edda; color: #155724; }
 .flash--error   { background: #f8d7da; color: #721c24; }
 .flash--info    { background: #d1ecf1; color: #0c5460; }
+/* warning : fond jaune pâle (erreurs non-bloquantes, ex : Stripe partiel) */
+.flash--warning { background: #fff3cd; color: #856404; }
+/* danger  : alias de error pour les messages bloquants à fort impact (URL vidéo invalide) */
+.flash--danger  { background: #f8d7da; color: #721c24; }
 
 /* ── Responsive admin (< 900px) ─────────────────────────────────────────── */
 @media (max-width: 900px) {
@@ -669,6 +673,18 @@
             {% endfor %}
             {% for message in app.flashes('info') %}
                 <div class="flash flash--info">{{ message }}</div>
+            {% endfor %}
+            {#
+             # warning : erreurs non bloquantes (ex : Stripe partiellement synchronisé).
+             # danger  : erreurs bloquantes à fort impact (ex : URL vidéo hors liste blanche).
+             # Les deux types étaient précédemment émis par le controller mais
+             # non rendus ici — messages perdus silencieusement (bug C1 ADR-0014).
+             #}
+            {% for message in app.flashes('warning') %}
+                <div class="flash flash--warning">{{ message }}</div>
+            {% endfor %}
+            {% for message in app.flashes('danger') %}
+                <div class="flash flash--danger">{{ message }}</div>
             {% endfor %}
 
             {% block content %}{% endblock %}

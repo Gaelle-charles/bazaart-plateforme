@@ -99,6 +99,46 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTimeInterface $resetTokenExpiresAt = null;
 
+    // ─── Champs onboarding (Lot 2) ───────────────────────────────────────────
+
+    /**
+     * Indique si l'utilisateur a complété son parcours d'onboarding.
+     *
+     * false → l'utilisateur sera redirigé vers /onboarding à chaque requête
+     *         (via OnboardingGatingListener).
+     * true  → accès libre à l'application.
+     *
+     * Les comptes existants (avant ce champ) sont mis à true via la migration SQL
+     * UPDATE pour ne pas les bloquer. Seuls les NOUVEAUX comptes partent à false.
+     *
+     * Convention Doctrine : NOT NULL, default false (les nouveaux comptes démarrent
+     * avec onboarding non complété).
+     */
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $onboardingCompleted = false;
+
+    /**
+     * Liste des objectifs de l'artiste sur la plateforme.
+     *
+     * Stocké en JSON : tableau de valeurs correspondant aux cases de ArtistLookingFor.
+     * Exemple : ["formations", "ressources_appels"]
+     *
+     * nullable: true → non renseigné avant l'onboarding (et pour les comptes admin/structure).
+     *
+     * @var array<string>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $lookingFor = null;
+
+    /**
+     * Texte libre "autre chose que je recherche" (case AUTRE cochée à l'étape 3).
+     *
+     * Non null uniquement si ArtistLookingFor::AUTRE est dans $lookingFor.
+     * Stocké tel quel, sans formatage (l'utilisateur s'exprime librement).
+     */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $lookingForOther = null;
+
     /**
      * Relation inverse vers ArtistProfile.
      * mappedBy = 'user' fait référence à la propriété $user dans ArtistProfile.
@@ -289,6 +329,69 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setResetTokenExpiresAt(?\DateTimeInterface $resetTokenExpiresAt): static
     {
         $this->resetTokenExpiresAt = $resetTokenExpiresAt;
+        return $this;
+    }
+
+    // ─── Getters / Setters — Onboarding ────────────────────────────────────
+
+    /**
+     * Indique si l'utilisateur a complété son onboarding.
+     * Utilisé par OnboardingGatingListener pour décider d'autoriser ou non l'accès.
+     */
+    public function isOnboardingCompleted(): bool
+    {
+        return $this->onboardingCompleted;
+    }
+
+    /**
+     * Marque l'onboarding comme complété (true) ou non (false).
+     * Appelé par OnboardingService::completeOnboarding() à la dernière étape.
+     */
+    public function setOnboardingCompleted(bool $onboardingCompleted): static
+    {
+        $this->onboardingCompleted = $onboardingCompleted;
+        return $this;
+    }
+
+    /**
+     * Retourne la liste des objectifs de l'artiste (valeurs de ArtistLookingFor).
+     * Null si non encore renseigné (avant onboarding ou compte non artiste).
+     *
+     * @return array<string>|null
+     */
+    public function getLookingFor(): ?array
+    {
+        return $this->lookingFor;
+    }
+
+    /**
+     * Enregistre les objectifs de l'artiste.
+     * Appelé à l'étape 3 de l'onboarding par OnboardingService.
+     *
+     * @param array<string>|null $lookingFor Tableau de valeurs ArtistLookingFor::value
+     */
+    public function setLookingFor(?array $lookingFor): static
+    {
+        $this->lookingFor = $lookingFor;
+        return $this;
+    }
+
+    /**
+     * Retourne le texte libre "autre" si la case AUTRE était cochée.
+     * Null si l'utilisateur n'a pas sélectionné AUTRE, ou avant l'onboarding.
+     */
+    public function getLookingForOther(): ?string
+    {
+        return $this->lookingForOther;
+    }
+
+    /**
+     * Enregistre le texte libre "autre chose que je recherche".
+     * Appelé par OnboardingService si ArtistLookingFor::AUTRE est sélectionné.
+     */
+    public function setLookingForOther(?string $lookingForOther): static
+    {
+        $this->lookingForOther = $lookingForOther;
         return $this;
     }
 }

@@ -4,11 +4,17 @@
  # dashboard/index.html.twig — Tableau de bord artiste (thème Street)
  #
  # Variables transmises par DashboardController::index() :
- #   - user            : App\Entity\User — l'utilisateur connecté
- #                       → user.artistProfile (OneToOne) : .displayName, .bio, .location, .websiteUrl
- #   - recent_resources: Resource[]     — 5 dernières ressources publiées
- #   - recent_posts    : Post[]         — 3 derniers posts du fil communauté
- #   - submissions     : int            — nombre total de soumissions de cet utilisateur
+ #   - user               : App\Entity\User — l'utilisateur connecté
+ #                          → user.artistProfile (OneToOne) : .displayName, .bio, .location, .websiteUrl
+ #   - recent_resources   : Resource[]      — 5 dernières ressources publiées
+ #   - recent_posts       : Post[]          — 3 derniers posts du fil communauté
+ #   - submissions        : int             — nombre total de soumissions de cet utilisateur
+ #   - active_subscription: Subscription|null — abonnement actif ou null
+ #   - upcoming_events    : CourseEnrollment[] — inscriptions événements à venir (ADR-0014 Phase 2)
+ #                          triées par date de début ASC ; peut être vide ([])
+ #
+ # Note (ADR-0012 révisé, juin 2026) : le widget « Mes formations » membres a été retiré.
+ # Le controller ne transmet plus de liste de propositions utilisateur.
  #
  # Fonction Twig disponible : unread_notifications_count()
  #
@@ -951,33 +957,189 @@
     color: var(--accent);
 }
 
+
 /* ══════════════════════════════════════════════════════════════
-   WIDGET « MES FORMATIONS » (proposer + suivi des propositions)
+   WIDGET « MES ÉVÉNEMENTS À VENIR » (ADR-0014 Phase 2)
+   Affiché après le bandeau abonnement, avant la grille.
+   Fond --bg-alt, bordure --ink, design Street (0 border-radius).
 ══════════════════════════════════════════════════════════════ */
-.db-proposals {
+.db-events {
     border: 1px solid var(--ink);
-    background: var(--bg-alt);
-    padding: 18px 22px;
     margin-bottom: 24px;
 }
-.db-proposals__head {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 16px; flex-wrap: wrap; margin-bottom: 12px;
+
+/* En-tête du widget événements */
+.db-events__head {
+    padding: 14px 18px;
+    background: var(--ink);
+    color: var(--bg);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
 }
-.db-proposals__list { list-style: none; margin: 0; padding: 0; }
-.db-proposals__item {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 8px 0; border-top: 1px solid var(--line-soft);
+
+.db-events__title {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--bg);
+    margin: 0;
 }
-.db-proposals__title { font-family: var(--body); font-size: 14px; color: var(--ink); }
-.db-proposals__empty { font-family: var(--mono); font-size: 12px; color: var(--ink-mute); margin: 0; }
-.db-prop-badge {
-    font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .08em;
-    text-transform: uppercase; padding: 3px 8px; border: 1px solid var(--ink); white-space: nowrap;
+
+/* Ligne d'un événement */
+.db-event-row {
+    display: grid;
+    /* Date | Info centrale | Accès */
+    grid-template-columns: 80px 1fr auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line-soft);
+    text-decoration: none;
+    color: var(--ink);
 }
-.db-prop-badge--warn   { background: var(--accent-2); color: var(--ink); }
-.db-prop-badge--ok     { background: var(--ok, #1F8A5B); color: #fff; border-color: var(--ok, #1F8A5B); }
-.db-prop-badge--danger { background: var(--danger, #E5484D); color: #fff; border-color: var(--danger, #E5484D); }
+
+.db-event-row:last-child {
+    border-bottom: none;
+}
+
+/* Bloc date (jour en chiffre géant + mois en mono) */
+.db-event-date {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--accent);
+    padding: 8px 6px;
+    border: 1px solid var(--ink);
+    flex-shrink: 0;
+    min-width: 60px;
+}
+
+.db-event-date__day {
+    font-family: var(--display);
+    font-size: 24px;
+    line-height: 1;
+    color: var(--ink);
+    letter-spacing: -.02em;
+}
+
+.db-event-date__month {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink);
+    opacity: .7;
+    margin-top: 2px;
+}
+
+/* Infos centrales (titre, heure, format) */
+.db-event-info__title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 3px;
+    line-height: 1.3;
+}
+
+.db-event-info__meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-mute);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+/* Bouton accès — vert acide (accent) pour l'événement en ligne, sable pour présentiel */
+.db-event-access {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    border: 1px solid var(--ink);
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background .12s, color .12s;
+}
+
+/* Accès visio : fond lime (accent) */
+.db-event-access--visio {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+.db-event-access--visio:hover {
+    background: var(--ink);
+    color: var(--accent);
+}
+
+/* Accès présentiel : fond sombre */
+.db-event-access--presentiel {
+    background: var(--ink);
+    color: var(--accent);
+}
+
+.db-event-access--presentiel:hover {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+/* État vide du widget événements */
+.db-events__empty {
+    padding: 20px 18px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+/* ── Bouton d'annulation d'inscription (Phase 3) ────────────────
+   Petit bouton discret dans le coin bas-droit de la ligne événement.
+   Rouge atténué pour signaler l'action destructive sans envahir l'UI.
+----------------------------------------------------------------- */
+.db-event-cancel-btn {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 5px 9px;
+    border: 1px solid rgba(200, 0, 0, .35);
+    background: transparent;
+    color: rgba(200, 0, 0, .7);
+    cursor: pointer;
+    border-radius: 0;
+    transition: background .12s, color .12s, border-color .12s;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.db-event-cancel-btn:hover {
+    background: rgba(200, 0, 0, .08);
+    border-color: rgba(200, 0, 0, .7);
+    color: rgb(180, 0, 0);
+}
+
+/* Message "annulation non disponible" affiché quand hors fenêtre */
+.db-event-cancel-unavail {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--ink-mute);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 5px 0;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 
 </style>
 {% endblock %}
@@ -1187,29 +1349,221 @@
 </div>
 
 
+
 {# ══════════════════════════════════════════════════════════════════════════════
-   WIDGET « MES FORMATIONS »
-   Bouton « Proposer une formation » (→ formulaire) + suivi des propositions de l'user.
+   WIDGET « MES ÉVÉNEMENTS & FORMATIONS À VENIR » (ADR-0014 Phase 2)
+
+   upcoming_events est passé par DashboardController::index() :
+   tableau de CourseEnrollment[] triés par date de début ASC.
+   Chaque enrollment.getCourse() retourne la formation-événement.
+
+   C'est ici (et UNIQUEMENT ici) que le lien visio (eventExternalUrl) et
+   l'adresse exacte (eventLocation) sont révélés après inscription.
+   Sur la page publique /formations/{slug}, ces informations sont masquées.
 ══════════════════════════════════════════════════════════════════════════════ #}
-<div class="db-proposals">
-    <div class="db-proposals__head">
-        <span class="db-subscription__label">Mes formations</span>
-        <a href="{{ path('app_course_proposal_new') }}" class="db-subscription__btn">
-            Proposer une formation
+
+{#
+   Noms des mois en français pour l'affichage dans le calendrier-widget.
+   Twig n'a pas de filtre de locale intégré — on utilise un tableau de mapping.
+   Le filtre |date('n') retourne le numéro du mois (1-12) sans zéro initial.
+   On soustrait 1 pour indexer dans ce tableau 0-indexed.
+#}
+{% set moisFr = ['Jan.', 'Fév.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sep.', 'Oct.', 'Nov.', 'Déc.'] %}
+
+<div class="db-events">
+    <div class="db-events__head">
+        <h2 class="db-events__title">
+            Mes formations &amp; événements à venir
+        </h2>
+        {# Lien vers le catalogue si l'utilisateur veut explorer d'autres formations #}
+        <a href="{{ path('app_course_index') }}"
+           style="font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .06em;
+                  text-transform: uppercase; color: rgba(242,239,230,.6); text-decoration: none;"
+           onmouseover="this.style.color='rgba(242,239,230,1)'"
+           onmouseout="this.style.color='rgba(242,239,230,.6)'">
+            Explorer →
         </a>
     </div>
-    {% if my_proposals is not empty %}
-        <ul class="db-proposals__list">
-            {% for p in my_proposals %}
-                <li class="db-proposals__item">
-                    <span class="db-proposals__title">{{ p.title }}</span>
-                    <span class="db-prop-badge db-prop-badge--{{ p.status.badgeVariant() }}">{{ p.status.label() }}</span>
-                </li>
-            {% endfor %}
-        </ul>
+
+    {#
+     # On affiche chaque inscription événement sous forme de ligne :
+     # [Calendrier date] | [Titre + heure + format] | [Bouton accès]
+     #
+     # Accès révélé ici selon le mode :
+     #   VISIO       → lien direct (eventExternalUrl) dans le bouton "Rejoindre"
+     #   PRESENTIEL  → adresse complète (eventLocation) affichée dans les métadonnées
+     #
+     # Si l'utilisateur n'a aucun événement à venir → message d'invitation.
+     #}
+    {#
+     # Phase 3 : on itère sur enrollments_cancel_info (enrichi avec les flags d'annulation)
+     # plutôt que sur upcoming_events directement.
+     # Les deux sont synchrones (même ordre), mais enrollments_cancel_info contient
+     # en plus : can_cancel, refund_eligible, is_paid.
+     #}
+    {% if enrollments_cancel_info is defined and enrollments_cancel_info|length > 0 %}
+
+        {% for item in enrollments_cancel_info %}
+            {# item = {enrollment, can_cancel, refund_eligible, is_paid} #}
+            {% set enrollment = item.enrollment %}
+            {% set event = enrollment.course %}
+            {#
+             # Numéro du mois 1-indexed → index 0-indexed pour moisFr
+             # event.eventStartAt|date('n') retourne "7" pour juillet → moisFr[6] = 'Juil.'
+             #}
+            {% set moisIndex = event.eventStartAt ? (event.eventStartAt|date('n') - 1) : 0 %}
+
+            {#
+             # La ligne est maintenant en display:block (pas un <a>) car on y imbrique
+             # un formulaire d'annulation. La CSS .db-event-row reste en grid.
+             # On retire le style ancre et on gère les liens individuellement.
+             #}
+            <div class="db-event-row">
+
+                {# Bloc calendrier : jour en chiffre + mois abrégé #}
+                <div class="db-event-date">
+                    <span class="db-event-date__day">
+                        {{ event.eventStartAt ? event.eventStartAt|date('j') : '?' }}
+                    </span>
+                    <span class="db-event-date__month">
+                        {{ event.eventStartAt ? moisFr[moisIndex] : '—' }}
+                    </span>
+                </div>
+
+                {# Informations centrales : titre, heure de début, format #}
+                <div class="db-event-info">
+                    <div class="db-event-info__title">{{ event.title|e }}</div>
+                    <div class="db-event-info__meta">
+                        {# Heure #}
+                        {% if event.eventStartAt is not null %}
+                            {{ event.eventStartAt|date('H\\hi') }}
+                        {% endif %}
+                        {# Séparateur + format #}
+                        {% if event.eventMode is not null %}
+                            &nbsp;·&nbsp;
+                            {% if event.eventMode.value == 'online' %}
+                                En ligne (visio)
+                            {% elseif event.eventMode.value == 'in_person' %}
+                                Présentiel
+                            {% endif %}
+                        {% endif %}
+                        {# Adresse pour les événements présentiel — révélée après inscription #}
+                        {% if event.eventMode is not null and event.eventMode.value == 'in_person' and event.eventLocation is not null %}
+                            &nbsp;·&nbsp; {{ event.eventLocation|e }}
+                        {% endif %}
+                    </div>
+
+                    {#
+                     # Phase 3 — bouton / indicateur d'annulation.
+                     #
+                     # Cas 1 : éligible au remboursement (payant + dans la fenêtre + avant début)
+                     #   → bouton "Annuler (remboursé)" avec confirmation JS
+                     #
+                     # Cas 2 : payant MAIS hors fenêtre → message explicatif discret
+                     #   → "Annulation non remboursable — contacter Bazaart"
+                     #
+                     # Cas 3 : événement gratuit → bouton "Annuler mon inscription" simple
+                     #
+                     # CSRF : token unique par inscription → 'cancel_enrollment_{id}'
+                     # Route : POST /dashboard/inscriptions/{id}/annuler
+                     #}
+                    <div style="margin-top: 6px;">
+                        {% if item.can_cancel %}
+                            {% if item.refund_eligible %}
+                                {#
+                                 # CAS 1 : remboursement éligible
+                                 # Formulation claire : l'utilisateur sait qu'il sera remboursé.
+                                 # Confirmation JS obligatoire (action irréversible + argent).
+                                 #}
+                                <form method="POST"
+                                      action="{{ path('app_dashboard_enrollment_cancel', {id: enrollment.id}) }}"
+                                      onsubmit="return confirm('Annuler votre inscription et être remboursé intégralement ? Cette action est irréversible.');"
+                                      style="display:inline;">
+                                    <input type="hidden" name="_token"
+                                           value="{{ csrf_token('cancel_enrollment_' ~ enrollment.id) }}">
+                                    <button type="submit" class="db-event-cancel-btn"
+                                            aria-label="Annuler votre inscription à {{ event.title|e }} avec remboursement">
+                                        Annuler &amp; rembourser
+                                    </button>
+                                </form>
+                            {% elseif item.is_paid %}
+                                {#
+                                 # CAS 2 : payant mais hors fenêtre de remboursement.
+                                 # On masque le bouton d'annulation (blocage UX)
+                                 # et on affiche un message explicatif.
+                                 # L'utilisateur doit contacter l'équipe pour les cas exceptionnels.
+                                 #}
+                                <span class="db-event-cancel-unavail"
+                                      title="Délai de remboursement dépassé — contactez l'équipe Bazaart pour une demande exceptionnelle">
+                                    Annulation non remboursable
+                                </span>
+                            {% else %}
+                                {#
+                                 # CAS 3 : événement gratuit → annulation simple sans remboursement.
+                                 # Libère juste la place, pas d'argent en jeu.
+                                 #}
+                                <form method="POST"
+                                      action="{{ path('app_dashboard_enrollment_cancel', {id: enrollment.id}) }}"
+                                      onsubmit="return confirm('Annuler votre inscription à cet événement ? Cette action est irréversible.');"
+                                      style="display:inline;">
+                                    <input type="hidden" name="_token"
+                                           value="{{ csrf_token('cancel_enrollment_' ~ enrollment.id) }}">
+                                    <button type="submit" class="db-event-cancel-btn"
+                                            aria-label="Annuler votre inscription gratuite à {{ event.title|e }}">
+                                        Annuler l'inscription
+                                    </button>
+                                </form>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+
+                {#
+                 # Bouton d'accès — révèle le lien/adresse selon le mode.
+                 # VISIO : lien direct vers la session (Zoom, Meet, Jitsi…)
+                 # PRESENTIEL : lien vers la page détail de l'événement.
+                 #}
+                {% if event.eventMode is not null and event.eventMode.value == 'online' %}
+                    {% if event.eventExternalUrl is not null %}
+                        <a href="{{ event.eventExternalUrl|e }}"
+                           class="db-event-access db-event-access--visio"
+                           target="_blank" rel="noopener noreferrer"
+                           aria-label="Rejoindre l'événement {{ event.title|e }} en ligne">
+                            Rejoindre →
+                        </a>
+                    {% else %}
+                        <span class="db-event-access" style="opacity:.4; cursor:default; background: var(--bg-alt); color: var(--ink-mute);">
+                            Lien à venir
+                        </span>
+                    {% endif %}
+                {% else %}
+                    {# Présentiel : lien vers la page détail de l'événement #}
+                    <a href="{{ path('app_course_show', {slug: event.slug}) }}"
+                       class="db-event-access db-event-access--presentiel"
+                       aria-label="Voir la fiche de l'événement {{ event.title|e }}">
+                        Voir la fiche
+                    </a>
+                {% endif %}
+
+            </div>
+        {% endfor %}
+
     {% else %}
-        <p class="db-proposals__empty">Tu n'as pas encore proposé de formation.</p>
+
+        {# Aucun événement à venir — invitation à explorer le catalogue #}
+        <div class="db-events__empty">
+            Aucun événement à venir — <a href="{{ path('app_course_index') }}"
+               style="color: var(--ink); font-weight: 700; text-decoration: underline;">
+               explorer le catalogue
+            </a>
+        </div>
+
     {% endif %}
+    {#
+     # Fallback pour les dashboards où enrollments_cancel_info n'est pas encore transmis.
+     # (En théorie ne devrait pas arriver si DashboardController est à jour.)
+     #}
+
 </div>
 
 
@@ -1440,6 +1794,45 @@
                 <a href="{{ path('app_notification_index') }}" class="db-btn-dark">
                     Voir →
                 </a>
+            </div>
+        {% endif %}
+
+        {#
+         # ┄┄ Widget F : Récap des alertes activées ┄┄
+         #
+         # Affiche un résumé des préférences d'alertes configurées durant l'onboarding.
+         # Visible uniquement si l'utilisateur a un ArtistProfile (onboarding complété).
+         # Si pas d'ArtistProfile → on ne l'affiche pas (structure, admin...).
+         #
+         # Note : on n'a pas accès à ResourceAlert ici sans le passer depuis le controller.
+         # On affiche plutôt le résumé de "que recherches-tu" (lookingFor) qui est
+         # accessible directement via user.lookingFor.
+        #}
+        {% if user.lookingFor is not null and user.lookingFor|length > 0 %}
+            <div style="padding: 14px 18px; border-top: 1px solid var(--line-soft); background: var(--bg);">
+                <p style="font-family: var(--mono); font-size: 10px; font-weight: 700;
+                           letter-spacing: .10em; text-transform: uppercase; color: var(--ink-mute);
+                           margin: 0 0 8px;">
+                    Tes alertes actives
+                </p>
+                <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                    {% set lookingForLabels = {
+                        'formations':        'Formations',
+                        'ressources_aides':  'Aides financieres',
+                        'ressources_appels': 'Appels a projets',
+                        'autre':             'Autre'
+                    } %}
+                    {% for val in user.lookingFor %}
+                        <li style="font-size: 12px; color: var(--ink); display: flex; align-items: center; gap: 6px;">
+                            {# Puce vert acide #}
+                            <span style="width: 6px; height: 6px; background: var(--accent); display: inline-block; flex-shrink: 0;"></span>
+                            {{ lookingForLabels[val] ?? val }}
+                            {% if val == 'autre' and user.lookingForOther is not null %}
+                                : {{ user.lookingForOther|e }}
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
             </div>
         {% endif %}
 

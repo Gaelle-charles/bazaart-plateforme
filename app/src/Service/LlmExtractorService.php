@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\DTO\ScrapedOpportunity;
+use App\Repository\DisciplineRepository;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -74,6 +75,24 @@ class LlmExtractorService
      */
     private const MAX_TEXT_LENGTH = 12000;
 
+    /**
+     * Cache de la liste des disciplines pour le prompt LLM.
+     *
+     * Problème résolu :
+     *   buildDisciplinesListForPrompt() fait une requête BDD (findAllOrdered) à chaque
+     *   appel. Dans une commande traitant 10 sources, cette méthode était appelée
+     *   10 fois → 10 SELECT identiques sur la table disciplines pour retourner
+     *   toujours le même résultat (les disciplines ne changent pas pendant l'exécution).
+     *
+     * Solution :
+     *   On mémorise le résultat dans cette propriété au premier appel.
+     *   Les appels suivants retournent directement la valeur mise en cache.
+     *   null = "pas encore calculé" (lazy init).
+     *   '' est une valeur valide (BDD vide de disciplines) → on ne peut pas utiliser
+     *   ?? '' comme sentinelle, d'où le type ?string.
+     */
+    private ?string $disciplinesListCache = null;
+
     public function __construct(
         // Client HTTP Symfony (symfony/http-client) — injecté automatiquement par autowiring
         private readonly HttpClientInterface $httpClient,
@@ -81,6 +100,9 @@ class LlmExtractorService
         private readonly SettingService $settingService,
         // Logger PSR-3 — pour tracer les erreurs sans lever d'exception
         private readonly LoggerInterface $logger,
+        // Repository Discipline — pour passer la liste des disciplines au LLM (ADR-0016 Lot 1)
+        // Utilisé dans buildDisciplinesListForPrompt() pour contraindre les choix du LLM.
+        private readonly DisciplineRepository $disciplineRepository,
     ) {
     }
 
@@ -739,17 +761,27 @@ PROMPT;
         string $sourceSite,
     ): array {
         // ── Construction du prompt système ─────────────────────────────────────
+        // ADR-0016 Lot 1 : ajout des champs city, country, experienceLevel, disciplines contraints.
+        //
         // Le prompt est en français car les opportunités cibles sont souvent franco-européennes.
         // On demande un JSON structuré pour un parsing fiable côté PHP.
-        $systemPrompt = <<<'PROMPT'
+        //
+        // IMPORTANT — disciplines contraintes :
+        //   On passe la liste exacte des disciplines BDD pour que le LLM choisisse
+        //   parmi elles plutôt qu'inventer des libellés libres.
+        //   Si aucune discipline ne correspond, le LLM doit retourner [].
+        $disciplinesList = $this->buildDisciplinesListForPrompt();
+        $systemPrompt = <<<PROMPT
 Tu es un extracteur d'opportunités artistiques et culturelles. Analyse le contenu fourni et extrait TOUTES les opportunités (appels à projets, résidences, bourses, financements, prix, concours) présentes.
 
 Pour chaque opportunité, retourne un objet JSON avec exactement ces champs :
 - titre (string) : titre de l'opportunité
 - type (string) : "Résidence" | "Bourse" | "Appel à projets" | "Appel à candidatures" | "Prix" | "Financement" | "Concours" | "Mentorat" | "Tutorat" | "Accompagnement" | "Formation" | "Autre"
 - organisme (string) : nom de l'organisme qui propose l'opportunité
-- pays (string) : pays de l'organisme (ex: "France", "Belgique", "Suisse", "Europe")
-- disciplines (string) : disciplines concernées séparées par des virgules (ex: "Arts plastiques, Musique")
+- country (string) : pays de l'organisme en toutes lettres (ex: "France", "Belgique", "Suisse") sinon ""
+- city (string) : ville principale où se déroule l'opportunité (ex: "Paris", "Lyon", "Bruxelles") sinon ""
+- disciplines (array) : tableau des disciplines artistiques parmi la liste suivante UNIQUEMENT : [$disciplinesList]. Retourne [] si aucune ne correspond.
+- experienceLevel (string) : niveau d'expérience requis — "beginner" (débutant), "intermediate" (intermédiaire), "experienced" (expérimenté) — ou "" si non précisé / tous niveaux
 - montant (string) : montant si mentionné (ex: "5 000 €") sinon ""
 - publicEligible (string) : public éligible si mentionné sinon ""
 - deadline (string) : date limite au format ISO 8601 (AAAA-MM-JJ) si trouvée sinon ""
@@ -878,17 +910,26 @@ PROMPT;
         }
 
         // ── Construction du prompt système ────────────────────────────────────
+        // ADR-0016 Lot 1 : ajout des champs city, country, experienceLevel, disciplines contraints.
+        //
         // On demande explicitement la clé "opportunites" car response_format json_object
         // exige un objet JSON (pas un tableau direct) — {"opportunites": [...]} est la convention.
-        $systemPrompt = <<<'PROMPT'
+        //
+        // IMPORTANT — disciplines en tableau contraint :
+        //   Le LLM doit choisir parmi la liste exacte des disciplines BDD.
+        //   Les disciplines sont un tableau (array) dans la réponse JSON.
+        $disciplinesList = $this->buildDisciplinesListForPrompt();
+        $systemPrompt = <<<PROMPT
 Tu es un extracteur d'opportunités artistiques et culturelles. Analyse le contenu fourni et extrait TOUTES les opportunités (appels à projets, résidences, bourses, financements, prix, concours).
 
 Retourne un objet JSON avec une clé "opportunites" contenant un tableau. Chaque élément a exactement ces champs :
 - titre (string) : titre de l'opportunité
 - type (string) : "Résidence" | "Bourse" | "Appel à projets" | "Appel à candidatures" | "Prix" | "Financement" | "Concours" | "Mentorat" | "Tutorat" | "Accompagnement" | "Formation" | "Autre"
 - organisme (string) : organisme proposant l'opportunité
-- pays (string) : pays de l'organisme (ex: "France", "Belgique", "Europe")
-- disciplines (string) : disciplines concernées, séparées par des virgules
+- country (string) : pays de l'organisme en toutes lettres (ex: "France", "Belgique") sinon ""
+- city (string) : ville où se déroule l'opportunité (ex: "Paris", "Lyon") sinon ""
+- disciplines (array) : tableau des disciplines artistiques parmi cette liste UNIQUEMENT : [$disciplinesList]. Retourne [] si aucune ne correspond.
+- experienceLevel (string) : niveau requis — "beginner", "intermediate", "experienced" — ou "" si non précisé / tous niveaux
 - montant (string) : montant si mentionné, sinon ""
 - publicEligible (string) : public éligible si mentionné, sinon ""
 - deadline (string) : date limite ISO 8601 (AAAA-MM-JJ) si trouvée, sinon ""
@@ -1047,18 +1088,21 @@ PROMPT;
      * Convertit les items JSON retournés par le LLM en objets ScrapedOpportunity.
      *
      * Mapping LLM → ScrapedOpportunity :
-     *   titre       → title
-     *   type        → type
-     *   url         → url
-     *   description → description
-     *   deadline    → deadline (string ISO 8601 ou vide)
-     *   disciplines → disciplines
+     *   titre            → title
+     *   type             → type
+     *   url              → url
+     *   description      → description
+     *   deadline         → deadline (string ISO 8601 ou vide)
+     *   disciplines      → disciplines (string CSV rétrocompat) + disciplinesLabels (tableau)
+     *   country          → country (ADR-0016 Lot 1 — pays en clair)
+     *   city             → city    (ADR-0016 Lot 1 — ville)
+     *   experienceLevel  → experienceLevel (ADR-0016 Lot 1 — "beginner"|"intermediate"|"experienced"|"")
      *   (documents non cherchés par le LLM → string vide)
      *   (relevanceScore → 0, recalculé par AfrodiasporaRelevanceScorer dans la commande)
      *
-     * @param array<int, array<string, string>> $items     Items JSON du LLM
-     * @param string                            $sourceUrl URL de la page source
-     * @param string                            $sourceSite Nom du site
+     * @param array<int, array<string, mixed>> $items     Items JSON du LLM
+     * @param string                           $sourceUrl URL de la page source
+     * @param string                           $sourceSite Nom du site
      * @return ScrapedOpportunity[]
      */
     private function mapItemsToOpportunities(
@@ -1081,10 +1125,11 @@ PROMPT;
                 $url = $sourceUrl;
             }
 
-            // Enrichissement de la description avec le pays et le montant si disponibles
+            // Enrichissement de la description avec l'organisme, le pays et le montant
             $description = trim((string) ($item['description'] ?? ''));
             $organisme   = trim((string) ($item['organisme'] ?? ''));
-            $pays        = trim((string) ($item['pays'] ?? ''));
+            // country remplace l'ancien champ "pays" dans le prompt enrichi ADR-0016
+            $pays        = trim((string) ($item['country'] ?? $item['pays'] ?? ''));
             $montant     = trim((string) ($item['montant'] ?? ''));
 
             // Construction d'un contexte supplémentaire à ajouter à la description
@@ -1112,6 +1157,61 @@ PROMPT;
             // 200 chars est la limite affichée dans l'interface admin (colonne description).
             $description = mb_substr($description, 0, 200);
 
+            // ── ADR-0016 Lot 1 : extraction des nouveaux champs ───────────────
+
+            // Extraction de la ville (champ "city" dans le nouveau prompt).
+            // Troncature à 150 caractères : correspond à la longueur de colonne
+            // définie sur ScrapedResource::$city. Sans cette limite, un retour LLM
+            // trop long (ex: "Paris, Île-de-France, Grand Est, …") provoquerait une
+            // exception Doctrine et ferait échouer tout le flush du batch.
+            $city = mb_substr(trim((string) ($item['city'] ?? '')), 0, 150);
+
+            // Extraction du pays (champ "country" dans le nouveau prompt).
+            // Fallback sur l'ancien champ "pays" pour rétrocompatibilité si un seul appel LLM
+            // utilisait l'ancien prompt (ex: appel Anthropic avec l'ancien code).
+            // Troncature à 100 caractères : même raison que city (longueur colonne).
+            $country = mb_substr($pays, 0, 100); // $pays = $item['country'] ?? $item['pays'] ci-dessus
+
+            // Extraction du niveau d'expérience
+            // Le LLM doit retourner "beginner", "intermediate", "experienced" ou ""
+            $rawLevel       = trim((string) ($item['experienceLevel'] ?? ''));
+            $experienceLevel = in_array($rawLevel, ['beginner', 'intermediate', 'experienced'], true)
+                ? $rawLevel
+                : ''; // Valeur invalide → on ignore, "" = tous niveaux
+
+            // Extraction des disciplines :
+            //   NOUVEAU PROMPT : disciplines = tableau (array) — ex: ["Musique", "Danse"]
+            //   ANCIEN PROMPT  : disciplines = string CSV — ex: "Musique, Danse"
+            //
+            // On gère les deux formats pour la rétrocompatibilité.
+            $rawDisciplines = $item['disciplines'] ?? [];
+
+            /** @var string[] $disciplinesLabels */
+            $disciplinesLabels = [];
+            if (is_array($rawDisciplines)) {
+                // Nouveau format tableau : on nettoie chaque item
+                foreach ($rawDisciplines as $d) {
+                    $clean = trim((string) $d);
+                    if ($clean !== '') {
+                        $disciplinesLabels[] = $clean;
+                    }
+                }
+            } else {
+                // Ancien format string CSV : on explose par virgule
+                $csvParts = explode(',', (string) $rawDisciplines);
+                foreach ($csvParts as $part) {
+                    $clean = trim($part);
+                    if ($clean !== '') {
+                        $disciplinesLabels[] = $clean;
+                    }
+                }
+            }
+
+            // Champ $disciplines (string CSV) conservé pour la rétrocompatibilité
+            // avec ScrapedResourcePersister et l'affichage dans l'interface admin.
+            // Il est déduit de $disciplinesLabels.
+            $disciplinesString = implode(', ', $disciplinesLabels);
+
             $opportunities[] = new ScrapedOpportunity(
                 title: $title,
                 type: $this->normalizeType((string) ($item['type'] ?? '')),
@@ -1119,13 +1219,61 @@ PROMPT;
                 source: $sourceSite,
                 description: $description,
                 deadline: trim((string) ($item['deadline'] ?? '')),
-                disciplines: trim((string) ($item['disciplines'] ?? '')),
-                documents: '', // Le LLM ne cherche pas les PDFs — laissé vide
-                relevanceScore: 0, // Sera recalculé par AfrodiasporaRelevanceScorer
+                disciplines: $disciplinesString,
+                documents: '',        // Le LLM ne cherche pas les PDFs — laissé vide
+                relevanceScore: 0,    // Sera recalculé par AfrodiasporaRelevanceScorer
+                publishedAt: null,    // RSS uniquement — pas de date publiée dans LLM
+                city: $city,
+                country: $country,
+                experienceLevel: $experienceLevel,
+                disciplinesLabels: $disciplinesLabels,
             );
         }
 
         return $opportunities;
+    }
+
+    /**
+     * Construit la liste des disciplines BDD formatée pour l'injection dans le prompt LLM.
+     *
+     * Exemple de sortie : "Musique, Cinéma & Audiovisuel, Arts visuels, Danse, ..."
+     *
+     * Cette liste est passée directement dans les prompts Mistral et Anthropic pour
+     * CONTRAINDRE le LLM à choisir parmi les disciplines existantes — évitant ainsi
+     * les libellés inventés ("Photographie", "Arts plastiques") qui ne correspondent
+     * à aucune entité en BDD.
+     *
+     * Pourquoi ici plutôt que dans les méthodes de prompt ?
+     *   Cette méthode effectue une requête BDD. On l'extrait pour ne la charger
+     *   qu'une seule fois, même si extractFromHtml() est appelé plusieurs fois.
+     *   (En pratique la requête est légère — ~8 disciplines en V1.)
+     *
+     * Visibilité private : utilisée uniquement par callMistralApi() et callAnthropicApi().
+     */
+    private function buildDisciplinesListForPrompt(): string
+    {
+        // ── Cache lazy-init ───────────────────────────────────────────────────
+        // Si le résultat est déjà calculé, on le retourne immédiatement.
+        // Évite N requêtes BDD identiques quand la commande traite N sources
+        // dans une même exécution (les disciplines ne changent pas en cours de run).
+        if ($this->disciplinesListCache !== null) {
+            return $this->disciplinesListCache;
+        }
+
+        // Charge toutes les disciplines disponibles en BDD (triées alphabétiquement)
+        $disciplines = $this->disciplineRepository->findAllOrdered();
+
+        // Extrait juste les noms pour construire la liste formatée
+        $names = array_map(
+            static fn ($d) => $d->getName(),
+            $disciplines
+        );
+
+        // Format : "Musique, Cinéma & Audiovisuel, Arts visuels, Danse, ..."
+        // Simple à inclure dans le prompt et compréhensible par le LLM.
+        $this->disciplinesListCache = implode(', ', $names);
+
+        return $this->disciplinesListCache;
     }
 
     /**

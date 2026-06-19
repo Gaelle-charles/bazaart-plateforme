@@ -16,6 +16,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
 use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
@@ -38,11 +39,18 @@ use Symfony\Component\Security\Http\EntryPoint\AuthenticationEntryPointInterface
 class GoogleAuthenticator extends OAuth2Authenticator implements AuthenticationEntryPointInterface
 {
     public function __construct(
-        private readonly ClientRegistry $clientRegistry,
-        private readonly RouterInterface $router,
-        private readonly UserRepository $userRepository,
-        private readonly EntityManagerInterface $em,
-        private readonly UserPasswordHasherInterface $passwordHasher,
+        private readonly ClientRegistry               $clientRegistry,
+        private readonly RouterInterface              $router,
+        private readonly UserRepository               $userRepository,
+        private readonly EntityManagerInterface       $em,
+        private readonly UserPasswordHasherInterface  $passwordHasher,
+        // AuthorizationCheckerInterface permet d'appeler isGranted() depuis
+        // onAuthenticationSuccess(). On l'injecte plutôt que de lire getRoles()
+        // directement sur l'entité, car isGranted() respecte la hiérarchie des rôles
+        // définie dans security.yaml (ROLE_ADMIN hérite de ROLE_STRUCTURE, etc.).
+        // Lire $user->getRoles() retournerait seulement les rôles bruts de la BDD,
+        // sans expansion de la hiérarchie — ce qui peut mener à des incohérences.
+        private readonly AuthorizationCheckerInterface $authChecker,
     ) {}
 
     /**
@@ -88,6 +96,17 @@ class GoogleAuthenticator extends OAuth2Authenticator implements AuthenticationE
                             $this->passwordHasher->hashPassword($user, bin2hex(random_bytes(20)))
                         );
 
+                        // ── Email déjà vérifié par Google ────────────────────────
+                        //
+                        // Google garantit que l'email retourné par OAuth appartient
+                        // à l'utilisateur et a été validé par Google lui-même.
+                        // On marque donc directement isVerified=true pour ne pas
+                        // bloquer les utilisateurs Google dans UserChecker::checkPreAuth().
+                        //
+                        // Sans ce flag, UserChecker bloquerait toute connexion Google
+                        // car le compte aurait isVerified=false (valeur par défaut).
+                        $user->setIsVerified(true);
+
                         $this->em->persist($user);
                         $this->em->flush();
                     }
@@ -105,10 +124,13 @@ class GoogleAuthenticator extends OAuth2Authenticator implements AuthenticationE
      */
     public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): ?Response
     {
-        $user = $token->getUser();
-
-        // Vérifie si l'utilisateur a le rôle admin pour le rediriger au bon endroit
-        if ($user instanceof User && in_array('ROLE_ADMIN', $user->getRoles(), true)) {
+        // On utilise AuthorizationCheckerInterface::isGranted() plutôt que
+        // $user->getRoles() pour respecter la hiérarchie des rôles de security.yaml.
+        // Exemple : ROLE_ADMIN hérite de ROLE_STRUCTURE, ROLE_MODERATOR, etc.
+        // getRoles() sur l'entité retournerait seulement ['ROLE_ADMIN'] sans les héritages.
+        // isGranted() consulte le token courant (déjà peuplé par Symfony Security)
+        // et applique la hiérarchie complète — c'est la méthode canonique.
+        if ($this->authChecker->isGranted('ROLE_ADMIN')) {
             return new RedirectResponse($this->router->generate('app_admin_dashboard'));
         }
 

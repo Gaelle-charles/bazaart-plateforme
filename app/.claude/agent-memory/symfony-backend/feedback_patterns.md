@@ -34,3 +34,13 @@ PHPStan (via l'extension phpstan-doctrine) boote le kernel Symfony en mode test.
 Ne jamais révéler si un email existe ou non dans les réponses de formulaire. Le service retourne void et ne lève jamais d'exception. Le contrôleur affiche le MÊME message quel que soit le résultat.
 **Why :** Empêche l'énumération des adresses email de la plateforme.
 **How to apply :** Applicable à : mot de passe oublié, désabonnement, export RGPD.
+
+**DATE() n'est pas une fonction DQL native Doctrine**
+Ne pas utiliser `DATE(colonne) = DATE(:param)` en DQL — Doctrine rejette les fonctions SQL non enregistrées. Pour comparer une date sans l'heure, utiliser une plage 24h en DQL pur : `>= :dayStart AND < :dayEnd` (dayStart = minuit du jour, dayEnd = minuit du lendemain).
+**Why :** PHPStan avec l'extension doctrine.dql détecte le problème dès l'analyse statique.
+**How to apply :** Pour les colonnes 'date' (sans heure), passer un DateTimeImmutable à minuit et comparer avec `=` — Doctrine cast automatiquement en DATE SQL.
+
+**Normalisation de titres : utiliser Transliterator (ICU) plutôt qu'iconv//TRANSLIT**
+`iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', ...)` peut produire "e'" pour "é" sur certains systèmes (macOS/certains Linux), résultant en "cr e ation" après nettoyage. Utiliser `Transliterator::create('NFD; [:Nonspacing Mark:] Remove; NFC; Lower()')` à la place.
+**Why :** Extension `intl` disponible dans le container Docker ; résultat propre et portable.
+**How to apply :** Fallback sur iconv si `Transliterator::create()` retourne null (environnement dégradé). Synchroniser les implémentations dupliquées en commentaire.

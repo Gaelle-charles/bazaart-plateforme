@@ -121,6 +121,30 @@ class CoursePayment
     #[ORM\Column(type: 'string', length: 50, nullable: false)]
     private string $status;
 
+    // ─── Données de remboursement ─────────────────────────────────────────────
+
+    /**
+     * Date et heure du remboursement Stripe.
+     *
+     * null tant que le paiement n'est pas remboursé.
+     * Renseigné par EventCancellationService::processRefund() ou par le webhook
+     * charge.refunded lors d'un remboursement initié depuis le dashboard Stripe.
+     *
+     * Permet de calculer le délai entre achat et remboursement pour l'audit.
+     */
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $refundedAt = null;
+
+    /**
+     * ID du remboursement Stripe (ex : "re_xxx").
+     *
+     * Retourné par l'API Stripe Refund create.
+     * Utile pour les litiges et le suivi côté dashboard Stripe.
+     * Null si le remboursement n'a pas encore été effectué.
+     */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $stripeRefundId = null;
+
     // ─── Timestamp ────────────────────────────────────────────────────────────
 
     /**
@@ -222,6 +246,28 @@ class CoursePayment
         return $this->createdAt;
     }
 
+    public function getRefundedAt(): ?\DateTimeInterface
+    {
+        return $this->refundedAt;
+    }
+
+    public function setRefundedAt(?\DateTimeInterface $refundedAt): static
+    {
+        $this->refundedAt = $refundedAt;
+        return $this;
+    }
+
+    public function getStripeRefundId(): ?string
+    {
+        return $this->stripeRefundId;
+    }
+
+    public function setStripeRefundId(?string $stripeRefundId): static
+    {
+        $this->stripeRefundId = $stripeRefundId;
+        return $this;
+    }
+
     // ─── Méthodes utilitaires ─────────────────────────────────────────────────
 
     /**
@@ -233,6 +279,18 @@ class CoursePayment
     public function isCompleted(): bool
     {
         return $this->status === 'completed';
+    }
+
+    /**
+     * Retourne true si ce paiement a déjà été remboursé.
+     *
+     * CRITIQUE pour l'idempotence : EventCancellationService::processRefund()
+     * vérifie isRefunded() AVANT d'appeler l'API Stripe Refund.
+     * Sans cette vérification, un double appel rembourserait deux fois.
+     */
+    public function isRefunded(): bool
+    {
+        return $this->status === 'refunded';
     }
 
     /**

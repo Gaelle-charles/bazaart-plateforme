@@ -74,6 +74,128 @@ class LinkExtractorService
     }
 
     /**
+     * Extensions de fichiers à exclure lors de l'extraction de liens internes.
+     *
+     * Ces extensions correspondent à des assets statiques ou documents qui ne peuvent
+     * pas être des pages-listes d'opportunités. On les filtre en PHP avant d'envoyer
+     * la liste au LLM pour réduire le bruit et économiser des tokens.
+     *
+     * @var string[]
+     */
+    private const ASSET_EXTENSIONS = [
+        '.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.ico',  // images
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', // documents
+        '.css', '.js', '.woff', '.woff2', '.ttf', '.eot',          // assets web
+        '.zip', '.tar', '.gz', '.mp4', '.mp3', '.avi',             // archives / médias
+        '.xml', '.rss', '.atom',                                    // feeds
+    ];
+
+    /**
+     * Extrait les liens INTERNES d'une page (même domaine) pour le fallback LLM
+     * du ListingUrlDiscoverer.
+     *
+     * DIFFÉRENCE AVEC extractAndFilter() :
+     *   extractAndFilter() → garde les liens EXTERNES (autres domaines) pour découvrir
+     *                         de nouvelles sources à scraper.
+     *   extractInternalLinks() → garde les liens INTERNES (même domaine) pour trouver
+     *                            quelle SOUS-PAGE du site liste les opportunités.
+     *
+     * Pipeline de filtrage :
+     *   1. extractLinks()     — tous les <a href> (DomCrawler)
+     *   2. Garder uniquement les liens dont le host === host de $baseUrl
+     *   3. Filtrer les assets (.jpg, .pdf, .css, .js...)
+     *   4. Dédupliquer par URL normalisée (sans query string ni fragment)
+     *   5. Plafond $maxLinks pour limiter la taille du prompt LLM
+     *
+     * @param string $html     HTML brut de la page d'accueil
+     * @param string $baseUrl  URL de base du site (ex: "https://institutfrancais.com")
+     * @param int    $maxLinks Nombre maximum de liens à retourner (défaut : 120)
+     * @return array<int, array{text: string, url: string}> Liens internes dédupliqués
+     */
+    public function extractInternalLinks(string $html, string $baseUrl, int $maxLinks = 120): array
+    {
+        // ── Étape 1 : extraire tous les liens via DomCrawler ──────────────────
+        $crawler = new Crawler($html);
+        $allLinks = $this->extractLinks($crawler, $baseUrl);
+
+        // ── Étape 2 : parser le host de référence (domaine du site) ──────────
+        // On normalise le host pour gérer "www.example.com" vs "example.com"
+        $baseHost = parse_url($baseUrl, PHP_URL_HOST);
+
+        if (!is_string($baseHost)) {
+            // Ne devrait pas arriver si $baseUrl est valide, mais on sécurise
+            $this->logger->warning('[LinkExtractor] extractInternalLinks : baseUrl sans host.', [
+                'baseUrl' => $baseUrl,
+            ]);
+            return [];
+        }
+
+        $baseHostNorm = $this->normalizeHost($baseHost);
+
+        // ── Étape 3 : filtrer pour ne garder que les liens internes ───────────
+        // Un lien est "interne" si son host (normalisé) correspond au host de base.
+        // On exclut aussi les assets statiques et les paramètres de tri/page.
+        $seen = [];     // Pour la déduplication par URL normalisée
+        $internal = [];
+
+        foreach ($allLinks as $link) {
+            $linkHost = parse_url($link['url'], PHP_URL_HOST);
+
+            // Ignorer les liens sans host parseable
+            if (!is_string($linkHost)) {
+                continue;
+            }
+
+            // Vérifier que c'est le même domaine (normalisé sans www.)
+            if ($this->normalizeHost($linkHost) !== $baseHostNorm) {
+                continue; // Lien externe → on ignore
+            }
+
+            // ── Filtre assets : exclure les URLs pointant vers des fichiers statiques ──
+            // On regarde l'extension du chemin de l'URL (ex: "/img/logo.jpg")
+            $path = strtolower(parse_url($link['url'], PHP_URL_PATH) ?? '');
+            $isAsset = false;
+            foreach (self::ASSET_EXTENSIONS as $ext) {
+                if (str_ends_with($path, $ext)) {
+                    $isAsset = true;
+                    break;
+                }
+            }
+            if ($isAsset) {
+                continue; // Asset statique → on ignore
+            }
+
+            // ── Déduplication par URL normalisée (sans query string ni fragment) ──
+            // normalizeUrl() force https://, minuscules, supprime www., slash final, query, fragment.
+            // Ainsi "https://example.com/page/" et "https://example.com/page" sont traités identiques.
+            $normalizedUrl = $this->normalizeUrl($link['url']);
+            if (isset($seen[$normalizedUrl])) {
+                continue; // Doublon → on ignore
+            }
+            $seen[$normalizedUrl] = true;
+
+            $internal[] = $link;
+
+            // Plafond : on arrête dès qu'on a assez de liens pour le LLM
+            if (count($internal) >= $maxLinks) {
+                $this->logger->info('[LinkExtractor] extractInternalLinks : plafond atteint.', [
+                    'plafond' => $maxLinks,
+                    'baseUrl' => $baseUrl,
+                ]);
+                break;
+            }
+        }
+
+        $this->logger->debug('[LinkExtractor] extractInternalLinks résumé.', [
+            'total_avant_filtre' => count($allLinks),
+            'liens_internes'     => count($internal),
+            'baseUrl'            => $baseUrl,
+        ]);
+
+        return $internal;
+    }
+
+    /**
      * Extrait les liens d'une page HTML et les filtre pour ne garder que les candidats-sources.
      *
      * Point d'entrée principal du service — appelé par DiscoverSourcesCommand.
@@ -531,5 +653,26 @@ class LinkExtractorService
         });
 
         return array_values($filtered);
+    }
+
+    /**
+     * Normalise un nom d'hôte pour la comparaison : minuscules + suppression du www.
+     *
+     * Méthode interne réutilisée par extractInternalLinks() et filterInternalLinks()
+     * pour éviter la duplication de la logique de normalisation.
+     *
+     * Exemples :
+     *   "WWW.Example.com"  → "example.com"
+     *   "institutfrancais.com" → "institutfrancais.com"
+     *   "www2.example.org" → "www2.example.org" (www2 n'est PAS supprimé)
+     *
+     * @param string $host Nom d'hôte brut (issu de parse_url)
+     * @return string Nom d'hôte normalisé
+     */
+    private function normalizeHost(string $host): string
+    {
+        $lower = strtolower($host);
+        // On supprime uniquement "www." strict au début — pas "www2.", "www3.", etc.
+        return str_starts_with($lower, 'www.') ? substr($lower, 4) : $lower;
     }
 }

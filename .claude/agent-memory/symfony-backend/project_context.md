@@ -153,4 +153,20 @@ Plateforme bazaart.fr pour artistes de la diaspora afro-atlantique.
 - `EnrichOpportunitiesCommand` : `processScrapedResources()` reçoit `$isForce`, logique de mise à jour description/titre conditionnelle (`$hadDescription`), disciplines toujours mises à jour. `displayDryRunResult()` affiche un 4ème paramètre `$newDisciplines`.
 - Pas de migration : `ScrapedResource::disciplines` existait déjà en BDD (migration Version20260526150555).
 
+**Chantier Confirmation Email — Lot 1 (18 juin 2026) :**
+- Bundle installé : `symfonycasts/verify-email-bundle` v1.18.0
+- `EmailVerificationService` : sendVerificationEmail() (URL signée HMAC via VerifyEmailHelper) + handleVerification() (validation signature)
+- `AuthController` : register() envoie l'email + redirige vers /verifier-email/confirmation ; nouvelles routes app_check_email, app_verify_email, app_resend_verify_email
+- Templates : emails/verify_email.html.twig + .txt.twig (brandé Bazaart lime/sombre), auth/check_email.html.twig (split-screen Street avec form renvoi)
+- `UserChecker::checkPreAuth()` : bloque isVerified=false avec message clair (en plus du blocage isAnonymized existant)
+- `GoogleAuthenticator` : setIsVerified(true) à la création d'un compte Google (email déjà vérifié par Google)
+- `framework.yaml` : verify_email_limiter (3/10min/email) + déclinaison when@test (1000)
+- `services.yaml` : bind $verifyEmailLimiter vers @limiter.verify_email_limiter
+- `security.yaml` : ^/verifier-email PUBLIC_ACCESS
+- Fixtures déjà correctes : isVerified=true sur les 3 comptes de test
+- Pas de migration (isVerified existait déjà en BDD)
+- PHPStan 0 erreur, lint:container OK, doctrine:schema:validate OK
+- Corrections post-relecture : testRegisterWithValidData corrigé, testUnverifiedUserCannotLogin ajouté, GoogleAuthenticator utilise AuthorizationCheckerInterface::isGranted(), config/packages/symfonycasts_verify_email.yaml créé, log warning sur rate limit renvoi
+- Lot 2 (onboarding profil) et Lot 3 à venir
+
 **How to apply:** Consulter `docs/cahier-des-charges-v3.md` avant toute tâche d'architecture. Priorité au fonctionnel V1.

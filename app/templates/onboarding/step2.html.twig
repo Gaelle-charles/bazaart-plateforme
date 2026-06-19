@@ -1,0 +1,332 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # onboarding/step2.html.twig — Étape 2 : Profil artiste
+ #
+ # Variables transmises par OnboardingController::step2() :
+ #   - disciplines      : Discipline[]     — toutes les disciplines disponibles
+ #   - existing_profile : ArtistProfile|null — profil existant pour pré-remplissage
+ #   - error            : string|null       — message d'erreur si validation échoue
+ #
+ # Champs collectés :
+ #   - display_name  (obligatoire)
+ #   - location      (optionnel)
+ #   - disciplines[] (au moins 1 obligatoire)
+ #   - bio           (optionnel)
+ #   - portfolio_url (optionnel)
+ #   - website_url   (optionnel)
+ #   - instagram     (optionnel)
+#}
+
+{% block title %}Mon profil artiste — Étape 2{% endblock %}
+{% block page_title %}Mon profil{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+
+/* ── Conteneur et progression (réutilisés sur toutes les étapes) ─ */
+.ob-wrap { max-width: 680px; margin: 40px auto; padding: 0 16px; }
+
+.ob-progress {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 36px;
+}
+.ob-step-dot { width: 28px; height: 4px; background: var(--line-soft, #ddd); }
+.ob-step-dot--active { background: var(--accent); }
+.ob-step-dot--done { background: var(--ink); }
+.ob-progress__label {
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    letter-spacing: .10em; text-transform: uppercase; color: var(--ink-mute); margin-left: 8px;
+}
+
+/* ── Titre ────────────────────────────────────────────────────── */
+.ob-title {
+    font-family: var(--display); font-size: clamp(24px, 4vw, 38px); font-weight: 400;
+    text-transform: uppercase; letter-spacing: -.02em; line-height: .95;
+    color: var(--ink); margin: 0 0 8px;
+}
+.ob-title .it {
+    font-family: var(--serif); font-style: italic;
+    text-transform: none; font-weight: 400; color: var(--accent-2, #FF6B2C);
+}
+.ob-subtitle { font-size: 14px; color: var(--ink-mute); margin: 0 0 32px; line-height: 1.5; }
+
+/* ── Formulaire ────────────────────────────────────────────────── */
+.ob-form { display: flex; flex-direction: column; gap: 0; }
+
+/* Groupe de champ */
+.ob-field {
+    border-top: 1px solid var(--line-soft, #ddd);
+    padding: 20px 0;
+}
+.ob-field:last-of-type { border-bottom: 1px solid var(--line-soft, #ddd); }
+
+.ob-label {
+    display: block;
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    letter-spacing: .10em; text-transform: uppercase; color: var(--ink-mute);
+    margin-bottom: 8px;
+}
+.ob-label span { color: var(--accent-2); margin-left: 4px; } /* * = obligatoire */
+
+.ob-input {
+    width: 100%; box-sizing: border-box;
+    border: 1px solid var(--ink); background: var(--bg);
+    color: var(--ink); font-family: var(--body); font-size: 14px;
+    padding: 10px 12px; border-radius: 0;
+    transition: border-color .12s;
+}
+.ob-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(198,242,78,.3); }
+
+.ob-textarea {
+    width: 100%; box-sizing: border-box; resize: vertical; min-height: 100px;
+    border: 1px solid var(--ink); background: var(--bg);
+    color: var(--ink); font-family: var(--body); font-size: 14px;
+    padding: 10px 12px; border-radius: 0; line-height: 1.5;
+}
+.ob-textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(198,242,78,.3); }
+
+.ob-hint {
+    font-family: var(--mono); font-size: 10px; color: var(--ink-mute);
+    margin-top: 6px; letter-spacing: .04em;
+}
+
+/* ── Grille de disciplines (cases à cocher) ──────────────────── */
+.ob-disc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.ob-disc-item input[type="checkbox"] {
+    position: absolute; opacity: 0; width: 0; height: 0;
+}
+.ob-disc-item label {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--line-soft); cursor: pointer;
+    font-size: 13px; color: var(--ink);
+    transition: background .10s, border-color .10s;
+}
+.ob-disc-item label:hover { background: var(--bg-alt); }
+.ob-disc-item input:checked + label {
+    background: var(--accent); border-color: var(--ink); font-weight: 700;
+}
+/* Icône dans la case */
+.ob-disc-icon {
+    font-size: 16px; flex-shrink: 0;
+    /* Les icônes de discipline sont des emojis dans la base — on les laisse ici
+       car ils viennent de la BDD (pas hardcodés dans le code PHP) */
+}
+
+/* ── Boutons de navigation ────────────────────────────────────── */
+.ob-actions {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 32px; gap: 12px;
+}
+.ob-btn-back {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase;
+    padding: 12px 20px; background: transparent; color: var(--ink-mute);
+    border: 1px solid var(--line-soft); cursor: pointer; border-radius: 0;
+    text-decoration: none; transition: border-color .12s, color .12s;
+}
+.ob-btn-back:hover { color: var(--ink); border-color: var(--ink); }
+
+.ob-btn-next {
+    font-family: var(--display); font-size: 13px; font-weight: 400;
+    text-transform: uppercase; letter-spacing: .04em;
+    padding: 14px 40px; background: var(--ink); color: var(--bg);
+    border: 1px solid var(--ink); cursor: pointer; border-radius: 0;
+    transition: background .12s, color .12s; flex: 1; text-align: center;
+}
+.ob-btn-next:hover { background: var(--accent); color: var(--ink); }
+
+/* ── Erreur ───────────────────────────────────────────────────── */
+.ob-error {
+    background: #fff0f0; border: 1px solid #c00; color: #c00;
+    padding: 10px 14px; font-size: 13px; margin-bottom: 20px; border-radius: 0;
+}
+
+/* ── Grille 2 colonnes pour les liens optionnels ─────────────── */
+.ob-row-2 {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+@media (max-width: 500px) { .ob-row-2 { grid-template-columns: 1fr; } }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ob-wrap">
+
+    {# Progression #}
+    <div class="ob-progress" aria-label="Étape 2 sur 4">
+        <div class="ob-step-dot ob-step-dot--done"></div>
+        <div class="ob-step-dot ob-step-dot--active"></div>
+        <div class="ob-step-dot"></div>
+        <div class="ob-step-dot"></div>
+        <span class="ob-progress__label">Étape 2 / 4</span>
+    </div>
+
+    <h1 class="ob-title">Ton <span class="it">profil</span></h1>
+    <p class="ob-subtitle">
+        Ces informations constituent ton profil public sur Bazaart.
+        Le nom d'affichage et au moins une discipline sont obligatoires.
+    </p>
+
+    {# Erreur de validation retournée par le service #}
+    {% if error %}
+        <div class="ob-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="{{ path('app_onboarding_step2') }}" class="ob-form">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('onboarding_step2') }}">
+
+        {# ── Champ : nom d'affichage (obligatoire) ─────────────────────── #}
+        <div class="ob-field">
+            <label for="display_name" class="ob-label">
+                Nom d'affichage <span aria-hidden="true">*</span>
+                <span class="sr-only">(obligatoire)</span>
+            </label>
+            <input
+                type="text"
+                id="display_name"
+                name="display_name"
+                class="ob-input"
+                required
+                maxlength="100"
+                placeholder="Ex : Amara Diallo, DJ Kévin, Le Collectif Baobab..."
+                value="{{ existing_profile ? existing_profile.displayName|e : '' }}"
+                autocomplete="name"
+            >
+            <p class="ob-hint">Ce nom sera visible publiquement sur ton profil.</p>
+        </div>
+
+        {# ── Champ : localisation ───────────────────────────────────────── #}
+        <div class="ob-field">
+            <label for="location" class="ob-label">Localisation</label>
+            <input
+                type="text"
+                id="location"
+                name="location"
+                class="ob-input"
+                maxlength="150"
+                placeholder="Ex : Paris, France — Dakar, Sénégal — Bruxelles..."
+                value="{{ existing_profile and existing_profile.location ? existing_profile.location|e : '' }}"
+            >
+            <p class="ob-hint">Ville et pays où tu vis ou travailles principalement.</p>
+        </div>
+
+        {# ── Disciplines (au moins 1 obligatoire) ──────────────────────── #}
+        <div class="ob-field">
+            <p class="ob-label" id="disc-label">
+                Tes disciplines <span aria-hidden="true">*</span>
+                <span class="sr-only">(au moins une obligatoire)</span>
+            </p>
+            <div class="ob-disc-grid" role="group" aria-labelledby="disc-label">
+                {% for discipline in disciplines %}
+                    {#
+                        On vérifie si cette discipline était déjà sélectionnée.
+                        existing_profile.disciplines contient les entités Discipline ;
+                        on compare par ID pour éviter les erreurs d'identité d'objet.
+                    #}
+                    {% set isChecked = false %}
+                    {% if existing_profile %}
+                        {% for existingDisc in existing_profile.disciplines %}
+                            {% if existingDisc.id == discipline.id %}
+                                {% set isChecked = true %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+
+                    <div class="ob-disc-item">
+                        <input
+                            type="checkbox"
+                            id="disc_{{ discipline.id }}"
+                            name="disciplines[]"
+                            value="{{ discipline.id }}"
+                            {% if isChecked %}checked{% endif %}
+                        >
+                        <label for="disc_{{ discipline.id }}">
+                            {% if discipline.icon %}
+                                <span class="ob-disc-icon" aria-hidden="true">{{ discipline.icon }}</span>
+                            {% endif %}
+                            {{ discipline.name|e }}
+                        </label>
+                    </div>
+                {% endfor %}
+            </div>
+            <p class="ob-hint">Coche tout ce qui correspond a ta pratique. Au moins une discipline est requise.</p>
+        </div>
+
+        {# ── Biographie (optionnelle) ───────────────────────────────────── #}
+        <div class="ob-field">
+            <label for="bio" class="ob-label">Biographie <em style="text-transform:none; font-style:normal;">(optionnel)</em></label>
+            <textarea
+                id="bio"
+                name="bio"
+                class="ob-textarea"
+                maxlength="2000"
+                placeholder="Présente ta démarche artistique, ton parcours, tes influences..."
+            >{{ existing_profile and existing_profile.bio ? existing_profile.bio|e : '' }}</textarea>
+            <p class="ob-hint">Tu pourras la modifier a tout moment depuis ton profil.</p>
+        </div>
+
+        {# ── Liens (optionnels) ─────────────────────────────────────────── #}
+        <div class="ob-field">
+            <p class="ob-label">Liens <em style="text-transform:none; font-style:normal;">(optionnels)</em></p>
+            <div class="ob-row-2">
+                <div>
+                    <label for="portfolio_url" class="ob-label" style="margin-bottom:4px;">Portfolio / site perso</label>
+                    <input
+                        type="url"
+                        id="portfolio_url"
+                        name="portfolio_url"
+                        class="ob-input"
+                        placeholder="https://tonportfolio.com"
+                        value="{{ existing_profile and existing_profile.portfolioUrl ? existing_profile.portfolioUrl|e : '' }}"
+                    >
+                </div>
+                <div>
+                    <label for="website_url" class="ob-label" style="margin-bottom:4px;">Site web</label>
+                    <input
+                        type="url"
+                        id="website_url"
+                        name="website_url"
+                        class="ob-input"
+                        placeholder="https://tonsite.fr"
+                        value="{{ existing_profile and existing_profile.websiteUrl ? existing_profile.websiteUrl|e : '' }}"
+                    >
+                </div>
+            </div>
+            <div style="margin-top: 12px;">
+                <label for="instagram" class="ob-label" style="margin-bottom:4px;">Instagram (handle)</label>
+                <input
+                    type="text"
+                    id="instagram"
+                    name="instagram"
+                    class="ob-input"
+                    maxlength="100"
+                    placeholder="@ton_pseudo (sans le @)"
+                    value="{{ (existing_profile and existing_profile.socialLinks and existing_profile.socialLinks.instagram is defined)
+                        ? existing_profile.socialLinks.instagram|replace({'https://instagram.com/': ''})|e
+                        : '' }}"
+                >
+            </div>
+        </div>
+
+        {# ── Navigation ────────────────────────────────────────────────── #}
+        <div class="ob-actions">
+            <a href="{{ path('app_onboarding_step1') }}" class="ob-btn-back">
+                Retour
+            </a>
+            <button type="submit" class="ob-btn-next">
+                Continuer
+            </button>
+        </div>
+
+    </form>
+</div>
+{% endblock %}

@@ -55,8 +55,9 @@ class CoursePaymentRepository extends ServiceEntityRepository
     /**
      * Trouve un paiement par son PaymentIntent Stripe (ex : "pi_xxx").
      *
-     * Utilisé par le webhook charge.refunded (V2) pour retrouver le paiement
+     * Utilisé par le webhook charge.refunded pour retrouver le paiement
      * local à marquer comme 'refunded'.
+     * Aussi utilisé par EventCancellationService pour lancer un remboursement Stripe.
      *
      * Retourne null si aucun paiement ne correspond à cet ID Stripe.
      *
@@ -65,5 +66,45 @@ class CoursePaymentRepository extends ServiceEntityRepository
     public function findByStripePaymentIntentId(string $stripePaymentIntentId): ?CoursePayment
     {
         return $this->findOneBy(['stripePaymentIntentId' => $stripePaymentIntentId]);
+    }
+
+    /**
+     * Retourne le paiement COMPLÉTÉ d'un utilisateur pour une formation donnée.
+     *
+     * Utilisé par EventCancellationService pour retrouver le paiement à rembourser
+     * lors d'une annulation. On ne recherche que les paiements 'completed' car :
+     *   - 'pending' → paiement pas encore confirmé, pas de remboursement possible
+     *   - 'refunded' → déjà remboursé (idempotence : ne pas rembourser deux fois)
+     *
+     * Alias sémantique de findCompletedByUserAndCourse() pour la clarté d'usage
+     * dans le contexte d'annulation.
+     */
+    public function findCompletedPaymentForRefund(User $user, Course $course): ?CoursePayment
+    {
+        return $this->findCompletedByUserAndCourse($user, $course);
+    }
+
+    /**
+     * Retourne tous les paiements COMPLÉTÉS pour un cours (événement entier).
+     *
+     * Utilisé par EventCancellationService::cancelEventByAdmin() pour rembourser
+     * en masse tous les inscrits payants lors de l'annulation d'un événement complet.
+     *
+     * On filtre sur 'completed' uniquement — les paiements déjà 'refunded' sont
+     * exclus pour l'idempotence (si la route d'annulation admin est appelée deux fois).
+     *
+     * @return CoursePayment[]
+     */
+    public function findCompletedPaymentsByCourse(Course $course): array
+    {
+        return $this->createQueryBuilder('cp')
+            ->join('cp.user', 'u')
+            ->addSelect('u')
+            ->where('cp.course = :course')
+            ->andWhere('cp.status = :status')
+            ->setParameter('course', $course)
+            ->setParameter('status', 'completed')
+            ->getQuery()
+            ->getResult();
     }
 }

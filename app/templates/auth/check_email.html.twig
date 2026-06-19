@@ -1,0 +1,419 @@
+{% extends 'base.html.twig' %}
+
+{#
+ # auth/check_email.html.twig — Page "Vérifie ta boîte mail"
+ #
+ # Affichée après l'inscription pour inviter l'utilisateur à confirmer son email.
+ # Reprend la mise en page split-screen du design Street (comme login et register).
+ #
+ # Variables injectées par AuthController::checkEmail() :
+ #   - email : string — l'adresse email à laquelle le lien a été envoyé
+ #
+ # Actions disponibles sur cette page :
+ #   1. Renvoyer l'email (formulaire POST vers app_resend_verify_email)
+ #   2. Retourner à la page de connexion (lien vers app_login)
+ #}
+
+{% block title %}Vérifie ta boîte mail — BazaArt{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+
+    /* ── Reset hauteur pour le full-screen (identique à login.html.twig) ── */
+    html, body {
+        height: 100%;
+        overflow: hidden;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+     * LAYOUT — deux colonnes 50/50 pleine hauteur (design Street)
+     * ══════════════════════════════════════════════════════════════ */
+    .auth-layout {
+        display: flex;
+        height: 100vh;
+        background: var(--bg);
+    }
+
+    /* ── Colonne gauche : panneau décoratif fond --ink ── */
+    .auth-left {
+        flex: 0 0 50%;
+        background: var(--ink);
+        color: var(--bg);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 56px 64px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .auth-left__top {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xl);
+    }
+
+    .auth-left__logo {
+        font-family: var(--display);
+        font-size: 72px;
+        line-height: 1;
+        letter-spacing: -.02em;
+        color: var(--bg);
+    }
+
+    .auth-left__logo span {
+        color: var(--accent); /* vert lime */
+    }
+
+    /* Icône enveloppe stylisée (SVG inline) */
+    .auth-left__icon-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-md);
+    }
+
+    .auth-left__icon-label {
+        font-family: var(--mono);
+        font-size: var(--eyebrow-font-size);
+        font-weight: 700;
+        letter-spacing: var(--eyebrow-letter-spacing);
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+
+    /* Étapes de confirmation en bullets */
+    .auth-left__steps {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-sm);
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .auth-left__step {
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: .04em;
+        color: rgba(242, 239, 230, .75);
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-sm);
+        line-height: 1.5;
+    }
+
+    /* Numéro de l'étape en vert lime */
+    .auth-left__step-num {
+        background: var(--accent);
+        color: var(--ink);
+        font-weight: 700;
+        font-size: 10px;
+        width: 18px;
+        height: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        border-radius: 50%;
+        margin-top: 1px;
+    }
+
+    /* ── Colonne droite : contenu principal ── */
+    .auth-right {
+        flex: 1;
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: var(--space-xl);
+        overflow-y: auto;
+    }
+
+    .auth-form-wrapper {
+        width: 100%;
+        max-width: 440px;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-lg);
+    }
+
+    /* ── En-tête de la page ── */
+    .auth-header {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-sm);
+    }
+
+    /* Picto email au-dessus du titre */
+    .auth-picto {
+        width: 48px;
+        height: 48px;
+        background: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        margin-bottom: var(--space-sm);
+    }
+
+    .auth-title {
+        font-family: var(--display);
+        font-size: 36px;
+        line-height: 1.05;
+        letter-spacing: -.01em;
+        color: var(--ink);
+    }
+
+    .auth-subtitle {
+        font-family: var(--body);
+        font-size: 14px;
+        color: var(--ink-mute);
+        line-height: 1.6;
+    }
+
+    /* Adresse email mise en valeur */
+    .auth-email-highlight {
+        font-family: var(--mono);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--ink);
+        background: var(--bg-alt);
+        border: 2px solid var(--ink);
+        padding: 12px var(--space-md);
+        display: block;
+        word-break: break-all;
+    }
+
+    /* ── Flash messages ── */
+    .auth-flash-error {
+        border: 2px solid var(--accent-2);
+        background: rgba(255, 107, 44, .08);
+        padding: var(--space-md);
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+    }
+
+    .auth-flash-success {
+        border: 2px solid var(--ok);
+        background: rgba(31, 138, 91, .08);
+        padding: var(--space-md);
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+    }
+
+    /* ── Bouton de renvoi ── */
+    .auth-btn-resend {
+        width: 100%;
+        padding: 14px var(--space-lg);
+        font-family: var(--display);
+        font-size: var(--btn-font-size);
+        font-weight: var(--btn-font-weight);
+        letter-spacing: var(--btn-letter-spacing);
+        text-transform: uppercase;
+        color: var(--ink);
+        background: var(--accent);
+        border: 2px solid var(--ink);
+        border-radius: var(--radius-none);
+        cursor: pointer;
+        transition: background var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .auth-btn-resend:hover {
+        background: var(--ink);
+        color: var(--accent);
+        box-shadow: var(--shadow-offset-sm);
+    }
+
+    /* ── Conseil spam ── */
+    .auth-hint {
+        font-family: var(--body);
+        font-size: 12px;
+        color: var(--ink-mute);
+        line-height: 1.6;
+    }
+
+    /* Lien retour login */
+    .auth-back-link {
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--ink-mute);
+        text-decoration: none;
+        letter-spacing: .04em;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .auth-back-link:hover {
+        color: var(--ink);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+     * RESPONSIVE
+     * ══════════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+        html, body {
+            height: auto;
+            overflow: auto;
+        }
+
+        .auth-layout {
+            flex-direction: column;
+            height: auto;
+            min-height: 100vh;
+        }
+
+        .auth-left {
+            flex: none;
+            padding: var(--space-xl) var(--space-lg);
+            justify-content: flex-start;
+            gap: var(--space-lg);
+        }
+
+        .auth-left__icon-wrapper {
+            display: none;
+        }
+
+        .auth-left__logo {
+            font-size: 48px;
+        }
+
+        .auth-right {
+            padding: var(--space-xl) var(--space-md);
+        }
+
+        .auth-form-wrapper {
+            max-width: 100%;
+        }
+    }
+
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="auth-layout" role="main">
+
+    {# ════════════════════════════════════════════════════════════════════════
+     # COLONNE GAUCHE — Panneau décoratif
+     # ════════════════════════════════════════════════════════════════════════ #}
+    <aside class="auth-left" aria-hidden="true">
+
+        <div class="auth-left__top">
+            <div class="auth-left__logo">
+                Baza<span>Art</span>
+            </div>
+        </div>
+
+        <div class="auth-left__icon-wrapper">
+            <span class="auth-left__icon-label">Comment ca marche</span>
+            <ol class="auth-left__steps">
+                <li class="auth-left__step">
+                    <span class="auth-left__step-num">1</span>
+                    Tu viens de t'inscrire. Bien joue.
+                </li>
+                <li class="auth-left__step">
+                    <span class="auth-left__step-num">2</span>
+                    Un email de confirmation a ete envoye a ton adresse.
+                </li>
+                <li class="auth-left__step">
+                    <span class="auth-left__step-num">3</span>
+                    Clique sur le lien dans l'email pour activer ton compte.
+                </li>
+                <li class="auth-left__step">
+                    <span class="auth-left__step-num">4</span>
+                    Connecte-toi et rejoins la communaute.
+                </li>
+            </ol>
+        </div>
+
+    </aside>
+
+    {# ════════════════════════════════════════════════════════════════════════
+     # COLONNE DROITE — Message de confirmation
+     # ════════════════════════════════════════════════════════════════════════ #}
+    <div class="auth-right">
+        <div class="auth-form-wrapper">
+
+            {# ── Picto enveloppe ── #}
+            <div class="auth-picto" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1a1f2e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                    <polyline points="2,4 12,13 22,4"/>
+                </svg>
+            </div>
+
+            {# ── En-tête ── #}
+            <header class="auth-header">
+                <h1 class="auth-title">Verifie ta boite mail</h1>
+                <p class="auth-subtitle">
+                    Un lien de confirmation a ete envoye a cette adresse :
+                </p>
+            </header>
+
+            {# ── Adresse email mise en valeur ── #}
+            <code class="auth-email-highlight" aria-label="Adresse email de confirmation">
+                {{ email }}
+            </code>
+
+            {# ── Flash messages (renvoi ou erreur) ── #}
+            {% for message in app.flashes('error') %}
+                <div class="auth-flash-error" role="alert" aria-live="assertive">
+                    {{ message }}
+                </div>
+            {% endfor %}
+
+            {% for message in app.flashes('success') %}
+                <div class="auth-flash-success" role="status">
+                    {{ message }}
+                </div>
+            {% endfor %}
+
+            {# ══════════════════════════════════════════════════════════════════
+             # FORMULAIRE DE RENVOI
+             #
+             # Formulaire minimal : un champ email caché + bouton submit.
+             # Le token CSRF protege contre une soumission externe malveillante.
+             # Rate limiter cote serveur : 3 renvois / 10 min / email.
+             # ═══════════════════════════════════════════════════════════════ #}
+            <form method="post" action="{{ path('app_resend_verify_email') }}">
+
+                {#
+                    Champ email caché : transmet l'adresse au contrôleur de renvoi.
+                    Pré-rempli avec l'email en session.
+                #}
+                <input type="hidden" name="email" value="{{ email }}">
+
+                {# Token CSRF pour proteger le formulaire (intention 'resend_verify') #}
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('resend_verify') }}">
+
+                <button type="submit" class="auth-btn-resend">
+                    Renvoyer l'email de confirmation
+                </button>
+
+            </form>
+
+            {# ── Conseil : vérifier les spams ── #}
+            <p class="auth-hint">
+                Tu n'as pas recu l'email ? Verifie ton dossier de spams ou courriers indesirables.
+                Le lien est valable 1 heure.
+            </p>
+
+            {# ── Lien retour vers /login ── #}
+            <a href="{{ path('app_login') }}" class="auth-back-link">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="7,1 2,6 7,11"/>
+                </svg>
+                Retour a la connexion
+            </a>
+
+        </div>
+    </div>{# fin .auth-right #}
+
+</div>{# fin .auth-layout #}
+{% endblock %}
