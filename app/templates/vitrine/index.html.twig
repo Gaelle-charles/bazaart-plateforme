@@ -1563,6 +1563,536 @@
     }
 }
 
+
+/* ──────────────────────────────────────────────────────────────────────
+   SECTION SWIPE — Section matching (ADR-0021 Lot C)
+   Placée juste après le hero, avant le marquee.
+   Préfixe CSS : .swipe- pour éviter toute collision.
+
+   PHILOSOPHIE :
+   - On réutilise les classes .lp-btn, .lp-chip, .lp-section-header* etc.
+     du design system Street existant pour la cohérence visuelle.
+   - Les nouvelles classes .swipe-* ne définissent que ce qui est spécifique
+     à la mécanique de swipe (pile de cartes, animations, panneau latéral).
+   - Pas de Tailwind — cohérent avec le reste de la vitrine.
+──────────────────────────────────────────────────────────────────────── */
+
+/* Section conteneur — même espacement que les autres sections */
+.lp-swipe {
+    padding-bottom: 48px;
+    border-bottom:  1px solid var(--ink);
+}
+
+/* ── LAYOUT PRINCIPAL : pile de cartes + panneau latéral ─────────────────
+   Grille 2 colonnes :
+     - Colonne gauche (2fr) : pile de cartes (.swipe-deck)
+     - Colonne droite (1fr) : boutons + alerte (.swipe-panel)
+   Sur mobile : une seule colonne (carte au-dessus, actions en dessous).
+──────────────────────────────────────────────────────────────────────── */
+.swipe-layout {
+    display:               grid;
+    grid-template-columns: 2fr 1fr;
+    gap:                   32px;
+    margin-top:            32px;
+    align-items:           start;
+}
+
+/* ── PILE DE CARTES ───────────────────────────────────────────────────────
+   Position relative pour empiler les cartes en absolu.
+   Hauteur fixée à la hauteur de la carte "active" (la plus haute).
+──────────────────────────────────────────────────────────────────────── */
+.swipe-deck {
+    position:   relative;
+    /* min-height : assure que la zone de swipe a une hauteur même vide.
+       La valeur est calculée pour correspondre à la hauteur d'une carte. */
+    min-height: 420px;
+    /* user-select:none : empêche la sélection de texte pendant le drag */
+    user-select: none;
+    touch-action: pan-y; /* laisse le scroll vertical fonctionner */
+}
+
+/* ── CARTE INDIVIDUELLE ───────────────────────────────────────────────────
+   Toutes les cartes se superposent via position:absolute.
+   Seule la "active" est visible (voir .swipe-card--active).
+──────────────────────────────────────────────────────────────────────── */
+.swipe-card {
+    position:       absolute;
+    inset:          0;
+    background:     var(--bg);
+    border:         1px solid var(--ink);
+    padding:        28px 24px;
+    display:        flex;
+    flex-direction: column;
+    gap:            16px;
+    cursor:         grab;
+    will-change:    transform;    /* hint GPU : accélère les animations de drag */
+    /* La carte n'est pas visible par défaut — seule la "active" l'est */
+    opacity:        0;
+    pointer-events: none;
+}
+
+/* Carte active (first in view) */
+.swipe-card--active {
+    opacity:        1;
+    pointer-events: auto;
+    /* La carte active est toujours au-dessus dans la pile */
+    z-index:        2;
+}
+
+/* Carte suivante : visible en arrière-plan avec décalage subtil ("effet pile") */
+.swipe-card:nth-child(2) {
+    opacity:        0.6;
+    pointer-events: none;
+    z-index:        1;
+    /* Légèrement décalée vers le bas et réduite → impression de profondeur */
+    transform:      translateY(6px) scale(0.98);
+}
+
+/* Toutes les cartes masquées explicitement */
+.swipe-card--hidden {
+    opacity:        0 !important;
+    pointer-events: none !important;
+    z-index:        0 !important;
+}
+
+/* Curseur pendant le drag */
+.swipe-deck:active .swipe-card--active {
+    cursor: grabbing;
+}
+
+/* ── SANS JS : seule la première carte est visible ──────────────────────
+   Progressive enhancement : sans swipe.js, on affiche au moins la première
+   carte avec son formulaire POST natif. Les cartes suivantes sont cachées
+   car inatteignables sans JS. On n'utilise PAS :nth-child ici car le HTML
+   applique déjà .swipe-card--active sur la première carte.
+──────────────────────────────────────────────────────────────────────── */
+
+/* ── EN-TÊTE DE CARTE ─────────────────────────────────────────────────── */
+.swipe-card__header {
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+}
+
+/* Badge score (/100) — indicateur compact de pertinence */
+.swipe-card__score {
+    display:     flex;
+    align-items: baseline;
+    gap:         2px;
+}
+
+.swipe-card__score-number {
+    font-family: var(--display);
+    font-size:   24px;
+    color:       var(--ink);
+    line-height: 1;
+}
+
+.swipe-card__score-label {
+    font-family: var(--mono);
+    font-size:   11px;
+    color:       var(--ink-mute);
+    letter-spacing: .06em;
+}
+
+/* ── LOGO DE L'ORGANISME ──────────────────────────────────────────────── */
+.swipe-card__logo-wrap {
+    width:  64px;
+    height: 64px;
+    border: 1px solid var(--line-soft);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.swipe-card__logo {
+    width:      100%;
+    height:     100%;
+    object-fit: contain;
+}
+
+/* Fallback badge "B" (style Bazaart) si pas de logo */
+.swipe-card__logo-wrap--placeholder {
+    background:      var(--ink);
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+}
+
+.swipe-card__logo-badge {
+    font-family: var(--display);
+    font-size:   28px;
+    color:       var(--accent);
+    line-height: 1;
+}
+
+/* ── TITRE DE LA CARTE ─────────────────────────────────────────────────── */
+.swipe-card__title {
+    font-family:    var(--display);
+    font-size:      clamp(18px, 2.5vw, 24px);
+    line-height:    1.1;
+    letter-spacing: -.01em;
+    margin:         0;
+    color:          var(--ink);
+    /* Troncature à 4 lignes maximum */
+    display:             -webkit-box;
+    -webkit-line-clamp:  4;
+    line-clamp:          4;
+    -webkit-box-orient:  vertical;
+    overflow:            hidden;
+}
+
+/* ── MÉTADONNÉES (lieu + deadline) ────────────────────────────────────── */
+.swipe-card__metas {
+    display:     flex;
+    gap:         12px;
+    flex-wrap:   wrap;
+    font-family: var(--mono);
+    font-size:   11px;
+    letter-spacing: .04em;
+    color:       var(--ink-mute);
+    align-items: center;
+}
+
+.swipe-card__meta {
+    display:     inline-flex;
+    gap:         4px;
+    align-items: center;
+}
+
+/* ── BREAKDOWN "Pourquoi ce match ?" ─────────────────────────────────── */
+.swipe-card__why {
+    display:  flex;
+    gap:      6px;
+    flex-wrap: wrap;
+}
+
+/* Petit tag discret pour chaque critère positif */
+.swipe-card__why-tag {
+    font-family:    var(--mono);
+    font-size:      10px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding:        3px 7px;
+    background:     rgba(198, 242, 78, 0.18); /* lime à 18% */
+    color:          var(--ink);
+    border:         1px solid rgba(198, 242, 78, 0.5);
+}
+
+/* ── LIEN EXTERNE "Voir l'opportunite" ────────────────────────────────── */
+.swipe-card__link {
+    /* Le lien est en bas de la carte, séparé du contenu */
+    margin-top: auto;
+    align-self: flex-start;
+    /* On ne veut pas que le lien soit "stretched" sur toute la carte
+       (la carte est grab, pas un lien) — juste le bouton est cliquable. */
+    position:   relative;
+    z-index:    3; /* au-dessus du pseudo-élément de zone cliquable si jamais */
+}
+
+/* ── FORMULAIRE DE FALLBACK SANS JS ──────────────────────────────────── */
+.swipe-card__fallback-form {
+    /* Visible uniquement sans JS — swipe.js ajoute .swipe-has-js sur <html>
+       pour masquer ce bloc (les boutons JS le remplacent). */
+    margin-top: 12px;
+}
+
+/* Si JS actif : masque le formulaire fallback */
+.swipe-has-js .swipe-card__fallback-form {
+    display: none;
+}
+
+/* ── PANNEAU LATÉRAL ──────────────────────────────────────────────────── */
+.swipe-panel {
+    display:        flex;
+    flex-direction: column;
+    gap:            20px;
+    /* Collé en haut pour rester aligné avec le haut de la carte */
+    padding-top:    0;
+}
+
+/* ── BOUTONS D'ACTION ─────────────────────────────────────────────────── */
+.swipe-actions {
+    display: flex;
+    gap:     10px;
+    flex-direction: column;
+}
+
+/* Boutons "Passer" et "Intéressé(e)" — pleine largeur dans le panneau */
+.swipe-btn-pass,
+.swipe-btn-fav {
+    width:            100%;
+    justify-content:  center;
+    gap:              8px;
+}
+
+/* ── HINT CLAVIER ─────────────────────────────────────────────────────── */
+.swipe-hint {
+    font-family:    var(--mono);
+    font-size:      10px;
+    letter-spacing: .06em;
+    color:          var(--ink-mute);
+    text-align:     center;
+    margin:         0;
+    /* Masqué sans JS (inutile si les boutons ne fonctionnent pas) */
+    display:        none;
+}
+
+.swipe-has-js .swipe-hint {
+    display: block;
+}
+
+/* ── BLOC ALERTE ──────────────────────────────────────────────────────── */
+.swipe-alert-block {
+    border:      1px solid var(--line-soft);
+    padding:     16px;
+    background:  var(--bg-alt); /* légèrement plus sombre que le fond */
+}
+
+/* Titre discret du bloc */
+.swipe-alert-form__title {
+    font-family:    var(--mono);
+    font-size:      11px;
+    font-weight:    700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color:          var(--ink-mute);
+    margin:         0 0 10px;
+}
+
+/* Label de consentement : inline-flex pour aligner la checkbox et le texte */
+.swipe-alert-form__consent-label {
+    display:     flex;
+    gap:         8px;
+    align-items: flex-start;
+    cursor:      pointer;
+    font-size:   13px;
+    line-height: 1.4;
+    color:       var(--ink);
+}
+
+.swipe-alert-form__consent-check {
+    /* Checkbox native — on ne la customise pas pour rester accessible
+       et ne pas casser le comportement natif (espace, VoiceOver…). */
+    flex-shrink: 0;
+    width:       16px;
+    height:      16px;
+    margin-top:  2px; /* alignement vertical avec le texte */
+    cursor:      pointer;
+    /* accent-color : colorie la checkbox aux couleurs du thème (lime) */
+    accent-color: var(--accent);
+}
+
+.swipe-alert-form__consent-text {
+    color: var(--ink);
+}
+
+/* Message "alerte déjà active" */
+.swipe-alert-active {
+    display:     flex;
+    align-items: center;
+    gap:         6px;
+    font-family: var(--mono);
+    font-size:   12px;
+    letter-spacing: .06em;
+    color:       var(--ink);
+    margin:      0 0 8px;
+}
+
+.swipe-alert-edit-link {
+    font-family:    var(--mono);
+    font-size:      11px;
+    letter-spacing: .06em;
+    color:          var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+/* Zone de feedback AJAX du formulaire alerte */
+.swipe-alert-feedback {
+    font-family: var(--mono);
+    font-size:   12px;
+    margin:      8px 0 0;
+    padding:     6px 8px;
+}
+
+.swipe-alert-feedback[data-type="error"] {
+    color:      #cc2200;
+    background: rgba(204, 34, 0, 0.05);
+    border:     1px solid rgba(204, 34, 0, 0.2);
+}
+
+.swipe-alert-feedback[data-type="success"] {
+    color:      var(--ink);
+    background: rgba(198, 242, 78, 0.15);
+    border:     1px solid rgba(198, 242, 78, 0.5);
+}
+
+/* ── ÉTAT VIDE (toutes les cartes vues) ──────────────────────────────── */
+.swipe-empty {
+    margin-top: 32px;
+    text-align: center;
+    padding:    48px 24px;
+    border:     1px solid var(--line-soft);
+}
+
+/* Initialement caché — révélé par swipe.js */
+.swipe-empty--hidden {
+    display: none;
+}
+
+.swipe-empty__inner {
+    display:        flex;
+    flex-direction: column;
+    align-items:    center;
+    gap:            16px;
+}
+
+.swipe-empty__icon {
+    color: var(--accent);
+}
+
+.swipe-empty__msg {
+    font-size:   15px;
+    color:       var(--ink-mute);
+    margin:      0;
+    max-width:   320px;
+}
+
+/* ── ÉTAT "AUCUN MATCH" ──────────────────────────────────────────────── */
+.swipe-no-matches {
+    margin-top:  32px;
+    padding:     40px 24px;
+    border:      1px solid var(--line-soft);
+    text-align:  center;
+}
+
+.swipe-no-matches__msg {
+    font-size:   15px;
+    color:       var(--ink-mute);
+    margin:      0 0 20px;
+    max-width:   400px;
+    margin-inline: auto;
+}
+
+/* ── PROFIL INCOMPLET ────────────────────────────────────────────────── */
+.swipe-incomplete-profile {
+    margin-top:  32px;
+    padding:     40px 24px;
+    background:  var(--bg-alt);
+    border:      1px solid var(--ink);
+    text-align:  center;
+}
+
+.swipe-incomplete-profile__inner {
+    display:        flex;
+    flex-direction: column;
+    align-items:    center;
+    gap:            12px;
+}
+
+.swipe-incomplete-profile__msg {
+    font-size:   16px;
+    font-weight: 600;
+    color:       var(--ink);
+    margin:      0;
+    max-width:   420px;
+}
+
+.swipe-incomplete-profile__hint {
+    font-family:    var(--mono);
+    font-size:      12px;
+    letter-spacing: .06em;
+    color:          var(--ink-mute);
+    margin:         0;
+}
+
+/* ── ENCART VISITEUR (non connecté / non artiste) ────────────────────── */
+.swipe-guest-cta {
+    margin-top:  32px;
+    padding:     40px 24px;
+    background:  var(--ink);
+    text-align:  center;
+}
+
+.swipe-guest-cta__inner {
+    display:        flex;
+    flex-direction: column;
+    align-items:    center;
+    gap:            20px;
+}
+
+.swipe-guest-cta__msg {
+    font-size:   18px;
+    line-height: 1.4;
+    color:       var(--bg);
+    margin:      0;
+    max-width:   480px;
+}
+
+.swipe-guest-cta__btns {
+    display:  flex;
+    gap:      12px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* ── COMPTEUR ─────────────────────────────────────────────────────────── */
+.swipe-counter {
+    font-family:    var(--mono);
+    font-size:      11px;
+    font-weight:    700;
+    letter-spacing: .06em;
+    color:          var(--accent);
+}
+
+/* ── RESPONSIVE ──────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    /* Sur mobile : 1 colonne (pile en haut, panneau en bas) */
+    .swipe-layout {
+        grid-template-columns: 1fr;
+        gap:                   24px;
+    }
+
+    /* Sur mobile, la pile de cartes a une hauteur auto (pas de position absolu) */
+    .swipe-deck {
+        min-height: 360px;
+    }
+
+    /* Boutons en ligne sur mobile */
+    .swipe-actions {
+        flex-direction: row;
+    }
+
+    /* L'encart visiteur sur fond noir est moins haut sur mobile */
+    .swipe-guest-cta {
+        padding: 28px 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .swipe-card {
+        padding: 20px 16px;
+    }
+
+    .swipe-guest-cta__btns {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .swipe-guest-cta__btns .lp-btn {
+        width:            100%;
+        justify-content:  center;
+    }
+}
+
+/* prefers-reduced-motion : s'assure qu'aucune transition ne subsiste */
+@media (prefers-reduced-motion: reduce) {
+    .swipe-card {
+        will-change: auto;
+    }
+}
+
+
 /* ── GRILLE 2 COLONNES TEXTE / VIDÉO ─────────────────────────────────────────
    Disposition sous l'en-tête de section :
      colonne gauche  → texte de présentation (1fr)
@@ -1765,6 +2295,438 @@
             </div>{# /.lp-hero__sticky #}
 
         </section>{# /.lp-hero #}
+
+
+        {# ════════════════════════════════════════════════════════════════
+           LOT C — SECTION MATCHING / SWIPE (ADR-0021)
+           Placée JUSTE APRES LE HERO, avant le marquee.
+
+           TROIS ETATS (geres par Twig selon les variables du HomeController) :
+             1. isArtist = true + profileComplete = true + swipeMatches non vide
+                → Section swipe complete avec cartes + boutons + alerte
+             2. isArtist = true + profileComplete = false
+                → Encart "Completez votre profil" (lien vers onboarding)
+             3. Non connecte ou non artiste
+                → Encart "Rejoignez la plateforme" (lien login/register)
+
+           PROGRESSIVE ENHANCEMENT :
+             Sans JS, le premier formulaire POST "Interessé(e)" fonctionne
+             via l'endpoint existing POST /resources/{id}/favorite.
+             Les autres cartes ne sont pas accessibles sans JS (c'est acceptable :
+             le site reste utilisable, juste moins interactif).
+
+           NOTE : pas de data-theme ici, on reste dans le thème :root Street.
+        ════════════════════════════════════════════════════════════════ #}
+
+        {# ── Styles CSS de la section swipe ──────────────────────────────────── #}
+        {# Injectes dans le head via le bloc stylesheets du parent (deja ouvert
+           et ferme) — on utilise un style inline ici pour la modularite. #}
+        {%- set swipeStylesRendered = true -%}
+
+        {# ─── SECTION SWIPE ──────────────────────────────────────────────────── #}
+        <section
+            id="swipe-section"
+            class="lp-swipe lp-container"
+            aria-labelledby="lp-swipe-title"
+            {#
+                data-total-matches : nombre total de matchs positifs de l'artiste
+                (peut depasser le nombre de cartes chargees).
+                Utilise par swipe.js pour le compteur "X / Y matchs".
+            #}
+            data-total-matches="{{ swipeCount }}"
+        >
+
+            {# ─── ETAT 1 : Artiste connecte, profil complet, matchs disponibles ─ #}
+            {% if isArtist and profileComplete %}
+
+                {# ── En-tete de section ─────────────────────────────────────────── #}
+                <div class="lp-section-header">
+                    <div class="lp-section-header__left">
+                        <span class="lp-section-header__index" aria-hidden="true">00</span>
+                        <h2 class="lp-section-header__title" id="lp-swipe-title">
+                            Tes matchs
+                        </h2>
+                        {# Compteur dynamique — mis a jour par swipe.js #}
+                        <span class="lp-section-header__sub">
+                            <span class="swipe-counter" aria-live="polite" aria-atomic="true">
+                                {%- if swipeCount > 0 -%}
+                                    1 / {{ swipeCount }}
+                                {%- else -%}
+                                    0 / 0
+                                {%- endif -%}
+                            </span>
+                            &nbsp;opportunite{{ swipeCount > 1 ? 's' : '' }} qui correspond{{ swipeCount > 1 ? 'ent' : '' }}
+                        </span>
+                    </div>
+                    {# Lien vers la page de profil pour rappeler qu'on peut affiner le matching #}
+                    <div class="lp-section-header__action">
+                        <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--outline" style="font-size:11px;padding:7px 11px;" tabindex="0">
+                            Toutes les opportunites
+                        </a>
+                    </div>
+                </div>
+
+                {% if swipeMatches is not empty %}
+
+                    {# ── Conteneur principal : pile de cartes + panneau latéral ─────── #}
+                    <div class="swipe-layout">
+
+                        {# ── Pile de cartes (swipe-deck) ─────────────────────────────── #}
+                        <div class="swipe-deck" role="region" aria-label="Cartes de matching a swiper">
+
+                            {% for match in swipeMatches %}
+                            {#
+                                Chaque carte .swipe-card porte :
+                                  data-index       : position dans la pile (0-based)
+                                  data-resource-id : ID de la ressource (pour le POST favori)
+                                  data-csrf-token  : token CSRF specifique a cette ressource
+                                                     (nom 'resource_favorite_{id}')
+
+                                La premiere carte est visible (swipe-card--active ajoute par JS).
+                                Les suivantes sont cachees (swipe-card--hidden par defaut via CSS).
+                                Sans JS, seule la premiere carte est visible (voir CSS ci-dessous).
+                            #}
+                            <article
+                                class="swipe-card{{ loop.first ? ' swipe-card--active' : ' swipe-card--hidden' }}"
+                                data-index="{{ loop.index0 }}"
+                                data-resource-id="{{ match.resource_id }}"
+                                data-csrf-token="{{ csrf_token('resource_favorite_' ~ match.resource_id) }}"
+                                aria-label="Opportunite : {{ match.title }}"
+                                {# La carte n-1 (index > 0) est aria-hidden sans JS #}
+                                {{ loop.first ? '' : 'aria-hidden="true" tabindex="-1"' }}
+                            >
+                                {# ── En-tete de la carte : type + score ─────────────── #}
+                                <div class="swipe-card__header">
+                                    <span class="lp-chip lp-chip--sand" aria-label="Type : {{ match.resource_type }}">
+                                        {{ match.resource_type }}
+                                    </span>
+
+                                    {# Badge score : indicateur visuel de la pertinence du match #}
+                                    <div class="swipe-card__score" aria-label="Score de matching : {{ match.score }} sur 100">
+                                        <span class="swipe-card__score-number">{{ match.score }}</span>
+                                        <span class="swipe-card__score-label">/100</span>
+                                    </div>
+                                </div>
+
+                                {# ── Logo de l'organisme (si disponible) ─────────────── #}
+                                {%- if match.logo_url -%}
+                                    <div class="swipe-card__logo-wrap">
+                                        <img
+                                            src="{{ match.logo_url }}"
+                                            alt=""
+                                            class="swipe-card__logo"
+                                            loading="lazy"
+                                            decoding="async"
+                                        >
+                                    </div>
+                                {%- else -%}
+                                    {# Fallback badge "B" si pas de logo (style vitrine) #}
+                                    <div class="swipe-card__logo-wrap swipe-card__logo-wrap--placeholder" aria-hidden="true">
+                                        <span class="swipe-card__logo-badge">B</span>
+                                    </div>
+                                {%- endif -%}
+
+                                {# ── Titre de l'opportunite ──────────────────────────── #}
+                                <h3 class="swipe-card__title">{{ match.title }}</h3>
+
+                                {# ── Metadonnees (lieu + deadline) ───────────────────── #}
+                                <div class="swipe-card__metas">
+                                    {%- if match.city or match.country -%}
+                                        <span class="swipe-card__meta" aria-label="Lieu">
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                                            </svg>
+                                            {{ [match.city, match.country]|filter(v => v)|join(', ') }}
+                                        </span>
+                                    {%- endif -%}
+                                    {%- if match.deadline -%}
+                                        <span class="swipe-card__meta" aria-label="Date limite">
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                                            </svg>
+                                            Cloture {{ match.deadline|date('d/m/Y') }}
+                                        </span>
+                                    {%- endif -%}
+                                </div>
+
+                                {# ── Breakdown "Pourquoi ce match ?" ─────────────────── #}
+                                {# Rendu discret, visible sur la carte active — aide a comprendre
+                                   la logique de matching. N'alourdit pas la carte. #}
+                                <div class="swipe-card__why" aria-label="Raisons du match">
+                                    {%- if match.breakdown.disciplines > 0 -%}
+                                        <span class="swipe-card__why-tag">Discipline</span>
+                                    {%- endif -%}
+                                    {%- if match.breakdown.looking_for > 0 -%}
+                                        <span class="swipe-card__why-tag">Objectif</span>
+                                    {%- endif -%}
+                                    {%- if match.breakdown.territory > 0 -%}
+                                        <span class="swipe-card__why-tag">Lieu</span>
+                                    {%- endif -%}
+                                </div>
+
+                                {# ── Lien externe "Voir l'opportunite" ───────────────── #}
+                                {%- if match.external_url -%}
+                                    <a
+                                        href="{{ match.external_url }}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="swipe-card__link lp-btn lp-btn--outline"
+                                        aria-label="Voir l'opportunite {{ match.title }} (ouvre un nouvel onglet)"
+                                    >
+                                        Voir l'opportunite
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                            <polyline points="15 3 21 3 21 9"/>
+                                            <line x1="10" y1="14" x2="21" y2="3"/>
+                                        </svg>
+                                    </a>
+                                {%- else -%}
+                                    {# Pas de lien externe : on renvoie vers la fiche interne #}
+                                    <a
+                                        href="{{ path('app_resource_show', { id: match.resource_id }) }}"
+                                        class="swipe-card__link lp-btn lp-btn--outline"
+                                        aria-label="Voir la fiche de {{ match.title }}"
+                                    >
+                                        Voir la fiche
+                                    </a>
+                                {%- endif -%}
+
+                                {#
+                                    FALLBACK SANS JS : formulaire POST natif pour la premiere carte.
+                                    Ce formulaire est masque par CSS si le JS est actif (la classe
+                                    .swipe-has-js ajoutee par le script le cache).
+                                    Pour les cartes autres que la premiere, le fallback n'est pas
+                                    rendu (elles ne sont de toute facon pas visibles sans JS).
+                                #}
+                                {% if loop.first %}
+                                <form
+                                    method="POST"
+                                    action="{{ path('app_resource_favorite_toggle', { id: match.resource_id }) }}"
+                                    class="swipe-card__fallback-form"
+                                    aria-label="Ajouter '{{ match.title }}' en favori"
+                                >
+                                    <input type="hidden" name="_token" value="{{ csrf_token('resource_favorite_' ~ match.resource_id) }}">
+                                    <button type="submit" class="lp-btn lp-btn--accent" style="width:100%;justify-content:center;">
+                                        Interessé(e) — Ajouter en favori
+                                    </button>
+                                </form>
+                                {% endif %}
+
+                            </article>
+                            {% endfor %}
+
+                        </div>{# /.swipe-deck #}
+
+                        {# ── Panneau lateral : boutons + alerte ───────────────────────── #}
+                        <div class="swipe-panel">
+
+                            {# ── Boutons d'action ─────────────────────────────────────── #}
+                            <div class="swipe-actions" role="group" aria-label="Actions de swipe">
+                                {# Bouton "Passer" = swipe gauche = ignorer #}
+                                <button
+                                    type="button"
+                                    class="swipe-btn-pass lp-btn lp-btn--ghost"
+                                    aria-label="Passer cette opportunite"
+                                    title="Passer (fleche gauche)"
+                                >
+                                    {# Icone fleche gauche en SVG #}
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                                    </svg>
+                                    Passer
+                                </button>
+
+                                {# Bouton "Interesse(e)" = swipe droite = ajouter en favori #}
+                                <button
+                                    type="button"
+                                    class="swipe-btn-fav lp-btn lp-btn--accent"
+                                    aria-label="Ajouter en favori"
+                                    title="Interessé(e) (fleche droite)"
+                                >
+                                    Interess&eacute;(e)
+                                    {# Icone coeur en SVG #}
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {# ── Raccourcis clavier (info discrete) ───────────────────── #}
+                            <p class="swipe-hint" aria-hidden="true">
+                                Utilisez les fleches ou glissez les cartes
+                            </p>
+
+                            {# ── Formulaire alerte avec consentement ──────────────────── #}
+                            {# Ce formulaire est le FALLBACK HTML (fonctionne sans JS).
+                               Le JS intercepte la soumission pour envoyer en AJAX.
+                               Le consentement N'EST PAS coche par defaut (ADR-0021 §4).
+                            #}
+                            <div class="swipe-alert-block">
+                                {% if hasAlert %}
+                                    {# L'alerte est deja active — on informe, pas de doublon #}
+                                    <p class="swipe-alert-active" role="status">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+                                        </svg>
+                                        Alertes de matching actives
+                                    </p>
+                                    <a href="{{ path('app_resource_alert_edit') }}" class="swipe-alert-edit-link">
+                                        Gerer mes alertes
+                                    </a>
+                                {% else %}
+                                    {# Formulaire de creation d'alerte avec consentement #}
+                                    <form
+                                        method="POST"
+                                        action="{{ path('app_swipe_alert') }}"
+                                        class="swipe-alert-form"
+                                        aria-label="Creer une alerte de matching"
+                                        novalidate
+                                    >
+                                        {# Token CSRF pour l'endpoint /swipe/alert #}
+                                        <input type="hidden" name="_token" value="{{ csrf_token('swipe_alert') }}">
+
+                                        {# Titre discret de la section #}
+                                        <p class="swipe-alert-form__title">Me notifier ?</p>
+
+                                        {# Case a cocher de consentement — NON cochee par defaut (RGPD) #}
+                                        <label class="swipe-alert-form__consent-label" for="swipe-consent">
+                                            <input
+                                                type="checkbox"
+                                                id="swipe-consent"
+                                                name="consent"
+                                                value="1"
+                                                class="swipe-alert-form__consent-check"
+                                                {# JAMAIS checked par defaut — consentement explicite requis (ADR-0021) #}
+                                            >
+                                            <span class="swipe-alert-form__consent-text">
+                                                Oui, me notifier des futures opportunites qui correspondent a mon profil
+                                            </span>
+                                        </label>
+
+                                        {# Bouton de soumission #}
+                                        <button
+                                            type="submit"
+                                            class="swipe-btn-alert lp-btn lp-btn--dark"
+                                            style="width:100%;justify-content:center;margin-top:8px;"
+                                        >
+                                            Activer les alertes
+                                        </button>
+
+                                        {# Zone de feedback AJAX (initialement vide) #}
+                                        <p class="swipe-alert-feedback" role="status" aria-live="polite" style="display:none;"></p>
+                                    </form>
+                                {% endif %}
+                            </div>
+
+                        </div>{# /.swipe-panel #}
+
+                    </div>{# /.swipe-layout #}
+
+                    {# ── Etat vide : affiché quand toutes les cartes ont ete vues ──── #}
+                    {# Initialement cache (aria-hidden + classe) ; revele par swipe.js #}
+                    <div class="swipe-empty swipe-empty--hidden" aria-hidden="true" role="status">
+                        <div class="swipe-empty__inner">
+                            <span class="swipe-empty__icon" aria-hidden="true">
+                                {# Icone check SVG #}
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+                                </svg>
+                            </span>
+                            <p class="swipe-empty__msg">
+                                Tu as vu toutes tes opportunites pour le moment.
+                            </p>
+                            <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--outline" style="font-size:11px;padding:7px 11px;">
+                                Explorer tout le catalogue
+                            </a>
+                        </div>
+                    </div>
+
+                {% else %}
+                    {# Aucun match positif meme si le profil est complet #}
+                    <div class="swipe-no-matches">
+                        <p class="swipe-no-matches__msg">
+                            Aucune opportunite ne correspond encore a votre profil.
+                            Les nouvelles ressources sont ajoutees chaque semaine.
+                        </p>
+                        <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--outline" style="font-size:11px;padding:7px 11px;">
+                            Explorer le catalogue complet
+                        </a>
+                    </div>
+                {% endif %}
+
+            {# ─── ETAT 2 : Artiste connecte, profil incomplet ─────────────────── #}
+            {% elseif isArtist and not profileComplete %}
+
+                {#
+                    L'id "lp-swipe-title" est place sur le <h2> (pas sur le <div>)
+                    pour que aria-labelledby="lp-swipe-title" sur la <section> parente
+                    pointe vers un veritable element de titre (role=heading).
+                    Placer l'id sur un <div> generique ne satisfaisait pas cette exigence ARIA.
+                #}
+                <div class="lp-section-header">
+                    <div class="lp-section-header__left">
+                        <span class="lp-section-header__index" aria-hidden="true">00</span>
+                        <h2 class="lp-section-header__title" id="lp-swipe-title">
+                            Vos matchs
+                        </h2>
+                        <span class="lp-section-header__sub">profil a completer</span>
+                    </div>
+                </div>
+
+                <div class="swipe-incomplete-profile">
+                    <div class="swipe-incomplete-profile__inner">
+                        <p class="swipe-incomplete-profile__msg">
+                            Pour voir vos opportunites en matching, completez votre profil artistique.
+                        </p>
+                        <p class="swipe-incomplete-profile__hint">
+                            Le matching necessite au moins une discipline et un objectif renseignes.
+                        </p>
+                        <a href="{{ path('app_onboarding_step2') }}" class="lp-btn lp-btn--accent">
+                            Completer mon profil
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M5 12h14M13 5l7 7-7 7"/>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+
+            {# ─── ETAT 3 : Non connecte ou non artiste ──────────────────────── #}
+            {% else %}
+
+                {#
+                    Meme correction que l'etat 2 : l'id "lp-swipe-title" est deplace
+                    sur le <h2> pour que aria-labelledby pointe un element heading valide.
+                #}
+                <div class="lp-section-header">
+                    <div class="lp-section-header__left">
+                        <span class="lp-section-header__index" aria-hidden="true">00</span>
+                        <h2 class="lp-section-header__title" id="lp-swipe-title">
+                            Vos matchs
+                        </h2>
+                        <span class="lp-section-header__sub">connexion requise</span>
+                    </div>
+                </div>
+
+                <div class="swipe-guest-cta">
+                    <div class="swipe-guest-cta__inner">
+                        <p class="swipe-guest-cta__msg">
+                            Decouvrez les opportunites qui correspondent exactement a votre profil artistique.
+                        </p>
+                        <div class="swipe-guest-cta__btns">
+                            <a href="{{ path('app_login') }}" class="lp-btn lp-btn--dark">
+                                Se connecter
+                            </a>
+                            <a href="{{ path('app_register') }}" class="lp-btn lp-btn--outline">
+                                Creer un compte
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+            {% endif %}
+
+        </section>{# /.lp-swipe #}
+
 
         {# ── Marquee bande defilante ───────────────────────────────────────
            Juste apres la section hero (100vh) dans le flux normal.
@@ -2530,4 +3492,23 @@
     #}
 
 </div>{# /.lp-root #}
+
+{#
+    Script swipe.js — chargé uniquement si la section swipe est presente.
+    defer : non-bloquant, exécuté après parsing du DOM.
+    Le script ajoute immédiatement la classe "swipe-has-js" sur <html>
+    pour que le CSS puisse masquer les éléments de fallback sans-JS.
+
+    SECURITE CONTENU : ce script est dans /public/js/ (pas inline),
+    donc pas de problème CSP avec nonce.
+#}
+{% if isArtist is defined and isArtist %}
+    <script>
+        /* Ajout immediat de swipe-has-js pour eviter le flash du fallback.
+           Ce petit inline doit preceder le chargement de swipe.js (defer).
+           Il est inoffensif si swipe.js ne charge pas (erreur reseau). */
+        document.documentElement.classList.add('swipe-has-js');
+    </script>
+    <script src="{{ asset('js/swipe.js') }}" defer></script>
+{% endif %}
 {% endblock %}
