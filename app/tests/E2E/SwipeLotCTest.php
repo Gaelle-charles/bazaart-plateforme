@@ -77,10 +77,10 @@ class SwipeLotCTest extends AbstractE2ETestCase
             'La section swipe doit exister dans le HTML même pour les non-connectés.'
         );
 
-        // L'encart "Rejoindre" doit contenir un lien vers /login ou /register
-        // (état 3 : non connecté)
-        $this->assertSelectorExists('.swipe-guest-cta',
-            'L\'encart d\'invitation pour les non-connectés doit être présent.'
+        // Le formulaire multi-étapes de matching doit être présent pour les visiteurs.
+        // (état 5 : visiteur — anciennement .swipe-guest-cta, remplacé par le formulaire matching)
+        $this->assertSelectorExists('#matching-form-wrap',
+            'Le formulaire multi-étapes de matching doit être présent pour les visiteurs.'
         );
     }
 
@@ -104,9 +104,10 @@ class SwipeLotCTest extends AbstractE2ETestCase
             'La home doit retourner 200 pour un artiste avec profil incomplet.'
         );
 
-        // L'encart "compléter le profil" doit être visible
-        $this->assertSelectorExists('.swipe-incomplete-profile',
-            'L\'encart "compléter votre profil" doit être visible si le profil est incomplet.'
+        // Le formulaire multi-étapes de matching doit être affiché pour les artistes
+        // avec profil incomplet (état 3 — anciennement .swipe-incomplete-profile).
+        $this->assertSelectorExists('#matching-form-wrap',
+            'Le formulaire multi-étapes doit s\'afficher pour les artistes avec profil incomplet.'
         );
     }
 
@@ -444,6 +445,10 @@ class SwipeLotCTest extends AbstractE2ETestCase
     ): ArtistProfile {
         $profile = new ArtistProfile();
         $profile->setUser($user);
+
+        // display_name est NOT NULL en BDD — on utilise l'email comme fallback de test.
+        // En production, le displayName est saisi à l'étape 2 de l'onboarding.
+        $profile->setDisplayName(explode('@', $user->getEmail())[0] . ' (test)');
 
         if ($location !== null) {
             $profile->setLocation($location);

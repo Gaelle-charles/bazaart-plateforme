@@ -1,0 +1,298 @@
+{#
+ # matching/_matching_form.html.twig
+ #
+ # Section matching home : formulaire multi-étapes visible (3 étapes)
+ # pour les visiteurs non connectés et les artistes avec profil incomplet.
+ #
+ # DEUX CAS D'USAGE :
+ #   A) Visiteur non connecté
+ #      Peut remplir les 3 étapes librement.
+ #      A la dernière étape, un bouton "Voir mes matchs" le redirige vers
+ #      l'inscription artiste (/register?intent=artist). Ses réponses sont
+ #      stockées en session pour pré-remplir l'onboarding après inscription.
+ #
+ #   B) Artiste connecté avec profil incomplet
+ #      Même formulaire, mais la soumission finale appelle directement
+ #      POST /matching/form (action du formulaire) et sauvegarde le profil
+ #      via OnboardingService. Redirige ensuite vers la home avec section swipe.
+ #
+ # VARIABLES TRANSMISES PAR HomeController :
+ #   matchingForm_disciplines    : Discipline[]         — toutes les disciplines
+ #   matchingForm_lookingFor     : ArtistLookingFor[]   — tous les cas enum
+ #   matchingForm_legalStatuses  : LegalStatus[]        — tous les cas enum
+ #   matchingForm_savedData      : array                — données session pré-remplissage
+ #                                 {discipline_ids:[], looking_for:[], looking_for_other:'', legal_status:null}
+ #   matchingForm_isLoggedIn     : bool                 — utilisateur connecté ?
+ #   matchingForm_csrfToken      : string               — token CSRF pour le POST
+ #
+ # ARCHITECTURE JS :
+ #   Le JS (matching-form.js) gère la navigation entre étapes sans rechargement.
+ #   Sans JS : les étapes sont toutes visibles (affichage séquentiel dégradé).
+ #   Le POST final est un formulaire HTML classique (fonctionne sans JS).
+ #
+ # ACCESSIBILITÉ :
+ #   - Chaque étape est un <fieldset> avec <legend> visible
+ #   - La barre de progression est aria-live="polite" (mise à jour par JS)
+ #   - Focus géré par matching-form.js lors de la navigation entre étapes
+ #   - prefers-reduced-motion : transitions JS désactivées (voir matching-form.js)
+#}
+
+{# ── Extraction des valeurs pré-remplies depuis la session ─────────────────── #}
+{% set saved = matchingForm_savedData is defined ? matchingForm_savedData : {} %}
+{% set saved_disc_ids = saved.discipline_ids is defined ? saved.discipline_ids : [] %}
+{% set saved_looking_for = saved.looking_for is defined ? saved.looking_for : [] %}
+{% set saved_looking_for_other = saved.looking_for_other is defined ? saved.looking_for_other : null %}
+{% set saved_legal_status_raw = saved.legal_status is defined ? saved.legal_status : null %}
+
+{# ── Résolution du LegalStatus pré-sélectionné (on compare par valeur string) ── #}
+{% set saved_legal_status = null %}
+{% if saved_legal_status_raw is not null %}
+    {% for ls in matchingForm_legalStatuses %}
+        {% if ls.value == saved_legal_status_raw %}
+            {% set saved_legal_status = ls %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+
+{# ── Conteneur du formulaire multi-étapes ──────────────────────────────────── #}
+<div
+    class="mf-wrap"
+    id="matching-form-wrap"
+    data-logged-in="{{ matchingForm_isLoggedIn ? 'true' : 'false' }}"
+    aria-label="Formulaire de matching en plusieurs étapes"
+>
+
+    {# ── Barre de progression (3 étapes) ──────────────────────────────────── #}
+    <div
+        class="mf-progress"
+        role="progressbar"
+        aria-valuemin="1"
+        aria-valuemax="3"
+        aria-valuenow="1"
+        aria-live="polite"
+        aria-label="Étape 1 sur 3"
+        id="mf-progress"
+    >
+        <div class="mf-step-dot mf-step-dot--active" data-step="1" title="Étape 1 : Tes disciplines"></div>
+        <div class="mf-step-dot" data-step="2" title="Étape 2 : Ce que tu recherches"></div>
+        <div class="mf-step-dot" data-step="3" title="Étape 3 : Ton statut (optionnel)"></div>
+        <span class="mf-progress__label" id="mf-progress-label">Étape 1 / 3</span>
+    </div>
+
+    {# ── Formulaire HTML — soumis en POST au controller matching ──────────── #}
+    {# action="..." pointera vers POST /matching/form (MatchingFormController::submit) #}
+    <form
+        method="POST"
+        action="{{ path('app_matching_form_submit') }}"
+        class="mf-form"
+        id="matching-multi-form"
+        novalidate
+    >
+        {# Token CSRF — protège le POST final contre les soumissions croisées #}
+        <input type="hidden" name="_csrf_token" value="{{ matchingForm_csrfToken }}">
+
+        {# Indique si l'utilisateur est connecté (traitement différent côté serveur) #}
+        <input type="hidden" name="_logged_in" value="{{ matchingForm_isLoggedIn ? '1' : '0' }}">
+
+        {# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+           ÉTAPE 1 : Disciplines artistiques
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ #}
+        <fieldset
+            class="mf-step"
+            id="mf-step-1"
+            data-step="1"
+            aria-labelledby="mf-step1-legend"
+        >
+            <legend class="mf-step__legend" id="mf-step1-legend">
+                Tes <span class="mf-it">disciplines</span>
+            </legend>
+            <p class="mf-step__hint">
+                Sélectionne ta ou tes pratiques artistiques. Ces informations personnalisent les opportunités qui te seront proposées.
+            </p>
+
+            {# Bloc erreur (affiché par JS ou par rechargement sans JS) #}
+            <div class="mf-error" id="mf-step1-error" role="alert" aria-live="assertive" style="display:none;"></div>
+
+            {# Champ de filtre pour chercher rapidement dans la liste de disciplines #}
+            <div class="mf-disc-filter-wrap">
+                <input
+                    type="text"
+                    class="mf-disc-filter ob-input"
+                    id="mf-disc-filter"
+                    placeholder="Filtrer les disciplines..."
+                    aria-label="Filtrer les disciplines artistiques"
+                    autocomplete="off"
+                >
+            </div>
+
+            {# Inclusion du partial disciplines — field_prefix "mf" pour éviter doublons d'ids #}
+            {% include 'matching/_step_disciplines.html.twig' with {
+                disciplines:  matchingForm_disciplines,
+                selected_ids: saved_disc_ids,
+                field_prefix: 'mf',
+                show_label:   false
+            } %}
+
+        </fieldset>
+
+        {# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+           ÉTAPE 2 : Ce que tu recherches (lookingFor)
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ #}
+        <fieldset
+            class="mf-step"
+            id="mf-step-2"
+            data-step="2"
+            aria-labelledby="mf-step2-legend"
+            hidden
+        >
+            <legend class="mf-step__legend" id="mf-step2-legend">
+                Que <span class="mf-it">recherches-tu</span> ?
+            </legend>
+            <p class="mf-step__hint">
+                Coche tout ce qui correspond à tes besoins. Ces informations permettent de personnaliser les opportunités proposées.
+            </p>
+
+            <div class="mf-error" id="mf-step2-error" role="alert" aria-live="assertive" style="display:none;"></div>
+
+            {# Inclusion du partial lookingFor — field_prefix "mf2" #}
+            {% include 'matching/_step_looking_for.html.twig' with {
+                looking_for_options: matchingForm_lookingFor,
+                selected_values:     saved_looking_for,
+                looking_for_other:   saved_looking_for_other,
+                field_prefix:        'mf2'
+            } %}
+
+        </fieldset>
+
+        {# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+           ÉTAPE 3 : Statut juridique (optionnel)
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ #}
+        <fieldset
+            class="mf-step"
+            id="mf-step-3"
+            data-step="3"
+            aria-labelledby="mf-step3-legend"
+            hidden
+        >
+            <legend class="mf-step__legend" id="mf-step3-legend">
+                Ton <span class="mf-it">statut</span>
+                <span class="mf-optional-badge">optionnel</span>
+            </legend>
+            <p class="mf-step__hint">
+                Ton statut juridique permet de te proposer les opportunités auxquelles tu es éligible. Tu peux passer cette étape.
+            </p>
+
+            {# Inclusion du partial legalStatus — field_prefix "mf3" #}
+            {% include 'matching/_step_legal_status.html.twig' with {
+                legal_status_options:  matchingForm_legalStatuses,
+                selected_legal_status: saved_legal_status,
+                field_prefix:          'mf3',
+                show_skip_note:        false
+            } %}
+
+        </fieldset>
+
+        {# ── Navigation entre étapes ─────────────────────────────────────── #}
+        {# Ces boutons sont gérés par matching-form.js.
+           Sans JS : seul le bouton de soumission finale est visible.
+           Le bouton "Suivant" est type="button" (n'envoie PAS le formulaire). #}
+        <div class="mf-actions" id="mf-actions">
+
+            {# Bouton "Retour" : caché à l'étape 1, visible aux étapes 2 et 3 #}
+            <button
+                type="button"
+                class="mf-btn-prev ob-btn-back"
+                id="mf-btn-prev"
+                aria-controls="mf-step-1 mf-step-2 mf-step-3"
+                hidden
+            >
+                Retour
+            </button>
+
+            {# Bouton "Suivant" : visible aux étapes 1 et 2 (géré par JS) #}
+            <button
+                type="button"
+                class="mf-btn-next ob-btn-next"
+                id="mf-btn-next"
+                aria-controls="mf-step-1 mf-step-2 mf-step-3"
+            >
+                Continuer
+            </button>
+
+            {# Bouton de soumission finale : visible à l'étape 3 (JS),
+               ou toujours visible sans JS (fallback).
+               Pour les visiteurs non connectés : libellé "Voir mes matchs"
+               Pour les artistes : libellé "Trouver mes matchs" #}
+            <button
+                type="submit"
+                class="mf-btn-submit ob-btn-next"
+                id="mf-btn-submit"
+                {% if matchingForm_isLoggedIn %}
+                    aria-label="Enregistrer mon profil et voir mes matchs"
+                {% else %}
+                    aria-label="Continuer vers l'inscription pour voir mes matchs"
+                {% endif %}
+                hidden
+            >
+                {% if matchingForm_isLoggedIn %}
+                    Trouver mes matchs
+                {% else %}
+                    Voir mes matchs
+                {% endif %}
+            </button>
+
+        </div>
+
+        {#
+            FALLBACK SANS JS :
+            Sans JS, toutes les étapes sont visibles simultanément (fieldset[hidden]
+            n'est pas respecté si JS ne retire pas l'attribut hidden → en réalité
+            si JS est absent, les fieldsets avec `hidden` sont masqués par HTML.
+            On ajoute un message explicatif pour guider l'utilisateur dans ce cas.
+        #}
+        <noscript>
+            <p class="mf-noscript-hint">
+                Activez JavaScript pour naviguer entre les étapes. Sans JavaScript, vous pouvez remplir le formulaire en entier ci-dessous et cliquer sur "Voir mes matchs".
+            </p>
+        </noscript>
+
+    </form>
+
+    {#
+        ENCART D'INCITATION VISITEUR (affiché après la dernière étape par JS,
+        ou après soumission si visiteur non connecté côté serveur).
+        Caché par défaut — affiché par JS quand le formulaire est complété et
+        que l'utilisateur n'est pas connecté.
+    #}
+    {% if not matchingForm_isLoggedIn %}
+    <div class="mf-signup-cta" id="mf-signup-cta" hidden aria-live="polite">
+        <div class="mf-signup-cta__inner">
+            <p class="mf-signup-cta__msg">
+                Tes réponses sont sauvegardées !
+                Crée ton compte artiste pour découvrir tes opportunités.
+            </p>
+            <div class="mf-signup-cta__btns">
+                {#
+                    Le lien /register?intent=artist indique à AuthController
+                    qu'après inscription, l'utilisateur doit être redirigé vers
+                    l'onboarding avec pré-remplissage depuis la session.
+                #}
+                <a
+                    href="{{ path('app_register', { intent: 'artist' }) }}"
+                    class="lp-btn lp-btn--dark"
+                    id="mf-register-link"
+                >
+                    Créer mon compte artiste
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 12h14M13 5l7 7-7 7"/>
+                    </svg>
+                </a>
+                <a href="{{ path('app_login') }}" class="lp-btn lp-btn--ghost">
+                    J'ai déjà un compte
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>{# /.mf-wrap #}

@@ -11,6 +11,7 @@ use App\Entity\User;
 use App\Enum\ArtistLookingFor;
 use App\Enum\LegalStatus;
 use App\Repository\DisciplineRepository;
+use App\Service\MatchingFormSessionService;
 use App\Service\OnboardingService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -47,8 +48,12 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class OnboardingController extends AbstractController
 {
     public function __construct(
-        private readonly OnboardingService    $onboardingService,
-        private readonly DisciplineRepository $disciplineRepository,
+        private readonly OnboardingService         $onboardingService,
+        private readonly DisciplineRepository      $disciplineRepository,
+        // Service de session pour le carryover depuis le formulaire matching home.
+        // Permet de pré-remplir l'onboarding si l'utilisateur avait déjà rempli
+        // le formulaire home avant de s'inscrire (Flux A du matching form).
+        private readonly MatchingFormSessionService $matchingFormSession,
     ) {}
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -157,10 +162,21 @@ class OnboardingController extends AbstractController
         // Profil existant (si l'utilisateur revient à l'étape 2 — pré-remplissage)
         $existingProfile = $user->getArtistProfile();
 
+        // ── Carryover depuis le formulaire matching home (Flux A) ─────────────
+        // Si l'utilisateur avait rempli le formulaire home avant de s'inscrire,
+        // on pré-sélectionne les disciplines de la session dans le template.
+        // Les données de session sont passées au template pour que le partial
+        // matching/_step_disciplines.html.twig puisse les afficher sélectionnées.
+        $matchingSessionData = $this->matchingFormSession->getSessionData($request->getSession());
+
         return $this->render('onboarding/step2.html.twig', [
-            'disciplines'      => $disciplines,
-            'existing_profile' => $existingProfile,
-            'error'            => $error,
+            'disciplines'          => $disciplines,
+            'existing_profile'     => $existingProfile,
+            'error'                => $error,
+            // Données de carryover depuis la session matching (peut être vide si pas de session)
+            // Le template les utilise pour pré-sélectionner les disciplines si le profil
+            // n'existe pas encore (premier passage à l'étape 2).
+            'matching_session_data' => $matchingSessionData,
         ]);
     }
 
@@ -213,12 +229,26 @@ class OnboardingController extends AbstractController
             }
         }
 
+        // ── Carryover depuis la session matching pour le pré-remplissage ────
+        $matchingSessionData = $this->matchingFormSession->getSessionData($request->getSession());
+
+        // Priorité du pré-remplissage :
+        //   1. Données déjà enregistrées sur l'utilisateur (lookingFor en BDD)
+        //   2. Carryover depuis la session matching home
+        $selectedValues = $user->getLookingFor() ?? [];
+        $lookingForOther = $user->getLookingForOther();
+
+        if (empty($selectedValues) && !empty($matchingSessionData['looking_for'])) {
+            $selectedValues  = $matchingSessionData['looking_for'];
+            $lookingForOther = $matchingSessionData['looking_for_other'];
+        }
+
         return $this->render('onboarding/step3.html.twig', [
             // On passe tous les cas de l'enum pour les afficher dynamiquement
             'looking_for_options' => ArtistLookingFor::cases(),
-            // Valeurs déjà sélectionnées (si l'utilisateur revient en arrière)
-            'selected_values'     => $user->getLookingFor() ?? [],
-            'looking_for_other'   => $user->getLookingForOther(),
+            // Valeurs pré-remplies (BDD ou carryover session)
+            'selected_values'     => $selectedValues,
+            'looking_for_other'   => $lookingForOther,
             'error'               => $error,
         ]);
     }
@@ -277,6 +307,12 @@ class OnboardingController extends AbstractController
             // Le statut juridique est optionnel — null est accepté.
             $this->onboardingService->saveStep4AndComplete($user, $dto);
 
+            // ── Nettoyage de la session matching (carryover) ──────────────────
+            // Si l'utilisateur venait du formulaire matching de la home (Flux A),
+            // les données de session ont été utilisées pour pré-remplir l'onboarding.
+            // On les vide maintenant : elles ne sont plus nécessaires.
+            $this->matchingFormSession->clearSession($request->getSession());
+
             // Onboarding complété avec succès
             $this->addFlash('success', 'Bienvenue sur Bazaart ! Ton profil est pret.');
 
@@ -291,6 +327,16 @@ class OnboardingController extends AbstractController
         // le guard ci-dessus redirige si le profil est null.
         // PHPStan le sait aussi — on utilise -> (pas ?->) pour éviter l'avertissement.
         $selectedLegalStatus = $user->getArtistProfile()->getLegalStatus();
+
+        // ── Carryover depuis la session matching pour le statut juridique ─────
+        // Si le profil n'a pas encore de statut ET que la session a une valeur,
+        // on la propose en pré-sélection.
+        if ($selectedLegalStatus === null) {
+            $matchingSessionData = $this->matchingFormSession->getSessionData($request->getSession());
+            if (!empty($matchingSessionData['legal_status'])) {
+                $selectedLegalStatus = LegalStatus::tryFrom($matchingSessionData['legal_status']);
+            }
+        }
 
         return $this->render('onboarding/step4.html.twig', [
             'legal_status_options'   => $legalStatusOptions,

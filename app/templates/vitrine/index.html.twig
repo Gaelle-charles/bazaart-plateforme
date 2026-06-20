@@ -2145,6 +2145,354 @@
 }
 
 
+/* ──────────────────────────────────────────────────────────────────────
+   FORMULAIRE MULTI-ÉTAPES MATCHING (home, visiteur et profil incomplet)
+   Préfixe CSS : .mf- (matching form)
+
+   Réutilise les classes .ob-* de l'onboarding (définis dans base_app.html.twig
+   ou dans les templates d'onboarding). Les classes .ob-* sont définies dans
+   les templates onboarding — on les redéfinit ici pour la vitrine.
+────────────────────────────────────────────────────────────────────── */
+
+/* Conteneur global du formulaire */
+.mf-wrap {
+    max-width:    680px;
+    margin:       24px 0 0;
+    padding:      28px 24px;
+    border:       1px solid var(--ink);
+    background:   var(--bg-alt, #EAE6D9);
+}
+
+/* Barre de progression (3 points-étapes) */
+.mf-progress {
+    display:       flex;
+    align-items:   center;
+    gap:           6px;
+    margin-bottom: 24px;
+}
+
+.mf-step-dot {
+    width:      28px;
+    height:     4px;
+    background: var(--line-soft, #ddd);
+    transition: background .15s;
+}
+.mf-step-dot--active { background: var(--accent); }
+.mf-step-dot--done   { background: var(--ink); }
+
+.mf-progress__label {
+    font-family:    var(--mono);
+    font-size:      10px;
+    font-weight:    700;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color:          var(--ink-mute);
+    margin-left:    8px;
+}
+
+/* Chaque étape (fieldset) */
+.mf-step {
+    border:  none;
+    margin:  0;
+    padding: 0;
+    /* La transition d'apparition est gérée par matching-form.js.
+       CSS uniquement : opacité de transition pour prefers-reduced-motion. */
+}
+
+.mf-step__legend {
+    font-family:    var(--display);
+    font-size:      clamp(20px, 3vw, 28px);
+    font-weight:    400;
+    text-transform: uppercase;
+    letter-spacing: -.02em;
+    line-height:    .95;
+    color:          var(--ink);
+    margin:         0 0 6px;
+    padding:        0;
+    width:          100%;
+}
+
+/* Mot en italique dans les titres d'étapes */
+.mf-it {
+    font-family:    var(--serif);
+    font-style:     italic;
+    text-transform: none;
+    font-weight:    400;
+    color:          var(--accent-2, #FF6B2C);
+}
+
+/* Badge "optionnel" discret */
+.mf-optional-badge {
+    display:        inline-block;
+    font-family:    var(--mono);
+    font-size:      9px;
+    font-weight:    700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    background:     var(--bg);
+    border:         1px solid var(--line-soft);
+    color:          var(--ink-mute);
+    padding:        2px 7px;
+    vertical-align: middle;
+    margin-left:    8px;
+}
+
+.mf-step__hint {
+    font-size:   13px;
+    color:       var(--ink-mute);
+    margin:      0 0 16px;
+    line-height: 1.5;
+}
+
+/* Filtre de recherche disciplines */
+.mf-disc-filter-wrap {
+    margin-bottom: 12px;
+}
+
+/* Classes .ob-* réutilisées par les partials matching/_step_*.html.twig
+   Redéfinies ici car les templates vitrine n'extends pas base_app.html.twig.
+   On ne les définit que si elles ne sont pas déjà dans le head (lazy definition).
+   Note : en Symfony/Twig, il n'y a pas de "if class exists" CSS — on accepte
+   la duplication légère ; ces règles sont idempotentes. */
+
+/* Grille de disciplines */
+.mf-wrap .ob-disc-grid {
+    display:               grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap:                   8px;
+    margin-top:            8px;
+}
+.mf-wrap .ob-disc-item input[type="checkbox"] {
+    position: absolute; opacity: 0; width: 0; height: 0;
+}
+.mf-wrap .ob-disc-item label {
+    display:     flex;
+    align-items: center;
+    gap:         8px;
+    padding:     10px 12px;
+    border:      1px solid var(--line-soft);
+    cursor:      pointer;
+    font-size:   13px;
+    color:       var(--ink);
+    transition:  background .10s, border-color .10s;
+}
+.mf-wrap .ob-disc-item label:hover { background: var(--bg); }
+.mf-wrap .ob-disc-item input:checked + label {
+    background:   var(--accent);
+    border-color: var(--ink);
+    font-weight:  700;
+}
+.mf-wrap .ob-disc-icon { font-size: 15px; flex-shrink: 0; }
+
+/* Options lookingFor */
+.mf-wrap .ob-options,
+.mf-wrap .mf-options-group {
+    display:        flex;
+    flex-direction: column;
+    gap:            0;
+    margin-bottom:  16px;
+}
+.mf-wrap .ob-option-item input[type="checkbox"] {
+    position: absolute; opacity: 0; width: 0; height: 0;
+}
+.mf-wrap .ob-option-item label {
+    display:     flex;
+    align-items: flex-start;
+    gap:         14px;
+    padding:     14px 16px;
+    border:      1px solid var(--line-soft);
+    border-bottom: none;
+    cursor:      pointer;
+    font-size:   13px;
+    color:       var(--ink);
+    line-height: 1.4;
+    transition:  background .10s;
+}
+.mf-wrap .ob-option-item:last-child label { border-bottom: 1px solid var(--line-soft); }
+.mf-wrap .ob-option-item label:hover { background: var(--bg); }
+.mf-wrap .ob-option-item input:checked + label {
+    background:   var(--accent);
+    border-color: var(--ink);
+    font-weight:  600;
+}
+.mf-wrap .ob-checkbox-visual {
+    width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px;
+    border: 2px solid var(--ink); background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+}
+.mf-wrap .ob-option-item input:checked + label .ob-checkbox-visual { background: var(--ink); }
+.mf-wrap .ob-check-icon { display: none; }
+.mf-wrap .ob-option-item input:checked + label .ob-check-icon { display: block; }
+
+/* Champ "Autre" caché par défaut */
+.mf-wrap .mf-autre-field {
+    display:      none;
+    margin-top:   10px;
+    border-left:  3px solid var(--accent);
+    padding-left: 14px;
+}
+.mf-wrap .mf-autre-field.visible { display: block; }
+
+/* Options legalStatus (radios) */
+.mf-wrap .ob-option-item input[type="radio"] {
+    position: absolute; opacity: 0; width: 0; height: 0;
+}
+.mf-wrap .ob-radio-visual {
+    width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px;
+    border: 2px solid var(--ink); border-radius: 50%; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+}
+.mf-wrap .ob-radio-dot {
+    display: none; width: 8px; height: 8px;
+    background: var(--ink); border-radius: 50%;
+}
+.mf-wrap .ob-option-item input:checked + label .ob-radio-dot { display: block; }
+
+/* Champs texte */
+.mf-wrap .ob-input {
+    width:       100%;
+    box-sizing:  border-box;
+    border:      1px solid var(--ink);
+    background:  var(--bg);
+    color:       var(--ink);
+    font-family: var(--body);
+    font-size:   13px;
+    padding:     9px 12px;
+    border-radius: 0;
+}
+.mf-wrap .ob-input:focus {
+    outline:    none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(198,242,78,.3);
+}
+.mf-wrap .ob-hint {
+    font-family:    var(--mono);
+    font-size:      10px;
+    color:          var(--ink-mute);
+    margin-top:     6px;
+    letter-spacing: .04em;
+}
+
+/* Bloc erreur */
+.mf-error {
+    background: #fff0f0;
+    border:     1px solid #c00;
+    color:      #c00;
+    padding:    8px 12px;
+    font-size:  12px;
+    margin:     0 0 12px;
+}
+
+/* Navigation (boutons Retour / Continuer / Valider) */
+.mf-actions {
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    gap:             10px;
+    margin-top:      20px;
+}
+
+/* Bouton "Retour" — même style que ob-btn-back */
+.mf-wrap .ob-btn-back, .mf-btn-prev {
+    font-family:    var(--mono);
+    font-size:      11px;
+    font-weight:    700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding:        10px 18px;
+    background:     transparent;
+    color:          var(--ink-mute);
+    border:         1px solid var(--line-soft);
+    cursor:         pointer;
+    border-radius:  0;
+    text-decoration: none;
+    transition:     border-color .12s, color .12s;
+}
+.mf-wrap .ob-btn-back:hover, .mf-btn-prev:hover { color: var(--ink); border-color: var(--ink); }
+
+/* Bouton "Continuer" / "Voir mes matchs" */
+.mf-wrap .ob-btn-next, .mf-btn-next, .mf-btn-submit {
+    font-family:    var(--display);
+    font-size:      12px;
+    font-weight:    400;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding:        12px 32px;
+    background:     var(--ink);
+    color:          var(--bg);
+    border:         1px solid var(--ink);
+    cursor:         pointer;
+    border-radius:  0;
+    transition:     background .12s, color .12s;
+    flex:           1;
+    text-align:     center;
+}
+.mf-wrap .ob-btn-next:hover, .mf-btn-next:hover, .mf-btn-submit:hover {
+    background: var(--accent);
+    color:      var(--ink);
+}
+
+/* Encart incitation inscription visiteur */
+.mf-signup-cta {
+    margin-top: 20px;
+    padding:    20px;
+    background: var(--ink);
+    text-align: center;
+}
+.mf-signup-cta__inner {
+    display:        flex;
+    flex-direction: column;
+    align-items:    center;
+    gap:            16px;
+}
+.mf-signup-cta__msg {
+    font-size:   15px;
+    line-height: 1.5;
+    color:       var(--bg);
+    margin:      0;
+    max-width:   420px;
+}
+.mf-signup-cta__btns {
+    display:         flex;
+    gap:             10px;
+    flex-wrap:       wrap;
+    justify-content: center;
+}
+
+/* Note noscript */
+.mf-noscript-hint {
+    font-family:    var(--mono);
+    font-size:      11px;
+    color:          var(--ink-mute);
+    padding:        8px;
+    border:         1px dashed var(--line-soft);
+    margin-top:     12px;
+    letter-spacing: .04em;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .mf-wrap { padding: 20px 16px; }
+    .mf-wrap .ob-disc-grid {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    }
+    .mf-actions { flex-direction: column; }
+    .mf-btn-prev, .mf-btn-next, .mf-btn-submit {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+    }
+    .mf-signup-cta__btns { flex-direction: column; width: 100%; }
+    .mf-signup-cta__btns .lp-btn { width: 100%; justify-content: center; }
+}
+
+/* prefers-reduced-motion : pas de transition pour le formulaire multi-étapes */
+@media (prefers-reduced-motion: reduce) {
+    .mf-step { transition: none; }
+    .mf-step-dot { transition: none; }
+}
+
+
 /* ── GRILLE 2 COLONNES TEXTE / VIDÉO ─────────────────────────────────────────
    Disposition sous l'en-tête de section :
      colonne gauche  → texte de présentation (1fr)
@@ -2770,83 +3118,74 @@
             {# ─── ETAT 3 : Artiste connecte, profil incomplet (sans limite atteinte) ─ #}
             {% elseif isArtist and not profileComplete %}
 
-                {#
-                    L'id "lp-swipe-title" est place sur le <h2> (pas sur le <div>)
-                    pour que aria-labelledby="lp-swipe-title" sur la <section> parente
-                    pointe vers un veritable element de titre (role=heading).
-                    Placer l'id sur un <div> generique ne satisfaisait pas cette exigence ARIA.
-                #}
-                <div class="lp-section-header">
-                    <div class="lp-section-header__left">
-                        <span class="lp-section-header__index" aria-hidden="true">00</span>
-                        <h2 class="lp-section-header__title" id="lp-swipe-title">
-                            Vos matchs
-                        </h2>
-                        <span class="lp-section-header__sub">profil a completer</span>
-                    </div>
-                </div>
-
-                <div class="swipe-incomplete-profile">
-                    <div class="swipe-incomplete-profile__inner">
-                        <p class="swipe-incomplete-profile__msg">
-                            Pour voir vos opportunites en matching, completez votre profil artistique.
-                        </p>
-                        <p class="swipe-incomplete-profile__hint">
-                            Le matching necessite au moins une discipline et un objectif renseignes.
-                        </p>
-                        <a href="{{ path('app_onboarding_step2') }}" class="lp-btn lp-btn--accent">
-                            Completer mon profil
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M5 12h14M13 5l7 7-7 7"/>
-                            </svg>
-                        </a>
-                    </div>
-                </div>
-
-            {# ─── ETAT 3 : connecté mais pas artiste, OU vraiment non connecté ─────
-                 Avant, cet état affichait « Se connecter » même à un utilisateur
-                 déjà connecté (ex. admin ou compte sans profil artiste). On distingue
-                 désormais les deux cas via app.user. #}
-            {% else %}
-
                 <div class="lp-section-header">
                     <div class="lp-section-header__left">
                         <span class="lp-section-header__index" aria-hidden="true">00</span>
                         <h2 class="lp-section-header__title" id="lp-swipe-title">
                             Tes matchs
                         </h2>
-                        <span class="lp-section-header__sub">{{ app.user ? 'réservé aux artistes' : 'connexion requise' }}</span>
+                        <span class="lp-section-header__sub">profil à compléter</span>
+                    </div>
+                </div>
+
+                {#
+                    FORMULAIRE MULTI-ETAPES — Artiste connecté, profil incomplet.
+                    On inclut le même formulaire que pour les visiteurs.
+                    La différence est gérée par le champ _logged_in et le controller :
+                    pour les artistes connectés, la soumission sauvegarde directement
+                    le profil via OnboardingService, puis redirige vers la home (swipe).
+                    Les données sont pré-remplies depuis la session si elles existent.
+                #}
+                {% include 'matching/_matching_form.html.twig' %}
+
+            {# ─── ETAT 4 : connecté mais pas artiste ─────────────────────────────── #}
+            {% elseif app.user %}
+
+                {# Connecté mais sans ROLE_ARTIST : message dédié, pas de formulaire #}
+                <div class="lp-section-header">
+                    <div class="lp-section-header__left">
+                        <span class="lp-section-header__index" aria-hidden="true">00</span>
+                        <h2 class="lp-section-header__title" id="lp-swipe-title">
+                            Tes matchs
+                        </h2>
+                        <span class="lp-section-header__sub">réservé aux artistes</span>
                     </div>
                 </div>
 
                 <div class="swipe-guest-cta">
                     <div class="swipe-guest-cta__inner">
-                        {% if app.user %}
-                            {# Connecté mais sans profil artiste (admin, ou compte non onboardé artiste) #}
-                            <p class="swipe-guest-cta__msg">
-                                Le matching est réservé aux artistes. Complète ton profil artiste pour découvrir les opportunités qui te correspondent.
-                            </p>
-                            <div class="swipe-guest-cta__btns">
-                                <a href="{{ path('app_onboarding_step1') }}" class="lp-btn lp-btn--dark">
-                                    Compléter mon profil artiste
-                                </a>
-                            </div>
-                        {% else %}
-                            {# Réellement non connecté #}
-                            <p class="swipe-guest-cta__msg">
-                                Découvre les opportunités qui correspondent exactement à ton profil artistique.
-                            </p>
-                            <div class="swipe-guest-cta__btns">
-                                <a href="{{ path('app_login') }}" class="lp-btn lp-btn--dark">
-                                    Se connecter
-                                </a>
-                                <a href="{{ path('app_register') }}" class="lp-btn lp-btn--outline">
-                                    Créer un compte
-                                </a>
-                            </div>
-                        {% endif %}
+                        <p class="swipe-guest-cta__msg">
+                            Le matching est réservé aux artistes. Complète ton profil artiste pour découvrir les opportunités qui te correspondent.
+                        </p>
+                        <div class="swipe-guest-cta__btns">
+                            <a href="{{ path('app_onboarding_step1') }}" class="lp-btn lp-btn--dark">
+                                Compléter mon profil artiste
+                            </a>
+                        </div>
                     </div>
                 </div>
+
+            {# ─── ETAT 5 : visiteur non connecté ─────────────────────────────────── #}
+            {% else %}
+
+                {#
+                    FORMULAIRE MULTI-ETAPES — Visiteur non connecté.
+                    L'utilisateur peut remplir les 3 étapes.
+                    A la soumission, ses réponses sont sauvées en session et il est
+                    redirigé vers /register?intent=artist.
+                    Après inscription + confirmation email, l'onboarding sera pré-rempli.
+                #}
+                <div class="lp-section-header">
+                    <div class="lp-section-header__left">
+                        <span class="lp-section-header__index" aria-hidden="true">00</span>
+                        <h2 class="lp-section-header__title" id="lp-swipe-title">
+                            Tes matchs
+                        </h2>
+                        <span class="lp-section-header__sub">trouve les opportunités faites pour toi</span>
+                    </div>
+                </div>
+
+                {% include 'matching/_matching_form.html.twig' %}
 
             {% endif %}
 
@@ -3635,5 +3974,22 @@
         document.documentElement.classList.add('swipe-has-js');
     </script>
     <script src="{{ asset('js/swipe.js') }}" defer></script>
+{% endif %}
+
+{#
+    Script matching-form.js — chargé uniquement si le formulaire multi-étapes
+    est potentiellement présent.
+
+    Deux cas où le formulaire apparaît :
+      - État 3 : artiste connecté avec profil incomplet (isArtist and not profileComplete)
+      - État 5 : visiteur non connecté (not app.user)
+
+    Le script est sûr si le formulaire est absent : init() sort immédiatement
+    si #matching-form-wrap est introuvable dans le DOM.
+
+    defer : non-bloquant, exécuté après le parsing du DOM.
+#}
+{% if not app.user or (isArtist is defined and isArtist and profileComplete is defined and not profileComplete) %}
+    <script src="{{ asset('js/matching-form.js') }}" defer></script>
 {% endif %}
 {% endblock %}

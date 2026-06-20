@@ -8,6 +8,7 @@ use App\DTO\RegisterDTO;
 use App\Repository\UserRepository;
 use App\Service\AuthService;
 use App\Service\EmailVerificationService;
+use App\Service\MatchingFormSessionService;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -47,21 +48,30 @@ class AuthController extends AbstractController
      * Note : le rate limiting de /login est géré automatiquement par Symfony Security
      * via login_throttling dans security.yaml — aucun code nécessaire ici.
      */
+    /**
+     * Clé de session pour l'intent d'inscription.
+     * Valeur possible : 'artist' (indique que l'utilisateur vient du formulaire matching home).
+     */
+    private const SESSION_INTENT_KEY = 'bazaart_register_intent';
+
     public function __construct(
-        private readonly AuthService              $authService,
-        private readonly EmailVerificationService $emailVerificationService,
-        private readonly UserRepository           $userRepository,
-        private readonly RateLimiterFactory       $registerLimiter,
-        private readonly RateLimiterFactory       $verifyEmailLimiter,
+        private readonly AuthService                $authService,
+        private readonly EmailVerificationService   $emailVerificationService,
+        private readonly UserRepository             $userRepository,
+        private readonly RateLimiterFactory         $registerLimiter,
+        private readonly RateLimiterFactory         $verifyEmailLimiter,
         // Logger injecté pour tracer les abus de rate limiting sur le renvoi d'email
         // (détection d'un attaquant qui tenterait de spammer la boîte d'un utilisateur).
         // Symfony autorise LoggerInterface dans les contrôleurs via autowiring.
-        private readonly LoggerInterface          $logger,
+        private readonly LoggerInterface            $logger,
         // Security (Symfony\Bundle\SecurityBundle\Security) est le service central
         // de Symfony Security. Sa méthode login() permet de connecter un utilisateur
         // par programmation, sans passer par le formulaire de login.
         // C'est l'API recommandée depuis Symfony 6.2 (remplace LoginContext + TokenStorage).
-        private readonly Security                 $security,
+        private readonly Security                   $security,
+        // MatchingFormSessionService injecté pour lire si des données de matching
+        // sont stockées en session (pré-remplissage de l'onboarding après inscription).
+        private readonly MatchingFormSessionService $matchingFormSession,
     ) {}
 
     // ─── Route : /login ───────────────────────────────────────────────────────
@@ -99,6 +109,23 @@ class AuthController extends AbstractController
             return $this->isGranted('ROLE_ADMIN')
                 ? $this->redirectToRoute('app_admin_dashboard')
                 : $this->redirectToRoute('app_dashboard');
+        }
+
+        // ── Capture du paramètre ?intent=artist ────────────────────────────────
+        //
+        // Quand un visiteur vient du formulaire matching de la home
+        // (clic sur "Créer mon compte artiste"), on reçoit ?intent=artist.
+        // On stocke cet intent en session pour l'utiliser après la vérification
+        // d'email (cf. verifyEmail() ci-dessous).
+        //
+        // On ne lit l'intent QUE sur les GET (pas sur les POST de soumission du formulaire)
+        // pour éviter qu'un POST malveillant manipule le flux de redirection.
+        if ($request->isMethod('GET')) {
+            $intent = $request->query->get('intent');
+            if ($intent === 'artist') {
+                // Stocke l'intent en session — survivra jusqu'à la vérification d'email
+                $request->getSession()->set(self::SESSION_INTENT_KEY, 'artist');
+            }
         }
 
         $error = null;
@@ -301,6 +328,15 @@ class AuthController extends AbstractController
                     return $loginResponse;
                 }
 
+                // Même logique de redirection que pour un premier clic :
+                // si intent=artist ou des données matching sont en session → onboarding.
+                $intent = $request->getSession()->get(self::SESSION_INTENT_KEY);
+                $hasMatchingData = $this->matchingFormSession->hasSessionData($request->getSession());
+                if ($intent === 'artist' || $hasMatchingData) {
+                    $request->getSession()->remove(self::SESSION_INTENT_KEY);
+                    return $this->redirectToRoute('app_onboarding_step2');
+                }
+
                 // Le gating renverra l'utilisateur vers l'onboarding si besoin
                 return $this->redirectToRoute('app_dashboard');
 
@@ -398,22 +434,42 @@ class AuthController extends AbstractController
         // Format : security.authenticator.form_login.<nom_du_firewall>
         $loginResponse = $this->security->login($user, 'security.authenticator.form_login.main', 'main');
 
-        // ── Lot A (ADR-0021/0022) : Redirection post-vérification email ──────
+        // ── Redirection post-vérification email ──────────────────────────────
         //
-        // Le gating onboarding global est désactivé en Lot A.
-        // Après confirmation d'email, on redirige toujours vers le dashboard.
-        // L'onboarding sera proposé à l'entrée du module matching (Lot C),
-        // pas forcé immédiatement après l'inscription.
-        //
-        // Note : si Security a produit sa propre Response (cas rare, ex: remember_me),
-        // on l'utilise en priorité — sinon on redirige vers le dashboard.
+        // Si Security a produit sa propre réponse (cas rare avec des listeners spéciaux
+        // comme remember_me, _target_path), on l'utilise en priorité.
         if ($loginResponse !== null) {
-            // Security a produit sa propre réponse (cas rare avec des listeners spéciaux)
             return $loginResponse;
         }
 
-        // Redirection vers le dashboard (le gating onboarding est désactivé en Lot A).
-        // L'utilisateur trouvera une bannière lui proposant de compléter son profil.
+        // ── Carryover matching : redirection vers l'onboarding si intent=artist ─
+        //
+        // Cas de figure :
+        //   1. Le visiteur a rempli le formulaire matching de la home (données en session)
+        //   2. Il a cliqué "Créer mon compte artiste" → ?intent=artist stocké en session
+        //   3. Il a créé son compte + confirmé son email
+        //   4. ICI : on le redirige vers l'étape 2 de l'onboarding (disciplines),
+        //      qui sera pré-remplie depuis la session via OnboardingController.
+        //
+        // LIMITE CONNUE (à signaler à l'utilisateur si besoin) :
+        //   Si l'utilisateur confirme son email dans un AUTRE navigateur ou onglet
+        //   que celui dans lequel il a rempli le formulaire matching, la session
+        //   (intent + données matching) ne sera pas partagée et le pré-remplissage
+        //   sera absent. Dans ce cas, l'onboarding s'affichera vide mais fonctionnel.
+        //   Ce cas est rare et acceptable pour V1.
+        $intent = $request->getSession()->get(self::SESSION_INTENT_KEY);
+        $hasMatchingData = $this->matchingFormSession->hasSessionData($request->getSession());
+
+        if ($intent === 'artist' || $hasMatchingData) {
+            // Nettoyage de l'intent (pas des données matching — OnboardingController les vide)
+            $request->getSession()->remove(self::SESSION_INTENT_KEY);
+
+            // Redirection vers l'étape 2 de l'onboarding (disciplines) avec pré-remplissage
+            return $this->redirectToRoute('app_onboarding_step2');
+        }
+
+        // Cas normal (sans intent artist) : redirection vers le dashboard.
+        // Le gating onboarding proposera à l'utilisateur de compléter son profil.
         return $this->redirectToRoute('app_dashboard');
     }
 

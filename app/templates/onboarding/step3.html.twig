@@ -149,53 +149,17 @@
     <form method="POST" action="{{ path('app_onboarding_step3') }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token('onboarding_step3') }}">
 
-        {# ── Options de l'enum ArtistLookingFor ─────────────────────────── #}
-        <div class="ob-options" role="group" aria-label="Ce que tu recherches sur Bazaart">
-            {% for option in looking_for_options %}
-                {% set isChecked = option.value in selected_values %}
-                <div class="ob-option-item">
-                    <input
-                        type="checkbox"
-                        id="lf_{{ option.value }}"
-                        name="looking_for[]"
-                        value="{{ option.value }}"
-                        {% if isChecked %}checked{% endif %}
-                        {#
-                          A1-FIX : on supprime le second attribut id="cb_autre" qui créait
-                          un doublon (HTML invalide). On utilise uniquement l'id généré
-                          par la boucle : lf_autre. Le JS ci-dessous a été mis à jour
-                          en conséquence pour cibler getElementById('lf_autre').
-                        #}
-                    >
-                    <label for="lf_{{ option.value }}">
-                        <span class="ob-checkbox-visual" aria-hidden="true">
-                            <svg class="ob-check-icon" width="12" height="12" viewBox="0 0 24 24"
-                                 fill="none" stroke="var(--bg)" stroke-width="3"
-                                 stroke-linecap="round" stroke-linejoin="round">
-                                <path d="m5 12 5 5L20 7"/>
-                            </svg>
-                        </span>
-                        {{ option.label()|e }}
-                    </label>
-                </div>
-            {% endfor %}
-        </div>
-
-        {# ── Champ libre "Autre" — visible uniquement si la case est cochée ─ #}
-        <div id="autre-field" class="{{ 'autre' in selected_values ? 'visible' : '' }}">
-            <label for="looking_for_other" class="ob-label">
-                Précise ce que tu recherches
-            </label>
-            <input
-                type="text"
-                id="looking_for_other"
-                name="looking_for_other"
-                class="ob-input"
-                maxlength="255"
-                placeholder="Ex : des opportunités de résidence au Sénégal, des collectifs d'artistes..."
-                value="{{ looking_for_other ? looking_for_other|e : '' }}"
-            >
-        </div>
+        {#
+            Inclusion du partial réutilisable lookingFor.
+            field_prefix vide → les ids générés sont "lf_{value}" et "autre-field",
+            identiques aux ids historiques (rétrocompatibilité JS onboarding/step3).
+        #}
+        {% include 'matching/_step_looking_for.html.twig' with {
+            looking_for_options: looking_for_options,
+            selected_values:     selected_values,
+            looking_for_other:   looking_for_other,
+            field_prefix:        ''
+        } %}
 
         <div class="ob-actions" style="margin-top: 32px;">
             <a href="{{ path('app_onboarding_step2') }}" class="ob-btn-back">Retour</a>
@@ -217,34 +181,46 @@
 (function () {
     'use strict';
 
-    // On cherche la case "autre" par l'id unifié 'lf_autre' (généré par la boucle Twig).
-    // A1-FIX : l'id 'cb_autre' a été supprimé — il créait un doublon HTML invalide.
-    var cbAutre = document.getElementById('lf_autre');
-    var autreField = document.getElementById('autre-field');
-    var autreInput = document.getElementById('looking_for_other');
+    /*
+     * Script d'onboarding step3 — Toggle du champ "Autre"
+     *
+     * Le partial matching/_step_looking_for.html.twig utilise les classes
+     * .mf-cb-autre, .mf-autre-field et .mf-other-input pour rendre ce toggle
+     * réutilisable (indépendant des IDs qui varient selon le field_prefix).
+     *
+     * Ici, field_prefix est vide → les IDs sont "lf_autre", "autre-field",
+     * "looking_for_other" (comportement historique conservé).
+     * On cible par classe pour la cohérence avec le formulaire home.
+     */
+
+    // On cherche par classe dans ce formulaire (compatibilité avec le partial)
+    var form = document.querySelector('form[action*="onboarding"]') || document.forms[0];
+    if (!form) { return; }
+
+    var cbAutre    = form.querySelector('.mf-cb-autre');
+    var autreField = form.querySelector('.mf-autre-field');
+    var autreInput = form.querySelector('.mf-other-input');
 
     if (!cbAutre || !autreField) {
-        return; // Sécurité : si les éléments n'existent pas, on ne fait rien
+        return; // Sécurité : éléments absents
     }
 
     function toggleAutreField() {
         if (cbAutre.checked) {
             autreField.classList.add('visible');
-            // Le champ texte devient requis quand la case est cochée
             if (autreInput) { autreInput.setAttribute('required', 'required'); }
         } else {
             autreField.classList.remove('visible');
             if (autreInput) {
                 autreInput.removeAttribute('required');
-                autreInput.value = ''; // Efface le texte si la case est décochée
+                autreInput.value = '';
             }
         }
     }
 
-    // Écoute le changement sur la case "autre"
     cbAutre.addEventListener('change', toggleAutreField);
 
-    // Initialisation au chargement (si la case était déjà cochée — retour arrière)
+    // Initialisation au chargement (pré-remplissage si case déjà cochée)
     toggleAutreField();
 }());
 </script>

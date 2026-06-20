@@ -1,0 +1,72 @@
+{#
+ # matching/_step_looking_for.html.twig
+ #
+ # Partial réutilisable : champ "Que recherches-tu ?" (lookingFor + lookingForOther)
+ # Utilisé dans :
+ #   - onboarding/step3.html.twig  (onboarding artiste connecté)
+ #   - matching/_form_step3.html.twig (formulaire home)
+ #
+ # Variables attendues :
+ #   looking_for_options  : ArtistLookingFor[]  — tous les cas de l'enum (cases())
+ #   selected_values      : string[]            — valeurs déjà cochées (pré-remplissage)
+ #   looking_for_other    : string|null         — texte libre "Autre" déjà saisi
+ #   field_prefix         : string              — préfixe optionnel pour les ids HTML
+ #
+ # Le champ libre "Autre" est masqué par défaut et révélé par JS.
+ # Sans JS : visible si la case "autre" est cochée (classe Twig).
+ # Le JS cible les éléments par leur class (.mf-autre-field, .mf-cb-autre, .mf-other-input)
+ # plutôt que par id pour pouvoir réutiliser ce partial plusieurs fois sur une page.
+ # Cependant, les ids restent préfixés pour rester valides HTML.
+#}
+
+{% set fp = field_prefix is defined ? field_prefix : '' %}
+{% set autre_field_id = 'autre-field' ~ (fp ? '-' ~ fp : '') %}
+{% set autre_cb_id = 'lf_autre' ~ (fp ? '_' ~ fp : '') %}
+{% set autre_input_id = 'looking_for_other' ~ (fp ? '_' ~ fp : '') %}
+{% set group_aria = 'Ce que tu recherches sur Bazaart' %}
+
+<div class="ob-options mf-options-group" role="group" aria-label="{{ group_aria }}">
+    {% for option in looking_for_options %}
+        {% set isChecked = option.value in selected_values %}
+        {% set cbId = 'lf_' ~ option.value ~ (fp ? '_' ~ fp : '') %}
+        <div class="ob-option-item">
+            <input
+                type="checkbox"
+                id="{{ cbId }}"
+                name="looking_for[]"
+                value="{{ option.value }}"
+                {% if isChecked %}checked{% endif %}
+                {% if option.value == 'autre' %}class="mf-cb-autre"{% endif %}
+            >
+            <label for="{{ cbId }}">
+                <span class="ob-checkbox-visual" aria-hidden="true">
+                    <svg class="ob-check-icon" width="12" height="12" viewBox="0 0 24 24"
+                         fill="none" stroke="var(--bg)" stroke-width="3"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m5 12 5 5L20 7"/>
+                    </svg>
+                </span>
+                {{ option.label()|e }}
+            </label>
+        </div>
+    {% endfor %}
+</div>
+
+{# Champ libre "Autre" : visible uniquement si la case est cochée #}
+<div
+    id="{{ autre_field_id }}"
+    class="mf-autre-field {{ 'autre' in selected_values ? 'visible' : '' }}"
+>
+    <label for="{{ autre_input_id }}" class="ob-label">
+        Précise ce que tu recherches
+    </label>
+    <input
+        type="text"
+        id="{{ autre_input_id }}"
+        name="looking_for_other"
+        class="ob-input mf-other-input"
+        maxlength="255"
+        placeholder="Ex : des opportunités de résidence au Sénégal, des collectifs d'artistes..."
+        value="{{ looking_for_other is defined and looking_for_other ? looking_for_other|e : '' }}"
+    >
+</div>

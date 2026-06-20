@@ -156,33 +156,17 @@
     <form method="POST" action="{{ path('app_onboarding_step4') }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token('onboarding_step4') }}">
 
-        {# ── Liste des statuts juridiques (radio) ───────────────────────── #}
-        <div class="ob-options" role="group" aria-label="Ton statut juridique">
-            {% for option in legal_status_options %}
-                {#
-                    Pré-sélection si l'artiste avait déjà choisi un statut
-                    (ex: retour en arrière depuis le dashboard).
-                    selected_legal_status est une instance de LegalStatus ou null.
-                #}
-                {% set isSelected = selected_legal_status is not null and selected_legal_status.value == option.value %}
-
-                <div class="ob-option-item">
-                    <input
-                        type="radio"
-                        id="ls_{{ option.value }}"
-                        name="legal_status"
-                        value="{{ option.value }}"
-                        {% if isSelected %}checked{% endif %}
-                    >
-                    <label for="ls_{{ option.value }}">
-                        <span class="ob-radio-visual" aria-hidden="true">
-                            <span class="ob-radio-dot"></span>
-                        </span>
-                        {{ option.label()|e }}
-                    </label>
-                </div>
-            {% endfor %}
-        </div>
+        {#
+            Inclusion du partial réutilisable legalStatus.
+            field_prefix vide → IDs "ls_{value}" (comportement historique conservé).
+            show_skip_note: false → la note "optionnel" est dans le sous-titre plus haut.
+        #}
+        {% include 'matching/_step_legal_status.html.twig' with {
+            legal_status_options:  legal_status_options,
+            selected_legal_status: selected_legal_status,
+            field_prefix:          '',
+            show_skip_note:        false
+        } %}
 
         {# ── Navigation ────────────────────────────────────────────────── #}
         <div class="ob-actions">

@@ -221,44 +221,34 @@
 
         {# ── Disciplines (au moins 1 obligatoire) ──────────────────────── #}
         <div class="ob-field">
-            <p class="ob-label" id="disc-label">
-                Tes disciplines <span aria-hidden="true">*</span>
-                <span class="sr-only">(au moins une obligatoire)</span>
-            </p>
-            <div class="ob-disc-grid" role="group" aria-labelledby="disc-label">
-                {% for discipline in disciplines %}
-                    {#
-                        On vérifie si cette discipline était déjà sélectionnée.
-                        existing_profile.disciplines contient les entités Discipline ;
-                        on compare par ID pour éviter les erreurs d'identité d'objet.
-                    #}
-                    {% set isChecked = false %}
-                    {% if existing_profile %}
-                        {% for existingDisc in existing_profile.disciplines %}
-                            {% if existingDisc.id == discipline.id %}
-                                {% set isChecked = true %}
-                            {% endif %}
-                        {% endfor %}
-                    {% endif %}
-
-                    <div class="ob-disc-item">
-                        <input
-                            type="checkbox"
-                            id="disc_{{ discipline.id }}"
-                            name="disciplines[]"
-                            value="{{ discipline.id }}"
-                            {% if isChecked %}checked{% endif %}
-                        >
-                        <label for="disc_{{ discipline.id }}">
-                            {% if discipline.icon %}
-                                <span class="ob-disc-icon" aria-hidden="true">{{ discipline.icon }}</span>
-                            {% endif %}
-                            {{ discipline.name|e }}
-                        </label>
-                    </div>
+            {#
+                Priorité du pré-remplissage :
+                  1. Profil existant en BDD (retour en arrière dans l'onboarding)
+                  2. Carryover depuis la session matching (formulaire home avant inscription)
+                  3. Aucune sélection (premier passage, pas de session)
+            #}
+            {% set selected_disc_ids = [] %}
+            {% if existing_profile %}
+                {# Priorité 1 : profil BDD #}
+                {% for existingDisc in existing_profile.disciplines %}
+                    {% set selected_disc_ids = selected_disc_ids|merge([existingDisc.id]) %}
                 {% endfor %}
-            </div>
-            <p class="ob-hint">Coche tout ce qui correspond a ta pratique. Au moins une discipline est requise.</p>
+            {% elseif matching_session_data is defined and matching_session_data.discipline_ids is not empty %}
+                {# Priorité 2 : carryover session matching #}
+                {% set selected_disc_ids = matching_session_data.discipline_ids %}
+            {% endif %}
+
+            {#
+                Inclusion du partial réutilisable disciplines.
+                field_prefix vide → les ids seront "disc_{id}" (sans préfixe),
+                cohérent avec le comportement historique du template.
+            #}
+            {% include 'matching/_step_disciplines.html.twig' with {
+                disciplines:  disciplines,
+                selected_ids: selected_disc_ids,
+                field_prefix: '',
+                show_label:   true
+            } %}
         </div>
 
         {# ── Biographie (optionnelle) ───────────────────────────────────── #}

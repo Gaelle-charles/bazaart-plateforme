@@ -1,0 +1,64 @@
+{#
+ # matching/_step_disciplines.html.twig
+ #
+ # Partial réutilisable : champ "Disciplines artistiques"
+ # Utilisé dans :
+ #   - onboarding/step2.html.twig  (onboarding artiste connecté)
+ #   - matching/_form_step2.html.twig (formulaire home, visiteur / profil incomplet)
+ #
+ # Variables attendues :
+ #   disciplines      : Discipline[]    — toutes les disciplines disponibles en BDD
+ #   selected_ids     : int[]           — IDs des disciplines déjà sélectionnées
+ #                                        (pré-remplissage depuis profil ou session)
+ #   field_prefix     : string          — préfixe optionnel pour les ids HTML
+ #                                        (évite les doublons si le partial est inclus 2x
+ #                                         sur la même page). Défaut : ''.
+ #   show_label       : bool            — afficher la <p> de label "Tes disciplines" ?
+ #                                        Défaut : true.
+ #
+ # ACCESSIBILITÉ : le groupe est labellisé par son id via aria-labelledby.
+ #
+ # NOTE SUR LES IDS HTML :
+ #   Chaque checkbox a l'id "disc_{prefix}_{discipline.id}".
+ #   Si field_prefix est vide, l'id est simplement "disc_{discipline.id}".
+ #   Cela permet d'inclure ce partial deux fois sans collision d'id.
+#}
+
+{% set fp = field_prefix is defined ? field_prefix : '' %}
+{% set show_label = show_label is defined ? show_label : true %}
+{% set group_id = 'disc-label' ~ (fp ? '-' ~ fp : '') %}
+
+{% if show_label %}
+<p class="ob-label" id="{{ group_id }}">
+    Tes disciplines <span aria-hidden="true">*</span>
+    <span class="sr-only">(au moins une obligatoire)</span>
+</p>
+{% endif %}
+
+<div class="ob-disc-grid" role="group" aria-labelledby="{{ group_id }}">
+    {% for discipline in disciplines %}
+        {#
+            On vérifie si cette discipline est sélectionnée.
+            selected_ids est un tableau d'entiers (IDs).
+            On utilise la fonction Twig `in` pour la comparaison.
+        #}
+        {% set isChecked = discipline.id in selected_ids %}
+
+        <div class="ob-disc-item">
+            <input
+                type="checkbox"
+                id="disc_{{ fp ? fp ~ '_' : '' }}{{ discipline.id }}"
+                name="disciplines[]"
+                value="{{ discipline.id }}"
+                {% if isChecked %}checked{% endif %}
+            >
+            <label for="disc_{{ fp ? fp ~ '_' : '' }}{{ discipline.id }}">
+                {% if discipline.icon %}
+                    <span class="ob-disc-icon" aria-hidden="true">{{ discipline.icon }}</span>
+                {% endif %}
+                {{ discipline.name|e }}
+            </label>
+        </div>
+    {% endfor %}
+</div>
+<p class="ob-hint">Coche tout ce qui correspond à ta pratique. Au moins une discipline est requise.</p>

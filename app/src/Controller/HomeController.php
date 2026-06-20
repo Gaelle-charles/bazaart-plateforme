@@ -6,12 +6,17 @@ namespace App\Controller;
 
 use App\DTO\Matching\MatchResult;
 use App\Entity\User;
+use App\Enum\ArtistLookingFor;
+use App\Enum\LegalStatus;
+use App\Repository\DisciplineRepository;
 use App\Repository\ForumThreadRepository;
 use App\Repository\ResourceAlertRepository;
 use App\Repository\ResourceRepository;
+use App\Service\MatchingFormSessionService;
 use App\Service\MatchingService;
 use App\Service\SubscriptionChecker;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
@@ -71,16 +76,20 @@ final class HomeController extends AbstractController
      * jamais de toggle depuis le swipe).
      */
     public function __construct(
-        private readonly ResourceRepository       $resourceRepository,
-        private readonly ForumThreadRepository    $forumThreadRepository,
+        private readonly ResourceRepository        $resourceRepository,
+        private readonly ForumThreadRepository     $forumThreadRepository,
         // MatchingService : calcul des matchs artiste <-> ressources (Lot B/C)
-        private readonly MatchingService          $matchingService,
+        private readonly MatchingService           $matchingService,
         // Pour savoir si l'utilisateur a déjà une alerte de matching active
-        private readonly ResourceAlertRepository  $alertRepository,
+        private readonly ResourceAlertRepository   $alertRepository,
         // SubscriptionChecker : gestion du paywall freemium (Lot D ADR-0022)
-        private readonly SubscriptionChecker      $subscriptionChecker,
+        private readonly SubscriptionChecker       $subscriptionChecker,
         // CsrfTokenManager : génération du token CSRF pour /swipe/record-view (Lot D)
         private readonly CsrfTokenManagerInterface $csrfTokenManager,
+        // DisciplineRepository : pour passer les disciplines au formulaire matching home
+        private readonly DisciplineRepository      $disciplineRepository,
+        // MatchingFormSessionService : lecture des réponses sauvegardées en session
+        private readonly MatchingFormSessionService $matchingFormSessionService,
     ) {}
 
     /**
@@ -105,7 +114,7 @@ final class HomeController extends AbstractController
      *   swipeRecordViewCsrf  string|null    — Token CSRF pour POST /swipe/record-view (Lot D)
      */
     #[Route('/', name: 'app_home')]
-    public function index(): Response
+    public function index(Request $request): Response
     {
         // On affiche la vitrine pour tout le monde.
         // La navbar se charge d'adapter son contenu selon l'état de connexion
@@ -246,11 +255,38 @@ final class HomeController extends AbstractController
             // swipeRecordViewCsrf : déjà généré ci-dessus dans le bloc paywall Lot D.
         }
 
+        // ── Données pour le formulaire matching home (visiteur / profil incomplet) ──
+        //
+        // Le formulaire multi-étapes est affiché quand :
+        //   - L'utilisateur n'est pas connecté (visiteur)
+        //   - L'utilisateur est artiste mais profil incomplet
+        // Dans les autres états (swipe, paywall, non-artiste connecté), ces données
+        // sont chargées mais non utilisées → coût SQL marginal (2 requêtes légères).
+        //
+        // On les charge dans tous les cas pour simplifier le code Twig
+        // (pas de bloc conditionnel PHP pour décider de charger ou non).
+        $matchingFormDisciplines = $this->disciplineRepository->findAll();
+        $matchingFormSessionData = $this->matchingFormSessionService->getSessionData($request->getSession());
+
+        // Token CSRF pour le formulaire matching multi-étapes
+        // Le nom 'matching_form' est partagé avec MatchingFormController::saveStep()
+        // et MatchingFormController::submit()
+        $matchingFormCsrf = $this->csrfTokenManager->getToken('matching_form')->getValue();
+
         return $this->render('vitrine/index.html.twig', [
             // ── Section opportunités publiques ──────────────────────────────────
             'opportunities'   => $opportunities,
             // ── Section communauté / forum ──────────────────────────────────────
             'recentThreads'   => $recentThreads,
+
+            // ── Formulaire multi-étapes matching (visiteur / profil incomplet) ──
+            // Ces variables alimentent le partial matching/_matching_form.html.twig
+            'matchingForm_disciplines'   => $matchingFormDisciplines,
+            'matchingForm_lookingFor'    => ArtistLookingFor::cases(),
+            'matchingForm_legalStatuses' => LegalStatus::cases(),
+            'matchingForm_savedData'     => $matchingFormSessionData,
+            'matchingForm_isLoggedIn'    => ($user instanceof User),
+            'matchingForm_csrfToken'     => $matchingFormCsrf,
 
             // ── Section swipe matching (Lot C) ───────────────────────────────────
             // Chaque match est un tableau avec les clés : resource_id, title,
