@@ -96,6 +96,14 @@
     {# Si un cache long-terme Nginx est ajouté, versionner avec ?v=1.             #}
     <link rel="stylesheet" href="{{ asset('css/page-hero.css') }}">
 
+    {# ── Splash screen / preloader ────────────────────────────────────────────── #}
+    {# preloader.css definit l'overlay comme invisible par defaut (opacity:0).    #}
+    {# Le JS pose .is-active pour l'afficher — si JS coupe, l'overlay reste       #}
+    {# invisible et ne bloque pas l'acces a la page.                              #}
+    {# Charge avant <style> inline pour que la classe .is-active soit disponible  #}
+    {# immediatement quand preloader.js s'execute.                                #}
+    <link rel="stylesheet" href="{{ asset('css/preloader.css') }}">
+
     <style>
         /* ══════════════════════════════════════════════════════════════════
          * DESIGN SYSTEM — Variables CSS (tokens du design Figma)
@@ -609,6 +617,35 @@
 <body>
 
 {#
+    ── Overlay de chargement (splash screen) ─────────────────────────────────────
+    Place en TOUT PREMIER dans le <body> pour etre rendu avant tout autre element.
+
+    Structure :
+      #bzrt-preloader         : overlay plein ecran (position:fixed, z-index:9999)
+        #bzrt-preloader-canvas : canvas pour l'animation spirale (rempli par le JS)
+        #bzrt-preloader-logo   : logo Bazaart en blanc (filter: brightness+invert)
+
+    aria-hidden="true" : l'overlay est purement decoratif, invisible aux lecteurs d'ecran.
+    Le contenu de la page reste dans le DOM derriere -> pas de piegeage du focus.
+
+    Le JS (preloader.js, charge en defer) pose la classe .is-active pour afficher
+    l'overlay, puis la retire pour declencher le fondu CSS de sortie (0.5s).
+    Si JS coupe : opacity:0 par defaut en CSS -> l'overlay est invisible = pas de blocage.
+#}
+<div id="bzrt-preloader" aria-hidden="true">
+    {# Canvas : l'animation spirale est dessinee ici par le JS via requestAnimationFrame #}
+    <canvas id="bzrt-preloader-canvas" aria-hidden="true"></canvas>
+
+    {# Logo Bazaart centre, rendu en blanc via filter CSS.
+       logo-black.png + brightness(0) invert(1) = blanc pur (voir preloader.css).
+       L'attribut alt est vide : element decoratif, le contenu pertinent est dans la page. #}
+    <img id="bzrt-preloader-logo"
+         src="{{ asset('images/logo-black.png') }}"
+         alt=""
+         aria-hidden="true">
+</div>
+
+{#
     {% block navbar %} encapsule l'intégralité de la nav (skip link, overlay,
     header.nav, nav mobile). Ce bloc est overridable par les templates enfants.
 
@@ -865,6 +902,20 @@
     du cache navigateur sur les pages suivantes.
 #}
 <script src="{{ asset('js/title-reveal.js') }}" defer></script>
+
+{# ── Preloader / splash screen ───────────────────────────────────────────────
+    defer : le script se charge en parallele du parsing HTML mais ne s'execute
+    qu'apres que le DOM est entierement construit (equivalent de DOMContentLoaded).
+    Cela garantit que #bzrt-preloader, #bzrt-preloader-canvas et #bzrt-preloader-logo
+    existent quand le JS s'execute.
+
+    POURQUOI defer et pas async ?
+    - async : s'execute des que le fichier est telecharge, sans attendre le DOM.
+      Risque : les elements DOM n'existent pas encore lors de l'execution.
+    - defer : garantit que le DOM est pret ET que les scripts defer sont executes
+      dans leur ordre de declaration (title-reveal.js d'abord, preloader.js ensuite).
+#}
+<script src="{{ asset('js/preloader.js') }}" defer></script>
 
 <script>
 /* ── Hamburger mobile ────────────────────────────────────────────────────── */

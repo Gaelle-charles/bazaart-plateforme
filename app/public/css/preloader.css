@@ -1,0 +1,131 @@
+/*
+ * preloader.css — Overlay de chargement (splash screen)
+ *
+ * FONCTIONNEMENT GENERAL :
+ *   L'overlay est INVISIBLE par defaut (opacity:0, pointer-events:none).
+ *   Le JS pose la classe .is-active pour le rendre visible, puis la retire
+ *   (avec transition opacity) pour le faire disparaitre en fondu.
+ *   Si JS est coupe, l'overlay reste invisible -> pas de blocage pour l'utilisateur.
+ *
+ * ORDRE DE CHARGEMENT :
+ *   Ce fichier doit etre charge avant preloader.js dans <head>.
+ *   La transition CSS est definie ici ; le JS ne gere que les classes.
+ *
+ * ACCESSIBILITE :
+ *   L'overlay a aria-hidden="true" (decoration pure, pas de contenu utile).
+ *   position:fixed + inset:0 le superpose a la page sans deplacer le DOM.
+ *   z-index:9999 -> au-dessus de la nav (z-index:100) et de la banniere cookies (z-index:1000).
+ */
+
+/* ── Overlay principal ─────────────────────────────────────────────────────── */
+#bzrt-preloader {
+    /* Position : couvre tout l'ecran, au-dessus de tout */
+    position: fixed;
+    inset: 0;                  /* raccourci pour top/right/bottom/left: 0 */
+    z-index: 9999;
+
+    /* Fond noir total */
+    background: #000000;
+
+    /* Layout interne : canvas + logo empiles au centre */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    /*
+     * Invisible par defaut (JS desactive).
+     * Le JS pose .is-active pour afficher, puis retire .is-active
+     * et pose .is-fading pour la transition de sortie.
+     * opacity: 0 + pointer-events: none = invisible ET non-interactif.
+     */
+    opacity: 0;
+    pointer-events: none;
+
+    /*
+     * Transition de SORTIE : fondu en 0.5s quand on retire .is-active.
+     * La transition d'entree est instantanee (opacity passe a 1 direct via JS).
+     */
+    transition: opacity 0.5s ease;
+}
+
+/*
+ * Classe .is-active : posee par le JS quand le splash doit etre affiche.
+ * Rend l'overlay visible et bloque les interactions avec la page derriere.
+ */
+#bzrt-preloader.is-active {
+    opacity: 1;
+    pointer-events: all;
+
+    /*
+     * Pendant l'affichage actif, PAS de transition (apparition instantanee
+     * au premier chargement -> on ne veut pas voir le fond "fondu" depuis le blanc).
+     * La transition de 0.5s s'applique UNIQUEMENT quand .is-active est retire.
+     */
+    transition: none;
+}
+
+/* ── Canvas de la spirale ──────────────────────────────────────────────────── */
+#bzrt-preloader-canvas {
+    /*
+     * Le canvas occupe toute la fenetre (dimensionne par le JS avec devicePixelRatio).
+     * position:absolute -> il ne pousse pas le logo hors du flex-center.
+     * Le logo est positionne AU-DESSUS via z-index.
+     */
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;         /* retire l'espace inline par defaut sous le canvas */
+}
+
+/* ── Logo blanc centre ─────────────────────────────────────────────────────── */
+#bzrt-preloader-logo {
+    /*
+     * z-index > canvas -> le logo est visible devant la spirale.
+     * position:relative est necessaire pour que z-index fonctionne
+     * (les elements static ne respectent pas z-index).
+     */
+    position: relative;
+    z-index: 1;
+
+    /* Taille du logo : 80px de hauteur, largeur automatique (respect des proportions) */
+    height: 80px;
+    width: auto;
+
+    /*
+     * Convertit logo-black.png en logo BLANC pur :
+     * - brightness(0) : rend l'image entierement noire
+     * - invert(1)     : inverse noir -> blanc
+     * Resultat : un logo monochrome blanc, quelle que soit la couleur source.
+     */
+    filter: brightness(0) invert(1);
+
+    /*
+     * Fondu d'entree progressif du logo pendant l'animation spirale.
+     * Demarre a opacity:0, le JS anime vers 1 via requestAnimationFrame.
+     * La transition CSS n'est PAS utilisee ici -> c'est le JS qui pilote
+     * directement la propriete style.opacity a chaque frame.
+     */
+    opacity: 0;
+}
+
+/*
+ * ── reduced-motion : respecte les preferences de l'utilisateur ───────────────
+ *
+ * Si l'utilisateur a active "Reduire les animations" dans son OS,
+ * on saute l'animation spirale (gere dans le JS) et on applique
+ * ici une transition de sortie instantanee pour l'overlay.
+ *
+ * Aucun mouvement ne doit se produire sous cette media query.
+ */
+@media (prefers-reduced-motion: reduce) {
+    #bzrt-preloader {
+        transition: none;   /* pas de fondu de sortie non plus */
+    }
+
+    #bzrt-preloader-logo {
+        /* Logo visible immediatement, sans animation */
+        opacity: 1;
+    }
+}
