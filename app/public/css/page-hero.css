@@ -221,15 +221,12 @@
 /* ── Mot accentué dans le titre (couleur accent orange) ─────────────────── */
 
 /*
- * .page-hero__accent : permet de colorier un mot en orange dans le H1 hero.
- * Utilisé via title_html dans _page_hero.html.twig (uniquement des chaînes
- * statiques Twig, jamais de données utilisateur).
- * Exemple : 'SE FORMER. <span class="page-hero__accent">TRANSMETTRE.</span>'
- * La couleur orange --accent-2 (#FF6B2C) contraste bien sur le voile sombre.
- * text-transform:uppercase hérité du parent .page-hero__title via CSS cascade.
+ * .page-hero__accent : conservé pour le markup title_html existant (ex. Formations),
+ * mais SANS couleur orange (demande Gaëlle : pas d'orange sur les titres hors home).
+ * color:inherit -> le mot adopte la couleur du titre (blanc), comme le reste.
  */
 .page-hero__accent {
-    color: var(--accent-2, #FF6B2C);
+    color: inherit;
 }
 
 /* ── Classe utilitaire CTA sous le hero ──────────────────────────────────── */
