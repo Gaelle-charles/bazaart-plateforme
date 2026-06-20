@@ -24,10 +24,10 @@
     'use strict';
 
     /* ── Paramètres ajustables ─────────────────────────────────────────────── */
-    var SPLASH_DURATION = 5000;  /* ms : durée d'affichage avant fondu de sortie */
+    var ANIM_DURATION   = 9000;  /* ms : durée pour jouer l'animation COMPLÈTE (time 0->1) */
+    var SPLASH_DURATION = 9200;  /* ms : le splash dure jusqu'à la fin de l'animation, puis fondu de sortie */
     var LOGO_DELAY      = 2000;  /* ms : délai avant apparition du logo (cf. bouton Enter) */
     var LOGO_FADE       = 1500;  /* ms : durée du fondu d'entrée du logo */
-    var ANIM_DURATION   = 15000; /* ms : time 0->1 (identique à GSAP duration:15) */
 
     var overlay = document.getElementById('bzrt-preloader');
     var canvas  = document.getElementById('bzrt-preloader-canvas');
@@ -267,7 +267,9 @@
         if (stopped) { return; }
         if (startTs === null) { startTs = ts; }
         var elapsed = ts - startTs;
-        time = (elapsed / ANIM_DURATION) % 1; /* boucle comme repeat:-1 */
+        /* On joue l'animation UNE fois jusqu'à la fin (time clampé à 1, pas de boucle)
+           pour que le splash montre la séquence complète avant de se fermer. */
+        time = Math.min(elapsed / ANIM_DURATION, 1);
         render();
         rafId = window.requestAnimationFrame(frame);
     }

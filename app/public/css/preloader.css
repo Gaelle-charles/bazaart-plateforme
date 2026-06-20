@@ -94,8 +94,8 @@
     position: relative;
     z-index: 1;
 
-    /* Taille du logo : 80px de hauteur, largeur automatique (respect des proportions) */
-    height: 80px;
+    /* Taille du logo : 40px de hauteur (réduit de moitié), largeur auto (proportions) */
+    height: 40px;
     width: auto;
 
     /*
