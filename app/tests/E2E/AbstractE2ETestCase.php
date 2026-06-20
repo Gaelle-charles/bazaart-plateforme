@@ -93,8 +93,12 @@ abstract class AbstractE2ETestCase extends WebTestCase
         // (PostgreSQL ne supporte pas TRUNCATE sans CASCADE pour les tables liées)
         $conn = $this->em->getConnection();
 
-        // Tronque les tables dans l'ordre inverse des dépendances
+        // Tronque les tables dans l'ordre inverse des dépendances.
+        // ⚠️ Mettre à jour cette liste si de nouvelles tables sont créées.
+        //    Dernière mise à jour : Lot D (match_consultations, subscriptions).
         $conn->executeStatement('TRUNCATE TABLE
+            match_consultations,
+            subscriptions,
             lesson_progresses,
             course_enrollments,
             lesson_resources,
@@ -295,6 +299,68 @@ abstract class AbstractE2ETestCase extends WebTestCase
         }
 
         return (string) $input->attr('value');
+    }
+
+    /**
+     * Extrait un token CSRF depuis un attribut data- d'un élément HTML.
+     *
+     * Utile pour les endpoints AJAX où le token est exposé dans un data-attribute
+     * plutôt que dans un champ input caché (pattern courant avec Stimulus/JS vanilla).
+     *
+     * Contexte Symfony 7 / SameOriginCsrfTokenManager :
+     *   En Symfony 7, le CsrfTokenManager basé session n'a pas de contexte de requête
+     *   disponible dans le container après la fin de la requête HTTP.
+     *   Il faut donc extraire le token directement depuis le HTML rendu par Twig
+     *   (où csrf_token() est appelé dans le contexte d'une requête active).
+     *
+     * Utilisation type :
+     *   $this->client->request('GET', '/');
+     *   $token = $this->getCsrfTokenFromDataAttribute('#swipe-section', 'record-view-csrf');
+     *   $this->client->request('POST', '/swipe/record-view', ['_token' => $token]);
+     *
+     * @param string $elementSelector Sélecteur CSS de l'élément portant le data-attribute
+     * @param string $dataAttributeName Nom du data-attribute SANS le préfixe "data-"
+     *                                  (ex: 'record-view-csrf' pour data-record-view-csrf)
+     *
+     * @return string Le token CSRF extrait (ou '' si l'élément ou l'attribut est introuvable)
+     */
+    protected function getCsrfTokenFromDataAttribute(
+        string $elementSelector,
+        string $dataAttributeName,
+    ): string {
+        $crawler = $this->client->getCrawler();
+        $element = $crawler->filter($elementSelector);
+
+        if ($element->count() === 0) {
+            return '';
+        }
+
+        // Les data-attributes sont accessibles via attr('data-nom-attribut')
+        return (string) $element->attr('data-' . $dataAttributeName);
+    }
+
+    /**
+     * Génère un token CSRF via le container de services Symfony.
+     *
+     * ⚠️ ATTENTION : cette méthode ne fonctionne que lorsqu'une requête HTTP
+     * est en cours dans la RequestStack (sinon SessionNotFoundException).
+     *
+     * En pratique : appeler UNIQUEMENT dans le contexte d'une requête HTTP simulée
+     * (par ex. depuis un controller de test via un callback), jamais directement
+     * depuis le corps d'une méthode de test après createClient().
+     *
+     * Préférer getCsrfTokenFromDataAttribute() ou getCsrfTokenFromHtml() pour les
+     * tokens exposés dans le HTML rendu.
+     *
+     * @deprecated Utiliser getCsrfTokenFromDataAttribute() ou getCsrfTokenFromHtml()
+     *             sauf cas particulier nécessitant l'accès direct au container.
+     */
+    protected function getCsrfTokenFromContainer(string $tokenId): string
+    {
+        /** @var \Symfony\Component\Security\Csrf\CsrfTokenManagerInterface $manager */
+        $manager = static::getContainer()->get('security.csrf.token_manager');
+
+        return $manager->getToken($tokenId)->getValue();
     }
 
 }

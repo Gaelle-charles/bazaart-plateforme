@@ -13,6 +13,7 @@ use App\Repository\ResourceAlertRepository;
 use App\Repository\ResourceFavoriteRepository;
 use App\Repository\ResourceRepository;
 use App\Repository\ResourceTypeRepository;
+use App\Security\Voter\FreemiumVoter;
 use App\Service\ResourceService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -66,6 +67,28 @@ class ResourceController extends AbstractController
     #[Route('', name: 'index')]
     public function index(Request $request): Response
     {
+        // ── Vérification du paywall freemium (ADR-0022, Lot D) ───────────────────
+        // Le catalogue complet est réservé aux abonnés (et aux admins).
+        // Si l'utilisateur gratuit essaie d'accéder à /resources, on le redirige
+        // vers la page tarifs avec un flash message d'incitation.
+        //
+        // POURQUOI ici et pas avec #[IsGranted] ou un voter sur la méthode ?
+        //   Le #[IsGranted] lancerait une AccessDeniedException qui affiche une
+        //   page d'erreur 403 générique. On préfère une redirection vers /tarifs
+        //   avec un message clair — meilleure UX.
+        //
+        // NOTE : on ne bloque PAS les ROLE_ADMIN (FreemiumVoter::voteOnAttribute
+        //   retourne true pour les admins via SubscriptionChecker::isSubscribed).
+        if (!$this->isGranted(FreemiumVoter::FEATURE_CATALOGUE)) {
+            // Message expliquant le contexte et invitant à s'abonner.
+            // "info" plutôt que "warning" : ton bienveillant, pas punitif.
+            $this->addFlash(
+                'info',
+                'Le catalogue complet des ressources est réservé aux abonnés Bazaart. Découvrez nos offres ci-dessous.'
+            );
+            return $this->redirectToRoute('app_pricing');
+        }
+
         // ── Récupération des filtres depuis l'URL ─────────────────────────────────
         // On valide chaque paramètre avant de l'utiliser pour éviter les injections
         // de valeurs arbitraires dans les requêtes Doctrine.
@@ -347,6 +370,17 @@ class ResourceController extends AbstractController
     #[Route('/alerts', name: 'alerts', methods: ['GET', 'POST'])]
     public function alerts(Request $request): Response
     {
+        // ── Vérification du paywall freemium : alertes réservées aux abonnés ─────
+        // Les alertes personnalisées sont une fonctionnalité premium (ADR-0022).
+        // On redirige les utilisateurs gratuits vers /tarifs avec un message clair.
+        if (!$this->isGranted(FreemiumVoter::FEATURE_ALERTS)) {
+            $this->addFlash(
+                'info',
+                'Les alertes personnalisées sont réservées aux abonnés Bazaart. Découvrez nos offres ci-dessous.'
+            );
+            return $this->redirectToRoute('app_pricing');
+        }
+
         /** @var User $user */
         $user = $this->getUser();
 

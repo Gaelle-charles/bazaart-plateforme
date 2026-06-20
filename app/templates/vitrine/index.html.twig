@@ -2036,6 +2036,58 @@
     justify-content: center;
 }
 
+/* ── ENCART PAYWALL (limite hebdomadaire atteinte — Lot D ADR-0022) ─────
+   Design inspire de .swipe-guest-cta mais avec le fond lime accent
+   pour marquer positivement le passage a l'abonnement (pas punitif).
+   On veut que l'utilisateur voie une opportunite, pas une punition.
+────────────────────────────────────────────────────────────────────── */
+.swipe-paywall {
+    margin-top:  32px;
+    padding:     40px 24px;
+    background:  var(--ink);
+    text-align:  center;
+}
+
+.swipe-paywall__inner {
+    display:        flex;
+    flex-direction: column;
+    align-items:    center;
+    gap:            16px;
+}
+
+/* Titre principal de l'encart : texte blanc sur fond noir */
+.swipe-paywall__msg {
+    font-size:   18px;
+    font-family: var(--display);
+    line-height: 1.3;
+    color:       var(--bg);
+    margin:      0;
+    max-width:   440px;
+}
+
+/* Texte descriptif des avantages de l'abonnement */
+.swipe-paywall__hint {
+    font-size:   14px;
+    line-height: 1.5;
+    color:       rgba(242, 239, 230, 0.72); /* var(--bg) a 72% d'opacite */
+    margin:      0;
+    max-width:   400px;
+}
+
+/* Bouton CTA vers /tarifs — couleur accent lime, sobre et visible */
+.swipe-paywall__cta {
+    /* Le CTA lime ressort sur le fond noir, couleur signature Bazaart */
+}
+
+/* Rappel de reinitialisation du compteur */
+.swipe-paywall__reset {
+    font-size:   11px;
+    font-family: var(--mono);
+    color:       rgba(242, 239, 230, 0.50); /* var(--bg) a 50% */
+    margin:      0;
+    letter-spacing: .04em;
+}
+
 /* ── COMPTEUR ─────────────────────────────────────────────────────────── */
 .swipe-counter {
     font-family:    var(--mono);
@@ -2332,12 +2384,73 @@
                 data-total-matches : nombre total de matchs positifs de l'artiste
                 (peut depasser le nombre de cartes chargees).
                 Utilise par swipe.js pour le compteur "X / Y matchs".
+
+                data-subscribed : true si l'utilisateur est abonne ou admin (paywall Lot D).
+                data-remaining  : nombre de consultations restantes cette semaine (paywall).
+                data-limit      : limite hebdomadaire pour les utilisateurs gratuits.
+                data-record-view-csrf : token CSRF pour POST /swipe/record-view.
+                data-pricing-url : URL de la page tarifs (pour la redirection JS).
+
+                Ces attributs sont lus par swipe.js pour gerer le paywall cote client.
+                La securite est AUSSI verifiee cote serveur dans SwipeController::recordView().
             #}
             data-total-matches="{{ swipeCount }}"
+            data-subscribed="{{ isSubscribed ? 'true' : 'false' }}"
+            data-remaining="{{ isSubscribed ? '999' : swipeRemainingViews }}"
+            data-limit="{{ swipeWeeklyLimit }}"
+            data-record-view-csrf="{{ swipeRecordViewCsrf ?? '' }}"
+            data-pricing-url="{{ path('app_pricing') }}"
         >
 
+            {#
+                ETATS DE LA SECTION SWIPE (Lot C + Lot D) :
+                  1. isArtist + profileComplete + pas de limite atteinte : section swipe complete
+                  2. isArtist + profileComplete + limite atteinte (gratuit) : ecran tarifs
+                  3. isArtist + profil incomplet : invitation a completer le profil
+                  4. Non connecte ou non artiste : invitation a s'inscrire
+
+                L'etat 2 (limite atteinte) est verifie EN PREMIER car il est plus prioritaire
+                que l'etat "profil complet" : on ne montre pas les cartes si la limite est atteinte.
+            #}
+
+            {# ─── ETAT 2 (Lot D) : Limite hebdomadaire atteinte pour utilisateur gratuit ─ #}
+            {# Affiche une incitation a s'abonner avant de montrer les cartes. #}
+            {% if isArtist and swipeLimitReached %}
+
+                <div class="lp-section-header">
+                    <div class="lp-section-header__left">
+                        <span class="lp-section-header__index" aria-hidden="true">00</span>
+                        <h2 class="lp-section-header__title" id="lp-swipe-title">
+                            Tes matchs
+                        </h2>
+                    </div>
+                </div>
+
+                {#
+                    Encart "limite atteinte" :
+                    Design coherent avec les autres encarts de la section (swipe-incomplete-profile, swipe-guest-cta).
+                    Ton bienveillant, pas punitif : on valorise ce que l'abonnement apporte.
+                    Lien vers /tarifs pour convertir.
+                #}
+                <div class="swipe-paywall" role="status">
+                    <div class="swipe-paywall__inner">
+                        <p class="swipe-paywall__msg">
+                            Tu as consulte tes {{ swipeWeeklyLimit }} matchs gratuits de la semaine.
+                        </p>
+                        <p class="swipe-paywall__hint">
+                            Passe a l'abonnement pour un acces illimite au matching, au catalogue complet, a la messagerie et aux alertes.
+                        </p>
+                        <a href="{{ path('app_pricing') }}" class="lp-btn lp-btn--accent swipe-paywall__cta">
+                            Decouvrir l'abonnement
+                        </a>
+                        <p class="swipe-paywall__reset">
+                            Le compteur se remet a zero chaque lundi.
+                        </p>
+                    </div>
+                </div>
+
             {# ─── ETAT 1 : Artiste connecte, profil complet, matchs disponibles ─ #}
-            {% if isArtist and profileComplete %}
+            {% elseif isArtist and profileComplete %}
 
                 {# ── En-tete de section ─────────────────────────────────────────── #}
                 <div class="lp-section-header">
@@ -2654,7 +2767,7 @@
                     </div>
                 {% endif %}
 
-            {# ─── ETAT 2 : Artiste connecte, profil incomplet ─────────────────── #}
+            {# ─── ETAT 3 : Artiste connecte, profil incomplet (sans limite atteinte) ─ #}
             {% elseif isArtist and not profileComplete %}
 
                 {#
@@ -2690,36 +2803,48 @@
                     </div>
                 </div>
 
-            {# ─── ETAT 3 : Non connecte ou non artiste ──────────────────────── #}
+            {# ─── ETAT 3 : connecté mais pas artiste, OU vraiment non connecté ─────
+                 Avant, cet état affichait « Se connecter » même à un utilisateur
+                 déjà connecté (ex. admin ou compte sans profil artiste). On distingue
+                 désormais les deux cas via app.user. #}
             {% else %}
 
-                {#
-                    Meme correction que l'etat 2 : l'id "lp-swipe-title" est deplace
-                    sur le <h2> pour que aria-labelledby pointe un element heading valide.
-                #}
                 <div class="lp-section-header">
                     <div class="lp-section-header__left">
                         <span class="lp-section-header__index" aria-hidden="true">00</span>
                         <h2 class="lp-section-header__title" id="lp-swipe-title">
-                            Vos matchs
+                            Tes matchs
                         </h2>
-                        <span class="lp-section-header__sub">connexion requise</span>
+                        <span class="lp-section-header__sub">{{ app.user ? 'réservé aux artistes' : 'connexion requise' }}</span>
                     </div>
                 </div>
 
                 <div class="swipe-guest-cta">
                     <div class="swipe-guest-cta__inner">
-                        <p class="swipe-guest-cta__msg">
-                            Decouvrez les opportunites qui correspondent exactement a votre profil artistique.
-                        </p>
-                        <div class="swipe-guest-cta__btns">
-                            <a href="{{ path('app_login') }}" class="lp-btn lp-btn--dark">
-                                Se connecter
-                            </a>
-                            <a href="{{ path('app_register') }}" class="lp-btn lp-btn--outline">
-                                Creer un compte
-                            </a>
-                        </div>
+                        {% if app.user %}
+                            {# Connecté mais sans profil artiste (admin, ou compte non onboardé artiste) #}
+                            <p class="swipe-guest-cta__msg">
+                                Le matching est réservé aux artistes. Complète ton profil artiste pour découvrir les opportunités qui te correspondent.
+                            </p>
+                            <div class="swipe-guest-cta__btns">
+                                <a href="{{ path('app_onboarding_step1') }}" class="lp-btn lp-btn--dark">
+                                    Compléter mon profil artiste
+                                </a>
+                            </div>
+                        {% else %}
+                            {# Réellement non connecté #}
+                            <p class="swipe-guest-cta__msg">
+                                Découvre les opportunités qui correspondent exactement à ton profil artistique.
+                            </p>
+                            <div class="swipe-guest-cta__btns">
+                                <a href="{{ path('app_login') }}" class="lp-btn lp-btn--dark">
+                                    Se connecter
+                                </a>
+                                <a href="{{ path('app_register') }}" class="lp-btn lp-btn--outline">
+                                    Créer un compte
+                                </a>
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
 

@@ -97,6 +97,20 @@
         const totalCards   = cards.length;  // Nombre total de cartes chargées
         const totalMatches = parseInt(section.dataset.totalMatches || '0', 10);
 
+        // ── Variables du paywall freemium (ADR-0022, Lot D) ──────────────────
+        // Ces valeurs viennent des data-attributes posés par HomeController.
+        // Le JS ne fait que compléter le contrôle côté serveur — le vrai gating
+        // est dans SwipeController::recordView() + FreemiumVoter.
+        const isSubscribed   = section.dataset.subscribed === 'true';
+        // remaining : nombre de consultations restantes cette semaine.
+        // '999' est passé pour les abonnés (représente "illimité").
+        let remainingViews   = parseInt(section.dataset.remaining || '999', 10);
+        const weeklyLimit    = parseInt(section.dataset.limit || '3', 10);
+        // Token CSRF pour POST /swipe/record-view
+        const recordViewCsrf = section.dataset.recordViewCsrf || '';
+        // URL de la page tarifs pour la redirection JS si la limite est atteinte
+        const pricingUrl     = section.dataset.pricingUrl || '/tarifs';
+
         if (totalCards === 0) {
             // Aucune carte → état vide affiché par le HTML de fallback, rien à faire
             return;
@@ -105,6 +119,12 @@
         // Montre la première carte immédiatement
         showCard(0);
         updateCounter();
+
+        // ── Enregistrement de la première consultation (paywall Lot D) ───────
+        // On enregistre la consultation dès que la première carte est affichée.
+        // Pour les abonnés et admins : recordView() côté serveur ne fait rien.
+        // Pour les gratuits : décrémente le compteur de 1.
+        recordViewOnServer(cards[0]);
 
         // ── Boutons ───────────────────────────────────────────────────────────
         if (btnPass) {
@@ -269,6 +289,10 @@
         /**
          * Avance à la carte suivante ou affiche l'état vide si toutes les cartes
          * ont été swipées.
+         *
+         * PAYWALL (Lot D) : avant d'afficher la carte suivante, on vérifie si
+         * l'utilisateur a encore des consultations disponibles. Si non, on affiche
+         * l'encart paywall au lieu de la carte.
          */
         function advance() {
             currentIndex++;
@@ -279,8 +303,21 @@
                 return;
             }
 
+            // ── Vérification paywall avant d'afficher la prochaine carte ─────
+            // Pour les abonnés/admins : remainingViews = 999, toujours ok.
+            // Pour les gratuits : on vérifie si la limite est atteinte.
+            if (!isSubscribed && remainingViews <= 0) {
+                // Limite atteinte → on affiche l'encart paywall
+                showPaywallState();
+                return;
+            }
+
             showCard(currentIndex);
             updateCounter();
+
+            // Enregistre la consultation de la nouvelle carte côté serveur.
+            // On le fait APRÈS avoir affiché la carte (l'utilisateur la voit déjà).
+            recordViewOnServer(cards[currentIndex]);
 
             // Remet le focus sur la nouvelle carte pour l'accessibilité clavier
             const newCard = cards[currentIndex];
@@ -306,6 +343,104 @@
                 emptyMsg.classList.remove('swipe-empty--hidden');
                 emptyMsg.removeAttribute('aria-hidden');
             }
+        }
+
+        /**
+         * Affiche l'encart paywall (limite hebdomadaire atteinte).
+         *
+         * PAYWALL (ADR-0022, Lot D) : quand l'utilisateur gratuit a épuisé ses
+         * 3 consultations, on masque les cartes et on redirige vers /tarifs.
+         *
+         * On ne construit PAS l'encart en JS : il est déjà dans le HTML du serveur
+         * (état Twig "swipeLimitReached"). Mais si l'utilisateur atteint la limite
+         * PENDANT la session (il avait des consultations au chargement, il les a
+         * toutes utilisées), on doit l'afficher dynamiquement.
+         *
+         * Stratégie : redirection vers /tarifs avec ancre pour une UX claire.
+         * On n'affiche pas d'encart inline pour ne pas complexifier le JS.
+         */
+        function showPaywallState() {
+            // Cache la pile de cartes et les boutons
+            deck.style.display = 'none';
+            const actionsBar = section.querySelector('.swipe-actions');
+            if (actionsBar) { actionsBar.style.display = 'none'; }
+
+            // Crée dynamiquement l'encart paywall (identique au HTML Twig mais injecté par JS)
+            // On le crée en JS uniquement pour le cas "limite atteinte EN COURS DE SESSION".
+            // Si la limite était déjà atteinte AU CHARGEMENT, le Twig affiche l'encart statique.
+            const paywallDiv = document.createElement('div');
+            paywallDiv.className = 'swipe-paywall';
+            paywallDiv.setAttribute('role', 'status');
+            paywallDiv.innerHTML = [
+                '<div class="swipe-paywall__inner">',
+                '  <p class="swipe-paywall__msg">Tu as consulte tes ' + weeklyLimit + ' matchs gratuits de la semaine.</p>',
+                '  <p class="swipe-paywall__hint">Passe a l\'abonnement pour un acces illimite au matching, au catalogue complet, a la messagerie et aux alertes.</p>',
+                '  <a href="' + pricingUrl + '" class="lp-btn lp-btn--accent swipe-paywall__cta">Decouvrir l\'abonnement</a>',
+                '  <p class="swipe-paywall__reset">Le compteur se remet a zero chaque lundi.</p>',
+                '</div>'
+            ].join('');
+
+            // Insère l'encart dans la section, après le deck masqué
+            section.appendChild(paywallDiv);
+        }
+
+        /**
+         * Enregistre une consultation de match côté serveur (ADR-0022, Lot D).
+         *
+         * Appelle POST /swipe/record-view avec le resource_id de la carte.
+         * En cas d'erreur réseau ou de limite déjà dépassée côté serveur : on logue
+         * mais on n'interrompt pas l'UX (le serveur est la source de vérité).
+         *
+         * SÉCURITÉ : le gating réel est côté serveur.
+         * Ce JS ne fait que mettre à jour l'état local pour anticiper la limite.
+         *
+         * @param {Element} card La carte DOM dont on enregistre la consultation
+         */
+        function recordViewOnServer(card) {
+            // Les abonnés et admins : pas besoin d'appel serveur (illimité)
+            // isSubscribed est lu depuis le data-attribute de la section.
+            if (isSubscribed) { return; }
+
+            // Récupère l'ID de la ressource depuis la carte
+            const resourceId = card ? (card.dataset.resourceId || '') : '';
+
+            // Construction du corps FormData (multipart/form-data)
+            const body = new FormData();
+            body.append('_token', recordViewCsrf);
+            if (resourceId) {
+                body.append('resource_id', resourceId);
+            }
+
+            fetch('/swipe/record-view', {
+                method:  'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body:    body,
+            })
+            .then(function (res) {
+                // Si la réponse est 403 : la limite est atteinte côté serveur.
+                // On met à jour l'état local et on déclenche l'affichage paywall.
+                if (res.status === 403) {
+                    remainingViews = 0;
+                    // On ne montre pas immédiatement l'encart paywall ici :
+                    // la carte est déjà affichée, l'utilisateur est en train de la voir.
+                    // Le blocage se déclenchera AU PROCHAIN swipe via advance().
+                    return;
+                }
+                // Réponse 200 : on met à jour le compteur local depuis la réponse JSON
+                return res.json();
+            })
+            .then(function (data) {
+                if (!data) { return; }
+                // data.remaining : consultations restantes retournées par le serveur
+                if (typeof data.remaining === 'number') {
+                    remainingViews = data.remaining;
+                }
+            })
+            .catch(function (err) {
+                // Erreur réseau : on logue discrètement, on ne bloque pas l'UX.
+                // Le gating serveur est la source de vérité.
+                console.warn('[swipe.js paywall] Erreur lors de l\'enregistrement de la consultation :', err);
+            });
         }
 
         /**

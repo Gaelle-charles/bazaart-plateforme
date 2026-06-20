@@ -9,6 +9,7 @@ use App\Entity\User;
 use App\Repository\ConversationRepository;
 use App\Repository\MessageRepository;
 use App\Repository\UserRepository;
+use App\Security\Voter\FreemiumVoter;
 use App\Security\Voter\MessagingVoter;
 use App\Service\MessagingService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -62,6 +63,17 @@ class MessagingController extends AbstractController
     #[Route('', name: 'index', methods: ['GET'])]
     public function index(): Response
     {
+        // ── Vérification du paywall freemium : messagerie réservée aux abonnés ────
+        // La messagerie privée est une fonctionnalité premium (ADR-0022, Lot D).
+        // On redirige les utilisateurs gratuits vers /tarifs avec un message d'incitation.
+        if (!$this->isGranted(FreemiumVoter::FEATURE_MESSAGING)) {
+            $this->addFlash(
+                'info',
+                'La messagerie privée est réservée aux abonnés Bazaart. Découvrez nos offres ci-dessous.'
+            );
+            return $this->redirectToRoute('app_pricing');
+        }
+
         /** @var User $currentUser */
         $currentUser = $this->getUser();
 
@@ -109,6 +121,17 @@ class MessagingController extends AbstractController
     #[Route('/new/{userId}', name: 'new', methods: ['GET', 'POST'])]
     public function new(int $userId, Request $request): Response
     {
+        // ── Vérification du paywall freemium : messagerie réservée aux abonnés ────
+        // On gate aussi cette route pour éviter qu'un utilisateur gratuit arrive
+        // ici depuis un lien direct (ex: bouton "Envoyer un message" sur un profil).
+        if (!$this->isGranted(FreemiumVoter::FEATURE_MESSAGING)) {
+            $this->addFlash(
+                'info',
+                'La messagerie privée est réservée aux abonnés Bazaart. Découvrez nos offres ci-dessous.'
+            );
+            return $this->redirectToRoute('app_pricing');
+        }
+
         /** @var User $currentUser */
         $currentUser = $this->getUser();
 

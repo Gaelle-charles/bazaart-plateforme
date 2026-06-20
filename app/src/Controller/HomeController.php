@@ -10,9 +10,11 @@ use App\Repository\ForumThreadRepository;
 use App\Repository\ResourceAlertRepository;
 use App\Repository\ResourceRepository;
 use App\Service\MatchingService;
+use App\Service\SubscriptionChecker;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 /**
  * Contrôleur de la page d'accueil publique.
@@ -75,6 +77,10 @@ final class HomeController extends AbstractController
         private readonly MatchingService          $matchingService,
         // Pour savoir si l'utilisateur a déjà une alerte de matching active
         private readonly ResourceAlertRepository  $alertRepository,
+        // SubscriptionChecker : gestion du paywall freemium (Lot D ADR-0022)
+        private readonly SubscriptionChecker      $subscriptionChecker,
+        // CsrfTokenManager : génération du token CSRF pour /swipe/record-view (Lot D)
+        private readonly CsrfTokenManagerInterface $csrfTokenManager,
     ) {}
 
     /**
@@ -90,9 +96,13 @@ final class HomeController extends AbstractController
      *   swipeCount       int            — Nombre total de matchs positifs
      *   profileComplete  bool           — Le profil artiste est-il utilisable pour le matching ?
      *   hasAlert         bool           — L'artiste a-t-il déjà une alerte active ?
-     *   swipeCsrfToken   string|null    — Token CSRF pour le toggle favori et l'alerte
-     *   alertCsrfToken   string|null    — Token CSRF spécifique à la création d'alerte
-     *   isArtist         bool           — L'utilisateur connecté est-il un artiste ?
+     *   swipeCsrfToken       string|null    — Token CSRF pour le toggle favori et l'alerte
+     *   alertCsrfToken       string|null    — Token CSRF spécifique à la création d'alerte
+     *   isArtist             bool           — L'utilisateur connecté est-il un artiste ?
+     *   isSubscribed         bool           — L'utilisateur est-il abonné (ou admin) ? (Lot D)
+     *   swipeRemainingViews  int            — Consultations de matchs restantes cette semaine (Lot D)
+     *   swipeLimitReached    bool           — Limite hebdomadaire atteinte ? (Lot D)
+     *   swipeRecordViewCsrf  string|null    — Token CSRF pour POST /swipe/record-view (Lot D)
      */
     #[Route('/', name: 'app_home')]
     public function index(): Response
@@ -129,12 +139,42 @@ final class HomeController extends AbstractController
         $swipeCsrfToken  = null;
         $alertCsrfToken  = null;
 
+        // ── Variables du paywall freemium (Lot D ADR-0022) ──────────────────────
+        // Initialisées avec les valeurs "accès libre" par défaut.
+        // Seront recalculées si l'utilisateur est artiste connecté.
+        $isSubscribed        = false; // L'utilisateur est-il abonné (ou admin) ?
+        $swipeRemainingViews = 0;     // Consultations de matchs restantes cette semaine
+        $swipeLimitReached   = false; // Limite hebdomadaire atteinte ?
+        $swipeRecordViewCsrf = null;  // Token CSRF pour POST /swipe/record-view
+
         // getUser() retourne null si non connecté, sinon l'objet utilisateur.
         $user = $this->getUser();
 
         if ($user instanceof User && $this->isGranted('ROLE_ARTIST')) {
             // L'utilisateur est connecté ET artiste : on charge les données de swipe.
             $isArtist = true;
+
+            // ── Vérification de l'abonnement (paywall Lot D) ─────────────────────
+            // On calcule ici pour que le template puisse afficher le bon état.
+            // isSubscribed() = true si ROLE_ADMIN OU abonnement Stripe actif.
+            $isSubscribed = $this->subscriptionChecker->isSubscribed($user);
+
+            // Nombre de consultations restantes cette semaine ISO.
+            // Pour les abonnés/admins : PHP_INT_MAX (qu'on convertit en -1 pour le JS).
+            // Pour les gratuits : entre 0 et FREE_WEEKLY_MATCH_LIMIT.
+            $rawRemaining        = $this->subscriptionChecker->getRemainingMatchViews($user);
+            // On borne à un entier raisonnable pour le Twig (PHP_INT_MAX serait absurde à afficher)
+            $swipeRemainingViews = $isSubscribed ? PHP_INT_MAX : $rawRemaining;
+            // La limite est atteinte si l'utilisateur n'est PAS abonné et n'a plus de consultation
+            $swipeLimitReached   = !$isSubscribed && $rawRemaining <= 0;
+
+            // ── Token CSRF pour l'endpoint record-view (Lot D) ───────────────────
+            // Généré ici pour que swipe.js puisse l'utiliser sans lire le DOM.
+            // On passe le token au template en data-attribute sur la section swipe.
+            // CsrfTokenManagerInterface est injecté dans le constructeur (autowiring).
+            $swipeRecordViewCsrf = $this->csrfTokenManager
+                ->getToken('swipe_record_view')
+                ->getValue();
 
             // ── Calcul de la complétude du profil ────────────────────────────────
             // On vérifie que le profil artiste existe et a au moins une discipline
@@ -147,8 +187,10 @@ final class HomeController extends AbstractController
                 && !empty($user->getLookingFor())
             );
 
-            // ── Calcul des matchs (uniquement si profil utilisable) ───────────────
-            if ($profileComplete) {
+            // ── Calcul des matchs (uniquement si profil utilisable ET pas limite atteinte) ──
+            // Si la limite est atteinte, on ne calcule pas les matchs : pas de cartes à afficher.
+            // Le template affichera l'état "limite atteinte" à la place.
+            if ($profileComplete && !$swipeLimitReached) {
                 // getMatchesForUser() retourne TOUS les matchs triés par score desc.
                 // On ne charge que les N premiers pour éviter de sérialiser des centaines
                 // de MatchResult en mémoire — la section swipe en a besoin de peu.
@@ -200,6 +242,8 @@ final class HomeController extends AbstractController
             // On ne le génère PAS en PHP dans le controller : Twig le fait directement.
             // La génération PHP ci-dessous serait redondante (le template utilise
             // {{ csrf_token('swipe_alert') }} directement).
+            //
+            // swipeRecordViewCsrf : déjà généré ci-dessus dans le bloc paywall Lot D.
         }
 
         return $this->render('vitrine/index.html.twig', [
@@ -224,6 +268,18 @@ final class HomeController extends AbstractController
             'hasAlert'        => $hasAlert,
             // true = l'utilisateur a ROLE_ARTIST (pour les blocs conditionnels Twig)
             'isArtist'        => $isArtist,
+
+            // ── Variables paywall freemium (Lot D ADR-0022) ──────────────────────
+            // isSubscribed : true si ROLE_ADMIN OU abonnement Stripe actif
+            'isSubscribed'         => $isSubscribed,
+            // swipeRemainingViews : nombre de consultations restantes (PHP_INT_MAX si abonné/admin)
+            'swipeRemainingViews'  => $swipeRemainingViews,
+            // swipeLimitReached : true si utilisateur gratuit ayant atteint sa limite hebdo
+            'swipeLimitReached'    => $swipeLimitReached,
+            // swipeRecordViewCsrf : token CSRF pour POST /swipe/record-view (null si non artiste)
+            'swipeRecordViewCsrf'  => $swipeRecordViewCsrf,
+            // swipeWeeklyLimit : la constante limite pour affichage dans l'UI
+            'swipeWeeklyLimit'     => SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT,
         ]);
     }
 }

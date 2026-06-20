@@ -7,8 +7,11 @@ namespace App\Controller;
 use App\Entity\ResourceAlert;
 use App\Entity\User;
 use App\Enum\AlertFrequency;
+use App\Repository\MatchConsultationRepository;
 use App\Repository\ResourceAlertRepository;
+use App\Repository\ResourceRepository;
 use App\Security\Voter\MatchingVoter;
+use App\Service\SubscriptionChecker;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -17,13 +20,14 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * SwipeController — Endpoints AJAX dédiés à l'UI swipe de la home (ADR-0021, Lot C).
+ * SwipeController — Endpoints AJAX dédiés à l'UI swipe de la home (ADR-0021, Lot C + Lot D).
  *
  * CE CONTROLLER NE GÈRE QUE LES ACTIONS AJAX DU SWIPE.
  * Il ne gère PAS la page elle-même (c'est HomeController qui la rend).
  *
  * ROUTES EXPOSÉES :
- *   POST /swipe/alert  → crée ou active une alerte de matching (avec consentement)
+ *   POST /swipe/alert        → crée ou active une alerte de matching (avec consentement)
+ *   POST /swipe/record-view  → enregistre une consultation de match (compteur paywall ADR-0022)
  *
  * NOTE SUR LES FAVORIS :
  *   Le toggle favori (swipe droite = "intéressé(e)") réutilise la route existante :
@@ -34,6 +38,11 @@ use Symfony\Component\Routing\Attribute\Route;
  * SÉCURITÉ :
  *   Toutes les routes vérifient MATCHING_VIEW via MatchingVoter (= ROLE_ARTIST requis).
  *   Chaque POST porte un token CSRF vérifié côté serveur.
+ *
+ * PAYWALL (ADR-0022, Lot D) :
+ *   record-view incrémente le compteur de consultations de matchs.
+ *   Pour les abonnés et admins : l'incrémentation est ignorée (illimité).
+ *   Pour les gratuits : si la limite est atteinte, le swipe est bloqué.
  *
  * PHILOSOPHIE "THIN CONTROLLER" :
  *   La logique de création/mise à jour de l'alerte est ici dans le controller
@@ -46,10 +55,123 @@ final class SwipeController extends AbstractController
 {
     public function __construct(
         // Repository d'alertes : lecture (findByUser) et écriture (persist via EM)
-        private readonly ResourceAlertRepository  $alertRepository,
+        private readonly ResourceAlertRepository       $alertRepository,
         // EntityManager : pour persist + flush de la nouvelle alerte
-        private readonly EntityManagerInterface   $entityManager,
+        private readonly EntityManagerInterface        $entityManager,
+        // Repository de consultations : enregistrement du compteur paywall (Lot D)
+        private readonly MatchConsultationRepository   $consultationRepository,
+        // Repository de ressources : pour retrouver la ressource consultée (Lot D)
+        private readonly ResourceRepository            $resourceRepository,
+        // SubscriptionChecker : vérifie si l'utilisateur est abonné (Lot D)
+        private readonly SubscriptionChecker           $subscriptionChecker,
     ) {}
+
+    /**
+     * Enregistre une consultation de match pour le compteur paywall (ADR-0022, Lot D).
+     *
+     * Route : POST /swipe/record-view
+     * Nom   : app_swipe_record_view
+     *
+     * PARAMÈTRES POST attendus :
+     *   _token      : token CSRF (nom 'swipe_record_view')
+     *   resource_id : (optionnel) l'ID de la ressource dont on affiche la carte
+     *
+     * COMPORTEMENT :
+     *   - Pour les abonnés et admins : on retourne 200 avec remaining=PHP_INT_MAX
+     *     (pas d'enregistrement, car illimité — pas de gaspillage de BDD).
+     *   - Pour les utilisateurs gratuits : on enregistre la consultation et on
+     *     retourne le nombre de consultations restantes cette semaine.
+     *   - Si la limite est déjà atteinte AVANT d'appeler cet endpoint :
+     *     on retourne 403 avec un message d'incitation à s'abonner.
+     *     (Le front doit vérifier AVANT d'afficher la carte — double sécurité côté serveur.)
+     *
+     * RÉPONSE JSON :
+     *   { "remaining": 2, "limit": 3, "subscribed": false }  → consultation enregistrée
+     *   { "remaining": 0, "limit": 3, "subscribed": false }  → plus de consultations
+     *   { "remaining": null, "limit": null, "subscribed": true } → abonné, illimité
+     *   { "error": "...", "code": 403 }  → CSRF invalide ou limite déjà atteinte
+     */
+    #[Route('/record-view', name: 'record_view', methods: ['POST'])]
+    public function recordView(Request $request): JsonResponse
+    {
+        // ── Vérification ROLE_ARTIST via MatchingVoter ──────────────────────────
+        // Même protection que createAlert : seuls les artistes connectés peuvent
+        // enregistrer des consultations. Les non-artistes n'ont pas de section swipe.
+        try {
+            $this->denyAccessUnlessGranted(MatchingVoter::MATCHING_VIEW);
+        } catch (\Symfony\Component\Security\Core\Exception\AccessDeniedException) {
+            return new JsonResponse(
+                ['error' => 'Vous devez être connecté(e) en tant qu\'artiste.'],
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        // ── Validation du token CSRF ────────────────────────────────────────────
+        // Nom de token distinct de swipe_alert pour isoler les tokens par endpoint.
+        $csrfToken = $request->request->getString('_token');
+        if (!$this->isCsrfTokenValid('swipe_record_view', $csrfToken)) {
+            return new JsonResponse(
+                ['error' => 'Token de sécurité invalide. Rechargez la page.'],
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        // ── Récupération de l'utilisateur connecté ─────────────────────────────
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return new JsonResponse(
+                ['error' => 'Utilisateur non authentifié.'],
+                Response::HTTP_UNAUTHORIZED
+            );
+        }
+
+        // ── Cas abonné ou admin : illimité, pas d'enregistrement en BDD ────────
+        if ($this->subscriptionChecker->isSubscribed($user)) {
+            // On ne crée pas d'enregistrement MatchConsultation pour les abonnés.
+            // Pas de gaspillage de BDD, et la réponse confirme le statut.
+            return new JsonResponse([
+                'remaining'  => null,   // null = illimité (le front interprète null comme "pas de limite")
+                'limit'      => null,
+                'subscribed' => true,
+            ]);
+        }
+
+        // ── Cas utilisateur gratuit : vérification de la limite ─────────────────
+        $remaining = $this->subscriptionChecker->getRemainingMatchViews($user);
+
+        if ($remaining <= 0) {
+            // Limite déjà atteinte avant cette consultation.
+            // On ne crée pas de nouvelle entrée (déjà à 0 ou moins).
+            // Le front doit afficher l'écran tarifs. Retour 403 = "accès refusé".
+            return new JsonResponse([
+                'error'      => 'Limite de consultations hebdomadaires atteinte.',
+                'remaining'  => 0,
+                'limit'      => SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT,
+                'subscribed' => false,
+                'pricing_url' => '/tarifs',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        // ── Enregistrement de la consultation ──────────────────────────────────
+        // On cherche la ressource si resource_id est fourni (optionnel).
+        // Si introuvable ou absent, on passe null (la consultation est quand même comptée).
+        $resourceId = $request->request->getInt('resource_id', 0);
+        $resource   = ($resourceId > 0)
+            ? $this->resourceRepository->find($resourceId)
+            : null;
+
+        // record() persiste et flush l'enregistrement MatchConsultation.
+        $this->consultationRepository->record($user, $resource);
+
+        // On recalcule après l'enregistrement pour retourner le solde EXACT mis à jour.
+        $remainingAfter = $this->subscriptionChecker->getRemainingMatchViews($user);
+
+        return new JsonResponse([
+            'remaining'  => $remainingAfter,
+            'limit'      => SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT,
+            'subscribed' => false,
+        ]);
+    }
 
     /**
      * Crée ou active une alerte de matching avec consentement explicite.

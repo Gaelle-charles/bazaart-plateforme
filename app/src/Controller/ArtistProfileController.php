@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Repository\ArtistProfileRepository;
 use App\Repository\DisciplineRepository;
+use App\Security\Voter\FreemiumVoter;
 use App\Service\ArtistProfileService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -101,10 +102,22 @@ class ArtistProfileController extends AbstractController
     /**
      * Annuaire public des artistes — liste tous les profils.
      * Permet de découvrir les artistes présents sur la plateforme.
+     *
+     * PAYWALL (ADR-0022, Lot D) : réservé aux abonnés et aux admins.
+     * Les utilisateurs gratuits sont redirigés vers /tarifs avec un flash message.
      */
     #[Route('/directory', name: 'directory')]
     public function directory(): Response
     {
+        // ── Vérification du paywall freemium : annuaire artistes réservé aux abonnés ──
+        if (!$this->isGranted(FreemiumVoter::FEATURE_DIRECTORY)) {
+            $this->addFlash(
+                'info',
+                'L\'annuaire des artistes est réservé aux abonnés Bazaart. Découvrez nos offres ci-dessous.'
+            );
+            return $this->redirectToRoute('app_pricing');
+        }
+
         // Charge tous les profils artistes triés alphabétiquement
         $profiles = $this->profileRepository->findAllForDirectory();
 
