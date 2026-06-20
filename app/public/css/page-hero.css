@@ -44,13 +44,18 @@
     position: relative;
     overflow: hidden;
 
+    /* Colonne flex, contenu aligné en bas : le hero peut GRANDIR pour contenir
+       un titre long (plus de troncature de la fin du titre). */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+
     /*
-     * Hauteur du hero : on choisit 52vh (environ mi-écran) pour que le
-     * contenu de la page soit visible sans scroll sur la majorité des écrans.
-     * min-height assure un minimum de 280px sur les petits écrans.
+     * Hauteur du hero : MINIMUM 52vh (mi-écran) mais le hero grandit si le
+     * titre déborde -> plus de troncature. max(52vh, 280px) garantit aussi un
+     * plancher de 280px sur les petits écrans.
      */
-    height: 52vh;
-    min-height: 280px;
+    min-height: max(52vh, 280px);
 
     /*
      * Full-bleed : on compense le padding de .app-content pour aller bord à bord.
@@ -124,10 +129,11 @@
      * On le positionne en absolu en bas-gauche du hero pour aligner
      * le texte avec le bas de la photo comme les grands journaux.
      */
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    /* Dans le flux (relative) au lieu d'absolute : le hero grandit pour contenir
+       le contenu -> la fin du titre n'est plus coupée. L'alignement en bas est
+       assuré par justify-content:flex-end sur .page-hero. */
+    position: relative;
+    width: 100%;
 
     /*
      * Padding interne : 24px en bas, aligné avec le padding horizontal
@@ -184,8 +190,7 @@
  */
 @media (max-width: 767px) {
     .page-hero {
-        height: 40vh;
-        min-height: 240px;
+        min-height: max(40vh, 240px); /* min, pas fixe -> pas de troncature */
 
         /* Sur mobile, .app-content a padding: 16px -> ajustement */
         margin-left: -16px;
@@ -213,8 +218,7 @@
  */
 @media (max-width: 480px) {
     .page-hero {
-        height: 36vh;
-        min-height: 200px;
+        min-height: max(36vh, 200px); /* min, pas fixe -> pas de troncature */
     }
 }
 
