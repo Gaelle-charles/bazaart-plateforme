@@ -330,9 +330,14 @@
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Sauvegarde les données de l'étape en session via AJAX (POST /matching/step).
+     * Sauvegarde les données de l'étape en session via AJAX.
      * Appel best-effort : en cas d'échec réseau, on continue quand même
      * (les données seront sauvegardées à la soumission finale de toute façon).
+     *
+     * L'URL de l'endpoint est lue depuis data-step-url sur #matching-form-wrap,
+     * avec un repli sur '/matching/step' si l'attribut est absent.
+     * Cette approche évite de coder l'URL en dur dans le JS (fragile si le
+     * préfixe de route change ou si Symfony est servi dans un sous-dossier).
      *
      * @param {number} step - Numéro de l'étape
      * @param {HTMLFormElement} form
@@ -373,8 +378,13 @@
             }
         }
 
-        // Appel AJAX — endpoint POST /matching/step
-        fetch('/matching/step', {
+        // Lecture de l'URL depuis data-step-url (posé par le template Twig via path()).
+        // Repli sur '/matching/step' si le data-attribute est absent ou vide (défensif).
+        var wrap    = document.getElementById('matching-form-wrap');
+        var stepUrl = (wrap && wrap.dataset.stepUrl) ? wrap.dataset.stepUrl : '/matching/step';
+
+        // Appel AJAX — endpoint POST (URL résolue dynamiquement)
+        fetch(stepUrl, {
             method:  'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             body:    fd,

@@ -257,16 +257,20 @@ final class HomeController extends AbstractController
 
         // ── Données pour le formulaire matching home (visiteur / profil incomplet) ──
         //
-        // Le formulaire multi-étapes est affiché quand :
-        //   - L'utilisateur n'est pas connecté (visiteur)
-        //   - L'utilisateur est artiste mais profil incomplet
-        // Dans les autres états (swipe, paywall, non-artiste connecté), ces données
-        // sont chargées mais non utilisées → coût SQL marginal (2 requêtes légères).
+        // Le formulaire multi-étapes est affiché uniquement dans deux états :
+        //   - État 3 : artiste connecté avec profil incomplet (isArtist && !profileComplete)
+        //   - État 5 : visiteur non connecté (!user)
         //
-        // On les charge dans tous les cas pour simplifier le code Twig
-        // (pas de bloc conditionnel PHP pour décider de charger ou non).
-        $matchingFormDisciplines = $this->disciplineRepository->findAll();
-        $matchingFormSessionData = $this->matchingFormSessionService->getSessionData($request->getSession());
+        // Dans les autres états (swipe complet, paywall, artiste sans ROLE_ARTIST connecté),
+        // le formulaire n'est PAS affiché → inutile de charger les disciplines.
+        // On évite ainsi une requête SQL à chaque visite d'un artiste avec profil complet.
+        $needsMatchingForm = !($user instanceof User) || ($isArtist && !$profileComplete);
+        $matchingFormDisciplines = $needsMatchingForm
+            ? $this->disciplineRepository->findAll()
+            : [];
+        $matchingFormSessionData = $needsMatchingForm
+            ? $this->matchingFormSessionService->getSessionData($request->getSession())
+            : [];
 
         // Token CSRF pour le formulaire matching multi-étapes
         // Le nom 'matching_form' est partagé avec MatchingFormController::saveStep()

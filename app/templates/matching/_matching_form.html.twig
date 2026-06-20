@@ -27,7 +27,9 @@
  #
  # ARCHITECTURE JS :
  #   Le JS (matching-form.js) gère la navigation entre étapes sans rechargement.
- #   Sans JS : les étapes sont toutes visibles (affichage séquentiel dégradé).
+ #   Sans JS : seule l'étape 1 (disciplines) est visible — les fieldsets des
+ #   étapes 2 et 3 portent l'attribut HTML [hidden] et restent masqués.
+ #   L'utilisateur peut quand même soumettre le formulaire (étape 1 uniquement).
  #   Le POST final est un formulaire HTML classique (fonctionne sans JS).
  #
  # ACCESSIBILITÉ :
@@ -55,10 +57,17 @@
 {% endif %}
 
 {# ── Conteneur du formulaire multi-étapes ──────────────────────────────────── #}
+{#
+    data-step-url : URL de l'endpoint AJAX qui sauvegarde chaque étape en session.
+    Le JS lit cette valeur plutôt que de coder l'URL en dur, ce qui est plus robuste
+    si la route change (préfixe de sous-dossier, CDN, etc.).
+    La route nommée 'app_matching_form_step' pointe vers POST /matching/step.
+#}
 <div
     class="mf-wrap"
     id="matching-form-wrap"
     data-logged-in="{{ matchingForm_isLoggedIn ? 'true' : 'false' }}"
+    data-step-url="{{ path('app_matching_form_step') }}"
     aria-label="Formulaire de matching en plusieurs étapes"
 >
 
@@ -245,14 +254,13 @@
 
         {#
             FALLBACK SANS JS :
-            Sans JS, toutes les étapes sont visibles simultanément (fieldset[hidden]
-            n'est pas respecté si JS ne retire pas l'attribut hidden → en réalité
-            si JS est absent, les fieldsets avec `hidden` sont masqués par HTML.
-            On ajoute un message explicatif pour guider l'utilisateur dans ce cas.
+            Sans JS, les fieldsets [hidden] des étapes 2 et 3 restent masqués par
+            le navigateur — seule l'étape 1 (disciplines) est visible et soumettable.
+            Le message <noscript> informe honnêtement l'utilisateur de cette limite.
         #}
         <noscript>
             <p class="mf-noscript-hint">
-                Activez JavaScript pour naviguer entre les étapes. Sans JavaScript, vous pouvez remplir le formulaire en entier ci-dessous et cliquer sur "Voir mes matchs".
+                Activez JavaScript pour remplir toutes les étapes. Sans JavaScript, seule la sélection des disciplines (étape 1) est possible.
             </p>
         </noscript>
 

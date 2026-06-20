@@ -321,6 +321,12 @@
 
         /* Identifiant de la boucle requestAnimationFrame (pour pouvoir l'annuler) */
         this.rafId = null;
+
+        /* Référence au handler 'resize' enregistré sur window.
+         * Stockée ici pour pouvoir le retirer proprement dans hide() et éviter
+         * une fuite mémoire (un handler orphelin resterait lié à l'objet controller
+         * même après la disparition de l'overlay). */
+        this.resizeHandler = null;
     }
 
     /**
@@ -506,8 +512,18 @@
      * Masque definitivement l'overlay apres le fondu.
      * display:none retire l'element du flux de rendu.
      * pointer-events:none (deja dans le CSS) est redondant mais explicite.
+     *
+     * On retire egalement le handler 'resize' de window pour eviter une fuite
+     * memoire : sans ce removeEventListener, le handler garderait une reference
+     * a l'objet AnimationController meme apres la fin du splash.
      */
     AnimationController.prototype.hide = function () {
+        /* Nettoyage du listener resize (fuite memoire preventive) */
+        if (this.resizeHandler) {
+            window.removeEventListener('resize', this.resizeHandler);
+            this.resizeHandler = null;
+        }
+
         this.overlay.style.display    = 'none';
         this.overlay.style.pointerEvents = 'none';
     };
@@ -591,15 +607,20 @@
          * Si l'utilisateur redimensionne la fenetre pendant le splash,
          * le canvas doit etre recompute (DPR, dimensions).
          * On utilise un delai de 100ms pour eviter de recalculer a chaque pixel.
+         *
+         * IMPORTANT : on stocke le handler dans this.resizeHandler pour pouvoir
+         * le retirer dans hide(). Sans ce nettoyage, le handler resterait lie
+         * a window indefiniment, gardant une reference a controller en memoire
+         * (fuite memoire mineure mais reelle).
          */
         var resizeTimer = null;
-        var resizeHandler = function () {
+        controller.resizeHandler = function () {
             clearTimeout(resizeTimer);
             resizeTimer = setTimeout(function () {
                 controller.resize();
             }, 100);
         };
-        window.addEventListener('resize', resizeHandler);
+        window.addEventListener('resize', controller.resizeHandler);
     };
 
     /* ── Point d'entree — execution apres chargement du DOM ────────────────── */

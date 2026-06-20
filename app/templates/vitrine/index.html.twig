@@ -2701,13 +2701,17 @@
            LOT C — SECTION MATCHING / SWIPE (ADR-0021)
            Placée JUSTE APRES LE HERO, avant le marquee.
 
-           TROIS ETATS (geres par Twig selon les variables du HomeController) :
-             1. isArtist = true + profileComplete = true + swipeMatches non vide
+           CINQ ETATS (geres par Twig selon les variables du HomeController) :
+             1. isArtist = true + profileComplete = true + pas de limite atteinte
                 → Section swipe complete avec cartes + boutons + alerte
-             2. isArtist = true + profileComplete = false
-                → Encart "Completez votre profil" (lien vers onboarding)
-             3. Non connecte ou non artiste
-                → Encart "Rejoignez la plateforme" (lien login/register)
+             2. isArtist = true + swipeLimitReached = true (gratuit, limite hebdo)
+                → Ecran paywall incitant a l'abonnement
+             3. isArtist = true + profileComplete = false
+                → Formulaire multi-etapes pour completer le profil
+             4. app.user existant mais sans ROLE_ARTIST
+                → Encart "Completez votre profil artiste" (lien onboarding)
+             5. Visiteur non connecte
+                → Formulaire multi-etapes pour decouvrir les matchs + inscription
 
            PROGRESSIVE ENHANCEMENT :
              Sans JS, le premier formulaire POST "Interessé(e)" fonctionne

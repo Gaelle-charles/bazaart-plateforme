@@ -168,8 +168,27 @@ final class MatchingFormController extends AbstractController
 
         if (!$user instanceof User || !$this->isGranted('ROLE_ARTIST')) {
             // FLUX A : visiteur ou utilisateur sans ROLE_ARTIST
-            // On redirige vers l'inscription artiste.
-            // La session contient déjà les réponses → l'onboarding les récupérera.
+
+            // Guard "sans JS" : si l'utilisateur a soumis le formulaire sans JS,
+            // seule l'étape 1 était visible — les étapes 2 et 3 restent cachées
+            // (attribut HTML [hidden]). On vérifie qu'au moins une discipline a été
+            // sélectionnée : sans discipline, l'onboarding post-inscription serait
+            // entièrement vide, ce qui serait déroutant.
+            // Avec JS, cette vérification est également faite côté client avant
+            // soumission (validateStep(1)), mais un attaquant peut contourner le JS.
+            $savedData = $this->sessionService->getSessionData($request->getSession());
+            if (empty($savedData['discipline_ids'])) {
+                // Aucune discipline sélectionnée : on informe l'utilisateur et
+                // on le renvoie vers le formulaire (ancre #swipe-section).
+                $this->addFlash(
+                    'error',
+                    'Sélectionne au moins une discipline pour continuer.'
+                );
+
+                return $this->redirectToRoute('app_home', ['_fragment' => 'swipe-section']);
+            }
+
+            // Les réponses sont en session → l'onboarding post-inscription les récupérera.
             return $this->redirectToRoute('app_register', ['intent' => 'artist']);
         }
 
