@@ -23,11 +23,9 @@
 {% block page_title %}Abonnement{% endblock %}
 
 {#
-    ── H1 unique : topbar comme titre principal ───────────────────────────────
-    Cette page n'a pas de hero photo ni de <h1> dans son contenu.
-    On surcharge topbar_element pour que la topbar soit un <h1> (WCAG 1.3.1 / SEO).
+    Le H1 de la page est désormais porté par le hero (_page_hero) dans le contenu.
+    On NE surcharge donc PAS topbar_element : la topbar reste un <span> (1 seul H1/page).
 #}
-{% block topbar_element %}<h1 class="topbar__title">Abonnement</h1>{% endblock %}
 
 {% block stylesheets %}
     {{ parent() }}
@@ -312,23 +310,14 @@
 
 {% block content %}
 
-{# ── EN-TETE DE PAGE ────────────────────────────────────────────────────────── #}
-<div class="pr-header">
-
-    {# Eyebrow — contexte typographique en mono uppercase, style affiche #}
-    <p class="pr-eyebrow">&#9632; ABONNEMENT</p>
-
-    {#
-     # Titre géant style affiche : deux lignes séparées par un retour à la ligne.
-     # On utilise <br> pour forcer le saut — pas de / cadratin.
-     # uppercase en CSS, pas besoin d'écrire en majuscules dans le HTML.
-     #}
-    <h2 class="pr-title">
-        REJOINS LA<br>
-        COMMUNAUTE.
-    </h2>
-
-</div>
+{# ── HERO DE PAGE (même composant que les autres pages publiques) ──────────────
+   Photo (celle retirée du blog) + voile + titre animé + sous-titre.
+   Porte le <h1> unique de la page (la topbar reste un <span>). #}
+{% include '_page_hero.html.twig' with {
+    image: 'images/hero-tarifs.jpg',
+    title: 'Rejoins la communauté.',
+    subtitle: 'Choisis ton abonnement et accède à tout Bazaart en illimité : opportunités, alertes, annuaires et messagerie privée.'
+} %}
 
 {# ── BANNIERE "ABONNEMENT ACTIF" — visible uniquement si l'utilisateur est abonné #}
 {% if hasActiveSubscription and activeSubscription is not null %}
