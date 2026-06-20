@@ -18,6 +18,14 @@
 {% block title %}Soumettre une ressource — Bazaart{% endblock %}
 {% block page_title %}Soumettre une ressource{% endblock %}
 
+{#
+    ── H1 unique : topbar comme titre principal ───────────────────────────────
+    Cette page n'a pas de hero photo ni de <h1> dans son contenu.
+    On surcharge topbar_element pour que la topbar émette un <h1> (WCAG 1.3.1 / SEO).
+    Mécanisme défini dans base_app.html.twig : le bloc contient l'élément entier.
+#}
+{% block topbar_element %}<h1 class="topbar__title">Soumettre une ressource</h1>{% endblock %}
+
 {% block stylesheets %}
 {{ parent() }}
 <style>

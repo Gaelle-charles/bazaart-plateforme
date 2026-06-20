@@ -127,7 +127,13 @@
             </div>
         {% endif %}
 
-        <h2 class="cf-show-hero__title">{{ course.title|e }}</h2>
+        {#
+         # H1 promu depuis h2 : cette page n'a pas d'autre h1, et ce titre est
+         # le titre sémantique principal de la page (WCAG 1.3.1 / SEO).
+         # La classe .cf-show-hero__title est inchangée → le CSS et l'animation
+         # title-reveal.js (sélecteur ".cf-show-hero__title") continuent de fonctionner.
+        #}
+        <h1 class="cf-show-hero__title">{{ course.title|e }}</h1>
 
         {% if course.subtitle is not null %}
             <p class="cf-show-hero__subtitle">{{ course.subtitle|e }}</p>

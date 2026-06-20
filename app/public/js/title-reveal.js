@@ -147,25 +147,25 @@
            des 3 hubs (le titre de section reste animé, lui). */
 
         /* === RESSOURCERIE === */
-        '.opp-title',
+        /* .opp-title SUPPRIMÉ (orphelin — classe remplacée par .page-hero__title) */
         '.resource-hero__title',
         '.myresources-title',
         '.alerts-title',
         '.fav-title',
 
         /* === BLOG === */
-        '.art-header__title',
+        /* .art-header__title SUPPRIMÉ (orphelin — classe remplacée par .page-hero__title) */
         '.art-identity__title',
         '.art-form-header__title',
         '.art-my-header__title',
 
         /* === FORUM === */
-        '.fi-title',
+        /* .fi-title SUPPRIMÉ (orphelin — classe remplacée par .page-hero__title) */
         '.ft-post__title',
         '.fn-page-title',
 
         /* === FORMATIONS === */
-        '.cf-hero__title',
+        /* .cf-hero__title SUPPRIMÉ (orphelin — classe remplacée par .page-hero__title) */
         '.cf-catalogue-title',
         '.cf-show-hero__title',
         '.cp-title',
