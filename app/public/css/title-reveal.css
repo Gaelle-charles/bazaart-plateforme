@@ -222,7 +222,17 @@
  */
 .tr-char {
     display:        inline-block;
-    overflow:       hidden;
+    /* On clippe UNIQUEMENT l'axe horizontal (overflow-x:clip) pour contenir le
+       balayage translateX des bandes, et on laisse l'axe vertical VISIBLE.
+       Pourquoi : les titres au line-height très serré (.88 pour le H1 hero)
+       produisent une boîte de lettre plus courte que le glyphe en capitales
+       (et que les accents : « É »). Avec l'ancien `overflow:hidden`, le haut
+       et le bas des lettres étaient ROGNÉS (titre tronqué). overflow-x:clip
+       conserve la protection anti-scroll horizontal des bandes, sans rien
+       couper verticalement. NB : `clip` + `visible` est la seule combinaison
+       d'axes valide (clip ne force pas l'autre axe à devenir un scroll). */
+    overflow-x:     clip;
+    overflow-y:     visible;
     vertical-align: bottom;
     position:       relative;
     line-height:    inherit;

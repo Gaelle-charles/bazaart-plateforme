@@ -24,8 +24,8 @@
     'use strict';
 
     /* ── Paramètres ajustables ─────────────────────────────────────────────── */
-    var ANIM_DURATION   = 9000;  /* ms : durée pour jouer l'animation COMPLÈTE (time 0->1) */
-    var SPLASH_DURATION = 9200;  /* ms : le splash dure jusqu'à la fin de l'animation, puis fondu de sortie */
+    var ANIM_DURATION   = 3000;  /* ms : durée pour jouer l'animation COMPLÈTE (time 0->1) */
+    var SPLASH_DURATION = 3200;  /* ms : le splash dure jusqu'à la fin de l'animation, puis fondu de sortie */
     var LOGO_DELAY      = 2000;  /* ms : délai avant apparition du logo (cf. bouton Enter) */
     var LOGO_FADE       = 1500;  /* ms : durée du fondu d'entrée du logo */
 

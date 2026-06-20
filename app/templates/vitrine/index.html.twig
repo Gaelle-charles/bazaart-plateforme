@@ -447,7 +447,16 @@
 /* Ligne du titre : overflow:hidden conservé pour l'animation title-reveal
    (les bandes de balayage horizontales doivent être clippées). */
 .lp-hero__title-row {
-    overflow: hidden;
+    /* AUCUN clipping ici. La 3e ligne « LES INTERMÉDIAIRES. » est un bloc
+       insécable (les &nbsp; collent les mots) plus large que le plafond de
+       860px de .lp-hero__text : avec un overflow:hidden/clip, elle était
+       ROGNÉE sur la droite (titre tronqué dans la capture). On laisse donc
+       déborder librement — le mot reste entièrement lisible, borné au pire
+       par .lp-hero__sticky (overflow:hidden, pleine largeur du hero) qui
+       évite tout scroll horizontal de page. Le balayage des bandes
+       d'animation est déjà contenu lettre par lettre par .tr-char
+       (overflow-x:clip), donc ce clip global n'est plus nécessaire. */
+    overflow: visible;
 }
 
 /* .lp-hero__title-left et .lp-hero__title-right ne sont plus utilisés
