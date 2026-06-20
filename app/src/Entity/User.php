@@ -261,8 +261,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function setArtistProfile(?ArtistProfile $artistProfile): static
     {
-        // Synchronise le côté propriétaire de la relation (ArtistProfile.$user)
-        if ($artistProfile !== null && $artistProfile->getUser() !== $this) {
+        // Synchronise le côté propriétaire de la relation (ArtistProfile.$user).
+        // IMPORTANT : on appelle directement setUser() SANS lire getUser() d'abord.
+        // Sur un ArtistProfile fraîchement créé (new ArtistProfile()), la propriété
+        // typée non-nullable $user n'est pas encore initialisée -> getUser() lèverait
+        // "Typed property ArtistProfile::$user must not be accessed before initialization".
+        // setUser() est idempotent et ne rappelle pas setArtistProfile() -> pas de récursion.
+        if ($artistProfile !== null) {
             $artistProfile->setUser($this);
         }
         $this->artistProfile = $artistProfile;
