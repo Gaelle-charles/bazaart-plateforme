@@ -68,15 +68,23 @@
 /* ── Canvas de la spirale ──────────────────────────────────────────────────── */
 #bzrt-preloader-canvas {
     /*
-     * Le canvas occupe toute la fenetre (dimensionne par le JS avec devicePixelRatio).
-     * position:absolute -> il ne pousse pas le logo hors du flex-center.
-     * Le logo est positionne AU-DESSUS via z-index.
+     * Le canvas est CARRE (size x size, ou size = max(innerWidth, innerHeight)).
+     * Il est centre sur l'ecran via la technique left:50%/top:50% + translate(-50%,-50%).
+     *
+     * POURQUOI CARRE et pas inset:0 ?
+     * La reference React/GSAP utilise un canvas carre de cote max(W,H).
+     * Cela garantit que la spirale n'est jamais coupee sur les ecrans larges ou hauts.
+     * La taille CSS exacte (size x size pixels) est ecrite par le JS dans style.width/height.
+     *
+     * position:absolute -> ne deplace pas les autres elements du flex-center.
+     * Le logo (#bzrt-preloader-logo) passe par-dessus via z-index:1.
      */
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     display: block;         /* retire l'espace inline par defaut sous le canvas */
+    /* width et height sont ecrits directement par le JS (resize()) */
 }
 
 /* ── Logo blanc centre ─────────────────────────────────────────────────────── */

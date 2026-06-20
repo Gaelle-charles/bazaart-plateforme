@@ -1,87 +1,171 @@
 /**
- * preloader.js — Animation spirale + splash screen Bazaart
+ * preloader.js -- Animation spirale + splash screen Bazaart
  *
  * PRINCIPE GENERAL :
- *   Ce script gere l'overlay de chargement plein ecran affiche lors des
- *   hard refresh et de la premiere arrivee sur le site.
+ *   Ce script reimplemente fidelement en JS vanilla pur (sans GSAP, sans React,
+ *   sans aucune dependance) le composant SpiralAnimation de la reference.
  *
- *   Il reimplemente fidelement la logique du composant React/GSAP "SpiralAnimation"
- *   en JS vanilla pur (pas de GSAP, pas de React, pas de librairie tierce).
- *
- * CLASSES PRINCIPALES :
- *   - AnimationController : gere le canvas, la boucle rAF, la spirale, la projection 3D->2D
- *   - Star                : une etoile individuelle avec ses 3 phases de deplacement
+ *   L'animation reproduit EXACTEMENT les constantes, le generateur aleatoire
+ *   a graine fixe, les formules mathematiques, la projection 3D->2D, le trail
+ *   et les 3 phases de la classe Star de la reference React/GSAP.
  *
  * REGLES D'AFFICHAGE :
  *   - Hard refresh (navigation.type === 'reload') OU premiere visite de la session
  *     -> afficher le splash
- *   - Navigation interne (Turbo/SPA ou lien normal) -> NE PAS afficher le splash
- *   - JS coupe -> l'overlay reste invisible (opacity:0 par defaut en CSS) = pas de blocage
+ *   - Navigation interne -> NE PAS afficher le splash
+ *   - JS coupe -> l'overlay reste invisible (opacity:0 par defaut en CSS) -> pas de blocage
  *   - prefers-reduced-motion -> aucune animation, logo bref, puis disparition
  *
- * DUREE :
- *   Animation spirale : ~2500ms (ANIM_DURATION_MS)
- *   Fondu de sortie   : ~500ms (gere par CSS transition opacity)
+ * DUREE TOTALE VISIBLE :
+ *   Le splash s'affiche pendant SPLASH_DURATION ms, puis fondu de sortie 0.5s.
+ *   La variable time avance de 0 a 1 en 15 000 ms (vitesse identique a la ref GSAP).
+ *   On voit donc le debut fidele de la sequence spirale pendant SPLASH_DURATION ms.
+ *
+ * CANVAS CARRE :
+ *   size = Math.max(innerWidth, innerHeight)
+ *   Le canvas est size x size en backing store (x DPR), centre par CSS.
+ *   Cela correspond exactement a la reference (pas de deformation sur ecrans larges).
  *
  * DEVICEPIXELRATIO :
- *   Le canvas est dimensionne en pixels physiques (DPR * taille CSS) pour
+ *   Le canvas est dimensionne en pixels physiques (DPR * size) pour
  *   un rendu net sur les ecrans Retina (DPR = 2 ou 3).
  */
 
 (function () {
     'use strict';
 
-    /* ── Constantes de configuration ───────────────────────────────────────── */
+    /* ======================================================================
+     * CONSTANTES IDENTIQUES A LA REFERENCE REACT/GSAP
+     * Reproduire exactement ces valeurs est essentiel pour la fidelite visuelle.
+     * ====================================================================== */
 
-    /* Duree totale de l'animation spirale en millisecondes */
-    var ANIM_DURATION_MS = 2500;
+    /**
+     * SPLASH_DURATION : duree d'affichage du splash en millisecondes.
+     * La spirale tourne pendant ce temps (time avance a la vitesse ref).
+     * Ajustable pour calibrer la duree du preloader sans modifier la vitesse
+     * de l'animation (les deux sont independants).
+     * Valeur par defaut : 5000 ms = 5 secondes.
+     */
+    var SPLASH_DURATION = 5000;
 
-    /* Duree du fondu de sortie de l'overlay en millisecondes (doit correspondre
-     * a la valeur de "transition: opacity Xs" dans preloader.css) */
+    /* Duree du fondu de sortie (ms) -- doit correspondre a la transition CSS */
     var FADE_OUT_MS = 500;
 
-    /* Nombre d'etoiles affichees dans la spirale */
-    var STAR_COUNT = 180;
+    /* Fraction du temps total ou le point de depart change de direction (phase 2 begin) */
+    var changeEventTime = 0.32;
 
-    /* Facteur de perspective pour la projection 3D -> 2D.
-     * Plus cette valeur est grande, moins la perspective est prononcee. */
-    var PERSPECTIVE = 250;
+    /* Position Z initiale de la camera (valeur negative = devant la scene) */
+    var cameraZ = -400;
 
-    /* ── Utilitaires mathematiques ──────────────────────────────────────────── */
+    /* Distance totale parcourue par la camera sur l'axe Z pendant l'animation */
+    var cameraTravelDistance = 3400;
+
+    /* Decalage vertical du point de depart de la spirale par rapport au centre */
+    var startDotYOffset = 28;
+
+    /* Facteur de zoom de la projection 3D (controle l'ampleur de la perspective) */
+    var viewZoom = 100;
+
+    /* Nombre total d'etoiles dans la scene */
+    var numberOfStars = 5000;
+
+    /* Nombre de segments dans la trainee lumineuse derriere le point central */
+    var trailLength = 80;
+
+    /* ======================================================================
+     * GENERATEUR ALEATOIRE A GRAINE FIXE (seed = 1234)
+     *
+     * La reference utilise ce generateur pendant la creation des etoiles pour
+     * garantir une DISTRIBUTION DETERMINISTE. Cela signifie que la position de
+     * chaque etoile est IDENTIQUE a chaque chargement de page, ce qui est cle
+     * pour matcher le visuel de la reference.
+     *
+     * Algorithme : generateur lineaire congruentiel (LCG) classique.
+     *   seed = (seed * 9301 + 49297) % 233280
+     *   valeur = seed / 233280  (retourne un float dans [0, 1[)
+     *
+     * ATTENTION AU BUG DE LA REFERENCE :
+     *   Dans la ref originale, createStars() est appelee deux fois, ce qui
+     *   avance le generateur deux fois et produit un ensemble d'etoiles different
+     *   de ce qu'on obtiendrait en l'appelant une seule fois.
+     *   INSTRUCTION : creer les etoiles UNE SEULE FOIS avec le RNG a graine.
+     *   On reproduit ainsi la seed de depart mais sans le doublon.
+     * ====================================================================== */
 
     /**
-     * ease (easing lineaire simple - identite ici, peut etre remplace).
-     * t : valeur normalisee entre 0 et 1.
-     * @param {number} t
+     * setupRandomGenerator : installe temporairement un Math.random personnalise.
+     * Appeler endRandomGenerator() pour restaurer le Math.random natif.
+     *
+     * @returns {{ end: function }} -- objet avec methode end() pour restaurer
+     */
+    function setupRandomGenerator() {
+        /* Graine initiale -- identique a la reference */
+        var seed = 1234;
+
+        /* Sauvegarde du Math.random natif pour le restaurer ensuite */
+        var nativeRandom = Math.random;
+
+        /* Remplacement de Math.random par le LCG a graine */
+        Math.random = function () {
+            /* Etape LCG : avance la graine */
+            seed = (seed * 9301 + 49297) % 233280;
+            /* Normalise dans [0, 1[ */
+            return seed / 233280;
+        };
+
+        return {
+            end: function () {
+                /* Restaure Math.random natif -- important pour le reste du code */
+                Math.random = nativeRandom;
+            }
+        };
+    }
+
+    /* ======================================================================
+     * UTILITAIRES MATHEMATIQUES -- reproduits exactement de la reference
+     * ====================================================================== */
+
+    /**
+     * ease(p, g) : easing generique a puissance.
+     *
+     * Courbe : accelere au debut (comportement "ease-in" si g > 1).
+     * Utilise pour le mouvement de la camera (newCameraZ) et la rotation globale.
+     *
+     * @param {number} p - valeur normalisee [0, 1]
+     * @param {number} g - exposant (gamma) : > 1 = ease-in, 1 = lineaire
      * @returns {number}
      */
-    function ease(t) {
-        /* Courbe sinusoidale douce : accelere au debut, ralentit a la fin */
-        return t < 0.5
-            ? 2 * t * t
-            : -1 + (4 - 2 * t) * t;
+    function ease(p, g) {
+        return Math.pow(p, g);
     }
 
     /**
-     * easeOutElastic : rebond elastique en sortie.
-     * Utilise pour l'apparition des points de la spirale.
-     * @param {number} t - valeur entre 0 et 1
+     * easeOutElastic(x) : rebond elastique en sortie.
+     *
+     * Depasse brievement 1 puis revient -- effet "ressort".
+     * Utilise dans la classe Star (sizeMultiplier, blend phases).
+     *
+     * @param {number} x - valeur normalisee [0, 1]
      * @returns {number}
      */
-    function easeOutElastic(t) {
-        if (t === 0 || t === 1) return t;
-        var p = 0.4;
-        var s = p / 4;
-        return Math.pow(2, -10 * t) * Math.sin((t - s) * (2 * Math.PI) / p) + 1;
+    function easeOutElastic(x) {
+        var c4 = (2 * Math.PI) / 3;
+        if (x === 0) return 0;
+        if (x === 1) return 1;
+        return Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * c4) + 1;
     }
 
     /**
-     * map : remapping lineaire d'une valeur d'un intervalle vers un autre.
+     * map(value, low1, high1, low2, high2) : remapping lineaire.
+     *
+     * Transforme `value` qui vit dans [low1, high1] vers un equivalent dans [low2, high2].
+     * Identique a la fonction map() de Processing/p5.js.
+     *
      * @param {number} value
-     * @param {number} low1 - borne basse de l'intervalle source
-     * @param {number} high1 - borne haute de l'intervalle source
-     * @param {number} low2 - borne basse de l'intervalle cible
-     * @param {number} high2 - borne haute de l'intervalle cible
+     * @param {number} low1
+     * @param {number} high1
+     * @param {number} low2
+     * @param {number} high2
      * @returns {number}
      */
     function map(value, low1, high1, low2, high2) {
@@ -89,7 +173,10 @@
     }
 
     /**
-     * constrain : limite une valeur entre min et max.
+     * constrain(value, min, max) : clamp.
+     *
+     * Limite `value` entre `min` et `max`.
+     *
      * @param {number} value
      * @param {number} min
      * @param {number} max
@@ -100,204 +187,193 @@
     }
 
     /**
-     * lerp : interpolation lineaire entre a et b.
-     * t=0 -> a, t=1 -> b.
+     * lerp(a, b, t) : interpolation lineaire.
+     *
+     * t=0 -> a, t=1 -> b, valeurs intermediaires : lineaire.
+     *
      * @param {number} a
      * @param {number} b
-     * @param {number} t
+     * @param {number} t - facteur [0, 1]
      * @returns {number}
      */
     function lerp(a, b, t) {
         return a + (b - a) * t;
     }
 
-    /* ── Classe Star ────────────────────────────────────────────────────────── */
-
     /**
-     * Star : une etoile dans l'espace 3D de la spirale.
+     * spiralPath(p) : position 2D du point courant de la spirale.
      *
-     * PHASES DE DEPLACEMENT (identiques au composant React d'origine) :
-     *   Phase 1 (t de 0 a 0.3) : l'etoile part d'une position aleatoire eloignee
-     *                             et converge vers l'axe de la spirale.
-     *   Phase 2 (t de 0.3 a 0.7) : l'etoile suit la trajectoire helicoide (spirale 3D).
-     *   Phase 3 (t de 0.7 a 1.0) : l'etoile se disperse vers l'exterieur puis disparait.
+     * La spirale fait 6 tours complets (theta = 2*PI*6*p).
+     * Le rayon grandit proportionnellement a sqrt(p) (spirale d'Archimede modifiee).
+     * Le point de depart est decale vers le bas de startDotYOffset.
      *
-     * @param {number} index - index de l'etoile (0 a STAR_COUNT-1)
-     * @param {number} total - nombre total d'etoiles
+     * @param {number} p - progression [0, 1]
+     * @returns {{ x: number, y: number }}
      */
-    function Star(index, total) {
-        /* Angle sur la spirale : reparti regulierement + decalage aleatoire */
-        this.angle = (index / total) * Math.PI * 2 * 6 + (Math.random() - 0.5) * 0.5;
-
-        /* Rayon initial dans l'espace 3D */
-        this.radius = map(index, 0, total, 20, 160);
-
-        /* Profondeur z initiale : les etoiles partent "devant" la camera */
-        this.z = Math.random() * 300 - 150;
-
-        /* Position de depart aleatoire (phase 1) */
-        this.startX = (Math.random() - 0.5) * 800;
-        this.startY = (Math.random() - 0.5) * 800;
-        this.startZ = Math.random() * 400 - 200;
-
-        /* Taille visuelle de l'etoile en pixels CSS */
-        this.size = Math.random() * 2.5 + 0.5;
-
-        /* Opacite de base */
-        this.opacity = Math.random() * 0.6 + 0.4;
-
-        /* Decalage de phase : chaque etoile demarre legerement plus tard
-         * -> effet de cascade progressif plutot qu'un demarrage simultane */
-        this.phaseOffset = (index / total) * 0.3;
-
-        /* Historique des positions precedentes pour le trail (trainee lumineuse) */
-        this.trail = [];
-
-        /* Nombre maximum de points dans la trainee */
-        this.maxTrail = 8;
+    function spiralPath(p) {
+        var r = 170 * Math.sqrt(p);
+        var theta = p * Math.PI * 2 * 6; /* 6 tours */
+        return {
+            x: Math.cos(theta) * r,
+            y: Math.sin(theta) * r + startDotYOffset
+        };
     }
 
     /**
-     * Calcule la position 3D de l'etoile pour une progression t donnee.
+     * rotate(v1, v2, p, orientation) : interpolation de position avec rebond.
      *
-     * @param {number} t - progression globale de l'animation (0 a 1)
-     * @returns {{x3d: number, y3d: number, z3d: number, alpha: number}}
-     *          Position 3D et opacite resultante.
+     * Interpole entre les positions v1 et v2 avec un easing cubique (ease(p,3))
+     * et un leger rebond elastique. L'orientation (+1 ou -1) controle le sens
+     * du deplacement lateral.
+     *
+     * Utilise pour calculer la position des segments du trail (drawTrail).
+     *
+     * @param {{ x: number, y: number }} v1 - position de depart
+     * @param {{ x: number, y: number }} v2 - position d'arrivee
+     * @param {number} p - progression [0, 1]
+     * @param {number} orientation - +1 ou -1 (sens du rebond lateral)
+     * @returns {{ x: number, y: number }}
      */
-    Star.prototype.getPosition = function (t) {
-        /* Progression locale de cette etoile (decalee par phaseOffset) */
-        var localT = constrain((t - this.phaseOffset) / (1 - this.phaseOffset), 0, 1);
+    function rotate(v1, v2, p, orientation) {
+        /* Easing cubique de base */
+        var t = ease(p, 3);
+        /* Rebond elastique attenue : easeOutElastic reduit a 15% pour un effet subtil */
+        var bounce = easeOutElastic(p) * 0.15;
+        return {
+            x: lerp(v1.x, v2.x, t) + orientation * bounce * (v2.x - v1.x),
+            y: lerp(v1.y, v2.y, t) + orientation * bounce * (v2.y - v1.y)
+        };
+    }
 
-        var x3d, y3d, z3d, alpha;
+    /* ======================================================================
+     * CLASSE STAR
+     *
+     * Represente une etoile individuelle dans l'espace 3D de la scene.
+     * Chaque etoile a trois phases de mouvement distinctes identiques a la ref.
+     *
+     * PHASES :
+     *   Phase 1 (t de 0 a 0.30) : convergence depuis position aleatoire
+     *   Phase 2 (t de 0.30 a 0.70) : suivi de trajectoire helicoide (deplacement z)
+     *   Phase 3 (t de 0.70 a 1.00) : expansion et disparition
+     *
+     * Deplacements : 30% / 40% / 30% de la duree totale.
+     *
+     * UTILISATION DU RNG :
+     *   Le constructeur doit etre appele APRES setupRandomGenerator() et AVANT end().
+     *   Toutes les valeurs aleatoires de chaque etoile sont ainsi determinees
+     *   par la graine fixe -> distribution identique a chaque chargement.
+     * ====================================================================== */
 
-        if (localT < 0.3) {
-            /* ── Phase 1 : convergence vers la spirale ─────────────────────── */
-            /* L'etoile va de sa position initiale vers sa position sur la spirale */
-            var p1 = localT / 0.3;             /* progression dans la phase 1 : 0->1 */
-            var p1e = easeOutElastic(p1);
+    /**
+     * Constructeur Star.
+     *
+     * @param {number} totalStars - nombre total d'etoiles (pour le placement initial)
+     */
+    function Star(totalStars) {
+        /* Position initiale aleatoire dans l'espace 3D (point de depart phase 1) */
+        this.x = (Math.random() - 0.5) * 2000;
+        this.y = (Math.random() - 0.5) * 2000;
+        this.z = (Math.random() - 0.5) * 2000;
 
-            /* Position cible sur la spirale au debut de la phase 2 */
-            var targetAngle = this.angle;
-            var targetR     = this.radius;
-            var targetX     = Math.cos(targetAngle) * targetR;
-            var targetY     = Math.sin(targetAngle) * targetR;
-            var targetZ     = this.z;
+        /* Facteur de poids visuel (epaisseur du trait) -- variant par etoile */
+        this.strokeWeightFactor = Math.random() * 0.8 + 0.6;
 
-            x3d = lerp(this.startX, targetX, p1e);
-            y3d = lerp(this.startY, targetY, p1e);
-            z3d = lerp(this.startZ, targetZ, p1e);
-            alpha = lerp(0, this.opacity, p1);
+        /* dotSize de base identique a la reference */
+        this.dotSize = 8.5 * this.strokeWeightFactor;
 
-        } else if (localT < 0.7) {
-            /* ── Phase 2 : rotation helicoide (spirale proprement dite) ────── */
-            var p2 = (localT - 0.3) / 0.4;    /* progression dans la phase 2 : 0->1 */
+        /* Identifiant de phase propre a cette etoile :
+         * decalage aleatoire [0, 1[ qui repartit les etoiles dans le temps */
+        this.phaseId = Math.random();
 
-            /* L'angle augmente au fil du temps : rotation de la spirale */
-            var a2 = this.angle + p2 * Math.PI * 2;
+        /* Orientation du rebond lateral dans rotate() : alternance +1/-1 */
+        this.orientation = Math.random() > 0.5 ? 1 : -1;
 
-            /* Le rayon se resserre legerement vers le centre */
-            var r2 = this.radius * (1 - p2 * 0.15);
+        /* Position cible finale determinee aleatoirement (point de destination phase 3) */
+        this.targetX = (Math.random() - 0.5) * 2000;
+        this.targetY = (Math.random() - 0.5) * 2000;
+        this.targetZ = (Math.random() - 0.5) * 2000;
+    }
 
-            x3d  = Math.cos(a2) * r2;
-            y3d  = Math.sin(a2) * r2;
-            /* Deplacement en profondeur : les etoiles avancent vers la camera */
-            z3d  = this.z + p2 * 100;
-            alpha = this.opacity;
+    /**
+     * getPosition(t1, t2) : calcule la position 3D et le facteur de taille
+     * de cette etoile en fonction des deux temps de progression.
+     *
+     * t1 : progression phase spirale (0->1 entre 0 et changeEventTime+0.25)
+     * t2 : progression phase camera (0->1 entre changeEventTime et 1)
+     *
+     * PHASES :
+     *   - t1 < 0.3  (phase 1) : convergence lineaire depuis position initiale
+     *   - t1 < 0.7  (phase 2) : deplacement sur l'axe Z avec blend power/elastic
+     *   - t1 >= 0.7 (phase 3) : expansion vers position cible
+     *
+     * @param {number} t1 - progression phase 1 (0->1)
+     * @param {number} t2 - progression phase 2 / camera (0->1)
+     * @returns {{ x: number, y: number, z: number, sizeMultiplier: number }}
+     */
+    Star.prototype.getPosition = function (t1, t2) {
+        var x, y, z, sizeMultiplier;
+
+        if (t1 < 0.3) {
+            /* ---- Phase 1 : convergence depuis la position initiale ---------- */
+            /* p = progression locale dans cette phase (0->1) */
+            var p1 = t1 / 0.3;
+
+            /* Interpolation lineaire vers (0, 0, 0) -- centre de la scene */
+            x = lerp(this.x, 0, p1);
+            y = lerp(this.y, 0, p1);
+            z = lerp(this.z, 0, p1);
+
+            /* La taille grandit progressivement depuis 0 */
+            sizeMultiplier = p1;
+
+        } else if (t1 < 0.7) {
+            /* ---- Phase 2 : deplacement helicoide sur l'axe Z ---------------- */
+            /* p2 = progression locale (0->1), centree sur la phase 2 */
+            var p2 = (t1 - 0.3) / 0.4;
+
+            /* Position en X/Y : oscillation autour de 0 (etoiles "flottent") */
+            x = Math.sin(p2 * Math.PI * 2 * 3 + this.phaseId * Math.PI * 2) * 100;
+            y = Math.cos(p2 * Math.PI * 2 * 3 + this.phaseId * Math.PI * 2) * 100;
+
+            /* Deplacement en Z : les etoiles avancent vers la camera */
+            z = lerp(0, -cameraTravelDistance * 0.6, ease(p2, 1.2));
+
+            /* Blend entre easing power et elastique : effect "pulse" de taille */
+            var powerBlend = ease(p2, 2);
+            var elasticBlend = easeOutElastic(p2);
+            sizeMultiplier = lerp(powerBlend, elasticBlend, 0.3) + 0.5;
 
         } else {
-            /* ── Phase 3 : dispersion et disparition ────────────────────────── */
-            var p3 = (localT - 0.7) / 0.3;    /* progression dans la phase 3 : 0->1 */
+            /* ---- Phase 3 : expansion vers position cible -------------------- */
+            var p3 = (t1 - 0.7) / 0.3;
 
-            /* Continuer la rotation */
-            var a3 = this.angle + 0.4 * Math.PI * 2 + p3 * Math.PI;
+            /* Les etoiles s'eloignent rapidement vers leur position cible */
+            x = lerp(0, this.targetX, ease(p3, 2));
+            y = lerp(0, this.targetY, ease(p3, 2));
+            z = lerp(-cameraTravelDistance * 0.6, this.targetZ, ease(p3, 1.5));
 
-            /* Les etoiles s'ecartent rapidement du centre */
-            var r3 = this.radius * (1 - 0.15 + p3 * 2.5);
-
-            x3d  = Math.cos(a3) * r3;
-            y3d  = Math.sin(a3) * r3;
-            z3d  = this.z + 100 + p3 * 200;
-            alpha = lerp(this.opacity, 0, p3);
+            /* La taille diminue et disparait */
+            sizeMultiplier = lerp(1.5, 0, ease(p3, 1.5));
         }
 
-        return { x3d: x3d, y3d: y3d, z3d: z3d, alpha: alpha };
+        return { x: x, y: y, z: z, sizeMultiplier: sizeMultiplier };
     };
 
-    /**
-     * Rendu d'une etoile sur le canvas.
-     * Inclut le dessin de la trainee lumineuse (trail) derriere l'etoile.
+    /* ======================================================================
+     * ANIMATION CONTROLLER
      *
-     * @param {CanvasRenderingContext2D} ctx
-     * @param {number} cx  - coordonnee X du centre de la scene
-     * @param {number} cy  - coordonnee Y du centre de la scene
-     * @param {number} t   - progression de l'animation (0 a 1)
-     */
-    Star.prototype.render = function (ctx, cx, cy, t) {
-        var pos = this.getPosition(t);
+     * Gere le cycle de vie complet de l'animation :
+     *   1. init()         : recupere les elements DOM, calibre le canvas
+     *   2. createStars()  : instancie les etoiles avec le RNG a graine fixe
+     *   3. start()        : verifie si le splash doit s'afficher, lance la boucle
+     *   4. render()       : dessin a chaque frame (boucle requestAnimationFrame)
+     *   5. showProjectedDot() : projection 3D->2D + dessin d'un point
+     *   6. drawStartDot() : point de depart de la spirale (halo + cercle)
+     *   7. drawTrail()    : trainee de 80 segments derriere le point central
+     *   8. finish()       : declenche le fondu de sortie de l'overlay
+     *   9. hide()         : masque definitivement l'overlay + nettoyage
+     * ====================================================================== */
 
-        /* ── Projection 3D -> 2D (perspective) ─────────────────────────────── */
-        /*
-         * Formule de projection en perspective conique :
-         *   x2d = cx + x3d * (PERSPECTIVE / (PERSPECTIVE + z3d))
-         * Plus z3d est grand (loin), plus l'etoile est proche du centre (cx, cy).
-         * Plus z3d est negatif (pres), plus elle s'ecarte du centre.
-         */
-        var dz = PERSPECTIVE + pos.z3d;
-        if (dz <= 0) return;                    /* derriere la camera : ne pas dessiner */
-        var scale = PERSPECTIVE / dz;
-
-        var x2d = cx + pos.x3d * scale;
-        var y2d = cy + pos.y3d * scale;
-        var r   = this.size * scale;
-
-        if (r < 0.1) return;                    /* trop petit : ne pas dessiner */
-
-        /* ── Mise a jour de la trainee ─────────────────────────────────────── */
-        /* On empile la position courante au debut du tableau */
-        this.trail.unshift({ x: x2d, y: y2d, r: r });
-
-        /* On limite la longueur de la trainee */
-        if (this.trail.length > this.maxTrail) {
-            this.trail.pop();
-        }
-
-        /* ── Dessin de la trainee (trait qui s'estompe) ─────────────────────── */
-        if (this.trail.length > 1) {
-            for (var i = 1; i < this.trail.length; i++) {
-                /* L'opacite de la trainee diminue avec la distance */
-                var trailAlpha = pos.alpha * (1 - i / this.trail.length) * 0.4;
-                var trailR     = this.trail[i].r * (1 - i / this.trail.length * 0.5);
-
-                if (trailR < 0.05 || trailAlpha < 0.01) continue;
-
-                ctx.beginPath();
-                ctx.arc(this.trail[i].x, this.trail[i].y, trailR, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255,255,255,' + trailAlpha + ')';
-                ctx.fill();
-            }
-        }
-
-        /* ── Dessin de l'etoile principale ─────────────────────────────────── */
-        ctx.beginPath();
-        ctx.arc(x2d, y2d, r, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,255,255,' + pos.alpha + ')';
-        ctx.fill();
-    };
-
-    /* ── AnimationController ────────────────────────────────────────────────── */
-
-    /**
-     * AnimationController : gere le cycle de vie complet de l'animation.
-     *
-     * CYCLE :
-     *   1. init()       : recupere les elements DOM, initialise les etoiles
-     *   2. start()      : verifie si le splash doit etre affiche, lance la boucle rAF
-     *   3. render()     : dessin a chaque frame (appele par rAF)
-     *   4. finish()     : declenche le fondu de sortie de l'overlay
-     *   5. hide()       : masque definitivement l'overlay apres le fondu
-     *
-     * @constructor
-     */
     function AnimationController() {
         /* Elements DOM */
         this.overlay = null;
@@ -305,34 +381,33 @@
         this.logo    = null;
         this.ctx     = null;
 
-        /* Dimensions du canvas en pixels physiques (DPR pris en compte) */
-        this.canvasW = 0;
-        this.canvasH = 0;
+        /* Taille du cote du canvas carre en pixels CSS */
+        this.size    = 0;
+        /* DevicePixelRatio courant */
         this.dpr     = 1;
 
         /* Tableau des etoiles */
         this.stars = [];
 
-        /* Progression de l'animation : de 0 a 1 */
+        /* Progression de l'animation : de 0 a 1 sur 15 000 ms */
         this.time = 0;
 
-        /* Timestamp de debut de l'animation (fixe par rAF a la premiere frame) */
+        /* Timestamp de la premiere frame (fixe par rAF) */
         this.startTime = null;
 
-        /* Identifiant de la boucle requestAnimationFrame (pour pouvoir l'annuler) */
+        /* Identifiant du rAF courant (pour annulation) */
         this.rafId = null;
 
-        /* Référence au handler 'resize' enregistré sur window.
-         * Stockée ici pour pouvoir le retirer proprement dans hide() et éviter
-         * une fuite mémoire (un handler orphelin resterait lié à l'objet controller
-         * même après la disparition de l'overlay). */
+        /* Indique si le fondu de sortie a deja ete declenche */
+        this.finishing = false;
+
+        /* Handler resize stocke pour nettoyage dans hide() */
         this.resizeHandler = null;
     }
 
     /**
-     * Initialise les elements DOM et les etoiles.
-     * Retourne false si les elements sont absents du DOM.
-     * @returns {boolean}
+     * init() : initialise les elements DOM et calibre le canvas.
+     * @returns {boolean} false si un element est manquant
      */
     AnimationController.prototype.init = function () {
         this.overlay = document.getElementById('bzrt-preloader');
@@ -340,222 +415,347 @@
         this.logo    = document.getElementById('bzrt-preloader-logo');
 
         if (!this.overlay || !this.canvas || !this.logo) {
-            /* Les elements ne sont pas dans le DOM (page sans base.html.twig ?) */
             return false;
         }
 
         this.ctx = this.canvas.getContext('2d');
         if (!this.ctx) return false;
 
-        /* Calibration initiale du canvas */
+        /* Calibrage initial */
         this.resize();
-
-        /* Initialisation des etoiles */
-        this.stars = [];
-        for (var i = 0; i < STAR_COUNT; i++) {
-            this.stars.push(new Star(i, STAR_COUNT));
-        }
 
         return true;
     };
 
     /**
-     * Adapte la taille du canvas a la fenetre en tenant compte du devicePixelRatio.
+     * createStars() : instancie toutes les etoiles avec le RNG a graine fixe.
      *
-     * POURQUOI DPR ?
-     * Sur un ecran Retina (DPR=2), chaque pixel CSS = 4 pixels physiques.
-     * Si on ne tient pas compte du DPR, le canvas est rendu en basse resolution
-     * et apparait flou sur ces ecrans.
-     * Solution : canvas.width/height en pixels physiques, context scale par DPR,
-     * style.width/height en pixels CSS (via CSS position:absolute 100%).
+     * IMPORTANT : setupRandomGenerator() remplace Math.random pendant toute
+     * cette methode. Le RNG est restaure a la fin via rng.end().
+     * La distribution est ainsi 100% deterministe = identique a chaque page load.
+     *
+     * On cree les etoiles UNE SEULE FOIS (bug original : 2 appels -> on n'en fait qu'un).
+     */
+    AnimationController.prototype.createStars = function () {
+        /* Installation du RNG a graine fixe */
+        var rng = setupRandomGenerator();
+
+        this.stars = [];
+        for (var i = 0; i < numberOfStars; i++) {
+            this.stars.push(new Star(numberOfStars));
+        }
+
+        /* Restauration de Math.random natif IMMEDIATEMENT apres la creation */
+        rng.end();
+    };
+
+    /**
+     * resize() : adapte la taille du canvas a la fenetre.
+     *
+     * Le canvas est CARRE (size = max(innerWidth, innerHeight)) pour
+     * correspondre exactement a la reference. Le CSS centre le canvas
+     * avec position:absolute + transform translate(-50%,-50%).
+     *
+     * DPR : canvas.width/height = size * DPR (pixels physiques nets).
+     * ctx.setTransform() : corrige l'echelle pour travailler en pixels CSS.
      */
     AnimationController.prototype.resize = function () {
-        this.dpr     = window.devicePixelRatio || 1;
-        this.canvasW = window.innerWidth  * this.dpr;
-        this.canvasH = window.innerHeight * this.dpr;
+        this.dpr  = window.devicePixelRatio || 1;
+        /* Canvas carre : max des deux dimensions de la fenetre */
+        this.size = Math.max(window.innerWidth, window.innerHeight);
 
-        this.canvas.width  = this.canvasW;
-        this.canvas.height = this.canvasH;
+        /* Dimensions du backing store en pixels physiques */
+        this.canvas.width  = this.size * this.dpr;
+        this.canvas.height = this.size * this.dpr;
 
-        /* Le context est scale : 1 unite = 1 pixel CSS (pas physique) */
+        /* Le canvas occupe exactement `size` x `size` pixels CSS.
+         * position:absolute avec left:50%/top:50% + translate(-50%,-50%)
+         * le centre sur l'ecran (voir preloader.css). */
+        this.canvas.style.width  = this.size + 'px';
+        this.canvas.style.height = this.size + 'px';
+
+        /* On travaille en coordonnees CSS (1 unite = 1px CSS, pas physique) */
         this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     };
 
     /**
-     * Calcule la position angulaire de la spirale pour un parametre t donne.
-     * Utilise pour dessiner le chemin central de la spirale (reference visuelle).
+     * showProjectedDot(ctx, position, sizeFactor) : projette un point 3D sur le canvas 2D.
      *
-     * @param {number} t - progression de l'animation (0 a 1)
-     * @returns {{x: number, y: number}}
+     * Formule de projection identique a la reference :
+     *   newCameraZ = cameraZ + ease(pow(t2, 1.2), 1.8) * cameraTravelDistance
+     *   depth = position.z - newCameraZ
+     *   x2d   = viewZoom * position.x / depth   (+ translation au centre)
+     *   y2d   = viewZoom * position.y / depth
+     *   sw    = 400 * sizeFactor / depth         (epaisseur / rayon)
+     *
+     * NB : dans la reference, la projection est calculee avec t2 courant.
+     * t2 est passe en parametre via le contexte de render().
+     *
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {{ x: number, y: number, z: number }} position - position 3D
+     * @param {number} sizeFactor - facteur de taille (sizeMultiplier de l'etoile)
+     * @param {number} t2 - progression de la phase camera (0->1)
      */
-    AnimationController.prototype.spiralPath = function (t) {
-        var cx = window.innerWidth  / 2;
-        var cy = window.innerHeight / 2;
+    AnimationController.prototype.showProjectedDot = function (ctx, position, sizeFactor, t2) {
+        /* Calcul de la position Z courante de la camera */
+        var newCameraZ = cameraZ + ease(Math.pow(t2, 1.2), 1.8) * cameraTravelDistance;
 
-        /* La spirale fait 4 tours complets */
-        var angle  = t * Math.PI * 2 * 4;
-        var radius = t * Math.min(cx, cy) * 0.6;
+        /* Profondeur : distance entre le point et la camera */
+        var depth = position.z - newCameraZ;
 
-        return {
-            x: cx + Math.cos(angle) * radius,
-            y: cy + Math.sin(angle) * radius
-        };
+        /* On ne dessine pas les points derriere la camera (depth <= 0) */
+        if (depth <= 0) return;
+
+        /* Projection 3D -> 2D (coordonnees relatives au centre du canvas) */
+        var x2d = viewZoom * position.x / depth;
+        var y2d = viewZoom * position.y / depth;
+
+        /* Rayon du point projete (sw = strokeWeight) */
+        var sw = 400 * sizeFactor / depth;
+
+        /* On ne dessine pas les points trop petits (optimisation + proprete) */
+        if (sw < 0.1) return;
+
+        /* Dessin du cercle plein blanc */
+        ctx.beginPath();
+        ctx.arc(x2d, y2d, sw * 0.5, 0, Math.PI * 2);
+        ctx.fill();
     };
 
     /**
-     * Rendu d'un point central de la spirale (le "point de depart" visible).
-     * @param {number} cx
-     * @param {number} cy
+     * drawStartDot(ctx) : dessine le point de depart de la spirale.
+     *
+     * Ce point suit la trajectoire spiralPath() et est toujours au centre
+     * (coordonnees relatives au centre du canvas, apres translate(size/2, size/2)).
+     * Il est visible en permanence pendant la phase 1 (t1 faible).
+     *
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {number} t1 - progression de la spirale (0->1)
      */
-    AnimationController.prototype.drawStartDot = function (cx, cy) {
-        /* Halo lumineux autour du point central */
-        var grad = this.ctx.createRadialGradient(cx, cy, 0, cx, cy, 12);
+    AnimationController.prototype.drawStartDot = function (ctx, t1) {
+        /* Position du point sur la spirale */
+        var pos = spiralPath(t1);
+
+        /* Halo lumineux gradient radial autour du point */
+        var grad = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 16);
         grad.addColorStop(0,   'rgba(255,255,255,0.9)');
         grad.addColorStop(0.4, 'rgba(255,255,255,0.3)');
         grad.addColorStop(1,   'rgba(255,255,255,0)');
 
-        this.ctx.beginPath();
-        this.ctx.arc(cx, cy, 12, 0, Math.PI * 2);
-        this.ctx.fillStyle = grad;
-        this.ctx.fill();
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, 16, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
 
         /* Point central opaque */
-        this.ctx.beginPath();
-        this.ctx.arc(cx, cy, 2, 0, Math.PI * 2);
-        this.ctx.fillStyle = 'rgba(255,255,255,0.95)';
-        this.ctx.fill();
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.fill();
     };
 
     /**
-     * Rendu d'une frame de l'animation.
-     * Appele a chaque iteration de la boucle requestAnimationFrame.
+     * drawTrail(ctx, t1) : dessine la trainee de 80 segments derriere le point central.
      *
-     * @param {number} timestamp - timestamp fourni par rAF en millisecondes
+     * La trainee interpole entre les positions successives de la spirale en utilisant
+     * la fonction rotate() pour creer un effet de courbure avec rebond.
+     * Chaque segment est plus fin et plus transparent que le precedent.
+     *
+     * Le nombre de segments est exactement trailLength = 80 (identique a la ref).
+     *
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {number} t1 - progression de la spirale (0->1)
+     */
+    AnimationController.prototype.drawTrail = function (ctx, t1) {
+        if (t1 <= 0) return;
+
+        /* Position courante du point (bout de la trainee) */
+        var current = spiralPath(t1);
+
+        for (var i = 1; i <= trailLength; i++) {
+            /* Progression relative dans le trail : 0 (bout) -> 1 (queue) */
+            var trailT = i / trailLength;
+
+            /* Position de ce segment : on remonte la spirale dans le passe */
+            var pastT = Math.max(0, t1 - trailT * t1);
+            var past  = spiralPath(pastT);
+
+            /* Interpolation avec rebond via rotate() */
+            var pos = rotate(current, past, trailT, this._trailOrientation || 1);
+
+            /* Opacite et epaisseur decroissantes avec la distance */
+            var alpha     = (1 - trailT) * 0.6;
+            var lineWidth = (1 - trailT) * 3.0;
+
+            if (alpha < 0.01 || lineWidth < 0.05) continue;
+
+            /* Dessin du segment comme un petit arc */
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, lineWidth * 0.5, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,' + alpha.toFixed(3) + ')';
+            ctx.fill();
+        }
+    };
+
+    /**
+     * render(timestamp) : boucle principale de rendu.
+     *
+     * Appelee a chaque frame par requestAnimationFrame.
+     *
+     * VITESSE : time avance de 0 a 1 en 15 000 ms (identique a la ref GSAP).
+     *   time += dt / 15000
+     *
+     * CALCUL DE t1 ET t2 (identique a la reference) :
+     *   t1 = constrain(map(time, 0, changeEventTime + 0.25, 0, 1), 0, 1)
+     *        -> progression de la spirale (phase 1)
+     *   t2 = constrain(map(time, changeEventTime, 1, 0, 1), 0, 1)
+     *        -> progression de la camera (phase 2 + vol)
+     *
+     * FOND NOIR : fillRect plein (pas de trail alpha partiel) -> efface proprement.
+     * ROTATION GLOBALE : rotate(-PI * ease(t2, 2.7)) -> vrille autour du centre.
+     * ORDRE DE DESSIN : trail -> etoiles -> point de depart.
+     *
+     * @param {number} timestamp - timestamp fourni par rAF en ms
      */
     AnimationController.prototype.render = function (timestamp) {
-        /* Enregistrement du debut de l'animation a la premiere frame */
+        /* Enregistrement du debut a la premiere frame */
         if (this.startTime === null) {
             this.startTime = timestamp;
         }
 
-        /* Calcul de la progression (0 a 1, clampee a 1) */
-        var elapsed = timestamp - this.startTime;
-        this.time   = Math.min(elapsed / ANIM_DURATION_MS, 1);
+        /* Delta time en ms depuis la frame precedente */
+        var dt = (this.lastTimestamp !== undefined)
+            ? timestamp - this.lastTimestamp
+            : 16; /* valeur par defaut pour la premiere frame */
+        this.lastTimestamp = timestamp;
 
-        var W  = window.innerWidth;
-        var H  = window.innerHeight;
-        var cx = W / 2;
-        var cy = H / 2;
+        /* Avancement de time : 0 a 1 en 15 000 ms (vitesse identique a la ref GSAP) */
+        this.time = Math.min(this.time + dt / 15000, 1);
 
-        /* ── Effacement du canvas (fond noir semi-transparent pour trail effect) */
-        /*
-         * On n'efface pas completement le canvas a chaque frame.
-         * On applique un rectangle noir semi-opaque (alpha=0.15) :
-         * les anciennes frames s'estompent progressivement -> effet de trainee lumineuse.
-         * Plus l'alpha est eleve, plus la trainee est courte.
-         */
-        this.ctx.fillStyle = 'rgba(0,0,0,0.15)';
-        this.ctx.fillRect(0, 0, W, H);
+        /* Calcul des deux progressions derivees de time, identiques a la reference */
+        var t1 = constrain(map(this.time, 0, changeEventTime + 0.25, 0, 1), 0, 1);
+        var t2 = constrain(map(this.time, changeEventTime, 1, 0, 1), 0, 1);
 
-        /* ── Rendu de toutes les etoiles ─────────────────────────────────────── */
+        var ctx  = this.ctx;
+        var size = this.size;
+
+        /* ---- Fond noir total --------------------------------------------- */
+        /* fillRect sur toute la surface du canvas -> efface la frame precedente */
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, size, size);
+
+        /* ---- Sauvegarde + centrage + rotation globale -------------------- */
+        ctx.save();
+
+        /* On centre le repere au milieu du canvas carre */
+        ctx.translate(size / 2, size / 2);
+
+        /* Rotation globale de la scene : vrille autour du centre pendant t2
+         * La vitesse de rotation est identique a la reference :
+         * -PI * ease(t2, 2.7) = une demi-revolution avec acceleration cubique */
+        ctx.rotate(-Math.PI * ease(t2, 2.7));
+
+        /* ---- Dessin de la trainee ---------------------------------------- */
+        ctx.fillStyle = 'white';
+        this.drawTrail(ctx, t1);
+
+        /* ---- Dessin des etoiles ------------------------------------------ */
+        ctx.fillStyle = 'white';
         for (var i = 0; i < this.stars.length; i++) {
-            this.stars[i].render(this.ctx, cx, cy, this.time);
+            var pos3d = this.stars[i].getPosition(t1, t2);
+            var sm    = pos3d.sizeMultiplier * this.stars[i].strokeWeightFactor;
+            if (sm <= 0) continue;
+            this.showProjectedDot(ctx, pos3d, sm, t2);
         }
 
-        /* ── Point central de la spirale ─────────────────────────────────────── */
-        /* Le point suit la trajectoire spirale avec un leger easing */
-        var eased    = ease(this.time);
-        var dotPos   = this.spiralPath(eased);
-        this.drawStartDot(dotPos.x, dotPos.y);
+        /* ---- Dessin du point de depart de la spirale --------------------- */
+        ctx.fillStyle = 'white';
+        this.drawStartDot(ctx, t1);
 
-        /* ── Animation du logo en fondu progressif ───────────────────────────── */
+        /* ---- Restauration du contexte ------------------------------------ */
+        ctx.restore();
+
+        /* ---- Animation du logo en fondu progressif ----------------------- */
         /*
-         * Le logo monte progressivement en opacite pendant l'animation.
-         * Il demarre a 0 et atteint 1 vers t=0.7 (70% de l'animation).
-         * On utilise constrain pour eviter d'aller au-dela de 1.
+         * Le logo commence a apparaitre progressivement apres le debut de l'animation.
+         * Il atteint opacity:1 vers t=0.25 (25% des 15 secondes = ~3.75s).
+         * On le rend visible tot pour qu'il soit deja bien visible pendant SPLASH_DURATION.
          */
-        var logoAlpha = constrain(map(this.time, 0.1, 0.7, 0, 1), 0, 1);
+        var logoAlpha = constrain(map(this.time, 0.05, 0.25, 0, 1), 0, 1);
         this.logo.style.opacity = logoAlpha;
 
-        /* ── Fin de l'animation -> fondu de sortie ───────────────────────────── */
-        if (this.time >= 1) {
-            this.finish();
-            return; /* on n'appelle plus rAF -> la boucle s'arrete */
-        }
-
-        /* Continuer la boucle */
+        /* ---- Continuer la boucle ----------------------------------------- */
+        /* La boucle continue indeterminement ; c'est le timeout SPLASH_DURATION
+         * qui declenche finish() independamment de time. */
         var self = this;
         this.rafId = requestAnimationFrame(function (ts) { self.render(ts); });
     };
 
     /**
-     * Declenche la disparition de l'overlay.
-     * Retire .is-active (qui stoppe la transition:none) -> la transition CSS opacity:0.5s
-     * s'applique automatiquement et fait fondre l'overlay.
+     * finish() : declenche la disparition de l'overlay.
+     *
+     * Annule la boucle rAF, assure le logo visible, retire .is-active
+     * pour que la transition CSS opacity 0.5s s'applique.
      */
     AnimationController.prototype.finish = function () {
-        var self = this;
+        /* Protection contre les appels multiples */
+        if (this.finishing) return;
+        this.finishing = true;
 
-        /* S'assure que le logo est bien visible avant la sortie */
+        /* Arret de la boucle d'animation */
+        if (this.rafId !== null) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = null;
+        }
+
+        /* S'assure que le logo est pleinement visible avant le fondu */
         this.logo.style.opacity = 1;
 
-        /* Retire la classe active -> la transition CSS (0.5s) demarre automatiquement */
+        /* Retire .is-active -> la transition CSS opacity:0.5s demarre */
         this.overlay.classList.remove('is-active');
 
-        /* Apres le fondu, masque definitivement l'overlay */
+        /* Masquage definitif apres le fondu */
+        var self = this;
         setTimeout(function () {
             self.hide();
-        }, FADE_OUT_MS + 50);  /* +50ms de marge pour la transition CSS */
+        }, FADE_OUT_MS + 50);
     };
 
     /**
-     * Masque definitivement l'overlay apres le fondu.
-     * display:none retire l'element du flux de rendu.
-     * pointer-events:none (deja dans le CSS) est redondant mais explicite.
+     * hide() : masque definitivement l'overlay + nettoyage memoire.
      *
-     * On retire egalement le handler 'resize' de window pour eviter une fuite
-     * memoire : sans ce removeEventListener, le handler garderait une reference
-     * a l'objet AnimationController meme apres la fin du splash.
+     * display:none retire l'element du flux de rendu (plus de GPU utilise).
+     * removeEventListener evite la fuite memoire du handler resize.
      */
     AnimationController.prototype.hide = function () {
-        /* Nettoyage du listener resize (fuite memoire preventive) */
+        /* Nettoyage du handler resize (previent fuite memoire) */
         if (this.resizeHandler) {
             window.removeEventListener('resize', this.resizeHandler);
             this.resizeHandler = null;
         }
 
-        this.overlay.style.display    = 'none';
+        this.overlay.style.display     = 'none';
         this.overlay.style.pointerEvents = 'none';
     };
 
     /**
-     * Demarre l'animation ou masque immediatement l'overlay selon les conditions.
+     * start() : demarre l'animation ou masque l'overlay selon les conditions.
      *
      * CONDITIONS D'AFFICHAGE :
-     *   - hard refresh (navigation.type === 'reload') OU premiere visite de session
-     *   -> affiche le splash
-     *
-     *   - navigation interne (clic de lien SPA ou Turbo)
-     *   -> masque immediatement l'overlay, sans animation
-     *
+     *   - Hard refresh (type === 'reload') OU premiere visite de la session
+     *     -> affiche le splash et lance la boucle rAF
+     *   - Navigation interne (lien, Turbo...)
+     *     -> masque immediatement, sans animation
      *   - prefers-reduced-motion
-     *   -> affiche le logo brievement sans animation spirale, puis disparait
+     *     -> affiche logo brievement (400ms), pas d'animation spirale
      */
     AnimationController.prototype.start = function () {
-        /* ── Verification : doit-on afficher le splash ? ─────────────────────── */
-
-        /*
-         * performance.getEntriesByType('navigation') retourne un tableau
-         * de PerformanceNavigationTiming. Le premier element decrit le type
-         * de navigation courante :
-         *   - 'navigate'   : premiere arrivee, lien externe
-         *   - 'reload'     : hard refresh (F5, Ctrl+R, cmd+R)
-         *   - 'back_forward' : bouton retour/avant
-         *   - 'prerender'  : prerendu speculatif
+        /* ---- Verification : doit-on afficher le splash ? ----------------
          *
-         * On affiche le splash si c'est un reload OU la premiere visite de la session.
-         * sessionStorage est efface a la fermeture de l'onglet -> une nouvelle session
-         * = nouvelle visite = splash affiche.
+         * performance.getEntriesByType('navigation')[0].type :
+         *   'reload'      -> hard refresh -> splash
+         *   'navigate'    -> premiere arrivee ou lien externe -> splash si !seen
+         *   'back_forward'-> bouton retour/avant -> pas de splash
          */
         var navEntries  = performance.getEntriesByType('navigation');
         var nav         = navEntries && navEntries.length > 0 ? navEntries[0] : null;
@@ -563,97 +763,88 @@
         var firstArrival = !sessionStorage.getItem('bzrt_splash_seen');
 
         if (!isReload && !firstArrival) {
-            /* Navigation interne -> masquage immediat, pas d'animation */
+            /* Navigation interne -> masquage immediat */
             this.hide();
             return;
         }
 
-        /* Marquer la session comme ayant vu le splash */
+        /* Marque la session pour ne pas re-afficher le splash sur les pages suivantes */
         sessionStorage.setItem('bzrt_splash_seen', '1');
 
-        /* ── Cas : prefers-reduced-motion ────────────────────────────────────── */
-        /*
-         * Si l'utilisateur a configure "Reduire les animations" dans son OS,
-         * on respecte cette preference : pas de mouvement.
-         * On affiche juste l'overlay avec le logo visible brievement, puis on disparait.
+        /* ---- Cas : prefers-reduced-motion --------------------------------
+         *
+         * Respecte la preference systeme "Reduire les animations".
+         * On affiche juste le logo brievement, sans aucun mouvement.
          */
         if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            /* Le CSS rend deja le logo visible (opacity:1 dans @media reduced-motion) */
             this.overlay.classList.add('is-active');
-
-            var self = this;
-            /* Attente courte (400ms), puis disparition sans animation */
+            var selfReduced = this;
             setTimeout(function () {
-                self.hide();
+                selfReduced.hide();
             }, 400);
             return;
         }
 
-        /* ── Cas normal : animation spirale ──────────────────────────────────── */
+        /* ---- Cas normal : animation spirale ------------------------------ */
 
-        /* Afficher l'overlay instantanement (is-active supprime la transition d'entree) */
+        /* Creation des etoiles avec le RNG a graine fixe */
+        this.createStars();
+
+        /* Affichage instantane de l'overlay (is-active supprime la transition d'entree) */
         this.overlay.classList.add('is-active');
 
-        /* Effacement initial complet du canvas */
+        /* Effacement initial du canvas (fond noir pur) */
         this.ctx.fillStyle = '#000000';
-        this.ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+        this.ctx.fillRect(0, 0, this.size, this.size);
 
-        /* Demarrer la boucle d'animation */
-        var controller = this;
-        this.rafId = requestAnimationFrame(function (ts) { controller.render(ts); });
+        /* Demarrage de la boucle rAF */
+        var self = this;
+        this.rafId = requestAnimationFrame(function (ts) { self.render(ts); });
 
-        /* ── Gestion du redimensionnement de la fenetre ──────────────────────── */
-        /*
-         * Si l'utilisateur redimensionne la fenetre pendant le splash,
-         * le canvas doit etre recompute (DPR, dimensions).
-         * On utilise un delai de 100ms pour eviter de recalculer a chaque pixel.
+        /* ---- Declenchement du fondu de sortie apres SPLASH_DURATION -------
          *
-         * IMPORTANT : on stocke le handler dans this.resizeHandler pour pouvoir
-         * le retirer dans hide(). Sans ce nettoyage, le handler resterait lie
-         * a window indefiniment, gardant une reference a controller en memoire
-         * (fuite memoire mineure mais reelle).
+         * SPLASH_DURATION (5000 ms par defaut) est independant de la vitesse
+         * de l'animation (15 000 ms pour un cycle complet).
+         * On voit donc les ~33% premiers de la sequence spirale pendant le splash.
+         * Pour voir plus : augmenter SPLASH_DURATION.
          */
+        setTimeout(function () {
+            self.finish();
+        }, SPLASH_DURATION);
+
+        /* ---- Gestion du redimensionnement -------------------------------- */
         var resizeTimer = null;
-        controller.resizeHandler = function () {
+        self.resizeHandler = function () {
             clearTimeout(resizeTimer);
             resizeTimer = setTimeout(function () {
-                controller.resize();
+                self.resize();
             }, 100);
         };
-        window.addEventListener('resize', controller.resizeHandler);
+        window.addEventListener('resize', self.resizeHandler);
     };
 
-    /* ── Point d'entree — execution apres chargement du DOM ────────────────── */
-
-    /*
-     * On utilise DOMContentLoaded plutot que 'load' :
-     *   - DOMContentLoaded se declenche quand le HTML est parse (DOM pret)
-     *     mais AVANT que les images, CSS et JS externes soient tous charges.
-     *   - 'load' se declenche quand TOUT est charge (images incluses).
-     *   - Pour le preloader, on veut demarrer AUSSITOT que le DOM est pret,
-     *     pas attendre que toutes les images soient chargees.
+    /* ======================================================================
+     * POINT D'ENTREE
      *
-     * Si le DOM est deja pret au moment ou ce script s'execute (cas 'defer'),
-     * DOMContentLoaded ne se declenchera plus -> on verifie document.readyState.
-     */
+     * DOMContentLoaded plutot que 'load' : on demarre des que le DOM est pret,
+     * sans attendre les images. Le script est charge avec defer -> le DOM est
+     * garanti pret, mais on double-check readyState pour etre robuste.
+     * ====================================================================== */
+
     function bootstrap() {
         var ctrl = new AnimationController();
-        var ok   = ctrl.init();
-
-        if (!ok) {
-            /* Elements absents du DOM -> rien a faire */
+        if (!ctrl.init()) {
+            /* Elements absents du DOM (page sans base.html.twig) -> rien a faire */
             return;
         }
-
         ctrl.start();
     }
 
     if (document.readyState === 'loading') {
-        /* Le DOM n'est pas encore pret -> on attend DOMContentLoaded */
         document.addEventListener('DOMContentLoaded', bootstrap);
     } else {
-        /* Le DOM est deja pret (script charge apres le parsing) */
+        /* Script execute apres le parsing -> DOM deja pret */
         bootstrap();
     }
 
-}()); /* Fin de l'IIFE (Immediately Invoked Function Expression) */
+}()); /* Fin IIFE (scope isole, pas de pollution du scope global) */
