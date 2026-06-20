@@ -88,6 +88,14 @@
     {# (leurs titres n'ont pas les classes listées dans SELECTORS du JS).                #}
     <link rel="stylesheet" href="{{ asset('css/title-reveal.css') }}">
 
+    {# ── Hero photo pages publiques (partial _page_hero.html.twig) ────────────── #}
+    {# Styles du conteneur hero (image de fond, voile, titre, sous-titre).         #}
+    {# Chargé après design-tokens.css et fonts.css car il utilise var(--display),  #}
+    {# var(--mono), var(--ink), var(--bg) etc. Ce fichier n'est actif que sur     #}
+    {# les pages qui intègrent le partial (les autres pages ne l'utilisent pas).   #}
+    {# Si un cache long-terme Nginx est ajouté, versionner avec ?v=1.             #}
+    <link rel="stylesheet" href="{{ asset('css/page-hero.css') }}">
+
     <style>
         /* ══════════════════════════════════════════════════════════════════
          * DESIGN SYSTEM — Variables CSS (tokens du design Figma)

@@ -168,7 +168,15 @@
         '.cf-hero__title',
         '.cf-catalogue-title',
         '.cf-show-hero__title',
-        '.cp-title'
+        '.cp-title',
+
+        /* === HERO PAGES PUBLIQUES (partial _page_hero.html.twig) ===
+           Ce sélecteur cible le H1 du hero photo sur les pages :
+           Opportunités (/resources), Formations (/formations),
+           Forum (/forum), Blog (/articles).
+           L'animation est déclenchée au chargement (above the fold)
+           grâce à la logique isHero étendue plus bas (étape D). */
+        '.page-hero__title'
     ].join(', ');
 
     /* ── 3. ARMEMENT D'UN TITRE PAR MOT ET PAR CARACTÈRE ──────────────────────
@@ -519,9 +527,19 @@
                on le saute pour ne pas démarrer d'animation vide. */
             if (state.charIndex === 0) { return; }
 
-            /* Identifier si c'est le hero (above the fold) :
-               .lp-hero__h1 doit jouer l'animation au chargement, pas au scroll. */
-            var isHero = el.classList.contains('lp-hero__h1');
+            /* Identifier si c'est un titre "above the fold" (hero) :
+               Ces titres doivent jouer l'animation au chargement de la page,
+               sans attendre que l'utilisateur scrolle jusqu'à eux.
+
+               Deux cas :
+               - .lp-hero__h1     : le H1 du hero de la page d'accueil vitrine
+               - .page-hero__title : le H1 du partial hero des pages publiques
+                 (Opportunités, Formations, Forum, Blog) — ajouté pour la V1
+
+               L'IntersectionObserver surveille quand même ces titres pour que
+               l'animation se rejoue si l'utilisateur remonte en haut de la page. */
+            var isHero = el.classList.contains('lp-hero__h1') ||
+                         el.classList.contains('page-hero__title');
 
             titlesData.push({ el: el, charCount: state.charIndex, isHero: isHero });
         });

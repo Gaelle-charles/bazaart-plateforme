@@ -48,54 +48,6 @@
     }
 
     /* ══════════════════════════════════════════════════════════════
-       EN-TÊTE DE PAGE
-       Flex horizontal : grand titre display à gauche, CTAs à droite.
-       borderBottom marque la limite avec la tab bar.
-    ══════════════════════════════════════════════════════════════ */
-
-    .fi-header {
-        border-bottom: 1px solid var(--ink);
-        padding: 32px 0 20px;
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        gap: 24px;
-    }
-
-    /* Eyebrow : contexte en mono uppercase avant le titre géant */
-    .fi-eyebrow {
-        font-family: var(--mono);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: .1em;
-        text-transform: uppercase;
-        color: var(--ink-mute);
-        margin-bottom: 10px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    /* Titre principal en Archivo Black — clamp pour s'adapter à la largeur d'écran */
-    .fi-title {
-        font-family: var(--display);
-        font-size: clamp(64px, 9vw, 132px);
-        line-height: 0.88;
-        margin: 0;
-        text-transform: uppercase;
-        color: var(--ink);
-    }
-
-    /* Groupe de boutons CTA alignés en bas du bloc droit */
-    .fi-header__ctas {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-shrink: 0;
-        padding-bottom: 4px; /* aligne visuellement avec la baseline du titre */
-    }
-
-    /* ══════════════════════════════════════════════════════════════
        TAB BAR
        Flex horizontal collé, fond --bg-alt, séparateurs fins.
        Le JS vanilla gère uniquement le style de l'onglet actif.
@@ -690,14 +642,7 @@
     }
 
     @media (max-width: 640px) {
-        .fi-header {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 16px;
-        }
-        .fi-title {
-            font-size: clamp(48px, 14vw, 80px);
-        }
+        /* .fi-header et .fi-title supprimes (remplaces par le hero photo) */
         .fi-grid {
             grid-template-columns: 1fr;
         }
@@ -713,60 +658,33 @@
 
 <div class="fi-wrapper">
 
-{# ── EN-TÊTE DE PAGE ──────────────────────────────────────────────────────────
-   Flex horizontal : titre display + eyebrow à gauche, boutons CTA à droite.
-
-   NOTE sur la route "Nouveau post" :
-   La route app_forum_new_thread requiert un {categorySlug} car la création
-   d'un thread est toujours liée à une catégorie. On pointe vers la première
-   catégorie active si elle existe. Si le forum est vide, le bouton est absent.
-
-   Convention Twig : on teste `categories|first` pour obtenir la première
-   catégorie sans lever d'erreur si le tableau est vide.
+{#
+   ── HERO PHOTO ─────────────────────────────────────────────────────────────
+   Remplace l'ancien .fi-header (eyebrow + titre geant + boutons CTA en ligne).
+   Le titre "ON SE PARLE." est conserve tel quel (texte existant).
+   Le sous-titre resume en une phrase l'espace communautaire du forum.
+   Le bouton "Nouveau post" est repositionne juste apres le hero.
 #}
-<div class="fi-header">
+{% include '_page_hero.html.twig' with {
+    image:    'images/hero-forum.jpg',
+    title:    'ON SE PARLE.',
+    subtitle: 'Le forum de la communauté Bazaart : questions, annonces, inspirations et discussions entre artistes.'
+} only %}
 
-    {# Bloc gauche : eyebrow + titre géant #}
-    <div>
-        {#
-            Eyebrow en mono uppercase — présente le contexte de la page.
-            Le carré "■" est un caractère Unicode (U+25A0), pas un ::before CSS,
-            pour conserver l'accessibilité des lecteurs d'écran.
-        #}
-        <div class="fi-eyebrow">
-            <span aria-hidden="true">&#9632;</span>
-            FORUM COMMUNAUTAIRE
-        </div>
-
-        {# Titre principal — Archivo Black, très grand, uppercase via CSS #}
-        <h1 class="fi-title">ON SE PARLE.</h1>
+{# ── Bouton "Nouveau post" (anciennement dans .fi-header__ctas) ────────────
+   Repositionne sous le hero, aligne a droite pour rester un CTA visible.
+   Condition : uniquement si au moins une categorie est configuree en base.
+#}
+{% if categories is not empty %}
+    {% set firstCategory = categories|first %}
+    {# Barre d'action sous le hero : CTA aligné à droite via .hero-action-bar (page-hero.css) #}
+    <div class="hero-action-bar">
+        <a href="{{ path('app_forum_new_thread', { categorySlug: firstCategory.slug }) }}"
+           class="btn btn-primary">
+            Nouveau post
+        </a>
     </div>
-
-    {# Bloc droit : boutons d'action principaux #}
-    <div class="fi-header__ctas">
-
-        {#
-            Bouton "Nouveau post" : actif uniquement si au moins une catégorie existe.
-            On prend la première catégorie comme point d'entrée par défaut.
-            Si toutes les catégories sont vides, on masque le bouton pour éviter
-            une erreur de route (categorySlug manquant).
-        #}
-        {% if categories is not empty %}
-            {% set firstCategory = categories|first %}
-            <a href="{{ path('app_forum_new_thread', { categorySlug: firstCategory.slug }) }}"
-               class="btn btn-primary">
-                Nouveau post
-            </a>
-        {% endif %}
-
-        {#
-            NOTE V1 : le bouton "Programmer un live" a été retiré.
-            La fonctionnalité Lives est reportée en V2 (cf. CDC V3 section 4).
-        #}
-
-    </div>
-
-</div>{# fin fi-header #}
+{% endif %}
 
 {# ── TAB BAR ──────────────────────────────────────────────────────────────────
    Barre de filtres horizontale.

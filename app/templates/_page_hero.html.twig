@@ -1,0 +1,135 @@
+{#
+ # _page_hero.html.twig — Hero photo de fond réutilisable (pages publiques)
+ # =========================================================================
+ #
+ # UTILISATION (texte simple) :
+ #   {% include '_page_hero.html.twig' with {
+ #       image:       'images/hero-opportunites.jpg',
+ #       title:       'CE QUI EST OUVERT.',
+ #       title_class: 'page-hero__title',
+ #       subtitle:    'Bourses, résidences et appels à projets pour les artistes de la diaspora.'
+ #   } only %}
+ #
+ # UTILISATION (titre avec HTML interne, ex. mot coloré) :
+ #   {% include '_page_hero.html.twig' with {
+ #       image:      'images/hero-formations.jpg',
+ #       title_html: 'SE FORMER. <span class="page-hero__accent">TRANSMETTRE.</span>',
+ #       subtitle:   'Des formations…'
+ #   } only %}
+ #
+ # PARAMÈTRES :
+ #   image       (string, obligatoire) : chemin relatif à public/ (ex: 'images/hero-blog.jpg')
+ #   title       (string, optionnel)   : texte du H1, échappé automatiquement. Ignoré si
+ #                                       title_html est fourni.
+ #   title_html  (string, optionnel)   : contenu HTML brut du H1, affiché avec |raw.
+ #                                       ⚠️ NE JAMAIS passer de données utilisateur ici.
+ #                                       Réservé aux chaînes statiques Twig (texte codé en dur).
+ #                                       Utilisé pour colorier un mot avec
+ #                                       <span class="page-hero__accent">.
+ #   title_class (string, optionnel)   : classe(s) supplémentaires sur le H1.
+ #                                       Doit inclure 'page-hero__title' pour le style.
+ #                                       Défaut : 'page-hero__title'
+ #   subtitle    (string, optionnel)   : sous-titre court (si vide, le <p> n'est pas rendu)
+ #
+ # ACCESSIBILITÉ :
+ #   - Un seul <h1> par page : ce partial REMPLACE l'ancien bloc de titre.
+ #     Ne pas conserver d'autre <h1> sur la même page.
+ #   - L'image est décorative (aria-hidden="true", alt="") : le titre
+ #     et le sous-titre en position relative sont les éléments sémantiques.
+ #   - Le H1 reçoit un aria-label par title-reveal.js avant le découpage
+ #     en caractères (les lecteurs d'écran lisent le texte complet).
+ #
+ # ANIMATION (title_html) :
+ #   - title-reveal.js découpe le texte du H1 en .tr-word > .tr-char.
+ #     Si title_html contient un <span class="page-hero__accent">, le script
+ #     traite les nœuds texte de manière récursive : les <span> internes sont
+ #     préservés comme conteneurs, leurs nœuds texte sont découpés en caractères.
+ #     Résultat : l'animation lettre par lettre fonctionne aussi sur title_html.
+ #   - title_class doit contenir 'page-hero__title' (sélecteur JS pour isHero).
+ #   - Sans JS : le titre est visible normalement (progressive enhancement).
+ #
+ # CSS :
+ #   Styles dans public/css/page-hero.css, chargé via base.html.twig.
+ #   La couleur du span accent est définie par .page-hero__accent { color: var(--accent-2); }.
+ #}
+
+{#
+    Valeur par défaut pour title_class si le paramètre n'est pas fourni.
+    Twig ne supporte pas les valeurs par défaut de paramètres 'only',
+    on utilise donc l'opérateur ?? (null coalescing).
+#}
+{% set resolvedTitleClass = title_class ?? 'page-hero__title' %}
+
+{#
+    .page-hero : conteneur principal avec position:relative.
+    L'image et le voile sont en position:absolute à l'intérieur.
+    Le contenu textuel (.page-hero__content) est également en absolute,
+    positionné en bas du hero (bottom:0).
+    Voir page-hero.css pour la technique full-bleed via marges négatives.
+#}
+<div class="page-hero">
+
+    {#
+        Image de fond décorative.
+        - aria-hidden="true" + role="presentation" : ignorée des lecteurs d'écran
+          (le contenu sémantique est le H1 et le sous-titre en dessous).
+        - alt="" : image décorative, pas besoin de description.
+        - loading="eager" : l'image hero est above the fold -> pas de lazy-loading
+          (on veut qu'elle se charge immédiatement pour éviter un flash de fond).
+        - fetchpriority="high" : signal au navigateur de prioriser cette image
+          (LCP = Largest Contentful Paint, métrique Core Web Vitals).
+        - object-fit:cover est géré par le CSS (.page-hero__img).
+    #}
+    <img
+        class="page-hero__img"
+        src="{{ asset(image) }}"
+        alt=""
+        role="presentation"
+        aria-hidden="true"
+        loading="eager"
+        fetchpriority="high"
+    >
+
+    {#
+        Voile sombre (gradient du bas vers le haut) pour améliorer la lisibilité
+        du texte blanc sur l'image de fond. Gradient défini dans page-hero.css.
+        Ce div est purement décoratif (pas de contenu sémantique).
+    #}
+    <div class="page-hero__overlay" aria-hidden="true"></div>
+
+    {#
+        Zone de contenu textuel : positionnée en bas du hero.
+        Padding horizontal identique à .app-content pour aligner
+        le texte avec le reste de la page.
+    #}
+    <div class="page-hero__content">
+
+        {#
+            Titre principal (H1).
+            - {{ resolvedTitleClass }} : contient 'page-hero__title' pour le style et l'animation.
+            - title-reveal.js découpe ce texte en .tr-word > .tr-char et déclenche
+              l'animation au chargement (isHero = true pour .page-hero__title).
+            - Sans JS : texte visible normalement (progressive enhancement).
+
+            Deux modes d'affichage (mutuellement exclusifs) :
+            1. title_html défini → |raw (HTML statique codé en dur, ex. mot coloré)
+            2. title défini     → | e (texte simple, échappé automatiquement)
+            ⚠️ title_html ne doit JAMAIS recevoir de données utilisateur (XSS).
+        #}
+        {% if title_html is defined and title_html %}
+            <h1 class="{{ resolvedTitleClass }}">{{ title_html|raw }}</h1>
+        {% else %}
+            <h1 class="{{ resolvedTitleClass }}">{{ title }}</h1>
+        {% endif %}
+
+        {#
+            Sous-titre : affiché uniquement s'il est fourni et non vide.
+            Twig : `subtitle is defined and subtitle` = true si défini et non vide.
+        #}
+        {% if subtitle is defined and subtitle %}
+            <p class="page-hero__subtitle">{{ subtitle }}</p>
+        {% endif %}
+
+    </div>
+
+</div>{# fin .page-hero #}

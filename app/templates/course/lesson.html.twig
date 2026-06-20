@@ -24,6 +24,14 @@
 
 {% block page_title %}{{ lesson.title|e }}{% endblock %}
 
+{#
+    ── H1 unique : topbar comme titre principal ───────────────────────────────
+    Cette page n'a pas de hero photo ni de <h1> dans son contenu.
+    On surcharge topbar_element pour que la topbar soit un <h1> (WCAG 1.3.1 / SEO).
+    Le titre est dynamique (titre de la leçon en cours).
+#}
+{% block topbar_element %}<h1 class="topbar__title">{{ lesson.title|e }}</h1>{% endblock %}
+
 {% block stylesheets %}
     {{ parent() }}
     <style>

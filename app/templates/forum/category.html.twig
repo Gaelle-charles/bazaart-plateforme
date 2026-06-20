@@ -3,6 +3,14 @@
 {% block title %}{{ category.name }} — Forum BazaArt{% endblock %}
 {% block page_title %}Forum{% endblock %}
 
+{#
+    ── H1 unique : topbar comme titre principal ───────────────────────────────
+    Cette page n'a pas de hero photo ni de <h1> dans son contenu.
+    On surcharge topbar_element pour que la topbar soit un <h1> (WCAG 1.3.1 / SEO).
+    Le nom de la catégorie est le titre sémantique le plus précis (ex: "Annonces").
+#}
+{% block topbar_element %}<h1 class="topbar__title">{{ category.name|e }}</h1>{% endblock %}
+
 {% block stylesheets %}
 {{ parent() }}
 {#

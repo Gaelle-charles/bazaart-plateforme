@@ -57,44 +57,6 @@
        Toutes les valeurs passent par les variables CSS du design-tokens.css.
     ===================================================================== */
 
-    /* ── En-tete de section ──────────────────────────────────────────── */
-
-    .opp-header {
-        padding-top: 32px;
-        padding-bottom: 24px;
-        border-bottom: 1px solid var(--ink);
-    }
-
-    /* Ligne flex : gauche = eyebrow + titre geant, droite = bouton alerte */
-    .opp-header__row {
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        gap: var(--space-lg);
-        flex-wrap: wrap;
-    }
-
-    /* Sur-titre eyebrow : carre mono uppercase + compteur */
-    .opp-eyebrow {
-        font-family: var(--mono);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: .12em;
-        text-transform: uppercase;
-        color: var(--ink-mute);
-        margin-bottom: 8px;
-    }
-
-    /* Titre principal : clamp fluid typography */
-    .opp-title {
-        font-family: var(--display);
-        font-size: clamp(64px, 9vw, 132px);
-        line-height: 0.88;
-        text-transform: uppercase;
-        color: var(--ink);
-        margin: 8px 0 0;
-    }
-
     /* ── Barre de filtres ────────────────────────────────────────────── */
 
     /* Fond legèrement different + bordure basse = zone fonctionnelle distincte */
@@ -581,64 +543,41 @@
    - Gauche  : eyebrow "OPPORTUNITES + compteur" + titre geant fluide
    - Droite  : bouton "Creer une alerte" bien visible
 #}
-<div class="opp-header">
-    <div class="opp-header__row">
+{#
+   ── HERO PHOTO ─────────────────────────────────────────────────────────────
+   Remplace l'ancien .opp-header (eyebrow + titre geant + bouton alerte en ligne).
+   Le titre "CE QUI EST OUVERT." est conserve tel quel (texte existant).
+   Le sous-titre decrit en une phrase le catalogue d'opportunites.
+   Le bouton "Creer une alerte" est repositionne juste apres le hero.
+#}
+{% include '_page_hero.html.twig' with {
+    image:    'images/hero-opportunites.jpg',
+    title:    'CE QUI EST OUVERT.',
+    subtitle: 'Bourses, résidences et appels à projets pour les artistes de la diaspora afro-atlantique.'
+} only %}
 
-        {# ── Colonne gauche : eyebrow + titre ── #}
-        <div>
-            {#
-                Eyebrow : carre Unicode U+25A0 + nombre d'opportunites actives.
-                `total` est le nombre de resultats tous filtres actifs confondus.
-            #}
-            <div class="opp-eyebrow">
-                &#9632; OPPORTUNITES
-                {%- if total is defined and total > 0 %} &middot; {{ total }} ACTIVE{{ total > 1 ? 'S' : '' }}{% endif %}
-            </div>
-
-            {#
-                Titre geant en deux lignes, uppercase, Archivo Black.
-                clamp(64px, 9vw, 132px) : typographie fluide selon le CDC.
-            #}
-            {#
-                Titre "CE QUI EST OUVERT." — sans <br> intentionnel.
-                Le retour à la ligne naturel est géré par clamp(64px, 9vw, 132px)
-                en combinaison avec la largeur du conteneur (la colonne gauche du
-                header). Sur grand écran, la taille de police est si importante
-                que le titre passe naturellement sur 2 lignes. Sur mobile (375px),
-                le clamp tombe à 64px : "CE QUI EST" tient sur une ligne,
-                "OUVERT." passe à la suivante automatiquement.
-                Supprimer le <br> est important pour l'animation title-reveal.js :
-                avec <br>, le bloc droit commençait par une ligne vide (hauteur
-                de ligne fantôme) qui créait un espace vide au-dessus du texte.
-            #}
-            <h1 class="opp-title">
-                CE QUI EST OUVERT.
-            </h1>
-        </div>
-
-        {# ── Colonne droite : bouton alerte ── #}
-        {#
-            Bouton "Creer une alerte" bien visible pour tout utilisateur connecte.
-            Mène vers /mes-alertes (route app_resource_alert_edit) = page de gestion
-            des preferences d'alertes email (disciplines, types, frequence).
-        #}
-        {% if is_granted('ROLE_USER') %}
-            <a href="{{ path('app_resource_alert_edit') }}"
-               class="btn btn-primary"
-               style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;">
-                {# Icone cloche SVG accessible (aria-hidden car le texte suffit) #}
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                     aria-hidden="true">
-                    <path d="M6 8a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/>
-                    <path d="M10 18a2 2 0 0 0 4 0"/>
-                </svg>
-                Creer une alerte
-            </a>
-        {% endif %}
-
-    </div>
+{# ── Bouton alerte (anciennement a droite du titre) ──────────────────────── #}
+{#
+   Repositionne en dessous du hero. Aligne a droite pour conserver
+   le lien visuel avec les actions sans perturber le flux de lecture.
+#}
+{% if is_granted('ROLE_USER') %}
+{# Barre d'action sous le hero : CTA aligné à droite via .hero-action-bar (page-hero.css) #}
+<div class="hero-action-bar">
+    <a href="{{ path('app_resource_alert_edit') }}"
+       class="btn btn-primary"
+       style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;">
+        {# Icone cloche SVG accessible (aria-hidden car le texte suffit) #}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             aria-hidden="true">
+            <path d="M6 8a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/>
+            <path d="M10 18a2 2 0 0 0 4 0"/>
+        </svg>
+        Créer une alerte
+    </a>
 </div>
+{% endif %}
 
 {# ── Barre de filtres ─────────────────────────────────────────────────────── #}
 {#

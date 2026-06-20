@@ -17,25 +17,6 @@
 {% block stylesheets %}
 {{ parent() }}
 <style>
-    /* ── HERO « SE FORMER. / TRANSMETTRE. » ─────────────────────────────────── */
-    .cf-hero { padding: 40px 0 36px; border-bottom: 1px solid var(--ink); }
-    .cf-eyebrow {
-        display: inline-flex; align-items: center; gap: 8px;
-        font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .12em;
-        text-transform: uppercase; color: var(--ink-mute); margin-bottom: 18px;
-    }
-    .cf-eyebrow::before { content: ""; width: 8px; height: 8px; background: var(--accent); display: block; }
-    .cf-hero__title {
-        font-family: var(--display); font-size: clamp(2.6rem, 9vw, 6rem);
-        line-height: .9; text-transform: uppercase; letter-spacing: -.02em; margin: 0;
-        color: var(--ink);
-    }
-    .cf-hero__title .accent { color: var(--accent-2); display: block; }
-    .cf-hero__subtitle {
-        font-family: var(--mono); font-size: 13px; color: var(--ink-mute);
-        line-height: 1.6; max-width: 620px; margin: 18px 0 24px;
-    }
-
     /* Bouton signature (effet d'ombre décalée du prototype) */
     .cf-btn {
         display: inline-flex; align-items: center; gap: 8px;
@@ -152,23 +133,27 @@
 
 {% block content %}
 
-{# ── HERO ─────────────────────────────────────────────────────────────────── #}
-<section class="cf-hero">
-    <span class="cf-eyebrow">Formation &amp; transmission</span>
-    <h1 class="cf-hero__title">
-        Se former.
-        <span class="accent">Transmettre.</span>
-    </h1>
-    <p class="cf-hero__subtitle">
-        Des formations et ateliers conçus par l'équipe Bazaart pour les artistes
-        de la communauté afro-atlantique.
-    </p>
-    {#
-     # Bouton « Proposer un atelier » retiré (ADR-0012 révisé, juin 2026).
-     # La création de formations est réservée à l'équipe admin.
-     # Texte du sous-titre mis à jour en cohérence (ADR-0013).
-     #}
-</section>
+{#
+   ── HERO PHOTO ─────────────────────────────────────────────────────────────
+   Remplace l'ancien <section class="cf-hero"> (eyebrow + titre + sous-titre
+   en texte simple sur fond sable).
+   Le titre conserve "SE FORMER. TRANSMETTRE." (contenu existant adapte en
+   uppercase : la casse est geree par le CSS .page-hero__title).
+   Note : le <span class="accent"> du titre original (Transmettre. en orange)
+   est simplifie en texte plat car le partial ne supporte que du texte simple
+   (pas de HTML arbitraire). Si on veut retrouver la couleur accent sur
+   "TRANSMETTRE.", il faudra etendre le partial pour accepter du Twig raw.
+   Voir Open Questions.
+   Le sous-titre est identique au texte existant.
+
+   Bouton "Proposer un atelier" : retire precedemment (ADR-0012 revise), pas
+   de CTA a repositionner ici.
+#}
+{% include '_page_hero.html.twig' with {
+    image:    'images/hero-formations.jpg',
+    title_html: 'SE FORMER. <span class="page-hero__accent">TRANSMETTRE.</span>',
+    subtitle: 'Des formations et ateliers conçus par l\'équipe Bazaart pour les artistes de la communauté afro-atlantique.'
+} only %}
 
 {# ── CATALOGUE ────────────────────────────────────────────────────────────── #}
 <div class="cf-catalogue-head">

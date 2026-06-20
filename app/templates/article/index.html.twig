@@ -21,66 +21,6 @@
 {# Styles préfixés .art- pour éviter les collisions avec les autres pages #}
 <style>
 
-    /* ── En-tête ScreenBlog ─────────────────────────────────────────────────── */
-
-    /*
-     * .art-header : zone titre avec bordure basse épaisse.
-     * paddingTop généreux pour un effet "magazine ouvert".
-     * La bordure 1px solid var(--ink) souligne le titre sans surcharger.
-     */
-    .art-header {
-        border-bottom: 1px solid var(--ink);
-        padding-top: 48px;
-        padding-bottom: 32px;
-    }
-
-    /* Eyebrow : petit texte mono au-dessus du titre géant */
-    .art-header__eyebrow {
-        font-family: var(--mono);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: .12em;
-        text-transform: uppercase;
-        color: var(--ink-mute);
-        margin: 0 0 16px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    /*
-     * Titre en deux lignes : "ON ÉCRIT." / "VOUS LISEZ."
-     * clamp() : 80px sur mobile, 11vw sur tablette, 160px max sur grand écran.
-     * line-height 0.88 : les lignes se collent pour un effet affiche fort.
-     */
-    .art-header__title {
-        font-family: var(--display);
-        font-size: clamp(80px, 11vw, 160px);
-        line-height: 0.88;
-        text-transform: uppercase;
-        color: var(--ink);
-        margin: 0;
-        letter-spacing: -.03em;
-    }
-
-    /*
-     * Ligne secondaire du titre : "Vous lisez." forcé sur sa propre ligne.
-     * On cible la classe .art-header__title__line2 (plutôt que le sélecteur
-     * générique "span") pour ne PAS toucher les .tr-block-wrap et .tr-block
-     * que title-reveal.js injecte dans le h1 lors de l'animation.
-     * Ces wrappers ont besoin de display:inline-block (title-reveal.css) :
-     * un sélecteur "span" trop large écraserait cette règle et casserait
-     * le positionnement horizontal des blocs animés.
-     */
-    .art-header__title__line2 {
-        display: block;
-    }
-
-    /* Bouton admin "Écrire un article +" positionné en haut à droite */
-    .art-header__actions {
-        margin-top: 24px;
-    }
-
     /* ── Article à la UNE ───────────────────────────────────────────────────── */
 
     /*
@@ -355,7 +295,7 @@
     }
 
     @media (max-width: 600px) {
-        .art-header__title { font-size: clamp(56px, 15vw, 80px); }
+        /* .art-header__title supprime (remplace par le hero photo) */
 
         /* Grille 2 -> 1 colonne sur mobile */
         .art-grid { grid-template-columns: 1fr; }
@@ -368,50 +308,36 @@
 
 {% block content %}
 
-{# ── En-tête ScreenBlog ──────────────────────────────────────────────────────── #}
-<header class="art-header">
+{#
+   ── HERO PHOTO ─────────────────────────────────────────────────────────────
+   Remplace l'ancien <header class="art-header"> (eyebrow + titre deux lignes
+   + bouton admin).
+   Le titre "ON ECRIT. VOUS LISEZ." reprend le contenu existant ("On écrit.
+   Vous lisez.") en majuscules (le CSS .page-hero__title force text-transform:
+   uppercase, donc la casse de la source n'importe pas).
+   Le sous-titre reprend l'eyebrow "Le journal de Bazaart" augmente d'un
+   complement descriptif.
+   Le bouton admin "Ecrire un article" est repositionne juste apres le hero.
+#}
+{% include '_page_hero.html.twig' with {
+    image:    'images/hero-blog.jpg',
+    title:    'On écrit. Vous lisez.',
+    subtitle: 'Le journal de Bazaart : actualités, portraits et textes de la diaspora afro-atlantique.'
+} only %}
 
-    {# Eyebrow : signal éditorial avant le titre géant #}
-    <p class="art-header__eyebrow">
-        <span aria-hidden="true">&#9632;</span> {# carré plein unicode ■ #}
-        Le journal de Bazaart
-    </p>
-
-    {#
-        Titre en deux lignes — l'effet typographique principal de ce design.
-
-        STRUCTURE IMPORTANTE pour title-reveal.js :
-        Le JS cherche le PREMIER NŒUD TEXTE direct du h1 pour isoler le
-        premier mot (bloc gauche) du reste (bloc droit). Si le h1 commence
-        par un élément HTML (<span>, <br>, etc.), le JS ne peut pas faire la
-        découpe et tombe en mode "un seul bloc" (moins expressif).
-
-        Solution : "On écrit." est du TEXTE PUR direct dans le h1 (pas dans
-        un <span>). Le JS trouve ce texte, isole "On" en bloc gauche et
-        "écrit. Vous lisez." en bloc droit. L'animation deux-blocs s'applique.
-
-        "Vous lisez." reste dans un <span> pour que le CSS
-        `.art-header__title span { display:block; }` le force sur sa propre
-        ligne. Sans JS, le rendu est identique à l'ancien (On écrit. / Vous
-        lisez. sur deux lignes distinctes). Avec le JS, le premier mot "On"
-        part vers la gauche et le reste (écrit. / Vous lisez.) vers la droite.
-    #}
-    <h1 class="art-header__title">On écrit. <span class="art-header__title__line2">Vous lisez.</span></h1>
-
-    {#
-        Bouton "Écrire un article +" visible uniquement pour les admins.
-        is_granted('ROLE_ADMIN') utilise la hiérarchie de rôles de security.yaml.
-        La publication est admin-only en V1 (décision produit).
-    #}
-    {% if is_granted('ROLE_ADMIN') %}
-        <div class="art-header__actions">
-            <a href="{{ path('app_article_new') }}" class="art-btn-new">
-                + Ecrire un article
-            </a>
-        </div>
-    {% endif %}
-
-</header>
+{#
+   Bouton "Ecrire un article +" : visible uniquement pour les admins.
+   Repositionne sous le hero, aligne a droite.
+   La publication est admin-only en V1 (decision produit).
+#}
+{% if is_granted('ROLE_ADMIN') %}
+    {# Barre d'action sous le hero : CTA aligné à droite via .hero-action-bar (page-hero.css) #}
+    <div class="hero-action-bar">
+        <a href="{{ path('app_article_new') }}" class="art-btn-new">
+            + Écrire un article
+        </a>
+    </div>
+{% endif %}
 
 {# ── Contenu ─────────────────────────────────────────────────────────────────── #}
 

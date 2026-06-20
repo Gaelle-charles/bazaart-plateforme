@@ -138,9 +138,39 @@
     {% block page_title %} est rempli par les pages enfants.
     Exemple : {% block page_title %}Ressourcerie{% endblock %}
     Si le bloc est vide, la topbar affiche une barre vide (invisible).
+
+    ACCESSIBILITÉ / SEO — règle du H1 unique :
+    On doit avoir EXACTEMENT un <h1> par page. Trois cas possibles :
+
+    1. Pages AVEC hero photo (resource/index, course/index, forum/index, article/index) :
+       le <h1> est dans _page_hero.html.twig → la topbar reste un <span> (défaut).
+
+    2. Pages AVEC leur propre <h1> dans le contenu (resource/show, forum/thread,
+       article/show, onboarding/*, legal/*, organization_profile/*, structure/*, …) :
+       la topbar reste un <span> (défaut).
+
+    3. Pages SANS aucun <h1> dans le contenu ET SANS hero
+       (post/feed, course/learn, course/lesson, course_payment/*, subscription/*,
+       forum/category, artist_profile/directory) :
+       ces pages surchargent {% block topbar_element %} pour émettre un <h1>.
+
+    MÉCANISME : le bloc topbar_element contient la balise complète (ouvrante+texte+fermante).
+    Par défaut il émet un <span>. Les pages du cas 3 le surchargent en <h1>.
+    On ne peut PAS utiliser {% set page_has_hero = true %} depuis un enfant :
+    en Twig, les variables définies dans un template enfant ne remontent pas au parent.
+    Les blocs, eux, sont bien évalués dans le contexte de la page enfant.
+    Twig interdit aussi d'interpoler le nom d'un tag HTML (ex: <{% block %}> = invalide),
+    d'où ce bloc qui englobe l'élément entier.
 #}
 <div class="topbar">
-    <h1 class="topbar__title">{% block page_title %}{% endblock %}</h1>
+    {% block topbar_element %}
+        {#
+            <span> par défaut : neutre pour les pages qui ont leur propre <h1>
+            (soit dans le hero, soit dans le contenu principal).
+            Les pages sans <h1> surchargent ce bloc pour émettre un <h1>.
+        #}
+        <span class="topbar__title">{% block page_title %}{% endblock %}</span>
+    {% endblock %}
 </div>
 
 {# ── CONTENU PRINCIPAL ──────────────────────────────────────────────────── #}
