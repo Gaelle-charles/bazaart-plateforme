@@ -24,8 +24,16 @@
     'use strict';
 
     /* ── Paramètres ajustables ─────────────────────────────────────────────── */
-    var ANIM_DURATION   = 3000;  /* ms : durée pour jouer l'animation COMPLÈTE (time 0->1) */
-    var SPLASH_DURATION = 3200;  /* ms : le splash dure jusqu'à la fin de l'animation, puis fondu de sortie */
+    /* ⚠️ DISTINCTION IMPORTANTE entre les deux durées :
+       - ANIM_DURATION = VITESSE de l'animation (temps pour que `time` aille de 0 à 1).
+         On NE LA TOUCHE PAS : 9000 ms = la vitesse d'origine, naturelle, validée.
+         La baisser accélérerait la spirale (effet « speed up » non voulu).
+       - SPLASH_DURATION = DURÉE D'AFFICHAGE du splash à l'écran.
+         C'est ELLE qu'on règle pour « raccourcir » le préloader : ici 5000 ms.
+         L'animation joue donc à sa vitesse normale, et le splash se ferme au
+         bout de 5 s (l'animation est simplement interrompue, pas accélérée). */
+    var ANIM_DURATION   = 9000;  /* ms : vitesse NATURELLE de l'animation (ne pas changer) */
+    var SPLASH_DURATION = 5000;  /* ms : durée d'affichage du splash, puis fondu de sortie */
     var LOGO_DELAY      = 2000;  /* ms : délai avant apparition du logo (cf. bouton Enter) */
     var LOGO_FADE       = 1500;  /* ms : durée du fondu d'entrée du logo */
 
