@@ -50,30 +50,41 @@ class ResourceRepository extends ServiceEntityRepository
      *     dans une requête COUNT sans GROUP BY → erreur "must appear in GROUP BY clause".
      *     Le tri est donc appliqué UNIQUEMENT dans findPublished(), qui en a réellement besoin.
      *
-     * @param bool        $hideExpired  Si true, masque les ressources dont la deadline est passée.
-     *                                  À passer true UNIQUEMENT pour le catalogue public — l'admin
-     *                                  doit toujours voir toutes les ressources publiées, y compris
-     *                                  celles dont la deadline est dépassée.
+     * @param bool        $hideExpired          Si true, masque les ressources dont la deadline est passée.
+     *                                          À passer true UNIQUEMENT pour le catalogue public — l'admin
+     *                                          doit toujours voir toutes les ressources publiées, y compris
+     *                                          celles dont la deadline est dépassée.
      *
-     *                                  Règle de masquage :
-     *                                    - r.deadline IS NULL           → visible (pas de date limite)
-     *                                    - r.deadline >= aujourd'hui    → visible (deadline présente ou future)
-     *                                    - r.deadline <  aujourd'hui    → MASQUÉE (deadline passée)
+     *                                          Règle de masquage :
+     *                                            - r.deadline IS NULL           → visible (pas de date limite)
+     *                                            - r.deadline >= aujourd'hui    → visible (deadline présente ou future)
+     *                                            - r.deadline <  aujourd'hui    → MASQUÉE (deadline passée)
      *
-     *                                  On compare au DÉBUT de la journée courante (minuit) :
-     *                                  une ressource dont la deadline EST aujourd'hui reste visible
-     *                                  (dernier jour pour candidater).
+     *                                          On compare au DÉBUT de la journée courante (minuit) :
+     *                                          une ressource dont la deadline EST aujourd'hui reste visible
+     *                                          (dernier jour pour candidater).
      *
-     *                                  ⚠️ Le paramètre :today est de type 'date' (DateTimeInterface),
-     *                                  compatible avec la colonne r.deadline (type 'date' Doctrine / DATE PostgreSQL).
+     *                                          ⚠️ Le paramètre :today est de type 'date' (DateTimeInterface),
+     *                                          compatible avec la colonne r.deadline (type 'date' Doctrine / DATE PostgreSQL).
      *
-     * @param int|null    $year         Filtre sur l'ANNÉE de la deadline (ex: 2026).
-     *                                  Seules les ressources dont YEAR(deadline) = $year sont retournées.
-     *                                  Les ressources sans deadline sont exclues quand ce filtre est actif.
-     *                                  Null = pas de filtre d'année.
+     * @param int|null    $year                 Filtre sur l'ANNÉE de la deadline (ex: 2026).
+     *                                          Seules les ressources dont YEAR(deadline) = $year sont retournées.
+     *                                          Les ressources sans deadline sont exclues quand ce filtre est actif.
+     *                                          Null = pas de filtre d'année.
      *
-     * @param string|null $country      Filtre sur le pays (comparaison exacte, insensible à la casse).
-     *                                  Null = pas de filtre pays.
+     * @param string|null $country              Filtre sur le pays (comparaison exacte, insensible à la casse).
+     *                                          Null = pas de filtre pays.
+     *
+     * @param bool        $excludeDocumentation Si true, exclut les ressources dont le type s'appelle
+     *                                          "Documentation" (insensible à la casse).
+     *                                          À passer true UNIQUEMENT depuis le catalogue public
+     *                                          (ResourceController::index) — l'admin et le dashboard
+     *                                          doivent continuer à voir ces ressources.
+     *
+     *                                          COMPORTEMENT SUR LES RESSOURCES SANS TYPE :
+     *                                          Les ressources dont resourceType est null (pas de type
+     *                                          associé) restent TOUJOURS visibles — on n'exclut que celles
+     *                                          qui ont un type explicitement nommé "Documentation".
      */
     private function buildPublishedQueryBuilder(
         ?int $typeId = null,
@@ -82,6 +93,7 @@ class ResourceRepository extends ServiceEntityRepository
         bool $hideExpired = false,
         ?int $year = null,
         ?string $country = null,
+        bool $excludeDocumentation = false,
     ): \Doctrine\ORM\QueryBuilder {
         $qb = $this->createQueryBuilder('r')
             // Filtre principal : seulement les ressources avec le statut "publié"
@@ -190,6 +202,63 @@ class ResourceRepository extends ServiceEntityRepository
         if ($country !== null && $country !== '') {
             $qb->andWhere('LOWER(r.country) = LOWER(:country)')
                ->setParameter('country', $country);
+        }
+
+        // ── Exclusion du type « Documentation » (catalogue public uniquement) ──
+        //
+        // POURQUOI NOT EXISTS plutôt qu'un JOIN ?
+        //   findPublished() fait déjà un leftJoin('r.resourceType', 'rt') pour charger
+        //   l'entité en mémoire. Si on ajoutait ici un JOIN supplémentaire sur la même
+        //   association (même alias 'rt'), Doctrine générerait un conflit d'alias.
+        //   Si on utilisait un alias différent ('rt_doc'), le COUNT dans countPublished()
+        //   fonctionnerait mais le code deviendrait fragile (couplage implicite entre
+        //   les JOINs du QB partagé et ceux ajoutés dans findPublished()).
+        //
+        //   SOLUTION : sous-requête DQL NOT EXISTS.
+        //   On ne JOIN rien dans ce QB partagé. À la place, on vérifie l'absence de
+        //   ResourceType nommé "documentation" via une sous-requête corrélée :
+        //
+        //     NOT EXISTS (
+        //       SELECT rt2.id
+        //       FROM App\Entity\ResourceType rt2
+        //       WHERE rt2 = r.resourceType      ← corrélation avec la requête externe
+        //         AND LOWER(rt2.name) = :docName ← comparaison insensible à la casse
+        //     )
+        //
+        //   Sémantique : la condition est vraie dans DEUX cas :
+        //     1. r.resourceType est null (pas de type associé) → aucun rt2 ne matche → NOT EXISTS = true → visible ✓
+        //     2. r.resourceType existe mais son nom ≠ "documentation" → NOT EXISTS = true → visible ✓
+        //     3. r.resourceType est nommé "documentation" → rt2 matche → NOT EXISTS = false → EXCLU ✓
+        //
+        //   Autrement dit : les ressources sans type restent toujours visibles,
+        //   seules celles dont le type s'appelle explicitement "documentation" sont masquées.
+        //
+        //   Compatibilité COUNT : la sous-requête NOT EXISTS n'ajoute pas de JOIN dans
+        //   la requête principale → pas de multiplication de lignes → COUNT exact ✓
+        //
+        // NOTE : on applique ce filtre uniquement quand $excludeDocumentation = true,
+        // c'est-à-dire uniquement depuis ResourceController::index(). Toutes les autres
+        // méthodes (admin, dashboard, matching...) ne passent pas ce flag → comportement inchangé.
+        if ($excludeDocumentation) {
+            $qb->andWhere(
+                // NOT EXISTS(...) : vrai si aucun ResourceType correspondant à "documentation"
+                // n'est lié à cette ressource.
+                $qb->expr()->not(
+                    $qb->expr()->exists(
+                        // Sous-requête DQL corrélée :
+                        //   - alias rt2 pour éviter tout conflit avec le alias 'rt' de findPublished()
+                        //   - rt2 = r.resourceType : corrèle la sous-requête sur la FK de la ressource courante
+                        //   - LOWER(rt2.name) = :docName : comparaison insensible à la casse
+                        'SELECT rt2.id FROM App\Entity\ResourceType rt2
+                         WHERE rt2 = r.resourceType
+                         AND LOWER(rt2.name) = :docName'
+                    )
+                )
+            )
+            // :docName est normalisé en minuscules une seule fois côté PHP.
+            // On utilise mb_strtolower() plutôt que strtolower() pour la robustesse
+            // multi-octets (noms de types potentiellement accentués en V2).
+            ->setParameter('docName', mb_strtolower('documentation'));
         }
 
         return $qb;
@@ -328,10 +397,14 @@ class ResourceRepository extends ServiceEntityRepository
      *                                  (catalogue public). L'admin voit tout.
      * @param int|null    $year         Filtre sur l'année de la deadline (null = toutes les années)
      * @param string|null $country      Filtre sur le pays (null = tous les pays)
-     * @param string      $sortBy       Critère de tri : 'recent' (publishedAt DESC, défaut)
-     *                                  ou 'deadline' (deadline ASC, les plus urgentes en premier).
-     *                                  Les ressources sans deadline passent en fin de liste
-     *                                  quand on trie par deadline.
+     * @param string      $sortBy              Critère de tri : 'recent' (publishedAt DESC, défaut)
+     *                                         ou 'deadline' (deadline ASC, les plus urgentes en premier).
+     *                                         Les ressources sans deadline passent en fin de liste
+     *                                         quand on trie par deadline.
+     * @param bool        $excludeDocumentation Si true, exclut du résultat les ressources dont le
+     *                                         ResourceType s'appelle "Documentation" (insensible à la casse).
+     *                                         À passer true UNIQUEMENT depuis le catalogue public.
+     *                                         Les ressources sans type restent visibles.
      * @return Resource[]
      */
     public function findPublished(
@@ -344,11 +417,12 @@ class ResourceRepository extends ServiceEntityRepository
         ?int $year = null,
         ?string $country = null,
         string $sortBy = 'recent',
+        bool $excludeDocumentation = false,
     ): array {
         // On part du QueryBuilder commun (filtres partagés avec countPublished).
-        // Les nouveaux paramètres $year et $country sont transmis pour que
+        // Les paramètres $year, $country et $excludeDocumentation sont transmis pour que
         // findPublished et countPublished appliquent exactement les mêmes conditions.
-        $qb = $this->buildPublishedQueryBuilder($typeId, $disciplineId, $search, $hideExpired, $year, $country);
+        $qb = $this->buildPublishedQueryBuilder($typeId, $disciplineId, $search, $hideExpired, $year, $country, $excludeDocumentation);
 
         // ── Choix du tri ────────────────────────────────────────────────────
         // 'recent'   : publishedAt DESC — les ressources récemment publiées en tête.
@@ -438,13 +512,18 @@ class ResourceRepository extends ServiceEntityRepository
      * Un SELECT COUNT en SQL ne charge aucune entité — c'est beaucoup plus efficace,
      * surtout quand le catalogue contient des centaines de ressources.
      *
-     * @param int|null    $typeId       Même filtre que findPublished()
-     * @param int|null    $disciplineId Même filtre que findPublished()
-     * @param string|null $search       Même filtre que findPublished()
-     * @param bool        $hideExpired  Même filtre que findPublished() — DOIT être identique
-     *                                  pour que le compteur soit cohérent avec la liste affichée.
-     * @param int|null    $year         Même filtre que findPublished()
-     * @param string|null $country      Même filtre que findPublished()
+     * @param int|null    $typeId              Même filtre que findPublished()
+     * @param int|null    $disciplineId        Même filtre que findPublished()
+     * @param string|null $search              Même filtre que findPublished()
+     * @param bool        $hideExpired         Même filtre que findPublished() — DOIT être identique
+     *                                         pour que le compteur soit cohérent avec la liste affichée.
+     * @param int|null    $year                Même filtre que findPublished()
+     * @param string|null $country             Même filtre que findPublished()
+     * @param bool        $excludeDocumentation Même filtre que findPublished() — DOIT être identique
+     *                                         pour que le compteur de pagination soit cohérent avec
+     *                                         la liste affichée (si on exclut Documentation dans la
+     *                                         liste mais pas dans le COUNT, la pagination afficherait
+     *                                         un nombre de pages trop élevé).
      */
     public function countPublished(
         ?int $typeId = null,
@@ -453,12 +532,15 @@ class ResourceRepository extends ServiceEntityRepository
         bool $hideExpired = false,
         ?int $year = null,
         ?string $country = null,
+        bool $excludeDocumentation = false,
     ): int {
         // On réutilise exactement le même QueryBuilder que findPublished() (sans les JOINs de chargement)
         // pour garantir que les filtres appliqués sont identiques.
         // ⚠️ IMPORTANT : tous les filtres doivent être passés ici aussi — sinon le COUNT et
         // la liste divergent → pagination incohérente.
-        $qb = $this->buildPublishedQueryBuilder($typeId, $disciplineId, $search, $hideExpired, $year, $country);
+        // Le paramètre $excludeDocumentation est passé pour que le COUNT exclue aussi les
+        // ressources Documentation (cohérence count/list indispensable à la pagination).
+        $qb = $this->buildPublishedQueryBuilder($typeId, $disciplineId, $search, $hideExpired, $year, $country, $excludeDocumentation);
 
         // On remplace le SELECT * par un SELECT COUNT(r.id)
         // getSingleScalarResult() retourne directement la valeur scalaire (un entier en string)
@@ -755,6 +837,19 @@ class ResourceRepository extends ServiceEntityRepository
             // Tri par score potentiel estimé : les plus récentes en premier
             // (en pratique le MatchingService re-triera par score calculé)
             ->orderBy('r.createdAt', 'DESC');
+
+        // ── Exclusion du type « Documentation » (cohérence avec le catalogue public) ──
+        // Les ressources de type « Documentation » (guides, articles, rapports issus du
+        // reclassement admin d'opportunités scrapées) ne sont pas de vraies opportunités
+        // à matcher : on les exclut donc du matching, comme on les exclut déjà du
+        // catalogue public (cf. buildPublishedQueryBuilder + ResourceController::index).
+        //
+        // On réutilise l'alias 'rt' déjà joint ci-dessus (leftJoin sur r.resourceType) :
+        //   - rt.id IS NULL          → ressource SANS type → on la GARDE (pas une doc)
+        //   - LOWER(rt.name) != ...  → tout type DIFFÉRENT de « documentation » → gardé
+        // La comparaison passe par LOWER() pour être insensible à la casse.
+        $qb->andWhere('rt.id IS NULL OR LOWER(rt.name) != :docName')
+           ->setParameter('docName', 'documentation');
 
         // Chargement EAGER des disciplines via une requête SQL séparée.
         //

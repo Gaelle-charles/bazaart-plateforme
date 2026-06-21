@@ -126,9 +126,13 @@ class ResourceController extends AbstractController
         // On compte AVANT de charger la page pour calculer totalPages.
         // countPublished() fait un SELECT COUNT — pas de chargement d'entités en mémoire.
         //
-        // ⚠️ TOUS les filtres (y compris year et country) doivent être identiques
-        // dans countPublished() ET findPublished() — sinon la pagination sera incohérente
-        // (le compteur et la liste ne couvriraient pas le même périmètre).
+        // ⚠️ TOUS les filtres (y compris year, country et excludeDocumentation) doivent
+        // être IDENTIQUES dans countPublished() ET findPublished() — sinon la pagination
+        // sera incohérente (le compteur et la liste ne couvriraient pas le même périmètre).
+        //
+        // excludeDocumentation: true → on ne compte PAS les ressources de type "Documentation".
+        // Ces ressources sont créées par l'admin pour classer un contenu interne, elles n'ont
+        // pas vocation à apparaître dans le catalogue public des opportunités/ressources artistes.
         $total = $this->resourceRepository->countPublished(
             $typeId,
             $disciplineId,
@@ -136,6 +140,7 @@ class ResourceController extends AbstractController
             hideExpired: true,
             year: $year,
             country: $country,
+            excludeDocumentation: true,
         );
 
         // ── Calcul du nombre total de pages ───────────────────────────────────────
@@ -149,6 +154,8 @@ class ResourceController extends AbstractController
         }
 
         // ── Chargement de la page courante uniquement ─────────────────────────────
+        // excludeDocumentation: true → même exclusion que dans countPublished() ci-dessus,
+        // indispensable pour que le nombre de résultats affiché soit cohérent avec la pagination.
         $resources = $this->resourceRepository->findPublished(
             $typeId,
             $disciplineId,
@@ -159,6 +166,7 @@ class ResourceController extends AbstractController
             year: $year,
             country: $country,
             sortBy: $sortBy,
+            excludeDocumentation: true,
         );
 
         // ── Listes pour les menus déroulants ─────────────────────────────────────
