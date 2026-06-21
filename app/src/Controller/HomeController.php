@@ -13,6 +13,7 @@ use App\Repository\ForumThreadRepository;
 use App\Repository\ResourceAlertRepository;
 use App\Repository\ResourceRepository;
 use App\Service\MatchingFormSessionService;
+use App\Service\MatchingProfileChecker;
 use App\Service\MatchingService;
 use App\Service\SubscriptionChecker;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -90,6 +91,9 @@ final class HomeController extends AbstractController
         private readonly DisciplineRepository      $disciplineRepository,
         // MatchingFormSessionService : lecture des réponses sauvegardées en session
         private readonly MatchingFormSessionService $matchingFormSessionService,
+        // MatchingProfileChecker : SOURCE DE VÉRITÉ UNIQUE pour la complétude du profil matching
+        // Remplace le calcul inline qui était dupliqué ici et dans MatchingController
+        private readonly MatchingProfileChecker    $profileChecker,
     ) {}
 
     /**
@@ -186,15 +190,15 @@ final class HomeController extends AbstractController
                 ->getValue();
 
             // ── Calcul de la complétude du profil ────────────────────────────────
-            // On vérifie que le profil artiste existe et a au moins une discipline
-            // et un objectif lookingFor renseigné. Sans ces données, le matching
-            // retournera des résultats quasi aléatoires (les scores seront tous 0).
-            $profile = $user->getArtistProfile();
-            $profileComplete = (
-                $profile !== null
-                && !$profile->getDisciplines()->isEmpty()
-                && !empty($user->getLookingFor())
-            );
+            // On délègue ENTIÈREMENT à MatchingProfileChecker : c'est la SOURCE
+            // DE VÉRITÉ UNIQUE (principe DRY). Les critères Option B vérifiés :
+            //   1. ArtistProfile non null
+            //   2. displayName non vide (après trim)
+            //   3. location non vide (NOUVEAU critère Option B)
+            //   4. Au moins 1 discipline renseignée
+            //   5. lookingFor non vide (sur User)
+            // Voir App\Service\MatchingProfileChecker pour le détail complet.
+            $profileComplete = $this->profileChecker->isComplete($user);
 
             // ── Calcul des matchs (uniquement si profil utilisable ET pas limite atteinte) ──
             // Si la limite est atteinte, on ne calcule pas les matchs : pas de cartes à afficher.
@@ -272,6 +276,48 @@ final class HomeController extends AbstractController
             ? $this->matchingFormSessionService->getSessionData($request->getSession())
             : [];
 
+        // ── Pré-remplissage du formulaire pour les artistes avec profil incomplet ──
+        //
+        // ÉVOLUTION OPTION B :
+        //   Les champs display_name et location sont désormais collectés dans le
+        //   formulaire matching. On pré-remplit ces champs avec les valeurs existantes
+        //   du profil artiste (si elles existent) pour faciliter la saisie.
+        //
+        //   Logique de priorité :
+        //     1. Si la session contient déjà une valeur (l'artiste a commencé à remplir
+        //        mais n'a pas encore soumis) → on utilise la valeur de session.
+        //     2. Sinon, si le profil artiste existe en BDD → on récupère la valeur existante.
+        //     3. Sinon → chaîne vide (le champ s'affiche vide).
+        //
+        //   Ces variables sont disponibles dans le template même si le formulaire
+        //   n'est pas affiché (valeur '' dans ce cas) — Twig ne plantera pas.
+        $matchingForm_displayName = '';
+        $matchingForm_location    = '';
+
+        if ($needsMatchingForm) {
+            // Priorité 1 : données en session (saisie en cours)
+            $sessionDisplayName = $matchingFormSessionData['display_name'] ?? null;
+            $sessionLocation    = $matchingFormSessionData['location'] ?? null;
+
+            if ($sessionDisplayName !== null && $sessionDisplayName !== '') {
+                $matchingForm_displayName = $sessionDisplayName;
+            } elseif ($user instanceof User && $user->getArtistProfile() !== null) {
+                // Priorité 2 : valeur existante en BDD.
+                // getDisplayName() retourne string (non nullable) → on compare à '' directement.
+                $existingDisplayName = $user->getArtistProfile()->getDisplayName();
+                $matchingForm_displayName = $existingDisplayName !== '' ? $existingDisplayName : '';
+            }
+
+            if ($sessionLocation !== null && $sessionLocation !== '') {
+                $matchingForm_location = $sessionLocation;
+            } elseif ($user instanceof User && $user->getArtistProfile() !== null) {
+                // Priorité 2 : valeur existante en BDD.
+                // getLocation() retourne ?string → null si non renseigné.
+                $existingLocation = $user->getArtistProfile()->getLocation();
+                $matchingForm_location = $existingLocation !== null ? $existingLocation : '';
+            }
+        }
+
         // Token CSRF pour le formulaire matching multi-étapes
         // Le nom 'matching_form' est partagé avec MatchingFormController::saveStep()
         // et MatchingFormController::submit()
@@ -291,6 +337,11 @@ final class HomeController extends AbstractController
             'matchingForm_savedData'     => $matchingFormSessionData,
             'matchingForm_isLoggedIn'    => ($user instanceof User),
             'matchingForm_csrfToken'     => $matchingFormCsrf,
+            // Pré-remplissage Option B : nom et localisation pour les artistes
+            // avec un profil existant (partiel ou complet) qui revoient le formulaire.
+            // '' si inconnu → le champ s'affiche vide, l'artiste saisit.
+            'matchingForm_displayName'   => $matchingForm_displayName,
+            'matchingForm_location'      => $matchingForm_location,
 
             // ── Section swipe matching (Lot C) ───────────────────────────────────
             // Chaque match est un tableau avec les clés : resource_id, title,

@@ -2253,6 +2253,41 @@
     line-height: 1.5;
 }
 
+/* ── Champs nom + localisation (étape 1, Option B) ──────────────────────────
+   Deux champs texte requis, empilés (ou côte à côte sur écran large). Les
+   <input> réutilisent .ob-input pour le style ; on stylise ici uniquement la
+   structure (label + espacement) et le sous-titre des disciplines. */
+.mf-text-fields {
+    display:        grid;
+    grid-template-columns: 1fr;
+    gap:            12px;
+    margin-bottom:  18px;
+}
+@media (min-width: 560px) {
+    /* Sur écran un peu large : nom et localisation côte à côte */
+    .mf-text-fields {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+.mf-field {
+    display:        flex;
+    flex-direction: column;
+    gap:            6px;
+}
+.mf-field__label {
+    font-size:      12px;
+    font-weight:    600;
+    color:          var(--ink);
+    letter-spacing: .01em;
+}
+/* Sous-titre introduisant la liste de disciplines, sous les deux champs texte */
+.mf-step__sublabel {
+    font-size:      12px;
+    font-weight:    600;
+    color:          var(--ink);
+    margin:         0 0 8px;
+}
+
 /* Filtre de recherche disciplines */
 .mf-disc-filter-wrap {
     margin-bottom: 12px;

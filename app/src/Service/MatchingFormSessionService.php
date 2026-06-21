@@ -18,6 +18,8 @@ use Symfony\Component\HttpFoundation\Session\SessionInterface;
  *
  * STRUCTURE DE LA CLEF SESSION :
  * [
+ *   'display_name'       => 'Kemi Adéola',  // Nom d'artiste (requis depuis Option B)
+ *   'location'           => 'Paris, France',  // Localisation (requise depuis Option B)
  *   'discipline_ids'     => [3, 7, 12],   // IDs (int) des disciplines sélectionnées
  *   'looking_for'        => ['formations', 'ressources_appels'],  // valeurs ArtistLookingFor
  *   'looking_for_other'  => 'Résidences au Sénégal',  // null si case "autre" non cochée
@@ -55,9 +57,16 @@ final class MatchingFormSessionService
      *
      * Si la clé n'existe pas (premier passage), retourne un tableau vide.
      * Cette méthode est utilisée par HomeController pour pré-remplir le formulaire
-     * et par OnboardingController pour pré-remplir l'onboarding.
+     * et par OnboardingController pour pré-remplir l'onboarding (carryover).
+     *
+     * ÉVOLUTION OPTION B :
+     *   'display_name' et 'location' sont désormais inclus dans la structure.
+     *   Ces deux champs sont requis à l'étape 1 pour que MatchingProfileChecker
+     *   considère le profil comme complet après soumission.
      *
      * @return array{
+     *   display_name: string|null,
+     *   location: string|null,
      *   discipline_ids: list<int>,
      *   looking_for: list<string>,
      *   looking_for_other: string|null,
@@ -77,6 +86,14 @@ final class MatchingFormSessionService
 
         // Normalisation des types (protection contre des données mal typées)
         return [
+            // Nom d'artiste : trim + null si vide (normalisé comme les autres champs texte)
+            'display_name'      => isset($raw['display_name']) && trim((string) $raw['display_name']) !== ''
+                ? trim((string) $raw['display_name'])
+                : null,
+            // Localisation : même traitement que display_name
+            'location'          => isset($raw['location']) && trim((string) $raw['location']) !== ''
+                ? trim((string) $raw['location'])
+                : null,
             'discipline_ids'    => $this->normalizeIntArray($raw['discipline_ids'] ?? []),
             'looking_for'       => $this->normalizeStringArray($raw['looking_for'] ?? []),
             'looking_for_other' => isset($raw['looking_for_other']) && $raw['looking_for_other'] !== ''
@@ -187,15 +204,41 @@ final class MatchingFormSessionService
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Étape 1 : Disciplines artistiques
-     * Validation : au moins une discipline sélectionnée.
+     * Étape 1 : Nom d'artiste + Localisation + Disciplines artistiques
      *
-     * @param array<string, mixed>    $existing Données existantes en session
-     * @param array<string, mixed>    $data     Données POST de l'étape
+     * ÉVOLUTION OPTION B :
+     *   display_name et location sont désormais collectés à cette étape et REQUIS.
+     *   Pourquoi requis ? MatchingProfileChecker::isComplete() vérifie ces deux champs.
+     *   Sans eux, l'artiste ne peut pas accéder au swipe même après avoir rempli le
+     *   formulaire — ce qui créerait une boucle frustrante.
+     *
+     * Validation (ordre logique d'affichage des erreurs) :
+     *   1. display_name non vide
+     *   2. location non vide
+     *   3. Au moins une discipline sélectionnée
+     *
+     * @param array<string, mixed> $existing Données existantes en session
+     * @param array<string, mixed> $data     Données POST de l'étape
      */
     private function saveStep1(SessionInterface $session, array $existing, array $data): ?string
     {
-        // Extraction et cast en tableau d'entiers
+        // ── Extraction du nom d'artiste ──────────────────────────────────────────
+        $displayName = trim((string) ($data['display_name'] ?? ''));
+
+        // Validation : le nom d'artiste est requis
+        if ($displayName === '') {
+            return 'Indique ton nom d\'artiste pour continuer.';
+        }
+
+        // ── Extraction de la localisation ─────────────────────────────────────────
+        $location = trim((string) ($data['location'] ?? ''));
+
+        // Validation : la localisation est requise (critère MatchingProfileChecker)
+        if ($location === '') {
+            return 'Indique ta localisation (ville, pays).';
+        }
+
+        // ── Extraction et normalisation des disciplines ────────────────────────────
         $rawDisciplines = $data['disciplines'] ?? [];
         $disciplineIds  = is_array($rawDisciplines)
             ? $this->normalizeIntArray($rawDisciplines)
@@ -206,7 +249,11 @@ final class MatchingFormSessionService
             return 'Choisis au moins une discipline artistique.';
         }
 
-        // Merge et persistance en session
+        // ── Merge et persistance en session ────────────────────────────────────────
+        // On merge les nouvelles valeurs dans les données existantes (pas d'écrasement
+        // des autres étapes déjà sauvegardées).
+        $existing['display_name']   = $displayName;
+        $existing['location']       = $location;
         $existing['discipline_ids'] = $disciplineIds;
         $session->set(self::SESSION_KEY, $existing);
 
@@ -282,7 +329,14 @@ final class MatchingFormSessionService
     /**
      * Retourne la structure de données vide (utilisée comme valeur par défaut).
      *
+     * ÉVOLUTION OPTION B :
+     *   display_name et location sont désormais inclus comme champs null par défaut.
+     *   Cela garantit que getSessionData() retourne toujours la même structure de clés,
+     *   peu importe l'état de la session (aucune exception KeyError dans le Twig).
+     *
      * @return array{
+     *   display_name: null,
+     *   location: null,
      *   discipline_ids: list<int>,
      *   looking_for: list<string>,
      *   looking_for_other: null,
@@ -292,6 +346,8 @@ final class MatchingFormSessionService
     private function emptyData(): array
     {
         return [
+            'display_name'      => null,
+            'location'          => null,
             'discipline_ids'    => [],
             'looking_for'       => [],
             'looking_for_other' => null,

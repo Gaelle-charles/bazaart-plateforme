@@ -120,7 +120,9 @@ final class MatchingFormController extends AbstractController
             $this->addFlash('error', $error);
         }
 
-        return $this->redirectToRoute('app_home', ['#' => 'swipe-section']);
+        // '_fragment' est le paramètre réservé Symfony pour générer une ancre (#swipe-section).
+        // (Utiliser '#' génère à tort une query string ?%23=swipe-section.)
+        return $this->redirectToRoute('app_home', ['_fragment' => 'swipe-section']);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -198,21 +200,34 @@ final class MatchingFormController extends AbstractController
 
         $errors = [];
 
-        // ── Étape 1 : Disciplines ──────────────────────────────────────────────
+        // ── Étape 1 : Nom d'artiste + Localisation + Disciplines ──────────────
+        //
+        // ÉVOLUTION OPTION B :
+        //   Le formulaire envoie désormais display_name et location dans l'étape 1.
+        //   OnboardingStep2DTO::fromRequest() lit ces deux clés depuis $data.
+        //   Contrairement à l'onboarding complet, location est REQUIS ici
+        //   (critère de complétude du profil : MatchingProfileChecker).
+        //   On N'utilise plus le fallback email comme placeholder — le nom
+        //   est maintenant collecté dans le formulaire lui-même (champ requis).
         $step2Dto = OnboardingStep2DTO::fromRequest($data);
-        // Pour le formulaire home, on ne collecte PAS displayName ni bio.
-        // On force un displayName vide si pas déjà renseigné.
-        // Si le profil artiste existe déjà, on conserve le displayName existant.
-        $existingProfile = $user->getArtistProfile();
-        if (trim($step2Dto->displayName) === '' && $existingProfile !== null) {
-            // On conserve le nom existant — on ne l'écrase pas avec une chaîne vide.
-            $step2Dto->displayName = $existingProfile->getDisplayName();
-        }
+
+        // Validation explicite de display_name dans le Flux B.
+        // (Normalement déjà validé par saveStep1 dans saveAllStepsToSession ci-dessus,
+        //  mais on protège aussi contre le cas sans JS où le service aurait échoué.)
         if (trim($step2Dto->displayName) === '') {
-            // Pas de profil existant et pas de nom saisi : on met un placeholder
-            // qui pourra être modifié depuis le dashboard. L'onboarding complet
-            // sera proposé depuis le dashboard.
-            $step2Dto->displayName = explode('@', $user->getEmail())[0];
+            $this->addFlash('error', 'Indique ton nom d\'artiste pour continuer.');
+
+            return $this->redirectToRoute('app_home', ['_fragment' => 'swipe-section']);
+        }
+
+        // Validation explicite de location : OnboardingService::saveStep2() accepte
+        // location = null (champ optionnel dans l'onboarding général), mais ici on
+        // EXIGE une localisation pour rendre le profil complet au sens de
+        // MatchingProfileChecker. On bloque donc si location est vide.
+        if ($step2Dto->location === null || trim($step2Dto->location) === '') {
+            $this->addFlash('error', 'Indique ta localisation (ville, pays).');
+
+            return $this->redirectToRoute('app_home', ['_fragment' => 'swipe-section']);
         }
 
         $error2 = $this->onboardingService->saveStep2($user, $step2Dto);
@@ -245,7 +260,9 @@ final class MatchingFormController extends AbstractController
                 $this->addFlash('error', $error);
             }
 
-            return $this->redirectToRoute('app_home', ['#' => 'swipe-section']);
+            // '_fragment' est le paramètre réservé Symfony pour générer une ancre (#swipe-section).
+            // (Utiliser '#' génère à tort une query string ?%23=swipe-section.)
+            return $this->redirectToRoute('app_home', ['_fragment' => 'swipe-section']);
         }
 
         // ── Succès : profil sauvegardé → section swipe disponible ─────────────
@@ -254,6 +271,8 @@ final class MatchingFormController extends AbstractController
         // On vide les données de session du formulaire matching (plus nécessaires).
         $this->sessionService->clearSession($request->getSession());
 
-        return $this->redirectToRoute('app_home', ['#' => 'swipe-section']);
+        // '_fragment' est le paramètre réservé Symfony pour générer une ancre (#swipe-section).
+        // (Utiliser '#' génère à tort une query string ?%23=swipe-section.)
+        return $this->redirectToRoute('app_home', ['_fragment' => 'swipe-section']);
     }
 }

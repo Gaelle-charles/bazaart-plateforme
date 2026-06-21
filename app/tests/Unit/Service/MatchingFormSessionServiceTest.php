@@ -49,6 +49,8 @@ final class MatchingFormSessionServiceTest extends TestCase
 
     /**
      * Quand la session est vide, getSessionData() retourne la structure vide normalisée.
+     *
+     * ÉVOLUTION OPTION B : display_name et location doivent aussi être null par défaut.
      */
     public function testGetSessionDataReturnsEmptyStructureWhenNoDataInSession(): void
     {
@@ -59,6 +61,10 @@ final class MatchingFormSessionServiceTest extends TestCase
 
         $data = $this->service->getSessionData($this->session);
 
+        // Nouveaux champs Option B
+        $this->assertNull($data['display_name']);
+        $this->assertNull($data['location']);
+        // Champs existants
         $this->assertSame([], $data['discipline_ids']);
         $this->assertSame([], $data['looking_for']);
         $this->assertNull($data['looking_for_other']);
@@ -67,6 +73,8 @@ final class MatchingFormSessionServiceTest extends TestCase
 
     /**
      * getSessionData() normalise correctement les types (int, string, null).
+     *
+     * ÉVOLUTION OPTION B : display_name et location sont maintenant dans la structure.
      */
     public function testGetSessionDataNormalizesTypes(): void
     {
@@ -74,6 +82,8 @@ final class MatchingFormSessionServiceTest extends TestCase
         $this->session->method('get')
             ->with(MatchingFormSessionService::SESSION_KEY, [])
             ->willReturn([
+                'display_name'      => '  Kemi Adéola  ',  // espaces à trimmer
+                'location'          => 'Paris, France',
                 'discipline_ids'    => ['3', '7', '12'],  // strings au lieu d'int
                 'looking_for'       => ['formations', 'residences'],
                 'looking_for_other' => 'Résidences',
@@ -82,6 +92,9 @@ final class MatchingFormSessionServiceTest extends TestCase
 
         $data = $this->service->getSessionData($this->session);
 
+        // Les espaces doivent être retirés (trim)
+        $this->assertSame('Kemi Adéola', $data['display_name']);
+        $this->assertSame('Paris, France', $data['location']);
         // Les IDs doivent être des entiers
         $this->assertSame([3, 7, 12], $data['discipline_ids']);
         $this->assertSame(['formations', 'residences'], $data['looking_for']);
@@ -139,7 +152,62 @@ final class MatchingFormSessionServiceTest extends TestCase
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
+     * Étape 1 : retourne une erreur si display_name est absent (vide).
+     *
+     * ÉVOLUTION OPTION B : display_name est maintenant REQUIS à l'étape 1.
+     */
+    public function testSaveStep1ReturnsErrorWhenDisplayNameMissing(): void
+    {
+        $this->session->method('get')
+            ->with(MatchingFormSessionService::SESSION_KEY, [])
+            ->willReturn([]);
+
+        // Pas de display_name dans les données soumises
+        $error = $this->service->saveStepToSession(
+            session: $this->session,
+            step:    1,
+            data:    [
+                'display_name' => '',  // vide → erreur
+                'location'     => 'Paris, France',
+                'disciplines'  => ['3'],
+            ],
+        );
+
+        $this->assertNotNull($error);
+        // Le message doit mentionner le nom d'artiste
+        $this->assertStringContainsString('nom', strtolower($error));
+    }
+
+    /**
+     * Étape 1 : retourne une erreur si location est absent (vide).
+     *
+     * ÉVOLUTION OPTION B : location est maintenant REQUIS à l'étape 1.
+     */
+    public function testSaveStep1ReturnsErrorWhenLocationMissing(): void
+    {
+        $this->session->method('get')
+            ->with(MatchingFormSessionService::SESSION_KEY, [])
+            ->willReturn([]);
+
+        $error = $this->service->saveStepToSession(
+            session: $this->session,
+            step:    1,
+            data:    [
+                'display_name' => 'Kemi Adéola',
+                'location'     => '',  // vide → erreur
+                'disciplines'  => ['3'],
+            ],
+        );
+
+        $this->assertNotNull($error);
+        // Le message doit mentionner la localisation
+        $this->assertStringContainsString('localisation', strtolower($error));
+    }
+
+    /**
      * Étape 1 : retourne une erreur si aucune discipline n'est sélectionnée.
+     * (La validation des disciplines reste inchangée, mais on doit maintenant
+     * fournir display_name et location pour atteindre cette validation.)
      */
     public function testSaveStep1ReturnsErrorWhenNoDisciplineSelected(): void
     {
@@ -151,7 +219,11 @@ final class MatchingFormSessionServiceTest extends TestCase
         $error = $this->service->saveStepToSession(
             session: $this->session,
             step:    1,
-            data:    ['disciplines' => []],
+            data:    [
+                'display_name' => 'Kemi Adéola',
+                'location'     => 'Paris, France',
+                'disciplines'  => [],  // aucune discipline → erreur
+            ],
         );
 
         $this->assertNotNull($error);
@@ -159,7 +231,10 @@ final class MatchingFormSessionServiceTest extends TestCase
     }
 
     /**
-     * Étape 1 : sauvegarde les disciplines valides et retourne null (succès).
+     * Étape 1 : sauvegarde les disciplines valides (+ display_name + location)
+     * et retourne null (succès).
+     *
+     * ÉVOLUTION OPTION B : display_name et location sont aussi sauvegardés.
      */
     public function testSaveStep1SavesDisciplinesOnSuccess(): void
     {
@@ -168,28 +243,36 @@ final class MatchingFormSessionServiceTest extends TestCase
             ->with(MatchingFormSessionService::SESSION_KEY, [])
             ->willReturn([]);
 
-        // On attend un appel à set() avec les disciplines
+        // On attend un appel à set() avec les disciplines ET les nouveaux champs
         $this->session->expects($this->once())
             ->method('set')
             ->with(
                 MatchingFormSessionService::SESSION_KEY,
                 $this->callback(function (array $data): bool {
-                    return $data['discipline_ids'] === [3, 7, 12];
+                    // Vérifie que les 3 champs de l'étape 1 sont bien sauvegardés
+                    return $data['discipline_ids'] === [3, 7, 12]
+                        && $data['display_name']   === 'Kemi Adéola'
+                        && $data['location']       === 'Paris, France';
                 })
             );
 
         $error = $this->service->saveStepToSession(
             session: $this->session,
             step:    1,
-            data:    ['disciplines' => ['3', '7', '12']],
+            data:    [
+                'display_name' => 'Kemi Adéola',
+                'location'     => 'Paris, France',
+                'disciplines'  => ['3', '7', '12'],
+            ],
         );
 
-        $this->assertNull($error, 'Aucune erreur attendue avec des disciplines valides');
+        $this->assertNull($error, 'Aucune erreur attendue avec des données valides');
     }
 
     /**
      * Étape 1 : ignore les IDs de disciplines invalides (0, négatifs).
      * Si le résultat filtré est vide → erreur.
+     * (Les champs display_name et location sont valides dans ce test.)
      */
     public function testSaveStep1RejectsInvalidDisciplineIds(): void
     {
@@ -201,10 +284,59 @@ final class MatchingFormSessionServiceTest extends TestCase
         $error = $this->service->saveStepToSession(
             session: $this->session,
             step:    1,
-            data:    ['disciplines' => ['0', '-1', 'abc']],
+            data:    [
+                'display_name' => 'Kemi Adéola',
+                'location'     => 'Paris, France',
+                'disciplines'  => ['0', '-1', 'abc'],
+            ],
         );
 
         $this->assertNotNull($error, 'Une erreur doit être retournée si aucun ID valide');
+    }
+
+    /**
+     * Étape 1 : les espaces seuls dans display_name sont rejetés (équivalents à vide).
+     * Protège contre les soumissions de type "   " (espaces uniquement).
+     */
+    public function testSaveStep1RejectsWhitespaceOnlyDisplayName(): void
+    {
+        $this->session->method('get')
+            ->with(MatchingFormSessionService::SESSION_KEY, [])
+            ->willReturn([]);
+
+        $error = $this->service->saveStepToSession(
+            session: $this->session,
+            step:    1,
+            data:    [
+                'display_name' => '   ',  // espaces seulement → rejeté après trim
+                'location'     => 'Paris, France',
+                'disciplines'  => ['3'],
+            ],
+        );
+
+        $this->assertNotNull($error);
+    }
+
+    /**
+     * Étape 1 : les espaces seuls dans location sont rejetés (équivalents à vide).
+     */
+    public function testSaveStep1RejectsWhitespaceOnlyLocation(): void
+    {
+        $this->session->method('get')
+            ->with(MatchingFormSessionService::SESSION_KEY, [])
+            ->willReturn([]);
+
+        $error = $this->service->saveStepToSession(
+            session: $this->session,
+            step:    1,
+            data:    [
+                'display_name' => 'Kemi Adéola',
+                'location'     => '   ',  // espaces seulement → rejeté après trim
+                'disciplines'  => ['3'],
+            ],
+        );
+
+        $this->assertNotNull($error);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

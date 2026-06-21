@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\DTO\Matching\MatchResult;
 use App\Entity\User;
 use App\Security\Voter\MatchingVoter;
+use App\Service\MatchingProfileChecker;
 use App\Service\MatchingService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -36,16 +37,23 @@ use Symfony\Component\Routing\Attribute\Route;
  *   - denyAccessUnlessGranted() retourne une 403 si le voter refuse l'accès.
  *   - L'artiste doit être connecté ET avoir ROLE_ARTIST.
  *
- * CAS "PROFIL INCOMPLET" :
- *   Si l'artiste n'a pas de profil (ArtistProfile null) ou n'a pas rempli son profil
- *   de matching, MatchingService retourne [] (liste vide).
- *   On retourne alors un JSON avec status 200 et un message clair, PAS une erreur 500.
+ * CAS "PROFIL INCOMPLET" (Option B — refactoring du 20 juin 2026) :
+ *   Si MatchingProfileChecker::isComplete() retourne false, on court-circuite AVANT
+ *   d'appeler MatchingService : on retourne { matches: [], count: 0, profile_complete: false }.
+ *   Cela garantit qu'un profil incomplet ne peut PAS récupérer de matchs via l'API,
+ *   même si la validation côté front est contournée (ex: appel curl direct).
+ *
+ *   Les critères de complétude sont définis dans MatchingProfileChecker.
+ *   C'est la SOURCE DE VÉRITÉ UNIQUE — on ne répète pas la logique ici.
  */
 #[Route('/api/matching', name: 'api_matching_')]
 final class MatchingController extends AbstractController
 {
     public function __construct(
-        private readonly MatchingService $matchingService,
+        private readonly MatchingService        $matchingService,
+        // MatchingProfileChecker : source de vérité unique pour la complétude du profil
+        // (remplace l'ancienne méthode privée isProfileComplete() de ce controller)
+        private readonly MatchingProfileChecker $profileChecker,
     ) {}
 
     /**
@@ -101,18 +109,33 @@ final class MatchingController extends AbstractController
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // Calcule la complétude réelle du profil (pour adapter le message front).
-        // On distingue "profil créé mais vide" (profile_complete = false) de "profil utilisable"
-        // (profile_complete = true) afin que le front puisse afficher une invitation ciblée.
-        $profileComplete = $this->isProfileComplete($user);
+        // ── Vérification de la complétude du profil ─────────────────────────────
+        // On délègue ENTIÈREMENT à MatchingProfileChecker : c'est lui la source
+        // de vérité (DRY). Si le profil est incomplet, on court-circuite ici
+        // sans appeler MatchingService — cela garantit qu'un profil incomplet
+        // ne peut jamais récupérer de matchs via cette API, même en appelant
+        // l'endpoint directement (contournement front impossible).
+        $profileComplete = $this->profileChecker->isComplete($user);
 
-        // Délègue tout le scoring au MatchingService
-        // Si le profil est null ou incomplet, MatchingService retourne [].
+        if (!$profileComplete) {
+            // Profil incomplet : on retourne une réponse vide immédiatement.
+            // HTTP 200 (et non 403 ni 422) car ce n'est pas une erreur d'autorisation
+            // ni de validation — c'est un état métier valide ("profil en cours").
+            // Le front lit profile_complete = false et affiche l'invitation à compléter.
+            return $this->json([
+                'count'            => 0,
+                'matches'          => [],
+                // false signale explicitement au front que le profil doit être complété
+                'profile_complete' => false,
+            ]);
+        }
+
+        // Profil complet : on délègue le calcul de scoring à MatchingService.
+        // getMatchesForUser() retourne TOUS les matchs triés par score décroissant.
         $matches = $this->matchingService->getMatchesForUser($user);
 
-        // Construit le tableau de réponse JSON.
-        // On filtre les matchs avec score > 0 pour le compteur affiché à l'utilisateur
-        // (un match avec score 0 = aucun critère commun → pas pertinent).
+        // On filtre les matchs avec score > 0 : un score nul = aucun critère commun
+        // → pas pertinent à montrer à l'utilisateur.
         $positiveMatches = array_values(
             array_filter($matches, fn(MatchResult $r) => $r->score > 0)
         );
@@ -121,17 +144,13 @@ final class MatchingController extends AbstractController
             // Nombre de matchs pertinents (score > 0) — affiché dans le hero home
             'count'            => count($positiveMatches),
             // Liste des matchs classés du meilleur au moins bon (score décroissant)
-            // On n'inclut QUE les matchs avec score > 0 dans la liste retournée
-            // (les ressources sans aucun critère commun ne servent pas à l'utilisateur)
+            // On n'inclut QUE les matchs avec score > 0 dans la liste retournée.
             'matches'          => array_map(
                 fn(MatchResult $r) => $r->toArray(),
                 $positiveMatches
             ),
-            // Indicateur de profil utilisable pour le matching.
-            // false → "profil créé mais vide" ou "pas de profil" → le front affiche
-            //         une invitation à compléter le profil artiste.
-            // true  → au moins une discipline ET un objectif lookingFor renseignés.
-            'profile_complete' => $profileComplete,
+            // true = profil complet et matchs calculés
+            'profile_complete' => true,
         ]);
     }
 
@@ -160,61 +179,20 @@ final class MatchingController extends AbstractController
             return $this->json(['count' => 0], Response::HTTP_UNAUTHORIZED);
         }
 
-        // countMatchesForUser() appelle getMatchesForUser() en interne.
-        // On ne filtre que les scores > 0 (cf. MatchingService::countMatchesForUser).
+        // ── Garde "profil incomplet" — cohérente avec myMatches() ───────────────
+        // Si le profil n'est pas complet, on retourne 0 sans calculer les matchs.
+        // Cela évite d'exposer des compteurs de matchs à des utilisateurs dont
+        // le profil n'est pas encore exploitable (peut induire une fausse confiance).
+        if (!$this->profileChecker->isComplete($user)) {
+            return $this->json(['count' => 0]);
+        }
+
+        // Profil complet : countMatchesForUser() appelle getMatchesForUser() en interne
+        // et ne retourne que les scores > 0 (cf. MatchingService::countMatchesForUser).
         $count = $this->matchingService->countMatchesForUser($user);
 
         return $this->json(['count' => $count]);
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // HELPERS PRIVÉS
-    // ═════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Détermine si le profil artiste est suffisamment rempli pour que le matching soit utile.
-     *
-     * CRITÈRES DE COMPLÉTUDE :
-     *   1. L'utilisateur doit avoir un ArtistProfile (non null).
-     *   2. Le profil doit avoir au moins une discipline renseignée.
-     *      Pourquoi : sans discipline, la composante "disciplines communes" (40 pts max)
-     *      sera toujours 0, ce qui dégrade fortement la pertinence des matchs.
-     *   3. L'utilisateur doit avoir renseigné au moins un objectif lookingFor.
-     *      Pourquoi : sans lookingFor, la composante "ce que cherche l'artiste" (30 pts max)
-     *      sera toujours 0. L'artiste verra des ressources classées quasi aléatoirement.
-     *
-     * NOTE : le lookingFor est sur User, pas sur ArtistProfile.
-     * C'est cohérent avec l'onboarding (User::$lookingFor est renseigné à l'étape 3).
-     *
-     * Ce helper vit dans le controller (et non dans MatchingService) car c'est
-     * une préoccupation d'affichage (savoir quoi dire dans la réponse JSON),
-     * pas une préoccupation de scoring. MatchingService gère le calcul de score ;
-     * c'est au controller de décider quoi indiquer au front sur l'état du profil.
-     *
-     * @param User $user L'utilisateur connecté (ROLE_ARTIST garanti par le voter)
-     * @return bool true si le profil est utilisable pour le matching, false sinon
-     */
-    private function isProfileComplete(User $user): bool
-    {
-        // Critère 1 : l'ArtistProfile doit exister
-        $profile = $user->getArtistProfile();
-        if ($profile === null) {
-            return false;
-        }
-
-        // Critère 2 : au moins une discipline renseignée sur le profil artiste
-        if ($profile->getDisciplines()->isEmpty()) {
-            return false;
-        }
-
-        // Critère 3 : au moins un objectif lookingFor renseigné sur l'utilisateur
-        // getLookingFor() retourne null si jamais renseigné, ou un tableau (potentiellement vide).
-        // On traite null et tableau vide comme "non renseigné" avec empty().
-        $lookingFor = $user->getLookingFor();
-        if (empty($lookingFor)) {
-            return false;
-        }
-
-        return true;
-    }
 }
+

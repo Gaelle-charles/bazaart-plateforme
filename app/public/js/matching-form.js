@@ -266,7 +266,22 @@
         clearStepError(step);
 
         if (step === 1) {
-            // Étape 1 : au moins une discipline cochée
+            // Étape 1 (Option B) : nom + localisation requis, puis au moins une discipline.
+            // Ces deux champs sont indispensables pour qu'un profil soit « complet »
+            // côté serveur (MatchingProfileChecker), donc on les exige dès l'étape 1.
+            var nameInput = form.querySelector('input[name="display_name"]');
+            if (nameInput && nameInput.value.trim() === '') {
+                showStepError(step, 'Indique ton nom d\'artiste pour continuer.');
+                nameInput.focus();
+                return false;
+            }
+            var locInput = form.querySelector('input[name="location"]');
+            if (locInput && locInput.value.trim() === '') {
+                showStepError(step, 'Indique ta localisation (ville, pays) pour continuer.');
+                locInput.focus();
+                return false;
+            }
+            // Au moins une discipline cochée
             var checked = form.querySelectorAll('input[name="disciplines[]"]:checked');
             if (checked.length === 0) {
                 showStepError(step, 'Coche au moins une discipline artistique pour continuer.');
@@ -356,6 +371,15 @@
 
         // Collecte des données selon l'étape
         if (step === 1) {
+            // Nom + localisation (Option B) — envoyés en session pour le carryover
+            var nameInput = form.querySelector('input[name="display_name"]');
+            if (nameInput) {
+                fd.append('display_name', nameInput.value.trim());
+            }
+            var locInput = form.querySelector('input[name="location"]');
+            if (locInput) {
+                fd.append('location', locInput.value.trim());
+            }
             // Disciplines cochées
             form.querySelectorAll('input[name="disciplines[]"]:checked').forEach(function (cb) {
                 fd.append('disciplines[]', cb.value);
