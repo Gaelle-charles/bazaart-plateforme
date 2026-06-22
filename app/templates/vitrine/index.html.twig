@@ -1819,19 +1819,69 @@
     padding-top:    0;
 }
 
-/* ── BOUTONS D'ACTION ─────────────────────────────────────────────────── */
-.swipe-actions {
-    display: flex;
-    gap:     10px;
+/* ── COLONNE GAUCHE : carte + actions empilées ────────────────────────── */
+.swipe-main {
+    display:        flex;
     flex-direction: column;
 }
 
-/* Boutons "Passer" et "Intéressé(e)" — pleine largeur dans le panneau */
+/* ── BOUTONS D'ACTION (sous la carte) ─────────────────────────────────────
+   Disposition en ligne : "Passer" ancré à GAUCHE, "Intéressé(e)" à DROITE.
+   C'est le vrai geste de swipe (refus à gauche, intérêt à droite). */
+.swipe-actions {
+    display:         flex;
+    flex-direction:  row;
+    justify-content: space-between;
+    align-items:     center;
+    gap:             12px;
+    margin-top:      16px;
+}
+
+/* On retire l'ancien width:100% : chaque bouton garde sa largeur naturelle,
+   et space-between les pousse aux deux extrémités sous la carte. */
 .swipe-btn-pass,
 .swipe-btn-fav {
-    width:            100%;
-    justify-content:  center;
-    gap:              8px;
+    flex:            0 0 auto;
+    justify-content: center;
+    gap:             8px;
+}
+
+/* ── COLONNE DROITE : bloc "Comment ça marche" ────────────────────────────
+   Explique le fonctionnement du matching, à droite de la zone de swipe. */
+.swipe-howto {
+    border:     1px solid var(--line-soft);
+    padding:    18px;
+    background: var(--bg-alt);
+}
+.swipe-howto__title {
+    font-family:    var(--mono);
+    font-size:      11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color:          var(--ink);
+    margin:         0 0 12px;
+}
+.swipe-howto__steps {
+    margin:       0;
+    padding-left: 18px;
+    display:      flex;
+    flex-direction: column;
+    gap:          8px;
+    font-size:    13px;
+    line-height:  1.5;
+    color:        var(--ink-mute);
+}
+.swipe-howto__steps strong {
+    color: var(--ink);
+}
+.swipe-howto__note {
+    margin:      12px 0 0;
+    font-size:   12px;
+    line-height: 1.5;
+    color:       var(--ink-mute);
+}
+.swipe-howto__note strong {
+    color: var(--ink);
 }
 
 /* ── HINT CLAVIER ─────────────────────────────────────────────────────── */
@@ -2813,7 +2863,7 @@
                     <div class="lp-section-header__left">
                         <span class="lp-section-header__index" aria-hidden="true">00</span>
                         <h2 class="lp-section-header__title" id="lp-swipe-title">
-                            Tes matchs
+                            Ton matching
                         </h2>
                     </div>
                 </div>
@@ -2849,7 +2899,7 @@
                     <div class="lp-section-header__left">
                         <span class="lp-section-header__index" aria-hidden="true">00</span>
                         <h2 class="lp-section-header__title" id="lp-swipe-title">
-                            Tes matchs
+                            Ton matching
                         </h2>
                         {# Compteur dynamique — mis a jour par swipe.js #}
                         <span class="lp-section-header__sub">
@@ -2875,6 +2925,9 @@
 
                     {# ── Conteneur principal : pile de cartes + panneau latéral ─────── #}
                     <div class="swipe-layout">
+
+                        {# ── Colonne gauche : pile de cartes + actions sous la carte ──── #}
+                        <div class="swipe-main">
 
                         {# ── Pile de cartes (swipe-deck) ─────────────────────────────── #}
                         <div class="swipe-deck" role="region" aria-label="Cartes de matching a swiper">
@@ -3022,10 +3075,7 @@
 
                         </div>{# /.swipe-deck #}
 
-                        {# ── Panneau lateral : boutons + alerte ───────────────────────── #}
-                        <div class="swipe-panel">
-
-                            {# ── Boutons d'action ─────────────────────────────────────── #}
+                            {# ── Boutons d'action SOUS la carte : Passer (gauche) | Interesse (droite) ── #}
                             <div class="swipe-actions" role="group" aria-label="Actions de swipe">
                                 {# Bouton "Passer" = swipe gauche = ignorer #}
                                 <button
@@ -3060,6 +3110,22 @@
                             <p class="swipe-hint" aria-hidden="true">
                                 Utilisez les fleches ou glissez les cartes
                             </p>
+
+                        </div>{# /.swipe-main #}
+
+                        {# ── Colonne droite : explication du matching + alerte ─────────── #}
+                        <div class="swipe-panel">
+
+                            {# ── Comment ca marche (explication du fonctionnement du matching) ── #}
+                            <div class="swipe-howto">
+                                <p class="swipe-howto__title">Comment &ccedil;a marche&nbsp;?</p>
+                                <ol class="swipe-howto__steps">
+                                    <li>On lit ton profil&nbsp;: disciplines, localisation et ce que tu cherches.</li>
+                                    <li>Chaque opportunit&eacute; re&ccedil;oit un <strong>score de correspondance sur 100</strong>.</li>
+                                    <li>Tu swipes&nbsp;: <strong>Int&eacute;ress&eacute;(e)</strong> &agrave; droite pour la garder, <strong>Passer</strong> &agrave; gauche pour l'&eacute;carter.</li>
+                                </ol>
+                                <p class="swipe-howto__note">Active une <strong>alerte</strong> pour ne rien manquer des prochaines.</p>
+                            </div>
 
                             {# ── Formulaire alerte avec consentement ──────────────────── #}
                             {# Ce formulaire est le FALLBACK HTML (fonctionne sans JS).
@@ -3166,7 +3232,7 @@
                     <div class="lp-section-header__left">
                         <span class="lp-section-header__index" aria-hidden="true">00</span>
                         <h2 class="lp-section-header__title" id="lp-swipe-title">
-                            Tes matchs
+                            Ton matching
                         </h2>
                         <span class="lp-section-header__sub">profil à compléter</span>
                     </div>
@@ -3190,7 +3256,7 @@
                     <div class="lp-section-header__left">
                         <span class="lp-section-header__index" aria-hidden="true">00</span>
                         <h2 class="lp-section-header__title" id="lp-swipe-title">
-                            Tes matchs
+                            Ton matching
                         </h2>
                         <span class="lp-section-header__sub">réservé aux artistes</span>
                     </div>
@@ -3223,7 +3289,7 @@
                     <div class="lp-section-header__left">
                         <span class="lp-section-header__index" aria-hidden="true">00</span>
                         <h2 class="lp-section-header__title" id="lp-swipe-title">
-                            Tes matchs
+                            Ton matching
                         </h2>
                         <span class="lp-section-header__sub">trouve les opportunités faites pour toi</span>
                     </div>
