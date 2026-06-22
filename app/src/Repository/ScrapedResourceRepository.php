@@ -6,6 +6,7 @@ namespace App\Repository;
 
 use App\Entity\ScrapedResource;
 use App\Enum\ScrapedResourceStatus;
+use App\Service\DeadlineParserService;
 use App\Service\TitleNormalizerService;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -21,6 +22,11 @@ class ScrapedResourceRepository extends ServiceEntityRepository
         // Un seul service partagé garantit que tous les points de dédup utilisent
         // EXACTEMENT le même algorithme — divergence = doublons non détectés ou faux positifs.
         private readonly TitleNormalizerService $titleNormalizer,
+        // DeadlineParserService : injecté pour refactorer archiveExpiredLegacy() (ADR-0024).
+        // Remplace le parsing inline de dates qui existait dans la méthode legacy.
+        // En centralisant ici, on garantit que les 3 formats reconnus (ISO, FR court, FR long)
+        // sont identiques à ceux utilisés par le persister et l'EventListener.
+        private readonly DeadlineParserService $deadlineParser,
     ) {
         parent::__construct($registry, ScrapedResource::class);
     }
@@ -333,22 +339,6 @@ class ScrapedResourceRepository extends ServiceEntityRepository
         $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris'));
         $count = 0;
 
-        // Mapping des noms de mois français vers leurs numéros (pour le format "31 mai 2026")
-        $monthsFr = [
-            'janvier'   => '01',
-            'février'   => '02',
-            'mars'      => '03',
-            'avril'     => '04',
-            'mai'       => '05',
-            'juin'      => '06',
-            'juillet'   => '07',
-            'août'      => '08',
-            'septembre' => '09',
-            'octobre'   => '10',
-            'novembre'  => '11',
-            'décembre'  => '12',
-        ];
-
         // Grâce de 48h : on ne touche jamais un item créé il y a moins de 48 heures.
         // Raison : certains scrapers stockent une "date de publication" dans deadline
         // (pas la vraie deadline de candidature). Sans cette protection, des items
@@ -361,52 +351,29 @@ class ScrapedResourceRepository extends ServiceEntityRepository
                 continue;
             }
 
-            $deadline = trim($resource->getDeadline() ?? '');
-
-            // Cas triviaux : deadline vide, tiret, ou valeur non informative → on ignore
-            if ($deadline === '' || $deadline === '-' || $deadline === '—') {
-                continue;
-            }
-
-            // $deadlineDate sera null si aucun format ne correspond
-            $deadlineDate = null;
-
-            // ── Tentative 1 : format ISO 8601 court (YYYY-MM-DD) ─────────────
-            // Exemple : "2026-05-31"
-            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $deadline)) {
-                $parsed = \DateTimeImmutable::createFromFormat('Y-m-d', $deadline);
-                if ($parsed !== false) {
-                    $deadlineDate = $parsed;
-                }
-            }
-
-            // ── Tentative 2 : format français court (JJ/MM/AAAA) ─────────────
-            // Exemple : "31/05/2026" ou "1/5/2026" (jour ET mois peuvent être sans zéro)
-            // Aligné sur DeadlineParserService::parse() — même pattern pour cohérence.
-            if ($deadlineDate === null && preg_match('/^\d{1,2}\/\d{1,2}\/\d{4}$/', $deadline)) {
-                $parsed = \DateTimeImmutable::createFromFormat('d/m/Y', $deadline);
-                if ($parsed !== false) {
-                    $deadlineDate = $parsed;
-                }
-            }
-
-            // ── Tentative 3 : format français long ("JJ mois AAAA") ───────────
-            // Exemple : "31 mai 2026" ou "15 décembre 2026"
-            if ($deadlineDate === null && preg_match('/^(\d{1,2})\s+(\w+)\s+(\d{4})$/i', $deadline, $matches)) {
-                $monthStr = mb_strtolower($matches[2]);
-                if (isset($monthsFr[$monthStr])) {
-                    // Reconstruction en format JJ/MM/AAAA pour createFromFormat
-                    $normalized  = sprintf('%02d/%s/%s', (int) $matches[1], $monthsFr[$monthStr], $matches[3]);
-                    $parsed      = \DateTimeImmutable::createFromFormat('d/m/Y', $normalized);
-                    if ($parsed !== false) {
-                        $deadlineDate = $parsed;
-                    }
-                }
-            }
+            // ── Parsing de la deadline via DeadlineParserService (ADR-0024) ───
+            //
+            // AVANT ce refactor : le parsing était inline ici (trois blocs if/preg_match
+            // copiés depuis archiveExpired() — duplication de code, risque de divergence).
+            //
+            // APRÈS (ADR-0024 Option 2) : on délègue à DeadlineParserService::parse()
+            // qui supporte exactement les mêmes 3 formats (ISO, FR court, FR long) et
+            // retourne null pour les cas non parsables (vide, tiret, em-dash, charabia).
+            //
+            // COMPORTEMENT QUASI-IDENTIQUE (une amélioration mineure) :
+            //   Le service utilise les mêmes regex et le même tableau MONTHS_FR que
+            //   l'ancien code inline. Seule différence : les mois ACCENTUÉS (août,
+            //   décembre, février) sont désormais reconnus, car le service utilise le
+            //   flag Unicode /iu là où l'ancien inline utilisait /i (ASCII) — ce dernier
+            //   ne matchait jamais ces 3 mois. Ce n'est pas une régression mais une
+            //   correction : l'impact opérationnel est nul (ces deadlines sont futures,
+            //   donc non concernées par l'archivage des deadlines passées).
+            $deadlineDate = $this->deadlineParser->parse($resource->getDeadline() ?? '');
 
             // ── Archivage si deadline clairement passée ───────────────────────
             // On n'archive que si :
             //   a) le parsing a réussi (deadlineDate n'est pas null)
+            //      → DeadlineParserService retourne null pour vide, tiret, em-dash, format inconnu
             //   b) la date est strictement antérieure à aujourd'hui
             //      (une deadline "aujourd'hui" = dernier jour pour candidater, pas encore expirée)
             if ($deadlineDate !== null && $deadlineDate < $today) {
