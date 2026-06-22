@@ -20,18 +20,21 @@ use Symfony\Component\Routing\Attribute\Route;
  *
  * CE CONTROLLER GÈRE DEUX FLUX DISTINCTS :
  *
- *   Flux A : Visiteur non connecté
- *     - L'utilisateur remplit les étapes discipline/lookingFor/legalStatus
- *     - Le JS enregistre chaque étape en session via POST /matching/step (saveStep)
- *     - A la soumission finale, les réponses sont persistées en session
+ *   Flux A : Visiteur NON connecté (filet de sécurité uniquement)
+ *     CONTEXTE : depuis juin 2026, la home n'affiche plus le formulaire matching
+ *     aux visiteurs non connectés (le Twig affiche un CTA de connexion à la place).
+ *     Ce flux subsiste comme garde-fou contre un POST direct sur /matching/form
+ *     sans être connecté (ex. cURL, manipulation de formulaire).
+ *     - Les réponses sont persistées en session
  *     - L'utilisateur est redirigé vers /register?intent=artist
  *     - Après création de compte + confirmation email, verifyEmail() détecte
  *       l'intent "artist" et redirige vers /onboarding avec pré-remplissage
  *
- *   Flux B : Artiste connecté avec profil incomplet
- *     - Même formulaire (les partials sont identiques)
+ *   Flux B : Tout utilisateur CONNECTÉ (artiste ou non, profil complet ou non)
  *     - La soumission finale (POST /matching/form) sauvegarde directement le profil
  *       via OnboardingService (réutilise la logique d'onboarding)
+ *     - saveStep2() dans OnboardingService accorde automatiquement ROLE_ARTIST
+ *       à l'utilisateur s'il ne l'avait pas encore
  *     - Redirige vers la home (la section swipe sera maintenant visible)
  *
  * ENDPOINTS :
@@ -132,14 +135,17 @@ final class MatchingFormController extends AbstractController
     /**
      * Traite la soumission finale du formulaire multi-étapes de matching.
      *
-     * FLUX A (visiteur non connecté) :
+     * FLUX A (visiteur NON connecté — filet de sécurité) :
+     *   La home ne présente plus le formulaire aux visiteurs (Twig affiche un CTA).
+     *   Ce flux couvre uniquement un POST direct sans authentification.
      *   - Sauvegarde les réponses complètes en session
      *   - Redirige vers /register?intent=artist
      *   - Après inscription + confirmation email, l'onboarding sera pré-rempli
      *
-     * FLUX B (artiste connecté, profil incomplet) :
+     * FLUX B (tout utilisateur CONNECTÉ, artiste ou non, profil complet ou non) :
      *   - Sauvegarde immédiatement le profil via OnboardingService
      *     (discipline + lookingFor + legalStatus)
+     *   - saveStep2() accorde ROLE_ARTIST si l'utilisateur ne l'avait pas encore
      *   - Redirige vers la home pour afficher la section swipe
      *
      * SÉCURITÉ :
@@ -168,8 +174,16 @@ final class MatchingFormController extends AbstractController
         // ── Détermination du flux ──────────────────────────────────────────────
         $user = $this->getUser();
 
-        if (!$user instanceof User || !$this->isGranted('ROLE_ARTIST')) {
-            // FLUX A : visiteur ou utilisateur sans ROLE_ARTIST
+        if (!$user instanceof User) {
+            // FLUX A : visiteur NON connecté (filet de sécurité)
+            //
+            // La home n'affiche plus le formulaire matching aux visiteurs depuis juin 2026
+            // (le Twig montre un CTA "Connecte-toi" à la place). Ce bloc ne devrait
+            // donc être atteint qu'en cas de POST direct sans session authentifiée
+            // (manipulation manuelle, cURL, etc.).
+            //
+            // Un utilisateur CONNECTÉ sans ROLE_ARTIST arrive désormais en Flux B :
+            // OnboardingService::saveStep2() lui accordera ROLE_ARTIST automatiquement.
 
             // Guard "sans JS" : si l'utilisateur a soumis le formulaire sans JS,
             // seule l'étape 1 était visible — les étapes 2 et 3 restent cachées
@@ -194,9 +208,10 @@ final class MatchingFormController extends AbstractController
             return $this->redirectToRoute('app_register', ['intent' => 'artist']);
         }
 
-        // FLUX B : artiste connecté avec profil incomplet
+        // FLUX B : utilisateur connecté (artiste ou non, profil complet ou non)
         // On réutilise les DTOs et services de l'onboarding pour sauvegarder
         // le profil directement (même logique, même service — pas de duplication).
+        // Si l'utilisateur n'avait pas encore ROLE_ARTIST, saveStep2() le lui accorde.
 
         $errors = [];
 

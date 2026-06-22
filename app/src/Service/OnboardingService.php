@@ -256,15 +256,26 @@ final class OnboardingService
         // est désactivé en Lot A, mais ce flag reste utile pour :
         //   - La bannière "complète ton profil" dans le dashboard
         //   - Le module matching (Lot C) qui vérifie si le profil est complet
+        //
+        // On capture l'état AVANT de marquer l'onboarding complété : depuis le
+        // nouveau parcours matching (ADR-0026), cette méthode est appelée à chaque
+        // soumission du formulaire de matching par un utilisateur connecté. Sans
+        // cette garde, un re-remplissage renverrait un email de bienvenue à chaque
+        // fois. On ne l'envoie donc qu'au PREMIER achèvement de l'onboarding.
+        $wasAlreadyCompleted = $user->isOnboardingCompleted();
+
         $user->setOnboardingCompleted(true);
 
         $this->em->persist($user);
         $this->em->flush();
 
-        // ── Email de bienvenue ────────────────────────────────────────────────
+        // ── Email de bienvenue (uniquement au premier achèvement) ──────────────
         // Envoyé APRÈS le flush pour garantir que l'onboarding est bien persisté
-        // même si l'email échoue.
-        $this->sendWelcomeEmail($user);
+        // même si l'email échoue. La garde évite les emails en double sur
+        // re-soumission du formulaire de matching (cf. ADR-0026).
+        if (!$wasAlreadyCompleted) {
+            $this->sendWelcomeEmail($user);
+        }
 
         return null; // Succès (signature cohérente avec les autres méthodes)
     }

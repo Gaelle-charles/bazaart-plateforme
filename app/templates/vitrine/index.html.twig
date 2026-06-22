@@ -3225,8 +3225,14 @@
                     </div>
                 {% endif %}
 
-            {# ─── ETAT 3 : Artiste connecte, profil incomplet (sans limite atteinte) ─ #}
-            {% elseif isArtist and not profileComplete %}
+            {# ─── ETAT 3 : Utilisateur CONNECTÉ dont le profil n'est pas complet ───────
+                Couvre désormais TOUT utilisateur connecté qui n'a pas encore un profil
+                matching complet : artiste au profil incomplet ET utilisateur connecté
+                pas encore artiste. Dans les deux cas, on lui montre le formulaire de
+                matching, qu'il peut remplir directement (sans passer par l'onboarding).
+                Les états 1 et 2 (artiste profil complet / limite atteinte) ont déjà été
+                captés au-dessus → ici "app.user" implique forcément profil non complet. #}
+            {% elseif app.user %}
 
                 <div class="lp-section-header">
                     <div class="lp-section-header__left">
@@ -3234,7 +3240,7 @@
                         <h2 class="lp-section-header__title" id="lp-swipe-title">
                             Ton matching
                         </h2>
-                        <span class="lp-section-header__sub">profil à compléter</span>
+                        <span class="lp-section-header__sub">réponds à quelques questions</span>
                     </div>
                 </div>
 
@@ -3248,54 +3254,39 @@
                 #}
                 {% include 'matching/_matching_form.html.twig' %}
 
-            {# ─── ETAT 4 : connecté mais pas artiste ─────────────────────────────── #}
-            {% elseif app.user %}
+            {# ─── ETAT 4 : VISITEUR NON connecté → connexion obligatoire ──────────────
+                Le matching nécessite désormais d'être connecté : on n'affiche plus le
+                formulaire aux visiteurs (parcours trop long avant inscription, beaucoup
+                d'abandons). On les invite à créer un compte / se connecter. Une fois
+                connectés, ils basculent dans l'état 3 et peuvent remplir le formulaire
+                de matching directement (sans onboarding obligatoire). #}
+            {% else %}
 
-                {# Connecté mais sans ROLE_ARTIST : message dédié, pas de formulaire #}
                 <div class="lp-section-header">
                     <div class="lp-section-header__left">
                         <span class="lp-section-header__index" aria-hidden="true">00</span>
                         <h2 class="lp-section-header__title" id="lp-swipe-title">
                             Ton matching
                         </h2>
-                        <span class="lp-section-header__sub">réservé aux artistes</span>
+                        <span class="lp-section-header__sub">connecte-toi pour commencer</span>
                     </div>
                 </div>
 
                 <div class="swipe-guest-cta">
                     <div class="swipe-guest-cta__inner">
                         <p class="swipe-guest-cta__msg">
-                            Le matching est réservé aux artistes. Complète ton profil artiste pour découvrir les opportunités qui te correspondent.
+                            Crée ton compte pour découvrir les opportunités qui correspondent à ton profil&nbsp;: financements, résidences, formations, mises en relation.
                         </p>
                         <div class="swipe-guest-cta__btns">
-                            <a href="{{ path('app_onboarding_step1') }}" class="lp-btn lp-btn--dark">
-                                Compléter mon profil artiste
+                            <a href="{{ path('app_register', { intent: 'artist' }) }}" class="lp-btn lp-btn--dark">
+                                Créer mon compte
+                            </a>
+                            <a href="{{ path('app_login') }}" class="lp-btn lp-btn--ghost">
+                                J'ai déjà un compte
                             </a>
                         </div>
                     </div>
                 </div>
-
-            {# ─── ETAT 5 : visiteur non connecté ─────────────────────────────────── #}
-            {% else %}
-
-                {#
-                    FORMULAIRE MULTI-ETAPES — Visiteur non connecté.
-                    L'utilisateur peut remplir les 3 étapes.
-                    A la soumission, ses réponses sont sauvées en session et il est
-                    redirigé vers /register?intent=artist.
-                    Après inscription + confirmation email, l'onboarding sera pré-rempli.
-                #}
-                <div class="lp-section-header">
-                    <div class="lp-section-header__left">
-                        <span class="lp-section-header__index" aria-hidden="true">00</span>
-                        <h2 class="lp-section-header__title" id="lp-swipe-title">
-                            Ton matching
-                        </h2>
-                        <span class="lp-section-header__sub">trouve les opportunités faites pour toi</span>
-                    </div>
-                </div>
-
-                {% include 'matching/_matching_form.html.twig' %}
 
             {% endif %}
 
@@ -4090,16 +4081,17 @@
     Script matching-form.js — chargé uniquement si le formulaire multi-étapes
     est potentiellement présent.
 
-    Deux cas où le formulaire apparaît :
-      - État 3 : artiste connecté avec profil incomplet (isArtist and not profileComplete)
-      - État 5 : visiteur non connecté (not app.user)
+    Un seul cas où le formulaire apparaît (cf. ADR-0026) :
+      - État 3 : utilisateur CONNECTÉ dont le profil n'est pas complet.
+        (Le visiteur non connecté voit un CTA de connexion, pas le formulaire :
+         inutile de charger ce script pour lui.)
 
     Le script est sûr si le formulaire est absent : init() sort immédiatement
     si #matching-form-wrap est introuvable dans le DOM.
 
     defer : non-bloquant, exécuté après le parsing du DOM.
 #}
-{% if not app.user or (isArtist is defined and isArtist and profileComplete is defined and not profileComplete) %}
+{% if app.user and not (isArtist is defined and isArtist and profileComplete is defined and profileComplete) %}
     <script src="{{ asset('js/matching-form.js') }}" defer></script>
 {% endif %}
 {% endblock %}

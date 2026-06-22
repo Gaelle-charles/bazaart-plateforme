@@ -32,10 +32,14 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
  * AJOUT LOT C (ADR-0021) :
  *   Si l'utilisateur est connecté et a ROLE_ARTIST, on calcule ses matchs
  *   via MatchingService et on les passe au template pour la section swipe.
- *   Le Twig gère ensuite les 3 états :
- *     1. Artiste avec profil complet → section swipe avec cartes
- *     2. Artiste sans profil complet → encart invitation à compléter le profil
- *     3. Non connecté ou non artiste → encart invitation à s'inscrire/se connecter
+ *
+ * ÉVOLUTION JUIN 2026 (décision Gaëlle, hors ADR-0021/0023) :
+ *   La connexion est désormais OBLIGATOIRE pour accéder au matching.
+ *   Le Twig gère maintenant ces états :
+ *     1. Visiteur non connecté → CTA "Connecte-toi" (géré côté Twig uniquement,
+ *        ce controller ne prépare aucune donnée de formulaire pour ce cas)
+ *     2. Utilisateur connecté avec profil complet (ROLE_ARTIST) → section swipe
+ *     3. Utilisateur connecté avec profil incomplet (artiste ou non) → formulaire matching
  */
 final class HomeController extends AbstractController
 {
@@ -259,16 +263,24 @@ final class HomeController extends AbstractController
             // swipeRecordViewCsrf : déjà généré ci-dessus dans le bloc paywall Lot D.
         }
 
-        // ── Données pour le formulaire matching home (visiteur / profil incomplet) ──
+        // ── Données pour le formulaire matching home (utilisateur connecté sans profil complet) ──
         //
-        // Le formulaire multi-étapes est affiché uniquement dans deux états :
-        //   - État 3 : artiste connecté avec profil incomplet (isArtist && !profileComplete)
-        //   - État 5 : visiteur non connecté (!user)
+        // NOUVELLE RÈGLE (juin 2026, décision Gaëlle) :
+        //   La connexion est désormais OBLIGATOIRE pour accéder au matching.
+        //   Le template (Twig) gère l'affichage d'un CTA "Connecte-toi" pour les visiteurs
+        //   non connectés. Ce controller NE prépare le formulaire QUE pour les connectés.
         //
-        // Dans les autres états (swipe complet, paywall, artiste sans ROLE_ARTIST connecté),
-        // le formulaire n'est PAS affiché → inutile de charger les disciplines.
-        // On évite ainsi une requête SQL à chaque visite d'un artiste avec profil complet.
-        $needsMatchingForm = !($user instanceof User) || ($isArtist && !$profileComplete);
+        // Cas où le formulaire est préparé :
+        //   - Utilisateur CONNECTÉ dont le profil de matching n'est pas encore complet,
+        //     qu'il ait ou non le rôle ROLE_ARTIST.
+        //     → $profileComplete vaut false pour un connecté sans ROLE_ARTIST (valeur
+        //       par défaut initialisée en haut de la méthode ; le bloc ROLE_ARTIST ci-dessus
+        //       ne s'est pas exécuté pour lui).
+        //
+        // Cas où le formulaire N'est PAS préparé (aucun chargement SQL inutile) :
+        //   - Visiteur non connecté : le Twig affiche le CTA de connexion.
+        //   - Artiste connecté avec profil complet : le Twig affiche la section swipe.
+        $needsMatchingForm = ($user instanceof User) && !$profileComplete;
         $matchingFormDisciplines = $needsMatchingForm
             ? $this->disciplineRepository->findAll()
             : [];
@@ -295,14 +307,18 @@ final class HomeController extends AbstractController
         $matchingForm_location    = '';
 
         if ($needsMatchingForm) {
+            // Ici, $needsMatchingForm = ($user instanceof User) && !$profileComplete,
+            // donc PHPStan sait que $user est nécessairement un User à ce stade.
+            // Pas de vérification instanceof supplémentaire nécessaire.
+
             // Priorité 1 : données en session (saisie en cours)
             $sessionDisplayName = $matchingFormSessionData['display_name'] ?? null;
             $sessionLocation    = $matchingFormSessionData['location'] ?? null;
 
             if ($sessionDisplayName !== null && $sessionDisplayName !== '') {
                 $matchingForm_displayName = $sessionDisplayName;
-            } elseif ($user instanceof User && $user->getArtistProfile() !== null) {
-                // Priorité 2 : valeur existante en BDD.
+            } elseif ($user->getArtistProfile() !== null) {
+                // Priorité 2 : valeur existante en BDD (profil artiste partiel).
                 // getDisplayName() retourne string (non nullable) → on compare à '' directement.
                 $existingDisplayName = $user->getArtistProfile()->getDisplayName();
                 $matchingForm_displayName = $existingDisplayName !== '' ? $existingDisplayName : '';
@@ -310,18 +326,22 @@ final class HomeController extends AbstractController
 
             if ($sessionLocation !== null && $sessionLocation !== '') {
                 $matchingForm_location = $sessionLocation;
-            } elseif ($user instanceof User && $user->getArtistProfile() !== null) {
-                // Priorité 2 : valeur existante en BDD.
+            } elseif ($user->getArtistProfile() !== null) {
+                // Priorité 2 : valeur existante en BDD (profil artiste partiel).
                 // getLocation() retourne ?string → null si non renseigné.
                 $existingLocation = $user->getArtistProfile()->getLocation();
                 $matchingForm_location = $existingLocation !== null ? $existingLocation : '';
             }
         }
 
-        // Token CSRF pour le formulaire matching multi-étapes
+        // Token CSRF pour le formulaire matching multi-étapes.
         // Le nom 'matching_form' est partagé avec MatchingFormController::saveStep()
-        // et MatchingFormController::submit()
-        $matchingFormCsrf = $this->csrfTokenManager->getToken('matching_form')->getValue();
+        // et MatchingFormController::submit().
+        // On ne le génère QUE si le formulaire est réellement affiché ($needsMatchingForm) :
+        // inutile pour les visiteurs non connectés (qui voient un CTA de connexion).
+        $matchingFormCsrf = $needsMatchingForm
+            ? $this->csrfTokenManager->getToken('matching_form')->getValue()
+            : null;
 
         return $this->render('vitrine/index.html.twig', [
             // ── Section opportunités publiques ──────────────────────────────────
