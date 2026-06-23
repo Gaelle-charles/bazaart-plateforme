@@ -58,13 +58,17 @@
     min-height: max(52vh, 280px);
 
     /*
-     * Full-bleed : on compense le padding de .app-content pour aller bord à bord.
-     * .app-content a : padding: 28px 32px (desktop) -> on déborde de 32px de chaque côté.
-     * margin-top : on compense aussi le padding-top pour coller au haut du conteneur.
+     * Full-bleed VIEWPORT : le hero prend TOUTE la largeur de la fenêtre, quelle que
+     * soit la largeur du conteneur. .app-content est centré et plafonné à 1440px : sur
+     * un écran plus large, on voyait donc des marges latérales. On sort du conteneur
+     * avec la technique full-bleed : largeur 100vw + marges négatives calculées
+     * (calc(50% - 50vw) ramène le bord du hero au bord de la fenêtre).
+     * margin-top : compense le padding-top de .app-content pour coller en haut.
      */
-    margin-left: -32px;
-    margin-right: -32px;
-    margin-top: -28px;   /* compense le padding-top de .app-content */
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+    margin-top: -28px;
     margin-bottom: 0;
 
     /*
@@ -192,9 +196,8 @@
     .page-hero {
         min-height: max(40vh, 240px); /* min, pas fixe -> pas de troncature */
 
-        /* Sur mobile, .app-content a padding: 16px -> ajustement */
-        margin-left: -16px;
-        margin-right: -16px;
+        /* Le full-bleed (width:100vw + marges calc) couvre déjà toutes les largeurs ;
+           on ajuste seulement la compensation du padding-top (16px sur mobile). */
         margin-top: -16px;
     }
 

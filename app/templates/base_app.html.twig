@@ -77,6 +77,10 @@
      */
     .app-main {
         min-height: calc(100vh - 64px); /* 64px = hauteur de .nav */
+        /* Évite un léger scroll horizontal dû au hero full-bleed (100vw inclut la
+           largeur de la barre de défilement sur certains OS). .app-main est pleine
+           largeur et n'est pas un ancêtre de la navbar sticky -> sans effet de bord. */
+        overflow-x: hidden;
     }
 
     .app-content {
