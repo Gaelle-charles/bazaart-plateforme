@@ -81,7 +81,9 @@
 
         // ── Affichage initial ────────────────────────────────────────────────
         // On retire le [hidden] de l'étape 1 et on configure les boutons.
-        showStep(1, form, btnPrev, btnNext, btnSubmit);
+        // shouldFocus = false : PAS de focus au chargement (sinon la page
+        // défilerait automatiquement jusqu'au formulaire matching).
+        showStep(1, form, btnPrev, btnNext, btnSubmit, false);
 
         // URL d'inscription (posée par le template via data-register-url) — sert à
         // rediriger un visiteur non connecté au clic sur "Continuer" (cf. ADR-0026).
@@ -113,7 +115,7 @@
                 // Utilisateur connecté : sauvegarde best-effort + navigation normale.
                 saveStepAjax(currentStep, form);
                 currentStep++;
-                showStep(currentStep, form, btnPrev, btnNext, btnSubmit);
+                showStep(currentStep, form, btnPrev, btnNext, btnSubmit, true);
                 updateProgress(currentStep, progress);
             });
         }
@@ -123,7 +125,7 @@
             btnPrev.addEventListener('click', function () {
                 if (currentStep <= 1) { return; }
                 currentStep--;
-                showStep(currentStep, form, btnPrev, btnNext, btnSubmit);
+                showStep(currentStep, form, btnPrev, btnNext, btnSubmit, true);
                 updateProgress(currentStep, progress);
             });
         }
@@ -200,18 +202,25 @@
      * @param {HTMLButtonElement|null} btnNext
      * @param {HTMLButtonElement|null} btnSubmit
      */
-    function showStep(step, form, btnPrev, btnNext, btnSubmit) {
+    function showStep(step, form, btnPrev, btnNext, btnSubmit, shouldFocus) {
         // Afficher/masquer les fieldsets
         var fieldsets = form.querySelectorAll('.mf-step');
         fieldsets.forEach(function (fs, idx) {
             var isTarget = (idx + 1) === step;
             if (isTarget) {
                 fs.removeAttribute('hidden');
-                // Focus sur le premier élément interactif de l'étape (accessibilité)
-                setTimeout(function () {
-                    var firstInput = fs.querySelector('input, button, select, textarea');
-                    if (firstInput) { firstInput.focus(); }
-                }, TRANSITION_MS);
+                // Focus sur le premier champ de l'étape (accessibilité) — MAIS
+                // UNIQUEMENT lors d'une navigation entre étapes (clic Continuer/Retour),
+                // PAS au chargement initial. Sinon le focus ferait défiler la page
+                // jusqu'au formulaire dès l'ouverture/l'actualisation de la home
+                // (bug « la page saute à la section matching »). shouldFocus vaut
+                // false à l'init, true lors des navigations.
+                if (shouldFocus) {
+                    setTimeout(function () {
+                        var firstInput = fs.querySelector('input, button, select, textarea');
+                        if (firstInput) { firstInput.focus(); }
+                    }, TRANSITION_MS);
+                }
             } else {
                 fs.setAttribute('hidden', '');
             }
