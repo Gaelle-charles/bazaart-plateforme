@@ -413,15 +413,23 @@
         body.page-home .nav:not(.is-scrolled) .nav-btn--ghost:hover {
             background: rgba(255, 255, 255, .14);
         }
-        /* Logo : pas de boîte noire ni de séparateur à droite quand transparent. */
-        body.page-home .nav:not(.is-scrolled) .nav-logo {
+        /* PAS DE NOIR sur la navbar de la home, dans TOUS les états (transparent ET
+           scrollé) : on retire la boîte noire du logo (+ son séparateur) et la boîte
+           noire de l'onglet actif. Le point doré reste l'indicateur d'onglet actif. */
+        body.page-home .nav .nav-logo {
             background: transparent;
             border-right-color: transparent;
         }
-        /* Onglet actif (ex : ACCUEIL) : pas de boîte noire, texte blanc. */
-        body.page-home .nav:not(.is-scrolled) .nav-tab[data-active="true"] {
+        body.page-home .nav .nav-tab[data-active="true"] {
             background: transparent;
+        }
+        /* Onglet actif transparent (sur le hero) : texte blanc. */
+        body.page-home .nav:not(.is-scrolled) .nav-tab[data-active="true"] {
             color: #ffffff;
+        }
+        /* Onglet actif scrollé (fond clair posé) : texte sombre pour le contraste. */
+        body.page-home .nav.is-scrolled .nav-tab[data-active="true"] {
+            color: var(--ink, #0D0D0D);
         }
 
         /* Conteneur interne : flex, max 1440px, hauteur 64px */
