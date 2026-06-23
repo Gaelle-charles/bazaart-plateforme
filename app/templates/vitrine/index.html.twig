@@ -467,7 +467,10 @@
 /* Sous-titre en Instrument Serif */
 .lp-hero__desc {
     font-family:  var(--serif);
-    font-size:    clamp(16px, 1.8vw, 22px);
+    /* +5px par rapport à la taille d'origine clamp(16px, 1.8vw, 22px) :
+       on ajoute 5px aux bornes ET à la valeur préférée (via calc) pour un
+       agrandissement de 5px garanti quelle que soit la largeur d'écran. */
+    font-size:    clamp(21px, calc(1.8vw + 5px), 27px);
     line-height:  1.3;
     margin:       0;
     color:        rgba(255, 255, 255, 0.88);

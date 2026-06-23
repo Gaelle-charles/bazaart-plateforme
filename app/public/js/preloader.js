@@ -32,8 +32,9 @@
          C'est ELLE qu'on règle pour « raccourcir » le préloader : ici 5000 ms.
          L'animation joue donc à sa vitesse normale, et le splash se ferme au
          bout de 5 s (l'animation est simplement interrompue, pas accélérée). */
-    var ANIM_DURATION   = 9000;  /* ms : vitesse NATURELLE de l'animation (ne pas changer) */
-    var SPLASH_DURATION = 5000;  /* ms : durée d'affichage du splash, puis fondu de sortie */
+    var ANIM_DURATION   = 4500;  /* ms : VITESSE de l'animation. Baissé (9000 -> 4500) pour ACCÉLÉRER
+                                    l'animation (~2x plus rapide), à la demande de Gaëlle. */
+    var SPLASH_DURATION = 5000;  /* ms : durée d'affichage du splash (INCHANGÉE) puis fondu de sortie */
     var LOGO_DELAY      = 2000;  /* ms : délai avant apparition du logo (cf. bouton Enter) */
     var LOGO_FADE       = 1500;  /* ms : durée du fondu d'entrée du logo */
 
