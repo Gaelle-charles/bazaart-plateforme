@@ -64,7 +64,7 @@
      * IMPORTANT : on utilise une URL relative au fichier CSS (public/css/).
      * "../images/" remonte d'un niveau (css/ → public/) puis entre dans images/.
      */
-    background-image:    url('../images/footer-bazaart.jpg');
+    background-image:    url('../images/footer-bg.jpg');
     background-size:     cover;
     background-position: center center;
     background-repeat:   no-repeat;
