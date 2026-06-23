@@ -664,6 +664,19 @@
     color:        var(--accent);
 }
 
+/* Séparateur (image SVG) entre les libellés — remplace les anciens points. */
+.lp-marquee__sep {
+    display:     inline-flex;
+    align-items: center;
+    padding:     0 14px;
+    flex-shrink: 0;
+}
+.lp-marquee__sep img {
+    height:  28px;
+    width:   28px;
+    display: block;
+}
+
 
 /* ──────────────────────────────────────────────────────────────────────
    4. SECTION HUBS
@@ -3292,33 +3305,16 @@
         ─────────────────────────────────────────────────────────────────── #}
         <div class="lp-marquee" aria-hidden="true">
             <div class="lp-marquee__track">
-                {# Repetition 1 #}
-                <span class="lp-marquee__item">+ 240 opportunites indexees chaque semaine</span>
-                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
-                <span class="lp-marquee__item">forum + lives communaute d'artistes</span>
-                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
-                <span class="lp-marquee__item">mentorat 1-to-1</span>
-                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
-                <span class="lp-marquee__item">la plateforme qui te repond en 24h</span>
-                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
-                {# Repetition 2 #}
-                <span class="lp-marquee__item">+ 240 opportunites indexees chaque semaine</span>
-                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
-                <span class="lp-marquee__item">forum + lives communaute d'artistes</span>
-                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
-                <span class="lp-marquee__item">mentorat 1-to-1</span>
-                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
-                <span class="lp-marquee__item">la plateforme qui te repond en 24h</span>
-                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
-                {# Repetition 3 #}
-                <span class="lp-marquee__item">+ 240 opportunites indexees chaque semaine</span>
-                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
-                <span class="lp-marquee__item">forum + lives communaute d'artistes</span>
-                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
-                <span class="lp-marquee__item">mentorat 1-to-1</span>
-                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
-                <span class="lp-marquee__item">la plateforme qui te repond en 24h</span>
-                <span class="lp-marquee__item">&middot; &middot; &middot;</span>
+                {# Les 6 libellés du bandeau. Le séparateur entre chaque (et en fin de set)
+                   est désormais le SVG marquee-sep.svg, à la place des anciens points. #}
+                {% set marquee_items = ['ton profil', 'Leurs critères', 'Le match', 'Des opportunités indexées chaque semaine', 'forum', "Communautés d'artistes"] %}
+                {# 3 répétitions du set : l'animation translate de 0 à -33.333% -> défilement fluide. #}
+                {% for rep in 1..3 %}
+                    {% for item in marquee_items %}
+                        <span class="lp-marquee__item">{{ item }}</span>
+                        <span class="lp-marquee__sep"><img src="{{ asset('images/marquee-sep.svg') }}" alt="" width="28" height="28"></span>
+                    {% endfor %}
+                {% endfor %}
             </div>
         </div>
 
