@@ -116,3 +116,15 @@ services:
             $stripeWebhookSecret: '%env(STRIPE_WEBHOOK_SECRET)%'
             $stripePriceMonthly:  '%env(STRIPE_PRICE_MONTHLY)%'
             $stripePriceAnnual:   '%env(STRIPE_PRICE_ANNUAL)%'
+
+    # CreatorDocumentStorage — stockage sécurisé des pièces d'identité créateurs (ADR-0027).
+    #
+    # Le chemin injecté pointe vers var/secure_uploads/ qui est :
+    #   - HORS du dossier public/ → jamais servi directement par Nginx
+    #   - Exclu du versioning git via .gitignore (app/var/secure_uploads/)
+    #
+    # %kernel.project_dir% = chemin absolu racine du projet Symfony (ex : /var/www/html).
+    # Le service utilise ce chemin pour stocker et lire les fichiers de façon portable.
+    App\Service\CreatorDocumentStorage:
+        arguments:
+            $secureUploadsDir: '%kernel.project_dir%/var/secure_uploads'

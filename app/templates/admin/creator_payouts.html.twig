@@ -1,0 +1,274 @@
+{% extends 'base_admin.html.twig' %}
+
+{% block title %}Dossiers de versement — Admin BazaArt{% endblock %}
+{% block page_title %}Dossiers de versement créateurs{% endblock %}
+
+{#
+    Template : revue admin des profils de versement (ADR-0027, Lot 1).
+    Variables transmises par AdminCreatorPayoutController#index() :
+      - pending  : CreatorPayoutProfile[] — dossiers en attente de vérification (priorité FIFO)
+      - reviewed : CreatorPayoutProfile[] — dossiers déjà traités (récents d'abord)
+
+    SÉCURITÉ :
+      - Le lien "Voir le document" appelle app_admin_creator_payout_document
+        qui contrôle ROLE_ADMIN et streame le fichier via BinaryFileResponse.
+      - JAMAIS de lien direct vers le fichier sur le disque.
+      - Les formulaires valider/refuser sont protégés par CSRF (token 'payout_review_{id}').
+
+    Design : cohérent avec course_proposals.html.twig (préfixe .cpd- pour Creator Payout Dossier).
+#}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Dossiers créateur — préfixe .cpd- (Creator Payout Dossier) */
+    .cpd-section-title {
+        font-family: var(--display); font-size: 20px; text-transform: uppercase;
+        margin: 8px 0 16px; color: var(--ink);
+    }
+    .cpd-card {
+        border: 1px solid var(--ink); background: var(--bg); margin-bottom: 18px;
+    }
+    .cpd-card__head {
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+        padding: 16px 20px; border-bottom: 1px solid var(--ink); background: var(--bg-alt); flex-wrap: wrap;
+    }
+    .cpd-card__user { font-family: var(--display); font-size: 17px; text-transform: uppercase; margin: 0; }
+    .cpd-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-mute); letter-spacing: .04em; margin-top: 4px; }
+    .cpd-card__body { padding: 16px 20px; }
+    .cpd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
+    .cpd-block { margin-bottom: 8px; }
+    .cpd-block__label {
+        font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+        color: var(--ink-mute); margin-bottom: 3px;
+    }
+    .cpd-block__value { font-family: var(--mono); font-size: 13px; color: var(--ink); }
+    .cpd-chip {
+        display: inline-block; font-family: var(--mono); font-size: 10px; font-weight: 700;
+        letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border: 1px solid var(--ink);
+        white-space: nowrap;
+    }
+    .cpd-chip--warn   { background: var(--accent-2); color: #fff; border-color: var(--accent-2); }
+    .cpd-chip--ok     { background: #1F8A5B; color: #fff; border-color: #1F8A5B; }
+    .cpd-chip--danger { background: #E5484D; color: #fff; border-color: #E5484D; }
+    .cpd-doc-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-family: var(--mono); font-size: 11px; color: var(--ink);
+        text-decoration: none; padding: 5px 10px;
+        border: 1px solid var(--line-soft, rgba(13,13,13,.14));
+        transition: border-color var(--transition-fast), background var(--transition-fast);
+    }
+    .cpd-doc-link:hover { border-color: var(--ink); background: var(--bg-alt); }
+    .cpd-doc-icon {
+        width: 13px; height: 13px;
+        stroke: currentColor; fill: none; stroke-width: 1.5;
+        stroke-linecap: round; stroke-linejoin: round;
+        flex-shrink: 0;
+    }
+    .cpd-no-doc {
+        font-family: var(--mono); font-size: 11px; color: var(--ink-mute); font-style: italic;
+    }
+    /* Zone actions admin */
+    .cpd-review {
+        padding: 14px 20px; border-top: 1px solid var(--line-soft); background: var(--bg-alt);
+    }
+    .cpd-reason {
+        width: 100%; min-height: 60px; padding: 10px 12px; border: 1px solid var(--line, rgba(13,13,13,.3));
+        font-family: var(--body); font-size: 13px; color: var(--ink); background: #fff;
+        box-sizing: border-box; resize: vertical; margin-bottom: 10px;
+        border-radius: 0;
+    }
+    .cpd-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .cpd-btn {
+        display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px;
+        border: 1px solid var(--ink); font-family: var(--body); font-size: 12px; font-weight: 700;
+        letter-spacing: .06em; text-transform: uppercase; cursor: pointer; border-radius: 0;
+    }
+    .cpd-btn--verify { background: #1F8A5B; color: #fff; border-color: #1F8A5B; }
+    .cpd-btn--verify:hover { background: #176b47; border-color: #176b47; }
+    .cpd-btn--reject { background: transparent; color: var(--ink); }
+    .cpd-btn--reject:hover { background: #E5484D; color: #fff; border-color: #E5484D; }
+    .cpd-empty {
+        font-family: var(--mono); font-size: 12px; color: var(--ink-mute); padding: 20px;
+        border: 1px solid var(--line-soft);
+    }
+    /* Lignes historique */
+    .cpd-row {
+        display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+        padding: 10px 16px; border: 1px solid var(--line-soft, rgba(13,13,13,.14));
+        border-top: none; font-size: 13px;
+    }
+    .cpd-row:first-child { border-top: 1px solid var(--line-soft, rgba(13,13,13,.14)); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── EN ATTENTE ────────────────────────────────────────────────────────────── #}
+<h2 class="cpd-section-title">En attente de vérification ({{ pending|length }})</h2>
+
+{% if pending is empty %}
+    <div class="cpd-empty">Aucun dossier en attente. Tous les créateurs ont été traités.</div>
+{% else %}
+    {% for profile in pending %}
+        <div class="cpd-card">
+
+            {# ── En-tête de la carte ── #}
+            <div class="cpd-card__head">
+                <div>
+                    <h3 class="cpd-card__user">{{ profile.user.email|split('@')|first }}</h3>
+                    <div class="cpd-meta">
+                        {{ profile.user.email|e }}
+                        &middot; soumis le {{ profile.submittedAt|date('d/m/Y à H:i') }}
+                    </div>
+                </div>
+                <span class="cpd-chip cpd-chip--warn">En attente</span>
+            </div>
+
+            {# ── Corps : informations bancaires ── #}
+            <div class="cpd-card__body">
+                <div class="cpd-grid">
+
+                    <div class="cpd-block">
+                        <div class="cpd-block__label">Titulaire du compte</div>
+                        <div class="cpd-block__value">{{ profile.accountHolderName|e }}</div>
+                    </div>
+
+                    <div class="cpd-block">
+                        <div class="cpd-block__label">SIRET</div>
+                        <div class="cpd-block__value">{{ profile.siret|e }}</div>
+                    </div>
+
+                    <div class="cpd-block">
+                        <div class="cpd-block__label">IBAN</div>
+                        {# L'IBAN est affiché en clair à l'admin pour vérification.
+                           Il n'est jamais affiché dans l'espace membre (données sensibles). #}
+                        <div class="cpd-block__value" style="letter-spacing:.05em;">{{ profile.iban|e }}</div>
+                    </div>
+
+                    <div class="cpd-block">
+                        <div class="cpd-block__label">BIC</div>
+                        <div class="cpd-block__value">{{ profile.bic ? profile.bic|e : '—' }}</div>
+                    </div>
+
+                    <div class="cpd-block" style="grid-column: 1 / -1;">
+                        <div class="cpd-block__label">Pièce d'identité</div>
+                        <div class="cpd-block__value">
+                            {% if profile.hasIdentityDocument() %}
+                                {#
+                                    Le lien appelle app_admin_creator_payout_document qui :
+                                    1. Vérifie ROLE_ADMIN (attribut #[IsGranted] sur la classe)
+                                    2. Lit le fichier depuis var/secure_uploads/ (hors public/)
+                                    3. Streame le fichier via BinaryFileResponse (inline → PDF affiché dans le navigateur)
+                                    → JAMAIS de lien direct vers le fichier physique.
+                                #}
+                                <a href="{{ path('app_admin_creator_payout_document', {id: profile.id}) }}"
+                                   class="cpd-doc-link"
+                                   target="_blank"
+                                   rel="noopener"
+                                   title="Voir la pièce d'identité (ouvre dans un nouvel onglet)">
+                                    <svg class="cpd-doc-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                    </svg>
+                                    Voir le document
+                                    ({{ profile.identityDocumentOriginalName|default('fichier')|e }})
+                                </a>
+                            {% else %}
+                                <span class="cpd-no-doc">Aucun document fourni</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            {#
+                Zone d'actions admin : valider ou refuser.
+                Un seul formulaire, deux boutons :
+                  - "Valider" → POST vers la route verify (formaction sur le bouton)
+                  - "Refuser" → POST vers la route reject (action principale du form)
+                Le motif de refus est affiché uniquement en cas de refus.
+                Le token CSRF 'payout_review_{id}' est partagé par les deux routes.
+            #}
+            <div class="cpd-review">
+                <form method="post" action="{{ path('app_admin_creator_payout_reject', {id: profile.id}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('payout_review_' ~ profile.id) }}">
+
+                    {# Motif de refus (obligatoire si on refuse) #}
+                    <textarea
+                        name="rejectionReason"
+                        class="cpd-reason"
+                        placeholder="Motif de refus (obligatoire si vous refusez — le créateur le recevra par email)"
+                    ></textarea>
+
+                    <div class="cpd-actions">
+                        {# Valider : formaction surcharge l'action principale du form #}
+                        <button type="submit"
+                                class="cpd-btn cpd-btn--verify"
+                                formaction="{{ path('app_admin_creator_payout_verify', {id: profile.id}) }}"
+                                onclick="return confirm('Valider ce dossier de versement ?')">
+                            Valider le dossier
+                        </button>
+                        {# Refuser : utilise l'action principale du form #}
+                        <button type="submit"
+                                class="cpd-btn cpd-btn--reject"
+                                onclick="return confirm('Refuser ce dossier ? Assurez-vous d\'avoir saisi un motif.')">
+                            Refuser
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+        </div>
+    {% endfor %}
+{% endif %}
+
+{# ── HISTORIQUE ────────────────────────────────────────────────────────────── #}
+<h2 class="cpd-section-title" style="margin-top: 40px;">
+    Dossiers traités ({{ reviewed|length }})
+</h2>
+
+{% if reviewed is empty %}
+    <div class="cpd-empty">Aucun dossier traité pour le moment.</div>
+{% else %}
+    {% for profile in reviewed %}
+        <div class="cpd-row">
+            <span class="cpd-chip cpd-chip--{{ profile.status.badgeVariant() }}">
+                {{ profile.status.label() }}
+            </span>
+            <strong>{{ profile.user.email|split('@')|first }}</strong>
+            <span class="cpd-meta">
+                {{ profile.accountHolderName|e }}
+                &middot; SIRET {{ profile.siret|e }}
+                {% if profile.verifiedAt %}
+                    &middot; traité le {{ profile.verifiedAt|date('d/m/Y') }}
+                {% endif %}
+                {% if profile.verifiedBy %}
+                    par {{ profile.verifiedBy.email|split('@')|first }}
+                {% endif %}
+            </span>
+            {% if profile.rejectionReason %}
+                <span class="cpd-meta" style="font-style:italic;">
+                    &mdash; Motif : {{ profile.rejectionReason|e|truncate(80, true, '...') }}
+                </span>
+            {% endif %}
+            {# Lien document même sur les dossiers traités (l'admin peut re-consulter) #}
+            {% if profile.hasIdentityDocument() %}
+                <a href="{{ path('app_admin_creator_payout_document', {id: profile.id}) }}"
+                   class="cpd-doc-link"
+                   target="_blank"
+                   rel="noopener"
+                   style="margin-left: auto;">
+                    <svg class="cpd-doc-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    Doc
+                </a>
+            {% endif %}
+        </div>
+    {% endfor %}
+{% endif %}
+
+{% endblock %}

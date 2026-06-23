@@ -1,0 +1,418 @@
+{% extends 'base_dashboard.html.twig' %}
+
+{% block title %}Mes coordonnées de versement — BazaArt{% endblock %}
+{% block page_title %}Coordonnées de versement{% endblock %}
+
+{#
+    Template : formulaire de coordonnées bancaires (ADR-0027, Lot 1).
+    Variables transmises par CreatorPayoutController#payout() :
+      - profile : App\Entity\CreatorPayoutProfile|null (null = première visite)
+      - dto     : App\DTO\Creator\PayoutProfileDTO|null (données POST en cas d'erreur)
+
+    Priorité d'affichage pour pré-remplir les champs :
+      1. $dto (données du POST si erreur de validation → on conserve ce que l'user a saisi)
+      2. $profile (données en BDD si profil existant)
+      3. Champ vide (première visite, pas d'erreur)
+
+    SÉCURITÉ :
+      - Formulaire POST protégé par un token CSRF (champ caché _token).
+      - Le fichier d'identité n'est jamais affiché / linké directement (URL sécurisée via admin).
+      - enctype="multipart/form-data" requis pour l'upload de fichier.
+#}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+    /* Formulaire versement — préfixe .pf- (payout-form) */
+    .pf-section {
+        margin-bottom: 32px;
+    }
+    .pf-section-title {
+        font-family: var(--display);
+        font-size: 16px;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        margin: 0 0 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--ink);
+        color: var(--ink);
+    }
+    .pf-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+    @media (max-width: 640px) {
+        .pf-grid { grid-template-columns: 1fr; }
+    }
+    .pf-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .pf-field--full {
+        grid-column: 1 / -1;
+    }
+    .pf-label {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+    }
+    .pf-label .pf-required {
+        color: var(--accent-2);
+        margin-left: 2px;
+    }
+    .pf-input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--ink);
+        background: #fff;
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--ink);
+        box-sizing: border-box;
+        border-radius: 0;
+        transition: border-color var(--transition-fast);
+    }
+    .pf-input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(255, 203, 16, .25);
+    }
+    .pf-hint {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        line-height: 1.5;
+    }
+    /* Zone upload pièce d'identité */
+    .pf-upload-zone {
+        border: 1px dashed var(--ink);
+        padding: 16px;
+        background: var(--bg-alt);
+    }
+    .pf-upload-input {
+        display: block;
+        margin-top: 8px;
+    }
+    .pf-upload-current {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+    }
+    .pf-doc-icon {
+        width: 14px;
+        height: 14px;
+        stroke: var(--ink-mute);
+        fill: none;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex-shrink: 0;
+    }
+    /* Statut du dossier */
+    .pf-status-card {
+        padding: 16px;
+        border: 1px solid var(--ink);
+        background: var(--bg-alt);
+        margin-bottom: 24px;
+    }
+    .pf-status-title {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: 8px;
+    }
+    .pf-chip {
+        display: inline-block;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border: 1px solid var(--ink);
+    }
+    .pf-chip--warn   { background: var(--accent-2); color: #fff; border-color: var(--accent-2); }
+    .pf-chip--ok     { background: #1F8A5B; color: #fff; border-color: #1F8A5B; }
+    .pf-chip--danger { background: #E5484D; color: #fff; border-color: #E5484D; }
+    .pf-rejection-reason {
+        margin-top: 8px;
+        padding: 10px 12px;
+        background: #fff0f0;
+        border-left: 3px solid #E5484D;
+        font-family: var(--body);
+        font-size: 13px;
+        color: var(--ink);
+        line-height: 1.6;
+    }
+    .pf-submit {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        background: var(--ink);
+        color: var(--accent);
+        border: 1px solid var(--ink);
+        font-family: var(--body);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        border-radius: 0;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .pf-submit:hover {
+        background: var(--accent);
+        color: var(--ink);
+    }
+    /* Bloc d'information RGPD */
+    .pf-rgpd {
+        padding: 14px 16px;
+        border: 1px solid var(--line-soft, rgba(13,13,13,.14));
+        background: var(--bg-alt);
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        line-height: 1.7;
+        margin-bottom: 20px;
+    }
+    .pf-rgpd-title {
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+        color: var(--ink);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── En-tête de la page ─────────────────────────────────────────────────────── #}
+<p style="font-family: var(--body); font-size: 14px; color: var(--ink-mute); margin-bottom: 24px; max-width: 620px;">
+    Ces informations sont nécessaires pour recevoir ton versement (virement bancaire)
+    après chaque atelier. Elles sont traitées de façon confidentielle et ne sont
+    accessibles qu'à l'équipe Bazaart.
+</p>
+
+{# ── Statut actuel du dossier (si profil existant) ───────────────────────────── #}
+{% if profile is not null %}
+    <div class="pf-status-card">
+        <div class="pf-status-title">Statut de ton dossier</div>
+        <span class="pf-chip pf-chip--{{ profile.status.badgeVariant() }}">
+            {{ profile.status.label() }}
+        </span>
+        <span style="font-family: var(--mono); font-size: 10px; color: var(--ink-mute); margin-left: 10px;">
+            Mis à jour le {{ profile.updatedAt|date('d/m/Y à H:i') }}
+        </span>
+
+        {# Si refusé : affiche le motif pour que le membre puisse corriger #}
+        {% if profile.status.value == 'rejected' and profile.rejectionReason %}
+            <div class="pf-rejection-reason">
+                <strong>Motif du refus :</strong> {{ profile.rejectionReason|e }}
+            </div>
+        {% endif %}
+
+        {# Si validé : message de félicitations #}
+        {% if profile.status.value == 'verified' %}
+            <p style="margin: 8px 0 0; font-family: var(--body); font-size: 13px; color: var(--ink);">
+                Ton dossier est validé. Tu recevras tes versements par virement après chaque atelier.
+                Toute modification de tes coordonnées repassera ton dossier en attente de re-vérification.
+            </p>
+        {% endif %}
+    </div>
+{% endif %}
+
+{# ── Notice RGPD ─────────────────────────────────────────────────────────────── #}
+<div class="pf-rgpd">
+    <div class="pf-rgpd-title">Données personnelles & RGPD</div>
+    Tes coordonnées bancaires (IBAN, SIRET) et ta pièce d'identité sont collectées
+    uniquement pour permettre ton versement. Ces données sont stockées de façon
+    sécurisée (accès restreint, pièce d'identité conservée hors du Web) et ne sont
+    accessibles qu'aux membres de l'équipe Bazaart.
+    Elles seront supprimées sur ta demande ou 6 mois après le dernier versement.
+    Droits : accès, rectification, suppression sur simple demande à bonjourbazaart@gmail.com.
+</div>
+
+{# ── Formulaire principal ─────────────────────────────────────────────────────── #}
+{#
+    enctype="multipart/form-data" est OBLIGATOIRE pour que PHP reçoive le fichier uploadé.
+    Sans cet attribut, $_FILES (et $request->files en Symfony) resterait vide.
+    Le token CSRF est le champ caché _token : il protège contre les requêtes POST forgées.
+#}
+<form method="post"
+      action="{{ path('app_creator_payout') }}"
+      enctype="multipart/form-data"
+      novalidate>
+    <input type="hidden" name="_token" value="{{ csrf_token('payout_form') }}">
+
+    {# ── Section 1 : Coordonnées bancaires ─── #}
+    <div class="pf-section">
+        <h2 class="pf-section-title">Coordonnées bancaires</h2>
+        <div class="pf-grid">
+
+            {# Titulaire du compte — affiché en premier car le plus "humain" #}
+            <div class="pf-field pf-field--full">
+                <label class="pf-label" for="accountHolderName">
+                    Titulaire du compte<span class="pf-required">*</span>
+                </label>
+                <input
+                    type="text"
+                    id="accountHolderName"
+                    name="accountHolderName"
+                    class="pf-input"
+                    required
+                    maxlength="255"
+                    autocomplete="name"
+                    placeholder="Nom et prénom exactement comme sur le RIB"
+                    value="{{ (dto is not null ? dto.accountHolderName : (profile is not null ? profile.accountHolderName : ''))|default('')|e }}"
+                >
+                <span class="pf-hint">Exactement comme indiqué sur ton relevé d'identité bancaire (RIB).</span>
+            </div>
+
+            {# IBAN — champ le plus important #}
+            <div class="pf-field pf-field--full">
+                <label class="pf-label" for="iban">
+                    IBAN<span class="pf-required">*</span>
+                </label>
+                <input
+                    type="text"
+                    id="iban"
+                    name="iban"
+                    class="pf-input"
+                    required
+                    maxlength="34"
+                    autocomplete="off"
+                    placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX"
+                    value="{{ (dto is not null ? dto.iban : (profile is not null ? profile.iban : ''))|default('')|e }}"
+                    style="font-family: var(--mono); letter-spacing: .08em;"
+                >
+                <span class="pf-hint">Visible sur ton RIB. Commence par le code pays (ex : FR76...).</span>
+            </div>
+
+            {# BIC — optionnel #}
+            <div class="pf-field">
+                <label class="pf-label" for="bic">BIC / SWIFT <em style="font-style:normal;opacity:.6;">(optionnel)</em></label>
+                <input
+                    type="text"
+                    id="bic"
+                    name="bic"
+                    class="pf-input"
+                    maxlength="11"
+                    autocomplete="off"
+                    placeholder="ex : BNPAFRPP"
+                    value="{{ (dto is not null ? dto.bic : (profile is not null ? profile.bic : ''))|default('')|e }}"
+                    style="font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em;"
+                >
+                <span class="pf-hint">Non obligatoire pour les virements SEPA en France.</span>
+            </div>
+
+            {# SIRET — 14 chiffres #}
+            <div class="pf-field">
+                <label class="pf-label" for="siret">
+                    SIRET<span class="pf-required">*</span>
+                </label>
+                <input
+                    type="text"
+                    id="siret"
+                    name="siret"
+                    class="pf-input"
+                    required
+                    maxlength="14"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    placeholder="14 chiffres sans espaces"
+                    value="{{ (dto is not null ? dto.siret : (profile is not null ? profile.siret : ''))|default('')|e }}"
+                    style="font-family: var(--mono); letter-spacing: .08em;"
+                >
+                <span class="pf-hint">
+                    Ton numéro SIRET (auto-entrepreneur, association...).
+                    Si tu n'en as pas encore, contacte-nous.
+                </span>
+            </div>
+
+        </div>
+    </div>
+
+    {# ── Section 2 : Pièce d'identité ─── #}
+    <div class="pf-section">
+        <h2 class="pf-section-title">Pièce d'identité</h2>
+
+        {# Affiche le document actuellement en BDD (si présent) #}
+        {% if profile is not null and profile.hasIdentityDocument() %}
+            <div class="pf-upload-current">
+                <svg class="pf-doc-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                Document actuel :
+                <strong>{{ profile.identityDocumentOriginalName|default('document')|e }}</strong>
+                &mdash; uploade un nouveau fichier ci-dessous pour le remplacer.
+            </div>
+        {% endif %}
+
+        <div class="pf-upload-zone">
+            <span class="pf-label" style="display:block;margin-bottom:8px;">
+                {% if profile is not null and profile.hasIdentityDocument() %}
+                    Remplacer la pièce d'identité (optionnel)
+                {% else %}
+                    Pièce d'identité <span class="pf-required">*</span>
+                {% endif %}
+            </span>
+            {#
+                L'attribut "accept" filtre côté navigateur (UX), mais la vraie validation
+                se fait côté serveur dans CreatorDocumentStorage#store() via finfo (type MIME réel).
+                Ne jamais faire confiance au filtre accept seul côté client.
+            #}
+            <input
+                type="file"
+                id="identityDocument"
+                name="identityDocument"
+                class="pf-upload-input"
+                accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+            >
+            <span class="pf-hint" style="display:block;margin-top:8px;">
+                Formats acceptés : JPG, PNG, PDF. Taille max : 5 Mo.
+                Carte nationale d'identité recto/verso ou passeport.
+                Le fichier est stocké de façon sécurisée et n'est accessible qu'à l'équipe Bazaart.
+            </span>
+        </div>
+    </div>
+
+    {# ── Actions ─── #}
+    <button type="submit" class="pf-submit">
+        {# Icône disquette (enregistrement) #}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.5"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+        </svg>
+        Enregistrer mes coordonnées
+    </button>
+
+</form>
+
+{% endblock %}
+
+{% block sidebar %}
+{#
+    Réutilise le même partial de sidebar que le dashboard artiste.
+    Centralise la navigation : tout changement dans sidebar_artiste.html.twig
+    s'applique automatiquement à toutes les pages du dashboard.
+#}
+{% include '_partials/sidebar_artiste.html.twig' %}
+{% endblock %}
