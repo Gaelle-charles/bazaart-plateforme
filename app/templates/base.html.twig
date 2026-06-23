@@ -374,8 +374,12 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            background: var(--bg, #F2EFE6);
-            border-bottom: 1px solid var(--line, rgba(13,13,13,.18));
+            /* Navbar TRANSPARENTE (demande Gaëlle) : le contenu/hero se voit derrière.
+               On retire aussi la bordure basse pour un rendu net.
+               NB : si le texte sombre devient peu lisible par-dessus un fond sombre,
+               on pourra passer à un fond semi-transparent + flou (effet « verre dépoli »)
+               ou adapter la couleur du texte. */
+            background: transparent;
         }
 
         /* Conteneur interne : flex, max 1440px, hauteur 64px */
