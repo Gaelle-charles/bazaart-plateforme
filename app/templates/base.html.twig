@@ -447,8 +447,9 @@
             display: flex;
             align-items: center;
             padding: 0 20px;
-            border-right: 1px solid var(--line, rgba(13,13,13,.18));
-            background: var(--ink, #0D0D0D);
+            /* Navbar épurée (toutes les pages) : pas de séparateur ni de boîte noire. */
+            border-right: none;
+            background: transparent;
             color: var(--accent, #FFCB10);
             font-family: var(--display, 'Archivo Black', sans-serif);
             font-size: 22px;
@@ -477,7 +478,8 @@
             border: 0;
             background: transparent;
             cursor: pointer;
-            border-right: 1px solid var(--line-soft, rgba(13,13,13,.10));
+            /* Navbar épurée : plus de séparateur entre onglets. */
+            border-right: none;
             font: 600 12.5px/1 var(--body, 'Space Grotesk', sans-serif);
             letter-spacing: .02em;
             color: var(--ink, #0D0D0D);
@@ -489,10 +491,10 @@
         }
         .nav-tab:hover { background: var(--bg-alt, #E8E5DC); }
 
-        /* Onglet actif : inversion (fond noir, texte lime) */
+        /* Onglet actif : sans boîte noire — texte sombre, le point doré sert d'indicateur. */
         .nav-tab[data-active="true"] {
-            background: var(--ink, #0D0D0D);
-            color: var(--accent, #FFCB10);
+            background: transparent;
+            color: var(--ink, #0D0D0D);
         }
 
         /* Point vert visible uniquement sur l'onglet actif */
@@ -511,7 +513,8 @@
             align-items: center;
             gap: 10px;
             padding: 0 14px;
-            border-left: 1px solid var(--line, rgba(13,13,13,.18));
+            /* Navbar épurée : plus de séparateur avant la zone droite. */
+            border-left: none;
         }
 
         /* ── Boutons Connexion / Rejoindre ── */
