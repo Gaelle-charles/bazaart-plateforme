@@ -37,8 +37,11 @@
        on couple donc la durée d'affichage à la durée de l'animation. À la demande de
        Gaëlle : « une fois l'animation terminée, on passe à la page home ». */
     var SPLASH_DURATION = ANIM_DURATION;  /* ms : fermeture dès la fin de l'animation */
-    var LOGO_DELAY      = 2000;  /* ms : délai avant apparition du logo (cf. bouton Enter) */
-    var LOGO_FADE       = 1500;  /* ms : durée du fondu d'entrée du logo */
+    var LOGO_DELAY      = 2000;  /* ms : délai avant le DÉBUT de l'apparition du logo */
+    /* Le fondu du logo doit se TERMINER exactement quand l'animation se termine
+       (demande Gaëlle) : durée du fondu = ANIM_DURATION - LOGO_DELAY. Ainsi le logo est
+       pleinement visible pile au moment où le splash se ferme et où l'on passe à la home. */
+    var LOGO_FADE       = ANIM_DURATION - LOGO_DELAY;
 
     var overlay = document.getElementById('bzrt-preloader');
     var canvas  = document.getElementById('bzrt-preloader-canvas');
