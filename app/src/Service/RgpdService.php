@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Entity\User;
 use App\Repository\CourseEnrollmentRepository;
+use App\Repository\CreatorPayoutProfileRepository;
 use App\Repository\ForumReplyRepository;
 use App\Repository\ForumThreadRepository;
 use App\Repository\LessonProgressRepository;
@@ -39,16 +40,32 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  *   de clé étrangère dans les tables (posts, resources, messages, forum_threads...).
  *   L'anonymisation préserve la cohérence des données tout en effaçant l'identité
  *   de la personne, ce qui satisfait pleinement l'article 17 du RGPD.
+ *
+ * Cas particulier — CreatorPayoutProfile (données bancaires + pièce d'identité) :
+ *   Contrairement aux posts ou ressources, les données bancaires (IBAN, BIC, SIRET)
+ *   et la pièce d'identité n'ont AUCUNE utilité après l'anonymisation d'un compte.
+ *   Il n'y a pas de raison légitime de les conserver (RGPD art. 5 — minimisation des données).
+ *   On les SUPPRIME donc (entité Doctrine + fichier physique) dans anonymizeUser().
+ *
+ *   Pourquoi la cascade ON DELETE ne suffit pas ici ?
+ *   La cascade `onDelete: 'CASCADE'` de la FK `creator_payout_profiles.user_id` ne se
+ *   déclenche que lors d'un DELETE SQL sur la ligne `users`. Or l'anonymisation ne
+ *   supprime PAS la ligne utilisateur — elle la modifie (UPDATE). La cascade est donc
+ *   inopérante dans ce cas, et la suppression doit être faite explicitement ici.
  */
 class RgpdService
 {
     /**
      * Injection par constructeur (convention projet : pas de setters, pas de propriétés publiques).
      *
-     * On injecte tous les repositories dont on a besoin pour l'export.
-     * EntityManagerInterface est nécessaire pour l'anonymisation (flush).
+     * On injecte tous les repositories dont on a besoin pour l'export et l'anonymisation.
+     * EntityManagerInterface est nécessaire pour l'anonymisation (remove + flush).
      * UserPasswordHasherInterface permet de générer un hash de mot de passe aléatoire
      * lors de l'anonymisation (le compte devient inutilisable).
+     *
+     * Nouveaux services ajoutés (conformité RGPD — ADR-0027 Lot 1) :
+     *   - CreatorPayoutProfileRepository : retrouver le profil de versement de l'utilisateur
+     *   - CreatorDocumentStorage : supprimer le fichier de pièce d'identité sur le disque
      */
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
@@ -65,6 +82,10 @@ class RgpdService
         // Repositories formation — ajoutés pour l'export RGPD (droit à la portabilité)
         private readonly CourseEnrollmentRepository $courseEnrollmentRepository,
         private readonly LessonProgressRepository $lessonProgressRepository,
+        // Versements créateur — ajoutés pour la suppression RGPD (ADR-0027)
+        // Ces données (IBAN, SIRET, pièce d'identité) doivent être effacées à l'anonymisation.
+        private readonly CreatorPayoutProfileRepository $creatorPayoutProfileRepository,
+        private readonly CreatorDocumentStorage $creatorDocumentStorage,
     ) {}
 
     /**
@@ -222,6 +243,42 @@ class RgpdService
             }
         }
 
+        // ── Profil de versement créateur ───────────────────────────────────────
+        // RGPD art. 15 (droit d'accès) + art. 20 (portabilité) :
+        //   L'utilisateur a le droit de savoir quelles données bancaires sont en BDD.
+        //   On exporte les métadonnées du profil (statut, dates) mais PAS l'IBAN complet
+        //   ni le document d'identité en clair — l'export JSON n'est pas un canal sécurisé.
+        //   On signale l'existence du document pour que l'utilisateur sache qu'un fichier
+        //   est stocké. L'IBAN est partiellement masqué (4 derniers chiffres visibles,
+        //   comme les relevés bancaires) pour confirmer quel compte est enregistré
+        //   sans exposer la totalité du numéro dans un fichier JSON téléchargeable.
+        $payoutProfileExport = null;
+        $payoutProfile = $this->creatorPayoutProfileRepository->findByUser($user);
+        if ($payoutProfile !== null) {
+            // Masquage partiel de l'IBAN : on ne garde que les 4 derniers caractères.
+            // Ex : "FR7630006000011234567890189" → "****890189" (non, trop long)
+            //      On affiche IBAN pays + 4 derniers chiffres, reste masqué.
+            $ibanRaw    = $payoutProfile->getIban();
+            $ibanMasked = strlen($ibanRaw) > 4
+                ? substr($ibanRaw, 0, 2) . str_repeat('*', strlen($ibanRaw) - 6) . substr($ibanRaw, -4)
+                : $ibanRaw; // si IBAN très court (ne devrait pas arriver)
+
+            $payoutProfileExport = [
+                'iban_masque'            => $ibanMasked,
+                'bic'                    => $payoutProfile->getBic(),
+                // SIRET : donnée fiscale, on peut l'exposer (registre public)
+                'siret'                  => $payoutProfile->getSiret(),
+                'titulaire_compte'       => $payoutProfile->getAccountHolderName(),
+                'document_identite'      => $payoutProfile->hasIdentityDocument()
+                    ? 'Fichier fourni (non exporté pour raisons de sécurité)'
+                    : null,
+                'nom_original_document'  => $payoutProfile->getIdentityDocumentOriginalName(),
+                'statut_verification'    => $payoutProfile->getStatus()->value,
+                'soumis_le'              => $payoutProfile->getSubmittedAt()->format(\DateTimeInterface::ATOM),
+                'mis_a_jour_le'          => $payoutProfile->getUpdatedAt()->format(\DateTimeInterface::ATOM),
+            ];
+        }
+
         // ── Assemblage final ───────────────────────────────────────────────────
         // Structure JSON conforme aux recommandations CNIL pour l'export de données.
         return [
@@ -245,6 +302,8 @@ class RgpdService
             // Données de formation — ajoutées conformément au droit à la portabilité
             'course_enrollments'   => $enrollmentsData,
             'lesson_progress'      => $lessonProgressData,
+            // Données de versement créateur — IBAN masqué, SIRET et statut exportés
+            'creator_payout'       => $payoutProfileExport,
         ];
     }
 
@@ -252,17 +311,19 @@ class RgpdService
      * Anonymise un compte utilisateur (droit à l'effacement — RGPD art. 17).
      *
      * Opérations effectuées :
-     *   1. Remplace l'email par un pseudonyme non identifiant
-     *   2. Invalide le mot de passe (hash d'une chaîne aléatoire → compte inutilisable)
-     *   3. Réinitialise les rôles à ROLE_USER (retire les privilèges éventuels)
-     *   4. Marque le compte comme non vérifié
-     *   5. Enregistre la date d'anonymisation (traçabilité RGPD)
-     *   6. Persiste les changements en base de données
+     *   1. Supprime le profil de versement créateur (IBAN, BIC, SIRET) + fichier d'identité
+     *      → données bancaires et biométriques : pas de raison de les conserver (minimisation)
+     *   2. Remplace l'email par un pseudonyme non identifiant
+     *   3. Invalide le mot de passe (hash d'une chaîne aléatoire → compte inutilisable)
+     *   4. Réinitialise les rôles à ROLE_USER (retire les privilèges éventuels)
+     *   5. Marque le compte comme non vérifié
+     *   6. Enregistre la date d'anonymisation (traçabilité RGPD)
+     *   7. Persiste les changements en base de données
      *
      * Ce que cette méthode NE fait PAS :
      *   - Ne supprime pas les posts, ressources, messages (intégrité référentielle)
      *   - Ne supprime pas les notifications (elles se nettoieront naturellement)
-     *   - Ne touche pas aux entités liées (ArtistProfile etc. — décision scope V1)
+     *   - Ne touche pas à ArtistProfile (données non-sensibles, décision scope V1)
      *
      * Sécurité du hash de remplacement :
      *   bin2hex(random_bytes(32)) génère 64 caractères hexadécimaux aléatoires
@@ -283,6 +344,40 @@ class RgpdService
         $userId = $user->getId() ?? throw new \LogicException(
             'Impossible d\'anonymiser un utilisateur sans identifiant persisté en base.'
         );
+
+        // ── Suppression du profil de versement créateur ───────────────────────
+        // RGPD art. 5 — principe de minimisation des données :
+        //   Un IBAN, un BIC, un SIRET et une pièce d'identité sont des données à
+        //   caractère personnel hautement sensibles. Il n'existe aucune base légale
+        //   justifiant leur conservation après que l'utilisateur a demandé l'effacement
+        //   de son compte. On les SUPPRIME, on ne les anonymise pas.
+        //
+        // Pourquoi ne pas se fier à la cascade ON DELETE de la FK ?
+        //   La cascade `onDelete: 'CASCADE'` de creator_payout_profiles.user_id
+        //   ne se déclenche que lors d'un DELETE SQL sur la ligne `users`.
+        //   Or anonymizeUser() ne supprime PAS la ligne — elle l'UPDATE.
+        //   La cascade est donc inopérante ici : on doit agir explicitement.
+        $payoutProfile = $this->creatorPayoutProfileRepository->findByUser($user);
+
+        if ($payoutProfile !== null) {
+            // a) Supprimer le fichier de pièce d'identité sur le disque.
+            //    On vérifie que le chemin est défini avant d'appeler delete() — même si
+            //    delete() est idempotente (ne lève pas si le fichier est absent), c'est
+            //    plus explicite et évite un appel inutile avec un chemin null.
+            $documentPath = $payoutProfile->getIdentityDocumentPath();
+            if ($documentPath !== null) {
+                // delete() supprime le fichier physique dans var/secure_uploads/.
+                // Si le fichier a déjà été supprimé manuellement, l'appel est silencieux.
+                $this->creatorDocumentStorage->delete($documentPath);
+            }
+
+            // b) Supprimer l'entité CreatorPayoutProfile de la base de données.
+            //    remove() marque l'entité pour suppression ; le DELETE SQL sera émis
+            //    lors du flush() ci-dessous (dans la même transaction que les UPDATE User).
+            //    On supprime l'entité complète — IBAN, BIC, SIRET, nom du titulaire —
+            //    car aucune de ces données n'a de valeur archivistique après l'effacement.
+            $this->entityManager->remove($payoutProfile);
+        }
 
         // ── Remplacement de l'email ────────────────────────────────────────────
         // Format : "anonymise_{id}@bazaart-deleted.fr"
@@ -315,8 +410,11 @@ class RgpdService
         $user->setAnonymizedAt(new \DateTime());
 
         // ── Persistance en base de données ─────────────────────────────────────
-        // flush() envoie les modifications SQL immédiatement.
-        // Pas besoin de persist() car l'entité est déjà managée (chargée depuis le contexte).
+        // flush() envoie toutes les opérations en attente en une seule transaction :
+        //   - DELETE sur creator_payout_profiles (si profil présent, see remove() ci-dessus)
+        //   - UPDATE sur users (email, password, rôles, isVerified, anonymizedAt)
+        // L'atomicité garantit qu'on n'a pas de compte "à moitié anonymisé" si une
+        // erreur survient en cours de traitement.
         $this->entityManager->flush();
     }
 }
