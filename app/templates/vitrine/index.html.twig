@@ -27,6 +27,10 @@
 #}
 {% extends 'base.html.twig' %}
 
+{# Classe body « page-home » : active la navbar transparente fixée par-dessus le hero
+   (cf. base.html.twig). Le hero (100vh) passe ainsi sous la navbar. #}
+{% block body_class %}page-home{% endblock %}
+
 {# ── TITRE DE L'ONGLET ──────────────────────────────────────────────────────── #}
 {% block title %}Bazaart — La plateforme des artistes de la diaspora afro-atlantique{% endblock %}
 

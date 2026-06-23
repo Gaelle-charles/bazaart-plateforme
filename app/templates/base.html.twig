@@ -374,12 +374,42 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            /* Navbar TRANSPARENTE (demande Gaëlle) : le contenu/hero se voit derrière.
-               On retire aussi la bordure basse pour un rendu net.
-               NB : si le texte sombre devient peu lisible par-dessus un fond sombre,
-               on pourra passer à un fond semi-transparent + flou (effet « verre dépoli »)
-               ou adapter la couleur du texte. */
+            /* Navbar TRANSPARENTE par défaut (pas de couleur) : le contenu se voit derrière.
+               Au scroll, on lui pose un fond « verre dépoli » pour la rendre distinguable. */
             background: transparent;
+            transition: background .25s ease, box-shadow .25s ease, border-color .25s ease;
+        }
+
+        /* Sur la HOME uniquement : navbar en position fixed pour que le hero (100vh)
+           passe DESSOUS. Sur les autres pages on garde sticky (le contenu reste sous
+           la nav, aucune page cassée). */
+        body.page-home .nav {
+            position: fixed;
+            left: 0;
+            right: 0;
+        }
+
+        /* État « scrollé » : la navbar devient distinguable — fond crème semi-transparent
+           + léger flou + fine bordure + ombre douce. Posé par un petit script au scroll. */
+        .nav.is-scrolled {
+            background: rgba(242, 239, 230, 0.82); /* --bg crème, translucide */
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--line, rgba(13,13,13,.18));
+            box-shadow: 0 2px 14px rgba(0, 0, 0, .06);
+        }
+
+        /* Sur la home, tant que la navbar est transparente (pas scrollée), le hero sombre
+           est derrière : on passe les libellés et boutons « ghost » en BLANC pour la
+           lisibilité. Une fois scrollée (fond clair posé), ils reprennent leur couleur sombre. */
+        body.page-home .nav:not(.is-scrolled) .nav-tab,
+        body.page-home .nav:not(.is-scrolled) .nav-btn--ghost {
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, .45);
+        }
+        body.page-home .nav:not(.is-scrolled) .nav-tab:hover,
+        body.page-home .nav:not(.is-scrolled) .nav-btn--ghost:hover {
+            background: rgba(255, 255, 255, .14);
         }
 
         /* Conteneur interne : flex, max 1440px, hauteur 64px */
@@ -618,7 +648,7 @@
 
     {% block stylesheets %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
 
 {#
     ── Overlay de chargement (splash screen) ─────────────────────────────────────
@@ -911,6 +941,24 @@
    s'appliquent pas → les titres s'affichent normalement, SANS animation, partout.
    Pour réactiver : remettre la ligne <script> ci-dessous.
    <script src="{{ asset('js/title-reveal.js') }}" defer></script> #}
+
+{# ── Navbar : devient « pleine » (verre dépoli) dès qu'on scrolle ───────────────
+   La navbar est transparente en haut ; au scroll, on lui pose la classe .is-scrolled
+   pour qu'elle soit distinguable du contenu qui défile dessous (UI/UX). Script léger,
+   inline, sans dépendance. #}
+<script>
+(function () {
+    var nav = document.querySelector('.nav');
+    if (!nav) { return; }
+    var THRESHOLD = 24; /* px de défilement avant de poser le fond de la navbar */
+    function syncNav() {
+        if (window.scrollY > THRESHOLD) { nav.classList.add('is-scrolled'); }
+        else { nav.classList.remove('is-scrolled'); }
+    }
+    syncNav(); /* état correct dès le chargement (ex : page rouverte en position scrollée) */
+    window.addEventListener('scroll', syncNav, { passive: true });
+}());
+</script>
 
 {# ── Preloader / splash screen ───────────────────────────────────────────────
     defer : le script se charge en parallele du parsing HTML mais ne s'execute
