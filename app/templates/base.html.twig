@@ -901,7 +901,12 @@
     NB : on l'inclut via une balise <script> séparée plutôt qu'inline pour bénéficier
     du cache navigateur sur les pages suivantes.
 #}
-<script src="{{ asset('js/title-reveal.js') }}" defer></script>
+{# Animation des titres (title-reveal) DÉSACTIVÉE à la demande de Gaëlle (juin 2026).
+   On ne charge plus le script : sans lui, la classe .js-title-reveal-ready n'est jamais
+   posée sur <html>, donc les règles CSS d'armement (qui masquaient les lettres) ne
+   s'appliquent pas → les titres s'affichent normalement, SANS animation, partout.
+   Pour réactiver : remettre la ligne <script> ci-dessous.
+   <script src="{{ asset('js/title-reveal.js') }}" defer></script> #}
 
 {# ── Preloader / splash screen ───────────────────────────────────────────────
     defer : le script se charge en parallele du parsing HTML mais ne s'execute
