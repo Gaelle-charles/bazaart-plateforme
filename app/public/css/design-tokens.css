@@ -53,7 +53,7 @@
   --line-soft:   rgba(13,13,13,.14); /* bordure douce — séparateurs discrets */
 
   /* Accents principaux (configurables en live dans le prototype) */
-  --accent:      #C6F24E;  /* vert acide — CTA primaire, tag actif, surlignage */
+  --accent:      #FFCB10;  /* jaune doré (ex-vert acide) — CTA primaire, tag actif, surlignage */
   --accent-2:    #FF6B2C;  /* orange tangerine — accent secondaire, badges live, urgence */
 
   /* États fonctionnels */

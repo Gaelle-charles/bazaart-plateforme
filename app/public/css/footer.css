@@ -258,7 +258,7 @@
 
 .lp-footer__links a:hover {
     /* Au survol, on passe au vert lime (--accent) : rappel de la charte Street */
-    color: var(--accent, #C6F24E);
+    color: var(--accent, #FFCB10);
 }
 
 /* ── L'eyebrow dans la colonne "L'asso" ─────────────────────────────── */
@@ -271,7 +271,7 @@
 
 /* Le carré ::before de l'eyebrow : vert lime, visible sur fond sombre */
 .lp-footer .lp-eyebrow::before {
-    background: var(--accent, #C6F24E);
+    background: var(--accent, #FFCB10);
 }
 
 

@@ -359,7 +359,7 @@
          * Tokens utilisés (définis dans design-tokens.css) :
          *   --bg        : #F2EFE6  (fond sable — corps de la nav)
          *   --ink       : #0D0D0D  (quasi-noir — logo, texte, bordures)
-         *   --accent    : #C6F24E  (vert lime — bouton Rejoindre, onglet actif)
+         *   --accent    : #FFCB10  (vert lime — bouton Rejoindre, onglet actif)
          *   --line      : rgba(13,13,13,.18)  (bordure standard)
          *   --line-soft : rgba(13,13,13,.10)  (bordure douce)
          *   --bg-alt    : #E8E5DC             (fond hover onglet)
@@ -395,7 +395,7 @@
             padding: 0 20px;
             border-right: 1px solid var(--line, rgba(13,13,13,.18));
             background: var(--ink, #0D0D0D);
-            color: var(--accent, #C6F24E);
+            color: var(--accent, #FFCB10);
             font-family: var(--display, 'Archivo Black', sans-serif);
             font-size: 22px;
             letter-spacing: -.01em;
@@ -438,7 +438,7 @@
         /* Onglet actif : inversion (fond noir, texte lime) */
         .nav-tab[data-active="true"] {
             background: var(--ink, #0D0D0D);
-            color: var(--accent, #C6F24E);
+            color: var(--accent, #FFCB10);
         }
 
         /* Point vert visible uniquement sur l'onglet actif */
@@ -446,7 +446,7 @@
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background: var(--accent, #C6F24E);
+            background: var(--accent, #FFCB10);
             display: none;
         }
         .nav-tab[data-active="true"] .dot { display: block; }
@@ -485,13 +485,13 @@
 
         /* "Rejoindre" — fond lime, texte noir */
         .nav-btn--lime {
-            background: var(--accent, #C6F24E);
+            background: var(--accent, #FFCB10);
             color: var(--ink, #0D0D0D);
-            border-color: var(--accent, #C6F24E);
+            border-color: var(--accent, #FFCB10);
         }
         .nav-btn--lime:hover {
             background: var(--ink, #0D0D0D);
-            color: var(--accent, #C6F24E);
+            color: var(--accent, #FFCB10);
             border-color: var(--ink, #0D0D0D);
         }
 
@@ -501,7 +501,7 @@
             height: 34px;
             border-radius: 0;
             background: var(--ink, #0D0D0D);
-            color: var(--accent, #C6F24E);
+            color: var(--accent, #FFCB10);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -513,7 +513,7 @@
             transition: background .12s, color .12s;
         }
         .nav-avatar:hover {
-            background: var(--accent, #C6F24E);
+            background: var(--accent, #FFCB10);
             color: var(--ink, #0D0D0D);
         }
 
@@ -589,7 +589,7 @@
             text-decoration: none;
             border-bottom: 1px solid var(--line-soft, rgba(13,13,13,.10));
         }
-        .nav-mobile-item:hover { background: var(--ink, #0D0D0D); color: var(--accent, #C6F24E); }
+        .nav-mobile-item:hover { background: var(--ink, #0D0D0D); color: var(--accent, #FFCB10); }
         .nav-mobile-item.danger { color: var(--accent-2, #FF6B2C); }
         .nav-mobile-sep { height: 1px; background: var(--ink, #0D0D0D); margin: 4px 0; }
 
@@ -670,7 +670,7 @@
 #}
 <a href="#main-content"
    style="position:absolute;left:-9999px;top:0;z-index:999;
-          background:var(--ink,#0D0D0D);color:var(--accent,#C6F24E);
+          background:var(--ink,#0D0D0D);color:var(--accent,#FFCB10);
           padding:8px 16px;font:700 12px var(--mono,'JetBrains Mono',monospace);
           text-transform:uppercase;letter-spacing:.06em;text-decoration:none;"
    onfocus="this.style.left='0'" onblur="this.style.left='-9999px'">
@@ -848,7 +848,7 @@
     {% else %}
         <a href="{{ path('app_login') }}" class="nav-mobile-item">Connexion</a>
         <a href="{{ path('app_register') }}" class="nav-mobile-item"
-           style="color:var(--accent, #C6F24E);">Rejoindre</a>
+           style="color:var(--accent, #FFCB10);">Rejoindre</a>
     {% endif %}
 
 </nav>
@@ -1026,7 +1026,7 @@
         z-index: 1000;
         background: var(--ink, #0D0D0D);
         color: var(--bg, #F2EFE6);
-        border-top: 2px solid var(--accent, #C6F24E);
+        border-top: 2px solid var(--accent, #FFCB10);
         padding: 16px 24px;
         align-items: center;
         justify-content: space-between;
@@ -1043,7 +1043,7 @@
                      font-weight: 700;
                      letter-spacing: .1em;
                      text-transform: uppercase;
-                     color: var(--accent, #C6F24E);
+                     color: var(--accent, #FFCB10);
                      display: block;
                      margin-bottom: 4px;">
             Cookies
@@ -1052,7 +1052,7 @@
            style="font-size: 13px; line-height: 1.5; margin: 0; opacity: .85;">
             Ce site utilise des cookies nécessaires à son fonctionnement (session, authentification).
             <a href="{{ path('app_legal_privacy') }}"
-               style="color: var(--accent, #C6F24E); text-decoration: underline;">
+               style="color: var(--accent, #FFCB10); text-decoration: underline;">
                 En savoir plus
             </a>
         </p>
@@ -1090,9 +1090,9 @@
                     font: 700 11px/1 var(--body, 'Space Grotesk', sans-serif);
                     letter-spacing: .05em;
                     text-transform: uppercase;
-                    background: var(--accent, #C6F24E);
+                    background: var(--accent, #FFCB10);
                     color: var(--ink, #0D0D0D);
-                    border: 1px solid var(--accent, #C6F24E);
+                    border: 1px solid var(--accent, #FFCB10);
                     cursor: pointer;
                     transition: background .12s, color .12s;
                 "

@@ -30,7 +30,7 @@
  # DESIGN TOKENS (design-tokens.css) :
  #   --bg (#F2EFE6)    --bg-alt (#EAE6D9)
  #   --ink (#0D0D0D)   --ink-mute (#5b584f)
- #   --accent (#C6F24E) — vert acide, couleur artiste
+ #   --accent (#FFCB10) — vert acide, couleur artiste
  #   --accent-2 (#FF6B2C) — orange, couleur structure
  #   --display (Archivo Black)  --body (Space Grotesk)  --mono (JetBrains Mono)
  #   --transition-fast (.12s ease)
@@ -216,7 +216,7 @@
 .sd-link:hover {
     background: rgba(242,239,230,.05);
     color: var(--bg);
-    border-left-color: rgba(198,242,78,.5);
+    border-left-color: rgba(255, 203, 16,.5);
 }
 
 /* Lien actif : vert acide + fond légèrement teinté */
@@ -224,11 +224,11 @@
     color: var(--accent);
     font-weight: 600;
     border-left-color: var(--accent);
-    background: rgba(198,242,78,.07);
+    background: rgba(255, 203, 16,.07);
 }
 
 .sd-link--active:hover {
-    background: rgba(198,242,78,.10);
+    background: rgba(255, 203, 16,.10);
 }
 
 /* ── Icône SVG dans les liens ────────────────────────────────────────────── */
@@ -297,7 +297,7 @@
     justify-content: center;
     font: 700 11px var(--mono);
     letter-spacing: .04em;
-    border: 1px solid rgba(198,242,78,.5);
+    border: 1px solid rgba(255, 203, 16,.5);
     flex-shrink: 0;
     /* Street = carré, border-radius: 0 implicite */
 }

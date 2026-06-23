@@ -652,8 +652,11 @@
                 </div>
             </a>
 
-            {# Articles (route externe au contrôleur admin) #}
-            <a href="{{ path('app_article_index') }}" class="adm-shortcut">
+            {# Articles : on pointe vers la PAGE DE GESTION admin (app_article_my),
+               qui liste les articles de l'admin (brouillons inclus) avec les boutons
+               « + Nouvel article », Modifier, Supprimer. (Avant : app_article_index =
+               liste publique, sans gestion ni brouillons.) #}
+            <a href="{{ path('app_article_my') }}" class="adm-shortcut">
                 {#
                    SVG document/pen — remplace l'emoji 📝
                    Feuille avec coin plié + trait de stylo

@@ -101,7 +101,7 @@
  *
  * TOKEN CSS UTILISÉ
  * -----------------
- * Les bandes utilisent var(--accent) = #C6F24E (vert acide, thème Street).
+ * Les bandes utilisent var(--accent) = #FFCB10 (vert acide, thème Street).
  * Ce token est déclaré dans design-tokens.css et disponible partout.
  */
 
@@ -255,7 +255,7 @@
  * clip-path : limite l'affichage à une tranche de la hauteur de la lettre.
  * pointer-events:none : les bandes ne captent pas les clics.
  *
- * Couleur : var(--accent) = #C6F24E (vert acide Bazaart, thème Street).
+ * Couleur : var(--accent) = #FFCB10 (vert acide Bazaart, thème Street).
  * La bande est colorée pour créer l'effet de "peinture qui passe".
  * Elle ne CONTIENT PAS le texte de la lettre (seul .tr-char__main le fait) —
  * les slices sont de purs éléments décoratifs colorés.
@@ -263,7 +263,7 @@
 .tr-char__slice {
     position:       absolute;
     inset:          0;
-    background:     var(--accent, #C6F24E); /* fallback si token non chargé */
+    background:     var(--accent, #FFCB10); /* fallback si token non chargé */
     pointer-events: none;
     /* par défaut invisible : l'animation est déclenchée par .is-revealing */
     opacity:        0;
