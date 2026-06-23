@@ -83,17 +83,35 @@
         // On retire le [hidden] de l'étape 1 et on configure les boutons.
         showStep(1, form, btnPrev, btnNext, btnSubmit);
 
+        // URL d'inscription (posée par le template via data-register-url) — sert à
+        // rediriger un visiteur non connecté au clic sur "Continuer" (cf. ADR-0026).
+        var registerUrl = wrap.dataset.registerUrl || '/register';
+
         // ── Bouton "Continuer" ───────────────────────────────────────────────
         if (btnNext) {
             btnNext.addEventListener('click', function () {
-                // Validation de l'étape courante avant de passer à la suivante
+                // Validation de l'étape courante avant de continuer
                 if (!validateStep(currentStep, form)) {
                     return;
                 }
 
-                // Sauvegarde de l'étape en session (AJAX best-effort)
-                saveStepAjax(currentStep, form);
+                // VISITEUR NON CONNECTÉ (cf. ADR-0026) : l'accès au matching nécessite
+                // un compte. Dès le clic sur "Continuer", on sauvegarde ses réponses de
+                // l'étape en session (pour pré-remplir l'inscription) PUIS on le redirige
+                // vers la page d'inscription.
+                // saveStepAjax() appelle TOUJOURS son callback (succès comme échec
+                // réseau), donc la redirection est garantie.
+                if (!isLoggedIn) {
+                    // On désactive le bouton pour éviter un double-clic pendant l'AJAX.
+                    btnNext.disabled = true;
+                    saveStepAjax(currentStep, form, function () {
+                        window.location.href = registerUrl;
+                    });
+                    return;
+                }
 
+                // Utilisateur connecté : sauvegarde best-effort + navigation normale.
+                saveStepAjax(currentStep, form);
                 currentStep++;
                 showStep(currentStep, form, btnPrev, btnNext, btnSubmit);
                 updateProgress(currentStep, progress);

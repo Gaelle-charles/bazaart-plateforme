@@ -3254,12 +3254,12 @@
                 #}
                 {% include 'matching/_matching_form.html.twig' %}
 
-            {# ─── ETAT 4 : VISITEUR NON connecté → connexion obligatoire ──────────────
-                Le matching nécessite désormais d'être connecté : on n'affiche plus le
-                formulaire aux visiteurs (parcours trop long avant inscription, beaucoup
-                d'abandons). On les invite à créer un compte / se connecter. Une fois
-                connectés, ils basculent dans l'état 3 et peuvent remplir le formulaire
-                de matching directement (sans onboarding obligatoire). #}
+            {# ─── ETAT 4 : VISITEUR NON connecté → formulaire d'accroche ──────────────
+                On affiche le formulaire de matching au visiteur (accroche). Mais dès le
+                clic sur "Continuer", matching-form.js le redirige vers la page
+                d'inscription (il n'est pas connecté) : l'accès réel au matching nécessite
+                un compte (cf. ADR-0026). Ses réponses de l'étape 1 sont sauvegardées en
+                session avant la redirection, pour pré-remplir l'inscription/onboarding. #}
             {% else %}
 
                 <div class="lp-section-header">
@@ -3268,25 +3268,11 @@
                         <h2 class="lp-section-header__title" id="lp-swipe-title">
                             Ton matching
                         </h2>
-                        <span class="lp-section-header__sub">connecte-toi pour commencer</span>
+                        <span class="lp-section-header__sub">trouve les opportunités faites pour toi</span>
                     </div>
                 </div>
 
-                <div class="swipe-guest-cta">
-                    <div class="swipe-guest-cta__inner">
-                        <p class="swipe-guest-cta__msg">
-                            Crée ton compte pour découvrir les opportunités qui correspondent à ton profil&nbsp;: financements, résidences, formations, mises en relation.
-                        </p>
-                        <div class="swipe-guest-cta__btns">
-                            <a href="{{ path('app_register', { intent: 'artist' }) }}" class="lp-btn lp-btn--dark">
-                                Créer mon compte
-                            </a>
-                            <a href="{{ path('app_login') }}" class="lp-btn lp-btn--ghost">
-                                J'ai déjà un compte
-                            </a>
-                        </div>
-                    </div>
-                </div>
+                {% include 'matching/_matching_form.html.twig' %}
 
             {% endif %}
 
@@ -4081,17 +4067,18 @@
     Script matching-form.js — chargé uniquement si le formulaire multi-étapes
     est potentiellement présent.
 
-    Un seul cas où le formulaire apparaît (cf. ADR-0026) :
+    Le formulaire apparaît dans deux états (cf. ADR-0026) :
       - État 3 : utilisateur CONNECTÉ dont le profil n'est pas complet.
-        (Le visiteur non connecté voit un CTA de connexion, pas le formulaire :
-         inutile de charger ce script pour lui.)
+      - État 4 : VISITEUR non connecté (accroche → redirection inscription au clic).
+    Dans les deux cas, le profil n'est pas complet : on charge donc le script tant
+    que profileComplete est faux (et hors paywall, où aucun formulaire n'apparaît).
 
     Le script est sûr si le formulaire est absent : init() sort immédiatement
     si #matching-form-wrap est introuvable dans le DOM.
 
     defer : non-bloquant, exécuté après le parsing du DOM.
 #}
-{% if app.user and not (isArtist is defined and isArtist and profileComplete is defined and profileComplete) %}
+{% if (profileComplete is not defined or not profileComplete) and (swipeLimitReached is not defined or not swipeLimitReached) %}
     <script src="{{ asset('js/matching-form.js') }}" defer></script>
 {% endif %}
 {% endblock %}

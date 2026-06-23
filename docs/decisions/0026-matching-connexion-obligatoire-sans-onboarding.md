@@ -42,12 +42,33 @@ sur la home) et l'ADR-0023 (profil complet obligatoire pour le matching).
    - Écarté : impossible de rattacher les matchs/alertes à un compte, pas de
      persistance, contraire au besoin de connexion exprimé.
 
+## Mise à jour (2026-06-23) — accroche par le formulaire
+
+Ajustement de la mise en œuvre côté visiteur, sans changer le principe (« connexion
+obligatoire pour accéder au matching ») :
+
+- Le visiteur non connecté **revoit le formulaire de matching** (accroche / engagement)
+  au lieu d'un simple CTA.
+- Mais dès le clic sur **« Continuer »**, comme il n'est pas connecté, il est
+  **redirigé vers la page d'inscription** (`/register?intent=artist`). Ses réponses
+  de l'étape sont d'abord **sauvegardées en session** (best-effort) pour pré-remplir
+  l'inscription/onboarding.
+- Mise en œuvre : `HomeController` prépare le formulaire dès que le profil n'est pas
+  complet (`$needsMatchingForm = !$profileComplete`, visiteurs inclus) ;
+  `matching-form.js` redirige le visiteur au clic « Continuer »
+  (`data-register-url`) ; filet de sécurité sans JS conservé (Flux A de
+  `MatchingFormController` : POST → session → redirection inscription).
+
+Le point 1 de la décision ci-dessous est donc nuancé : on ne montre plus un CTA nu au
+visiteur, mais le formulaire lui-même — l'accès reste verrouillé par l'inscription.
+
 ## Décision
 
 **Option 2 retenue.** Règles :
 
-1. **Connexion obligatoire** : la section matching n'affiche plus le formulaire aux
-   visiteurs non connectés → CTA d'inscription/connexion à la place.
+1. **Connexion obligatoire** : l'accès réel au matching est verrouillé par
+   l'inscription. (Mise à jour 2026-06-23 : le visiteur voit le formulaire en accroche,
+   mais le clic « Continuer » le redirige vers l'inscription — cf. section ci-dessus.)
 2. **Pas d'onboarding obligatoire** : tout utilisateur connecté au profil non
    complet voit le formulaire de matching et peut le remplir directement. La
    soumission (Flux B) enregistre le profil via `OnboardingService` et accorde

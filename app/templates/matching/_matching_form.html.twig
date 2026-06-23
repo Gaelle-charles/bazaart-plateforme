@@ -79,6 +79,9 @@
     id="matching-form-wrap"
     data-logged-in="{{ matchingForm_isLoggedIn ? 'true' : 'false' }}"
     data-step-url="{{ path('app_matching_form_step') }}"
+    {# URL d'inscription : lue par matching-form.js pour rediriger un visiteur
+       non connecté dès le clic sur "Continuer" (cf. ADR-0026). #}
+    data-register-url="{{ path('app_register', { intent: 'artist' }) }}"
     aria-label="Formulaire de matching en plusieurs étapes"
 >
 

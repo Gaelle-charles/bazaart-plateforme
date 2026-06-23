@@ -263,24 +263,23 @@ final class HomeController extends AbstractController
             // swipeRecordViewCsrf : déjà généré ci-dessus dans le bloc paywall Lot D.
         }
 
-        // ── Données pour le formulaire matching home (utilisateur connecté sans profil complet) ──
+        // ── Données pour le formulaire matching home ──────────────────────────────
         //
-        // NOUVELLE RÈGLE (juin 2026, décision Gaëlle) :
-        //   La connexion est désormais OBLIGATOIRE pour accéder au matching.
-        //   Le template (Twig) gère l'affichage d'un CTA "Connecte-toi" pour les visiteurs
-        //   non connectés. Ce controller NE prépare le formulaire QUE pour les connectés.
+        // RÈGLE (ADR-0026, ajustée juin 2026) :
+        //   Le formulaire de matching est affiché à TOUS ceux qui n'ont pas encore un
+        //   profil complet : les VISITEURS non connectés ET les utilisateurs connectés
+        //   au profil incomplet. La différence de comportement est gérée côté JS
+        //   (matching-form.js) :
+        //     - visiteur non connecté → au clic "Continuer", redirigé vers l'inscription ;
+        //     - utilisateur connecté  → remplit et valide le formulaire normalement.
         //
-        // Cas où le formulaire est préparé :
-        //   - Utilisateur CONNECTÉ dont le profil de matching n'est pas encore complet,
-        //     qu'il ait ou non le rôle ROLE_ARTIST.
-        //     → $profileComplete vaut false pour un connecté sans ROLE_ARTIST (valeur
-        //       par défaut initialisée en haut de la méthode ; le bloc ROLE_ARTIST ci-dessus
-        //       ne s'est pas exécuté pour lui).
+        // Cas où le formulaire est préparé : profil PAS complet (visiteur OU connecté
+        //   incomplet). $profileComplete vaut false par défaut (initialisé en haut de la
+        //   méthode) et n'est mis à true que pour un artiste connecté au profil complet.
         //
         // Cas où le formulaire N'est PAS préparé (aucun chargement SQL inutile) :
-        //   - Visiteur non connecté : le Twig affiche le CTA de connexion.
-        //   - Artiste connecté avec profil complet : le Twig affiche la section swipe.
-        $needsMatchingForm = ($user instanceof User) && !$profileComplete;
+        //   - Artiste connecté avec profil complet → le Twig affiche la section swipe.
+        $needsMatchingForm = !$profileComplete;
         $matchingFormDisciplines = $needsMatchingForm
             ? $this->disciplineRepository->findAll()
             : [];
@@ -307,9 +306,10 @@ final class HomeController extends AbstractController
         $matchingForm_location    = '';
 
         if ($needsMatchingForm) {
-            // Ici, $needsMatchingForm = ($user instanceof User) && !$profileComplete,
-            // donc PHPStan sait que $user est nécessairement un User à ce stade.
-            // Pas de vérification instanceof supplémentaire nécessaire.
+            // ATTENTION : $needsMatchingForm = !$profileComplete → ce bloc s'exécute
+            // AUSSI pour un VISITEUR non connecté ($user peut être null). On garde donc
+            // impérativement les vérifications "$user instanceof User" avant tout accès
+            // au profil artiste (sinon null->getArtistProfile() = erreur fatale).
 
             // Priorité 1 : données en session (saisie en cours)
             $sessionDisplayName = $matchingFormSessionData['display_name'] ?? null;
@@ -317,7 +317,7 @@ final class HomeController extends AbstractController
 
             if ($sessionDisplayName !== null && $sessionDisplayName !== '') {
                 $matchingForm_displayName = $sessionDisplayName;
-            } elseif ($user->getArtistProfile() !== null) {
+            } elseif ($user instanceof User && $user->getArtistProfile() !== null) {
                 // Priorité 2 : valeur existante en BDD (profil artiste partiel).
                 // getDisplayName() retourne string (non nullable) → on compare à '' directement.
                 $existingDisplayName = $user->getArtistProfile()->getDisplayName();
@@ -326,7 +326,7 @@ final class HomeController extends AbstractController
 
             if ($sessionLocation !== null && $sessionLocation !== '') {
                 $matchingForm_location = $sessionLocation;
-            } elseif ($user->getArtistProfile() !== null) {
+            } elseif ($user instanceof User && $user->getArtistProfile() !== null) {
                 // Priorité 2 : valeur existante en BDD (profil artiste partiel).
                 // getLocation() retourne ?string → null si non renseigné.
                 $existingLocation = $user->getArtistProfile()->getLocation();
