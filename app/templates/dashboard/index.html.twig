@@ -147,6 +147,7 @@
     justify-content: center;
     flex-shrink: 0;
     /* Street = carré, pas de border-radius */
+    overflow: hidden; /* nécessaire pour que l'image ne dépasse pas le carré */
 }
 
 /* Zone centrale : greeting + sous-titre */
@@ -1216,9 +1217,17 @@
 ══════════════════════════════════════════════════════════════════════════════ #}
 <div class="db-banner">
 
-    {# Avatar carré — initiales en Archivo Black #}
+    {# Avatar carré — photo de profil si disponible, sinon initiales en Archivo Black #}
     <div class="db-banner__avatar" aria-hidden="true">
-        {{ initials }}
+        {% if user.artistProfile is not null and user.artistProfile.avatarPath is not empty %}
+            {# asset() construit l'URL publique depuis le chemin relatif stocké en BDD
+               (ex: "uploads/avatars/abc123.jpg" → "/uploads/avatars/abc123.jpg") #}
+            <img src="{{ asset(user.artistProfile.avatarPath) }}"
+                 alt=""
+                 style="width:100%; height:100%; object-fit:cover; display:block;">
+        {% else %}
+            {{ initials }}
+        {% endif %}
     </div>
 
     {# Corps central : date + greeting + disciplines + chips rôles #}

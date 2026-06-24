@@ -241,14 +241,28 @@
 <div class="sd-user">
     {% if app.user %}
         {#
-            Initiales : 2 premiers caractères de la partie locale de l'email.
-            |upper pour cohérence visuelle.
-            |e pour l'échappement XSS.
+            Nom d'affichage : pseudo artiste si défini, sinon partie locale de l'email.
+            Initiales : 2 premiers caractères du nom d'affichage.
         #}
-        {% set initials = app.user.email|split('@')|first|slice(0,2)|upper %}
-        <div class="sd-avatar" aria-hidden="true">{{ initials|e }}</div>
+        {% set sidebarDisplayName = (app.user.artistProfile is not null and app.user.artistProfile.displayName is not empty)
+            ? app.user.artistProfile.displayName
+            : app.user.email|split('@')|first %}
+        {% set initials = sidebarDisplayName|slice(0, 2)|upper %}
+
+        {# Avatar : photo de profil si disponible, sinon initiales #}
+        <div class="sd-avatar" aria-hidden="true"
+             style="{% if app.user.artistProfile is not null and app.user.artistProfile.avatarPath is not empty %}padding:0; overflow:hidden;{% endif %}">
+            {% if app.user.artistProfile is not null and app.user.artistProfile.avatarPath is not empty %}
+                <img src="{{ asset(app.user.artistProfile.avatarPath) }}"
+                     alt=""
+                     style="width:100%; height:100%; object-fit:cover; display:block;">
+            {% else %}
+                {{ initials|e }}
+            {% endif %}
+        </div>
         <div style="min-width: 0; flex: 1; overflow: hidden;">
-            <span class="sd-user__name">{{ app.user.email|split('@')|first|e }}</span>
+            {# Affiche le pseudo artiste plutôt que l'email brut #}
+            <span class="sd-user__name">{{ sidebarDisplayName|e }}</span>
             <span class="sd-user__role">Artiste</span>
         </div>
         {# Lien de déconnexion — icône "porte de sortie" SVG #}
