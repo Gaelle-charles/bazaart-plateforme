@@ -16,7 +16,8 @@ use Symfony\Component\Routing\Attribute\Route;
  *
  * Routes :
  *   GET /confidentialite   → app_legal_privacy   (politique de confidentialité)
- *   GET /cgu               → app_legal_cgu        (conditions générales d'utilisation)
+ *   GET /cgu               → app_legal_cgu        (conditions générales d'utilisation + CGV article 11)
+ *   GET /cgv               → app_legal_cgv        (301 → /cgu, CGV intégrées article 11)
  *   GET /mentions-legales  → app_legal_mentions   (mentions légales)
  *
  * Ces routes doivent être ajoutées dans access_control de security.yaml en PUBLIC_ACCESS.
@@ -61,5 +62,24 @@ class LegalController extends AbstractController
     public function mentions(): Response
     {
         return $this->render('legal/mentions.html.twig');
+    }
+
+    /**
+     * Redirection permanente /cgv → /cgu (Article 11).
+     *
+     * Les Conditions Générales de Vente (CGV) sont intégrées directement
+     * dans les CGU à l'Article 11 "Conditions de vente et abonnements".
+     * Cette route redirige en 301 (permanent) pour :
+     *   - Permettre aux utilisateurs de trouver les CGV via /cgv
+     *   - Indiquer aux moteurs de recherche que l'URL canonique est /cgu
+     *
+     * Obligation légale : les CGV doivent être accessibles avant tout achat.
+     * Elles sont affichées sur la page /tarifs (lien) et ici via /cgu#cgu-11.
+     */
+    #[Route('/cgv', name: 'app_legal_cgv')]
+    public function cgv(): Response
+    {
+        // Redirection 301 (Moved Permanently) vers les CGU qui contiennent l'Article 11 (CGV)
+        return $this->redirect($this->generateUrl('app_legal_cgu'), Response::HTTP_MOVED_PERMANENTLY);
     }
 }

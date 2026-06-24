@@ -149,6 +149,30 @@ class StripeService
                     'plan'    => $plan,
                 ],
             ],
+
+            // Activation des codes promotionnels sur la page Checkout Stripe.
+            // Quand ce paramètre est à true, un champ "Code promo" apparaît
+            // automatiquement sur la page de paiement hébergée par Stripe.
+            // Les codes se créent dans le dashboard Stripe :
+            //   Billing → Coupons → Codes de promotion (ex: LAUNCH20)
+            // IMPORTANT : activé uniquement sur les abonnements (pas sur les formations).
+            'allow_promotion_codes' => true,
+
+            // Case à cocher "Accepter les CGU/CGV" — conformité DGCCRF
+            //
+            // Affiche une case à cocher obligatoire sur la page Checkout Stripe :
+            //   "J'accepte les conditions d'utilisation"
+            // Le lien pointe vers l'URL configurée dans le dashboard Stripe :
+            //   Paramètres → Checkout → "URL des conditions d'utilisation"
+            //   → à régler sur https://app.bazaart.fr/cgu
+            //
+            // Fondement légal : Directive 2011/83/UE (art. L.221-28 12° CdC) —
+            // pour les services numériques à exécution immédiate, l'utilisateur
+            // doit consentir EXPLICITEMENT à la renonciation de son droit de
+            // rétractation de 14 jours. Cette case matérialise ce consentement exprès.
+            'consent_collection' => [
+                'terms_of_service' => 'required',
+            ],
         ]);
 
         $this->logger->info('Session Checkout abonnement créée', [
@@ -238,6 +262,16 @@ class StripeService
                 'user_id'    => (string) $user->getId(),
                 'course_id'  => (string) $course->getId(),
                 'course_slug' => $course->getSlug(), // utilisé par paymentSuccess/paymentCancel
+            ],
+
+            // Case à cocher "Accepter les CGU/CGV" — même obligation légale que pour
+            // les abonnements : la formation est un contenu numérique à exécution
+            // immédiate, soumis à l'art. L.221-28 12° du Code de la consommation.
+            // L'URL des CGU doit être configurée dans Stripe :
+            //   Paramètres → Checkout → "URL des conditions d'utilisation"
+            //   → https://app.bazaart.fr/cgu
+            'consent_collection' => [
+                'terms_of_service' => 'required',
             ],
         ]);
 

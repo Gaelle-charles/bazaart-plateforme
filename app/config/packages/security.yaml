@@ -105,6 +105,7 @@ security:
         # LCEN art. 6-III oblige les mentions légales à être accessibles sans restriction.
         - { path: ^/confidentialite, roles: PUBLIC_ACCESS }
         - { path: ^/cgu, roles: PUBLIC_ACCESS }
+        - { path: ^/cgv, roles: PUBLIC_ACCESS }
         - { path: ^/mentions-legales, roles: PUBLIC_ACCESS }
         # Espace structure : réservé aux comptes structure activés (ROLE_STRUCTURE)
         # Note : la vérification isStructurePartner = true est faite dans StructureVoter,

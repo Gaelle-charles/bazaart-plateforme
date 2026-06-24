@@ -19,7 +19,7 @@
     {# ── En-tête ─────────────────────────────────────────────────────────── #}
     <div class="legal-header">
         <h1 class="legal-title">Conditions Générales d'Utilisation</h1>
-        <p class="legal-meta">Version en vigueur depuis : mai 2026</p>
+        <p class="legal-meta">Version en vigueur depuis : juin 2026</p>
         <p class="legal-intro">
             En créant un compte sur <strong>bazaart.fr</strong>, vous acceptez les présentes
             Conditions Générales d'Utilisation. Veuillez les lire attentivement.
@@ -36,9 +36,11 @@
         </p>
 
         <div class="legal-info-block">
-            <p><strong>Raison sociale :</strong> [À COMPLÉTER — raison sociale de l'association]</p>
-            <p><strong>SIRET :</strong> [À COMPLÉTER]</p>
-            <p><strong>Adresse :</strong> [À COMPLÉTER]</p>
+            <p><strong>Raison sociale :</strong> Reines des Temps Modernes (Bazaart)</p>
+            <p><strong>Forme juridique :</strong> Association déclarée (loi 1901)</p>
+            <p><strong>SIRET :</strong> 824 979 991 00026</p>
+            <p><strong>N° RNA :</strong> W9G2004401</p>
+            <p><strong>Adresse :</strong> 26 Lot Les Orangers de Moudong, 97122 Baie-Mahault (Guadeloupe)</p>
             <p><strong>Email :</strong> <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a></p>
         </div>
 
@@ -192,7 +194,7 @@
             Les présentes CGU sont soumises au droit français.
             En cas de litige, les parties s'engagent à rechercher une solution amiable.
             À défaut, les tribunaux compétents seront ceux du ressort de
-            [À COMPLÉTER — ville du siège social de l'association].
+            Pointe-à-Pitre (Guadeloupe).
         </p>
     </section>
 
@@ -205,6 +207,94 @@
             Toute modification significative vous sera notifiée par email au moins
             15 jours avant son entrée en vigueur. La poursuite de l'utilisation
             de la plateforme après ce délai vaut acceptation des nouvelles CGU.
+        </p>
+    </section>
+
+    {# ── Article 11 : Conditions de vente — Abonnements et paiements ────── #}
+    {#
+     # Cet article constitue les Conditions Générales de Vente (CGV) intégrées
+     # aux CGU. Obligation légale française (Code de la consommation) pour toute
+     # activité de vente de services numériques. La route /cgv redirige ici.
+    #}
+    <section class="legal-section" aria-labelledby="cgu-11">
+        <h2 id="cgu-11" class="legal-h2">Article 11 — Conditions de vente et abonnements</h2>
+
+        <p>
+            La plateforme Bazaart propose des abonnements payants donnant accès
+            aux fonctionnalités premium. Ces conditions s'appliquent à tout achat
+            effectué sur <strong>app.bazaart.fr</strong>.
+        </p>
+
+        {# ── 11.1 Offres disponibles ─────────────────────────────────────── #}
+        <h3 class="legal-h3">11.1 Offres disponibles</h3>
+
+        <div class="legal-info-block">
+            <p><strong>Abonnement Mensuel :</strong> 9,90€ TTC par mois</p>
+            <p><strong>Abonnement Annuel :</strong> 79€ TTC par an (soit 6,58€/mois)</p>
+        </div>
+
+        <p>
+            L'abonnement donne accès à la Ressourcerie complète (opportunités, alertes),
+            au forum communautaire et à la messagerie privée.
+            Il n'inclut <strong>pas</strong> les formations, dont l'accès fait l'objet d'un
+            paiement séparé par formation.
+        </p>
+
+        {# ── 11.2 Renouvellement automatique ─────────────────────────────── #}
+        <h3 class="legal-h3">11.2 Renouvellement automatique</h3>
+
+        <p>
+            L'abonnement est renouvelé automatiquement à la fin de chaque période
+            (mensuelle ou annuelle). Le prélèvement est effectué par notre prestataire
+            de paiement Stripe. Vous serez prélevé du même montant sauf modification
+            tarifaire notifiée par email au moins <strong>30 jours à l'avance</strong>.
+        </p>
+
+        {# ── 11.3 Résiliation ────────────────────────────────────────────── #}
+        <h3 class="legal-h3">11.3 Résiliation</h3>
+
+        <p>
+            Vous pouvez résilier votre abonnement à tout moment depuis votre
+            <a href="{{ path('app_subscription_manage') }}">espace abonnement</a>.
+            La résiliation prend effet à la fin de la période en cours ; vous conservez
+            l'accès jusqu'à cette date. <strong>Aucun remboursement au prorata</strong>
+            n'est effectué pour la période restante.
+        </p>
+
+        {# ── 11.4 Droit de rétractation ──────────────────────────────────── #}
+        <h3 class="legal-h3">11.4 Droit de rétractation</h3>
+
+        <p>
+            Conformément à l'article L.221-28 12° du Code de la consommation,
+            le droit de rétractation de 14 jours <strong>ne s'applique pas</strong>
+            aux contenus et services numériques dont l'exécution a commencé avec
+            l'accord exprès du consommateur et sa renonciation expresse à son droit
+            de rétractation.
+        </p>
+        <p>
+            En souscrivant à un abonnement Bazaart et en bénéficiant immédiatement
+            de l'accès à la plateforme, vous reconnaissez avoir expressément accepté
+            la fourniture immédiate du service et renoncé à votre droit de rétractation.
+        </p>
+
+        {# ── 11.5 Paiement sécurisé ──────────────────────────────────────── #}
+        <h3 class="legal-h3">11.5 Paiement sécurisé</h3>
+
+        <p>
+            Les paiements sont traités par <strong>Stripe</strong>
+            (<a href="https://stripe.com" target="_blank" rel="noopener">stripe.com</a>),
+            prestataire de services de paiement agréé par l'ACPR.
+            Bazaart ne stocke jamais vos coordonnées bancaires.
+            Toutes les transactions sont chiffrées (TLS/HTTPS).
+        </p>
+
+        {# ── 11.6 Réclamations ───────────────────────────────────────────── #}
+        <h3 class="legal-h3">11.6 Réclamations</h3>
+
+        <p>
+            Pour toute réclamation relative à un paiement ou un abonnement,
+            contactez-nous à <a href="mailto:contact@bazaart.fr">contact@bazaart.fr</a>.
+            Nous nous engageons à vous répondre sous 5 jours ouvrés.
         </p>
     </section>
 
@@ -228,6 +318,8 @@
 .legal-list li { font-size: 14px; line-height: 1.65; color: var(--ink, #0D0D0D); margin-bottom: 8px; }
 .legal-info-block { background: rgba(13,13,13,.04); border: 1px solid rgba(13,13,13,.12); padding: 16px 20px; margin: 16px 0; }
 .legal-info-block p { margin-bottom: 6px; }
+/* Sous-titres des sections numérotées (ex: 11.1, 11.2…) */
+.legal-h3 { font-family: var(--display, 'Archivo Black', sans-serif); font-size: 15px; color: var(--ink, #0D0D0D); margin: 20px 0 10px; }
 .legal-page a { color: var(--ink, #0D0D0D); text-decoration: underline; text-decoration-color: var(--accent, #FFCB10); text-underline-offset: 2px; }
 .legal-page a:hover { background: var(--accent, #FFCB10); text-decoration: none; }
 @media (max-width: 767px) { .legal-page { padding: 16px 0; } .legal-title { font-size: 22px; } }
