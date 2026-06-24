@@ -213,6 +213,29 @@
         }
     }
 
+    /* Sur mobile étroit : barre de filtres en colonne unique (A-3)
+       Les selects ont min-width:130px ce qui force un wrapping aléatoire.
+       En dessous de 560px, on passe tout en colonne pleine largeur. */
+    @media (max-width: 560px) {
+        .filter-bar__select,
+        .filter-bar__search {
+            min-width: 0;
+            width: 100%;
+            border-right: none;
+            border-bottom: 1px solid var(--line-soft);
+        }
+
+        .filter-bar__row,
+        .filter-bar__row2 {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .filter-bar__submit {
+            width: 100%;
+        }
+    }
+
     /* Card grille : flex colonne, bordures droite + bas partagees */
     .grid-card {
         display: flex;

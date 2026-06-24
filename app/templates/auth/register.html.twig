@@ -28,9 +28,10 @@
 <style>
 
     /* ── Reset hauteur pour le full-screen ── */
+    /* overflow:hidden déplacé vers .auth-layout (pas sur html/body)
+       pour éviter de bloquer le scroll sur mobile avec clavier virtuel */
     html, body {
         height: 100%;
-        overflow: hidden;
     }
 
     /* ══════════════════════════════════════════════════════════════
@@ -38,6 +39,7 @@
      * Même structure que login.html.twig pour cohérence visuelle
      * ══════════════════════════════════════════════════════════════ */
     .auth-layout {
+        overflow: hidden; /* contient le layout sans bloquer le scroll du document */
         display: flex;
         height: 100vh;
         background: var(--bg);
@@ -178,7 +180,7 @@
 
     .auth-title {
         font-family: var(--display);
-        font-size: 40px;
+        font-size: clamp(28px, 8vw, 40px); /* clamp() pour mobile : 28px min → 40px max */
         line-height: 1;
         letter-spacing: -.01em;
         color: var(--ink);
@@ -409,10 +411,7 @@
      * RESPONSIVE — mobile-first
      * ══════════════════════════════════════════════════════════════ */
     @media (max-width: 768px) {
-        html, body {
-            height: auto;
-            overflow: auto;
-        }
+        /* html/body n'ont plus overflow:hidden — pas besoin de reset ici */
 
         .auth-layout {
             flex-direction: column;
@@ -543,7 +542,7 @@
 
             {# ── Séparateur ── #}
             <div class="auth-divider" aria-hidden="true">
-                <span class="auth-divider__text">— ou —</span>
+                <span class="auth-divider__text">ou</span>
             </div>
 
             {# ══════════════════════════════════════════════════════════════════

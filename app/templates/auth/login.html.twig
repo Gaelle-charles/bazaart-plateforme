@@ -28,17 +28,19 @@
        Archivo Black 400 et Space Grotesk 400 sont les plus critiques. */
 
     /* ── Reset hauteur pour le full-screen ── */
-    /* overflow:hidden évite l'apparition d'une scrollbar sur le body
-       quand le layout prend exactement 100vh */
+    /* height:100% sur html/body permet au 100vh de l'enfant de fonctionner.
+       overflow:hidden est déplacé vers .auth-layout (C-1 mobile fix) :
+       mettre overflow:hidden sur html bloque le scroll du document entier,
+       ce qui piège les formulaires sous clavier virtuel sur iPhone/Android. */
     html, body {
         height: 100%;
-        overflow: hidden;
     }
 
     /* ══════════════════════════════════════════════════════════════
      * LAYOUT — deux colonnes 50/50 pleine hauteur
      * ══════════════════════════════════════════════════════════════ */
     .auth-layout {
+        overflow: hidden; /* contient le layout sans bloquer le scroll du document */
         display: flex;
         height: 100vh;
         /* background global = --bg du thème Street (#F2EFE6) */
@@ -171,10 +173,10 @@
         gap: var(--space-sm);
     }
 
-    /* Titre principal "Connexion" */
+    /* Titre principal "Connexion" — clamp() pour éviter le dépassement sur petits écrans */
     .auth-title {
         font-family: var(--display);  /* Archivo Black */
-        font-size: 40px;
+        font-size: clamp(28px, 8vw, 40px);
         line-height: 1;
         letter-spacing: -.01em;
         color: var(--ink);
@@ -349,11 +351,8 @@
      * la colonne décorative se réduit à un bandeau compact
      * ══════════════════════════════════════════════════════════════ */
     @media (max-width: 768px) {
-        /* Plus de full-screen figé sur mobile */
-        html, body {
-            height: auto;
-            overflow: auto;
-        }
+        /* Sur mobile, .auth-layout devient hauteur naturelle —
+           plus besoin de reset html/body car overflow est maintenant sur .auth-layout */
 
         .auth-layout {
             flex-direction: column;
@@ -490,7 +489,7 @@
 
             {# ── Séparateur visuel "— ou —" ── #}
             <div class="auth-divider" aria-hidden="true">
-                <span class="auth-divider__text">— ou —</span>
+                <span class="auth-divider__text">ou</span>
             </div>
 
             {# ══════════════════════════════════════════════════════════════════

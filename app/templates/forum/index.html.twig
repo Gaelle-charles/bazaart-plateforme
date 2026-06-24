@@ -300,11 +300,13 @@
     /* Titre du thread en Archivo Black */
     .fi-thread-card__title {
         font-family: var(--display);
-        font-size: 22px;
+        font-size: clamp(17px, 4vw, 22px); /* adaptatif sur mobile */
         line-height: 1.1;
         margin: 0 0 6px;
         text-transform: none;
         color: var(--ink);
+        word-break: break-word;       /* casse les mots sans espaces (URLs, hashtags) */
+        overflow-wrap: break-word;
     }
 
     /* Extrait du contenu : mono discret, tronqué */
@@ -322,7 +324,7 @@
     }
     .fi-thread-card__thumb img {
         display: block;
-        max-width: 220px;
+        max-width: min(220px, 100%); /* ne dépasse jamais la largeur du conteneur sur mobile */
         max-height: 140px;
         width: auto;
         height: auto;

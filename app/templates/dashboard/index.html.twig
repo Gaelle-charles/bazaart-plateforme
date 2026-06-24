@@ -895,6 +895,27 @@
     .db-quicklinks {
         grid-template-columns: 1fr 1fr;
     }
+
+    /* Ligne événement : la colonne "bouton" devient trop étroite avec 3 colonnes fixes
+       On passe en 2 colonnes (date + info) et le bouton descend sous l'info */
+    .db-event-row {
+        grid-template-columns: 60px 1fr;
+        grid-template-rows: auto auto;
+    }
+
+    .db-event-access,
+    .db-event-cancel-btn,
+    .db-event-cancel-unavail {
+        grid-column: 2; /* aligne avec la colonne info */
+        justify-self: start;
+        margin-top: 6px;
+    }
+
+    /* Nom d'utilisateur long dans la bannière */
+    .db-banner__greeting {
+        overflow-wrap: break-word;
+        word-break: break-word;
+    }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -950,6 +971,7 @@
     text-transform: uppercase;
     text-decoration: none;
     border-radius: 0;
+    white-space: nowrap; /* ne coupe pas "Découvrir l'abonnement" sur 2 lignes sur mobile */
     transition: background var(--transition-fast), color var(--transition-fast);
 }
 .db-subscription__btn:hover {
@@ -1494,7 +1516,7 @@
                                  # L'utilisateur doit contacter l'équipe pour les cas exceptionnels.
                                  #}
                                 <span class="db-event-cancel-unavail"
-                                      title="Délai de remboursement dépassé — contactez l'équipe Bazaart pour une demande exceptionnelle">
+                                      title="Délai de remboursement dépassé : contactez l'équipe Bazaart pour une demande exceptionnelle">
                                     Annulation non remboursable
                                 </span>
                             {% else %}

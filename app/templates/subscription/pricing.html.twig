@@ -302,7 +302,12 @@
         }
 
         .pr-price__amount {
-            font-size: 56px;
+            font-size: clamp(40px, 14vw, 56px); /* adaptatif : 40px min sur 320px */
+        }
+
+        /* Titre géant : plancher de 72px trop imposant sur mobile */
+        .pr-title {
+            font-size: clamp(40px, 12vw, 72px);
         }
     }
     </style>

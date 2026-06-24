@@ -672,6 +672,10 @@
             .nav-tabs { display: none; }
             .nav-hamburger { display: flex; }
             .nav-side { border-left: 0; padding: 0 8px; gap: 6px; }
+            /* Masquer les boutons Connexion/Rejoindre dans la nav-side sur mobile :
+               ils sont déjà disponibles dans le menu hamburger (.nav-mobile).
+               Évite le surencombrement de la barre sur iPhone SE (375px). */
+            .nav-btn { display: none; }
         }
     </style>
 
@@ -766,7 +770,7 @@
     <div class="nav-inner">
 
         {# ── Logo : bloc fond NOIR à gauche, image verte ─────────────────── #}
-        <a href="{{ path('app_home') }}" class="nav-logo" aria-label="BazaArt — accueil">
+        <a href="{{ path('app_home') }}" class="nav-logo" aria-label="BazaArt, accueil">
             {# Deux variantes : BLANCHE (navbar transparente, sur le hero) et NOIRE
                (au scroll / fond clair). Le basculement est géré en CSS selon l'état
                de la navbar. Le lecteur d'écran n'annonce que l'image visible. #}
@@ -1124,7 +1128,7 @@
      ">
 
     {# Texte informatif #}
-    <div style="flex: 1; min-width: 280px;">
+    <div style="flex: 1; min-width: 0;"> {# min-width:0 permet au flex-item de rétrécir sous 280px sur mobile #}
         <span id="cookie-banner-title"
               style="font-family: var(--mono, 'JetBrains Mono', monospace);
                      font-size: 10px;

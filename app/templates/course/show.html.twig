@@ -340,7 +340,7 @@
                         <form method="POST" action="{{ path('app_course_enroll', {slug: course.slug}) }}"
                               aria-label="S'inscrire à l'événement gratuit">
                             <input type="hidden" name="_token" value="{{ csrf_token('enroll_' ~ course.id) }}">
-                            <button type="submit" class="cf-btn">S'inscrire — Gratuit</button>
+                            <button type="submit" class="cf-btn">S'inscrire (gratuit)</button>
                         </form>
                     {% endif %}
 
