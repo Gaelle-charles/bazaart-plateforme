@@ -671,7 +671,9 @@
             /* Sur mobile, les onglets disparaissent → hamburger prend le relais */
             .nav-tabs { display: none; }
             .nav-hamburger { display: flex; }
-            .nav-side { border-left: 0; padding: 0 8px; gap: 6px; }
+            /* margin-left: auto pousse .nav-side à droite maintenant que .nav-tabs
+               (flex:1) est masqué — sans ça le hamburger reste collé au logo */
+            .nav-side { border-left: 0; padding: 0 8px; gap: 6px; margin-left: auto; }
             /* Masquer les boutons Connexion/Rejoindre dans la nav-side sur mobile :
                ils sont déjà disponibles dans le menu hamburger (.nav-mobile).
                Évite le surencombrement de la barre sur iPhone SE (375px). */
