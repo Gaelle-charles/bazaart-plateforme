@@ -470,7 +470,7 @@
                                required
                                autocomplete="off"
                                value="{{ formData['title'] ?? '' }}"
-                               placeholder="Ex : Résidence de création — Villa Médicis 2026">
+                               placeholder="Ex : Résidence de création, Villa Médicis 2026">
                     </div>
 
                     {# Type de ressource #}
@@ -479,7 +479,7 @@
                             Type de ressource
                         </label>
                         <select class="field-select" id="resourceTypeId" name="resourceTypeId" required>
-                            <option value="">— Sélectionner un type —</option>
+                            <option value="">Sélectionner un type</option>
                             {% for type in types %}
                                 <option value="{{ type.id }}"
                                         {{ (formData['resourceTypeId'] ?? '') == type.id ? 'selected' : '' }}>
@@ -499,7 +499,7 @@
                                   name="description"
                                   required
                                   placeholder="Décris la ressource, les critères d'éligibilité, les modalités de candidature…">{{ formData['description'] ?? '' }}</textarea>
-                        <span class="field-hint">Sois précis·e — une bonne description aide les artistes à évaluer rapidement si l'opportunité leur correspond.</span>
+                        <span class="field-hint">Sois précis·e : une bonne description aide les artistes à évaluer rapidement si l'opportunité leur correspond.</span>
                     </div>
 
                 </div>

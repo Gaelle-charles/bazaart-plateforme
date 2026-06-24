@@ -385,7 +385,7 @@
                             <li>
                                 <a href="{{ path('app_course_lesson', {slug: course.slug, lessonId: lesson.id}) }}"
                                    class="cf-learn__lesson cf-learn__lesson--{{ lessonStatus }}"
-                                   aria-label="{{ lesson.title|e }} — {{ lessonStatus == 'completed' ? 'terminée' : (lessonStatus == 'started' ? 'en cours' : 'non commencée') }}">
+                                   aria-label="{{ lesson.title|e }}, {{ lessonStatus == 'completed' ? 'terminée' : (lessonStatus == 'started' ? 'en cours' : 'non commencée') }}">
 
                                     {# Indicateur de statut : check, tiret, ou vide #}
                                     <span class="cf-learn__lesson-status" aria-hidden="true">
