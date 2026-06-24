@@ -940,6 +940,22 @@
         font-size: 10px;
         color: var(--ink-mute);
     }
+
+    /* ── Barre de navigation mobile : surcharge couleur structure ──────────── */
+    /*
+     * La CSS de base_dashboard.html.twig utilise --accent (vert acide) pour
+     * l'indicateur actif. Pour la structure, on surcharge avec --accent-2 (orange)
+     * pour rester cohérent avec l'identité visuelle du dashboard structure.
+     */
+    .sd-link--active {
+        border-top-color: var(--accent-2);
+        color: var(--accent-2);
+        background: rgba(255, 107, 44, .07); /* orange très transparent */
+    }
+
+    .sd-link--active:hover {
+        background: rgba(255, 107, 44, .12);
+    }
 }
 
 </style>
