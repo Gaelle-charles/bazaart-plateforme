@@ -440,39 +440,134 @@
 
 .sd-overlay--visible { display: block; }
 
-/* ── Responsive mobile (< 768px) ────────────────────────────────────────── */
+/* ── Responsive mobile (< 768px) — barre de navigation basse ────────────── */
 /*
- * Sur mobile :
- * - Sidebar masqué hors écran (translateX(-100%)), glisse via JS
- * - Zone principale prend 100% de largeur (margin-left: 0)
- * - Hamburger visible
- * - Padding réduit dans la topbar et le contenu
+ * Sur mobile, la sidebar latérale devient une barre de navigation fixée en bas.
+ * Pattern "bottom tab bar" — courant sur iOS/Android.
+ *
+ * Ce qui change :
+ *   - .sd-side : passe de "panneau vertical 220px" à "barre horizontale 60px en bas"
+ *   - .sd-nav  : flex-direction row, scrollable si les liens débordent
+ *   - .sd-link : colonne icône + label court, border-top en indicateur actif
+ *   - .sd-logo / .sd-user / .sd-section : masqués (pas de place dans 60px)
+ *   - .sd-topbar__hamburger : masqué (la barre basse remplace le panneau hamburger)
+ *   - .sd-overlay : inutile (plus de panneau glissant)
+ *   - .sd-content : padding-bottom 60px pour ne pas se cacher sous la barre
  */
 @media (max-width: 767px) {
 
-    /* Sidebar masqué, glisse de la gauche */
+    /* ── Barre basse fixe ── */
     .sd-side {
-        transform: translateX(-100%);
+        /* Repositionnement : plus de colonne gauche, barre collée au bas de l'écran */
+        top: auto;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        min-height: 0;
+        height: 60px;
+        /* Flex horizontal au lieu de vertical */
+        flex-direction: row;
+        align-items: stretch;
+        /* Pas de slide-in : la barre est toujours visible */
+        transform: none;
+        /* Scroll horizontal si les liens débordent (10 liens sur petits écrans) */
+        overflow-x: auto;
+        overflow-y: hidden;
+        /* Séparateur discret en haut */
+        border-top: 1px solid rgba(242,239,230,.2);
+        /* Transition supprimée (inutile, plus de slide) */
+        transition: none;
     }
 
-    /* Sidebar ouvert via JS (classe ajoutée par le script hamburger) */
+    /* Classe --open inutile mais on s'assure qu'elle ne perturbe pas */
     .sd-side--open {
-        transform: translateX(0);
+        transform: none;
     }
 
-    /* La zone principale prend toute la largeur (pas d'offset sidebar) */
+    /* Logo, labels de section et bloc utilisateur masqués dans la barre basse */
+    .sd-logo,
+    .sd-section,
+    .sd-user {
+        display: none;
+    }
+
+    /* Sections de nav en ligne, sans habillage */
+    .sd-nav {
+        flex-direction: row;
+        align-items: stretch;
+        flex-wrap: nowrap;
+    }
+
+    /* ── Liens : icône au-dessus + label court ── */
+    .sd-link {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 10px;
+        gap: 3px;
+        /* Label très court sur mobile */
+        font-size: 9px;
+        letter-spacing: .03em;
+        white-space: nowrap;
+        min-width: 58px;
+        /* Indicateur actif : bordure haute à la place de gauche */
+        border-left: none;
+        border-top: 2px solid transparent;
+        position: relative; /* pour le badge en absolu */
+    }
+
+    .sd-link:hover {
+        background: rgba(242,239,230,.07);
+        border-left-color: transparent;
+    }
+
+    .sd-link--active {
+        border-left-color: transparent;
+        border-top-color: var(--accent); /* vert acide en haut = actif */
+        color: var(--accent);
+        background: rgba(255,203,16,.07);
+    }
+
+    .sd-link--active:hover {
+        background: rgba(255,203,16,.10);
+    }
+
+    /* Badge notifications : repositionné en pastille absolue sur l'icône */
+    .sd-badge {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        font-size: 7px;
+        padding: 1px 4px;
+        min-width: 14px;
+        text-align: center;
+        margin-left: 0;
+    }
+
+    /* ── Zone principale ── */
+    /* margin-left: 0 car la sidebar n'est plus à gauche */
     .sd-main {
         margin-left: 0;
     }
 
-    /* Hamburger visible sur mobile */
-    .sd-topbar__hamburger {
-        display: flex;
+    /* padding-bottom = hauteur de la barre basse pour ne pas masquer le contenu */
+    .sd-content {
+        padding: 16px 16px 76px; /* 16px normal + 60px barre + petit extra */
     }
 
-    /* Paddings réduits sur mobile */
+    /* Hamburger masqué — la barre basse remplace le panneau glissant */
+    .sd-topbar__hamburger {
+        display: none;
+    }
+
+    /* Overlay inutile (plus de panneau glissant) */
+    .sd-overlay {
+        display: none !important;
+    }
+
+    /* Paddings topbar et flash réduits */
     .sd-topbar { padding: 0 16px; }
-    .sd-content { padding: 16px; }
     .sd-flash   { margin: 8px 16px 0; }
 }
 
