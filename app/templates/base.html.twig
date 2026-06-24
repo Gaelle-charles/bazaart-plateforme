@@ -1259,6 +1259,12 @@
         if (banner) {
             banner.style.display = 'none';
         }
+
+        /* Si l'utilisateur vient d'accepter, charger Google Analytics immédiatement.
+         * Sans ça, GA ne se chargerait qu'à la prochaine visite (après rechargement). */
+        if (value === 'accepted' && typeof window._bzrtLoadGA === 'function') {
+            window._bzrtLoadGA();
+        }
     };
 
     /* Au chargement de la page : afficher la bannière si pas encore de consentement */
@@ -1267,6 +1273,67 @@
         banner.style.display = 'flex';
     }
 
+}());
+</script>
+
+{# ══════════════════════════════════════════════════════════════════════════════
+ # GOOGLE ANALYTICS 4 — Chargement conditionnel au consentement RGPD
+ #
+ # Le script GA ne se charge JAMAIS avant que l'utilisateur ait cliqué "Accepter"
+ # sur la bannière cookie. C'est obligatoire depuis le RGPD (art. 82 LIL / ePrivacy).
+ #
+ # Deux cas gérés :
+ #   1. L'utilisateur a déjà accepté lors d'une session précédente
+ #      → getCookie('cookie_consent') === 'accepted' → chargement immédiat
+ #   2. L'utilisateur vient d'accepter sur cette page
+ #      → cookieConsent('accepted') appelle window._bzrtLoadGA() ci-dessus
+ # ══════════════════════════════════════════════════════════════════════════════ #}
+<script>
+(function () {
+    var GA_ID = 'G-3X14NKYMLG'; /* ID de mesure de la propriété app.bazaart.fr */
+
+    /* Initialise le dataLayer et la fonction gtag SANS déclencher de requête réseau.
+     * gtag() empile des commandes que le vrai script GA traitera une fois chargé. */
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { window.dataLayer.push(arguments); }
+    window.gtag = gtag;
+
+    /**
+     * Charge dynamiquement le script GA4 et configure la propriété.
+     * Utilise document.createElement pour éviter tout chargement avant consentement.
+     * Un flag _gaLoaded évite les doubles chargements si la fonction est appelée deux fois.
+     */
+    function loadGA() {
+        if (window._gaLoaded) { return; }
+        window._gaLoaded = true;
+
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(script);
+
+        /* Configure la propriété : envoie un hit de page vue */
+        gtag('js', new Date());
+        gtag('config', GA_ID);
+    }
+
+    /* Expose la fonction pour que cookieConsent() puisse l'appeler immédiatement */
+    window._bzrtLoadGA = loadGA;
+
+    /* Lecture du cookie de consentement (même logique que la bannière ci-dessus) */
+    function getCookieLocal(name) {
+        var parts = document.cookie.split('; ');
+        for (var i = 0; i < parts.length; i++) {
+            var kv = parts[i].split('=');
+            if (kv[0] === name) { return decodeURIComponent(kv[1]); }
+        }
+        return null;
+    }
+
+    /* Si l'utilisateur avait déjà accepté → GA se charge dès l'ouverture de la page */
+    if (getCookieLocal('cookie_consent') === 'accepted') {
+        loadGA();
+    }
 }());
 </script>
 
