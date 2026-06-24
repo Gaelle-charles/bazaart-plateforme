@@ -188,8 +188,17 @@
                 Avatar orange pour la structure (--accent-2) au lieu du vert artiste (--accent).
                 Style inline pour surcharger la couleur de .sd-avatar sans créer une classe dédiée.
             #}
-            <div class="sd-avatar" style="background: var(--accent-2); border-color: var(--accent-2);" aria-hidden="true">
-                {{ initials|e }}
+            {# Avatar sidebar : logo si disponible, sinon initiales (orange = couleur structure) #}
+            <div class="sd-avatar"
+                 style="background: var(--accent-2); border-color: var(--accent-2);{% if orgProfile is defined and orgProfile is not null and orgProfile.logoPath is not empty %} padding:0; overflow:hidden;{% endif %}"
+                 aria-hidden="true">
+                {% if orgProfile is defined and orgProfile is not null and orgProfile.logoPath is not empty %}
+                    <img src="{{ asset(orgProfile.logoPath) }}"
+                         alt=""
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                {% else %}
+                    {{ initials|e }}
+                {% endif %}
             </div>
             <div style="min-width: 0; flex: 1; overflow: hidden;">
                 <span class="sd-user__name">{{ orgName|e }}</span>
@@ -284,6 +293,7 @@
     justify-content: center;
     flex-shrink: 0;
     /* Street = carré, pas de border-radius */
+    overflow: hidden; /* contient l'image dans le carré sans débordement */
 }
 
 /* Corps central : eyebrow + nom + meta + chips */
@@ -977,9 +987,15 @@
 ══════════════════════════════════════════════════════════════════════════════ #}
 <div class="str-banner">
 
-    {# Avatar carré : initiales de la structure en Archivo Black #}
+    {# Avatar carré : logo de la structure si disponible, sinon initiales #}
     <div class="str-banner__avatar" aria-hidden="true">
-        {{ initials }}
+        {% if orgProfile.logoPath is not empty %}
+            <img src="{{ asset(orgProfile.logoPath) }}"
+                 alt=""
+                 style="width:100%; height:100%; object-fit:cover; display:block;">
+        {% else %}
+            {{ initials }}
+        {% endif %}
     </div>
 
     {# Corps central #}
