@@ -9,6 +9,7 @@ use App\DTO\Onboarding\OnboardingStep3DTO;
 use App\DTO\Onboarding\OnboardingStep4MatchingDTO;
 use App\Entity\User;
 use App\Enum\ArtistLookingFor;
+use App\Enum\Country;
 use App\Enum\LegalStatus;
 use App\Repository\DisciplineRepository;
 use App\Service\MatchingFormSessionService;
@@ -177,6 +178,9 @@ class OnboardingController extends AbstractController
             // Le template les utilise pour pré-sélectionner les disciplines si le profil
             // n'existe pas encore (premier passage à l'étape 2).
             'matching_session_data' => $matchingSessionData,
+            // Liste des pays européens triés alphabétiquement pour le <select> de localisation.
+            // Le champ location reste un string en BDD — on stocke le nom français du pays.
+            'countries'            => Country::casesSortedFr(),
         ]);
     }
 

@@ -162,17 +162,58 @@
                     <label class="mf-field__label" for="mf-location">
                         Ta localisation
                     </label>
-                    <input
-                        type="text"
+                    {#
+                        LOCALISATION — menu déroulant de pays européens
+                        Remplace l'ancien <input type="text"> par un <select>.
+
+                        LOGIQUE DE PRÉ-SÉLECTION :
+                          - saved_location contient la valeur actuelle (session ou profil BDD).
+                          - On cherche si cette valeur correspond à une option de l'enum Country.
+                          - Si oui → on la marque selected dans la boucle.
+                          - Si non (ancienne saisie libre) → on affiche une option supplémentaire
+                            en tête, labelisée "(ancienne saisie)", pour ne pas perdre la donnée
+                            existante au prochain enregistrement.
+
+                        La variable matchingForm_countries est passée par HomeController.
+                        Elle contient le tableau Country::casesSortedFr() = pays triés A→Z en FR.
+                    #}
+
+                    {# Détermine si la valeur courante est une ancienne saisie libre (hors liste) #}
+                    {% set location_in_list = false %}
+                    {% if saved_location is not empty %}
+                        {% for c in matchingForm_countries %}
+                            {% if c.value == saved_location %}
+                                {% set location_in_list = true %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+
+                    <select
                         class="mf-field__input ob-input"
                         id="mf-location"
                         name="location"
-                        value="{{ saved_location }}"
-                        placeholder="Ex : Marseille, France"
-                        maxlength="120"
-                        autocomplete="address-level2"
                         required
                     >
+                        {# Option placeholder — visible uniquement si aucune valeur pré-sélectionnée #}
+                        {% if saved_location is empty %}
+                            <option value="" disabled selected>Sélectionne ton pays</option>
+                        {% else %}
+                            <option value="" disabled>Sélectionne ton pays</option>
+                        {% endif %}
+
+                        {# Ancienne saisie libre non présente dans la liste → option de secours
+                           pour ne pas écraser silencieusement la valeur existante en BDD. #}
+                        {% if saved_location is not empty and not location_in_list %}
+                            <option value="{{ saved_location }}" selected>{{ saved_location }} (ancienne saisie)</option>
+                        {% endif %}
+
+                        {# Boucle sur les pays européens triés alphabétiquement #}
+                        {% for c in matchingForm_countries %}
+                            <option value="{{ c.value }}" {{ saved_location == c.value ? 'selected' : '' }}>
+                                {{- c.value -}}
+                            </option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
 

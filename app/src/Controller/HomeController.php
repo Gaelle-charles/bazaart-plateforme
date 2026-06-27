@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\DTO\Matching\MatchResult;
 use App\Entity\User;
 use App\Enum\ArtistLookingFor;
+use App\Enum\Country;
 use App\Enum\LegalStatus;
 use App\Repository\DisciplineRepository;
 use App\Repository\ForumThreadRepository;
@@ -363,6 +364,10 @@ final class HomeController extends AbstractController
             // '' si inconnu → le champ s'affiche vide, l'artiste saisit.
             'matchingForm_displayName'   => $matchingForm_displayName,
             'matchingForm_location'      => $matchingForm_location,
+            // Liste des pays européens triés alphabétiquement (FR) pour le <select> de localisation.
+            // Country::casesSortedFr() retourne un tableau de Country cases triés par label.
+            // Le tri est centralisé dans l'enum pour être cohérent avec les autres controllers.
+            'matchingForm_countries'     => Country::casesSortedFr(),
 
             // ── Section swipe matching (Lot C) ───────────────────────────────────
             // Chaque match est un tableau avec les clés : resource_id, title,

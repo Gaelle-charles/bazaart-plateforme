@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Enum\Country;
 use App\Repository\ArtistProfileRepository;
 use App\Repository\DisciplineRepository;
 use App\Security\Voter\FreemiumVoter;
@@ -96,6 +97,9 @@ class ArtistProfileController extends AbstractController
         return $this->render('artist_profile/edit.html.twig', [
             'profile'        => $profile,        // null si nouveau profil, objet si existant
             'allDisciplines' => $allDisciplines, // pour la section "Disciplines artistiques"
+            // Liste des pays européens triés alphabétiquement (FR) pour le <select> de localisation.
+            // Country::casesSortedFr() est appelé ici pour centraliser le tri dans l'enum.
+            'countries'      => Country::casesSortedFr(),
         ]);
     }
 

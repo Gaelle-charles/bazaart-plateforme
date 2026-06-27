@@ -419,14 +419,64 @@
                 </div>
 
                 <div class="ap-field">
-                    <label class="ap-label" for="location">Ville</label>
-                    <input
+                    <label class="ap-label" for="location">Pays</label>
+
+                    {#
+                        LOCALISATION — menu déroulant de pays européens.
+                        Remplace l'ancien <input type="text" name="location">.
+
+                        Valeur courante :
+                          - profile.location si le profil existe en BDD
+                          - chaîne vide pour un nouveau profil
+
+                        LOGIQUE DE PRÉ-SÉLECTION :
+                          - On cherche si la valeur BDD correspond à une option de la liste.
+                          - Si oui → marquée selected.
+                          - Si non (ex: "Paris, France" ou "Dakar" — ancienne saisie libre
+                            avant la mise à jour du champ) → option de secours pour ne pas
+                            écraser silencieusement la donnée lors d'une prochaine sauvegarde.
+
+                        La variable 'countries' est passée par ArtistProfileController::edit().
+                    #}
+
+                    {# Valeur courante depuis le profil BDD (ou vide si nouveau profil) #}
+                    {% set current_location = profile ? profile.location : '' %}
+
+                    {# Détermine si la valeur courante est dans la liste des pays #}
+                    {% set location_in_list = false %}
+                    {% if current_location is not empty %}
+                        {% for c in countries %}
+                            {% if c.value == current_location %}
+                                {% set location_in_list = true %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+
+                    <select
                         class="ap-input"
-                        type="text"
                         id="location"
                         name="location"
-                        value="{{ profile ? profile.location : '' }}"
-                        placeholder="Ex : Paris, Martinique, Dakar...">
+                    >
+                        {# Option placeholder — visible si aucune valeur pré-sélectionnée #}
+                        {% if current_location is empty %}
+                            <option value="" disabled selected>Sélectionne ton pays</option>
+                        {% else %}
+                            <option value="" disabled>Sélectionne ton pays</option>
+                        {% endif %}
+
+                        {# Ancienne saisie libre non présente dans la liste → option de secours
+                           pour ne pas écraser silencieusement la valeur lors d'un enregistrement. #}
+                        {% if current_location is not empty and not location_in_list %}
+                            <option value="{{ current_location }}" selected>{{ current_location }} (ancienne saisie)</option>
+                        {% endif %}
+
+                        {# Boucle sur les pays européens triés alphabétiquement #}
+                        {% for c in countries %}
+                            <option value="{{ c.value }}" {{ current_location == c.value ? 'selected' : '' }}>
+                                {{- c.value -}}
+                            </option>
+                        {% endfor %}
+                    </select>
                 </div>
 
             </div>

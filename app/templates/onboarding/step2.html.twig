@@ -204,19 +204,66 @@
             <p class="ob-hint">Ce nom sera visible publiquement sur ton profil.</p>
         </div>
 
-        {# ── Champ : localisation ───────────────────────────────────────── #}
+        {# ── Champ : localisation (menu déroulant pays européens) ──────── #}
         <div class="ob-field">
             <label for="location" class="ob-label">Localisation</label>
-            <input
-                type="text"
+
+            {#
+                LOCALISATION — menu déroulant de pays européens.
+                Remplace l'ancien <input type="text">.
+
+                Valeur courante :
+                  - Si un profil existant est présent en BDD → existing_profile.location
+                  - Sinon → chaîne vide (nouveau profil, premier passage)
+
+                LOGIQUE DE PRÉ-SÉLECTION :
+                  - On vérifie si la valeur courante correspond à une option de l'enum Country.
+                  - Si oui → option marquée selected dans la boucle.
+                  - Si non (ancienne saisie libre, ex: "Paris, France") → option de secours
+                    pour ne pas perdre la donnée silencieusement au prochain enregistrement.
+
+                La variable 'countries' est passée par OnboardingController::step2().
+            #}
+
+            {# Valeur courante : profil BDD ou vide #}
+            {% set current_location = (existing_profile and existing_profile.location) ? existing_profile.location : '' %}
+
+            {# Détermine si la valeur courante est dans la liste des pays #}
+            {% set location_in_list = false %}
+            {% if current_location is not empty %}
+                {% for c in countries %}
+                    {% if c.value == current_location %}
+                        {% set location_in_list = true %}
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+
+            <select
                 id="location"
                 name="location"
                 class="ob-input"
-                maxlength="150"
-                placeholder="Ex : Paris, France — Dakar, Sénégal — Bruxelles..."
-                value="{{ existing_profile and existing_profile.location ? existing_profile.location|e : '' }}"
             >
-            <p class="ob-hint">Ville et pays où tu vis ou travailles principalement.</p>
+                {# Option placeholder — visible uniquement si aucune valeur pré-sélectionnée #}
+                {% if current_location is empty %}
+                    <option value="" disabled selected>Sélectionne ton pays</option>
+                {% else %}
+                    <option value="" disabled>Sélectionne ton pays</option>
+                {% endif %}
+
+                {# Ancienne saisie libre non présente dans la liste → option de secours #}
+                {% if current_location is not empty and not location_in_list %}
+                    <option value="{{ current_location }}" selected>{{ current_location }} (ancienne saisie)</option>
+                {% endif %}
+
+                {# Boucle sur les pays européens triés alphabétiquement #}
+                {% for c in countries %}
+                    <option value="{{ c.value }}" {{ current_location == c.value ? 'selected' : '' }}>
+                        {{- c.value -}}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <p class="ob-hint">Pays où tu vis ou travailles principalement.</p>
         </div>
 
         {# ── Disciplines (au moins 1 obligatoire) ──────────────────────── #}
