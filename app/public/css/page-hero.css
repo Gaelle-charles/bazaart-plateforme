@@ -166,6 +166,10 @@
     color: #ffffff;
     margin: 0 0 14px;
     letter-spacing: -0.02em;
+    /* Autorise la coupure d'un mot trop long pour la largeur (sinon, sur mobile,
+       un titre mot-unique comme "CONFIDENTIALITE" déborde et se fait couper par
+       overflow:hidden du hero). Le wrapping fin (.tr-word) est géré en @media mobile. */
+    overflow-wrap: break-word;
 }
 
 /* ── Sous-titre du hero ──────────────────────────────────────────────────── */
@@ -208,6 +212,15 @@
     .page-hero__title {
         font-size: clamp(36px, 10vw, 60px);
         margin-bottom: 10px;
+    }
+
+    /* En mobile, on autorise un mot long du titre à se couper sur plusieurs
+       lignes au lieu de déborder (et d'être coupé par overflow:hidden du hero).
+       title-reveal.js met .tr-word en white-space:nowrap : on le neutralise ICI
+       en mobile. L'animation par lettre (.tr-char) continue de fonctionner. */
+    .page-hero__title .tr-word {
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
 
     .page-hero__subtitle {
