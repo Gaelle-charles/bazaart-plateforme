@@ -648,15 +648,14 @@ body[data-theme="dark"] {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
-   FILET DE SÉCURITÉ GLOBAL : titres jamais coupés horizontalement
+   FILET DE SÉCURITÉ GLOBAL (DOUX) : titres
    ──────────────────────────────────────────────────────────────────────
-   overflow-wrap:break-word autorise la coupure d'un MOT trop long pour la
-   largeur disponible (sinon, sur mobile, un titre mot-unique en Archivo Black
-   comme "CONFIDENTIALITE", un nom d'artiste long, etc. déborde et se fait
-   rogner par un overflow:hidden parent). N'affecte QUE les mots trop longs :
-   les titres normaux ne changent pas. Les titres animés (title-reveal) gardent
-   leur comportement car .tr-word impose white-space:nowrap (géré à part). */
+   On utilise UNIQUEMENT overflow-wrap (et NON word-break:break-word, qui coupait
+   les mots en plein milieu, lettre par lettre = illisible). Ici :
+   - un titre multi-mots se met à la ligne sur les ESPACES (lisible) ;
+   - un mot n'est coupé qu'en TOUT DERNIER recours (mot plus large que l'écran).
+   La vraie solution pour les titres mot-unique trop grands = réduire leur taille
+   en mobile (fait au cas par cas dans les pages concernées), pas couper les lettres. */
 h1, h2, h3, h4 {
   overflow-wrap: break-word;
-  word-break:    break-word;
 }

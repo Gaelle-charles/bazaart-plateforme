@@ -85,9 +85,9 @@
     color: var(--bg);              /* crème sur fond noir */
     margin: 0 0 var(--space-md) 0;
     letter-spacing: -.01em;
-    /* Un nom d'artiste long (mot unique) doit se couper au lieu de déborder/être coupé. */
+    /* Coupure douce uniquement en dernier recours (pas de coupure lettre par lettre).
+       La taille réduite ci-dessus (min 28px) suffit pour la plupart des noms. */
     overflow-wrap: break-word;
-    word-break: break-word;
 }
 
 /* Rangée de chips de disciplines + ville */
