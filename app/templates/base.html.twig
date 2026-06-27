@@ -839,18 +839,29 @@
             {% if app.user %}
                 {#
                     Utilisateur CONNECTÉ → avatar avec dropdown.
-                    Les initiales sont extraites des 2 premières lettres de l'identifiant
-                    email (partie avant @). Exemple : "amara.diallo@bazaart.fr" → "AM".
-                    À améliorer quand User exposera firstName/lastName.
+                    Initiales (par ordre de priorité) :
+                      1. Prénom + Nom (ex. "Amara Diallo" → "AD") si renseignés sur User
+                      2. sinon, 2 premières lettres du nom d'artiste (ArtistProfile.displayName)
+                      3. sinon, 2 premières lettres de l'identifiant email (fallback legacy)
+                    Le nom affiché dans l'aria-label suit la même priorité.
                 #}
-                {% set initials = app.user.email|split('@')|first|slice(0,2)|upper %}
+                {% if app.user.firstName is not empty and app.user.lastName is not empty %}
+                    {% set initials = (app.user.firstName|first ~ app.user.lastName|first)|upper %}
+                    {% set displayLabel = app.user.firstName ~ ' ' ~ app.user.lastName %}
+                {% elseif app.user.artistProfile is not null and app.user.artistProfile.displayName is not empty %}
+                    {% set initials = app.user.artistProfile.displayName|slice(0, 2)|upper %}
+                    {% set displayLabel = app.user.artistProfile.displayName %}
+                {% else %}
+                    {% set initials = app.user.email|split('@')|first|slice(0, 2)|upper %}
+                    {% set displayLabel = app.user.email|split('@')|first %}
+                {% endif %}
                 <div class="nav-user">
                     <button type="button"
                             class="nav-avatar"
                             id="user-btn"
                             aria-expanded="false"
                             aria-controls="user-menu"
-                            aria-label="Menu de {{ app.user.email|split('@')|first }}">
+                            aria-label="Menu de {{ displayLabel }}">
                         {{ initials }}
                     </button>
                     <div class="nav-user-menu" id="user-menu" role="menu" aria-labelledby="user-btn">

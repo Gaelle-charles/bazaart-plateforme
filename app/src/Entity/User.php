@@ -120,6 +120,34 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTimeInterface $resetTokenExpiresAt = null;
 
+    // ─── Identité de l'utilisateur ───────────────────────────────────────────
+    //
+    // firstName et lastName sont nullable en BDD pour deux raisons :
+    //   1. Les 22 comptes existants n'ont pas ces données (pas de migration destructive).
+    //   2. Les futures inscriptions les auront toujours (champs required dans le formulaire
+    //      ET dans RegisterDTO::fromArray()).
+    //
+    // Convention Doctrine : VARCHAR(100) NULL → choisi car les noms complets peuvent
+    // dépasser 50 caractères (ex : noms composés africains ou hispanophones).
+
+    /**
+     * Prénom de l'utilisateur, saisi à l'inscription.
+     *
+     * Nullable en BDD pour la rétrocompatibilité avec les comptes existants.
+     * Pour les nouvelles inscriptions, ce champ est toujours renseigné
+     * (le formulaire et RegisterDTO exigent une valeur non vide).
+     */
+    #[ORM\Column(type: 'string', length: 100, nullable: true)]
+    private ?string $firstName = null;
+
+    /**
+     * Nom de famille de l'utilisateur, saisi à l'inscription.
+     *
+     * Même politique que firstName : nullable en BDD, obligatoire à l'inscription.
+     */
+    #[ORM\Column(type: 'string', length: 100, nullable: true)]
+    private ?string $lastName = null;
+
     // ─── Champs onboarding (Lot 2) ───────────────────────────────────────────
 
     /**
@@ -485,5 +513,62 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         // il est immuable (aucun risque de le modifier par accident) et recommandé
         // dans les comparaisons temporelles ponctuelles.
         return $this->trialEndsAt > new \DateTimeImmutable();
+    }
+
+    // ─── Getters / Setters — Identité ────────────────────────────────────────
+
+    /**
+     * Retourne le prénom de l'utilisateur, ou null pour les anciens comptes.
+     */
+    public function getFirstName(): ?string
+    {
+        return $this->firstName;
+    }
+
+    /**
+     * Définit le prénom de l'utilisateur.
+     * Appelé par AuthService::register() lors de la création du compte.
+     */
+    public function setFirstName(?string $firstName): static
+    {
+        $this->firstName = $firstName;
+        return $this;
+    }
+
+    /**
+     * Retourne le nom de famille de l'utilisateur, ou null pour les anciens comptes.
+     */
+    public function getLastName(): ?string
+    {
+        return $this->lastName;
+    }
+
+    /**
+     * Définit le nom de famille de l'utilisateur.
+     * Appelé par AuthService::register() lors de la création du compte.
+     */
+    public function setLastName(?string $lastName): static
+    {
+        $this->lastName = $lastName;
+        return $this;
+    }
+
+    /**
+     * Retourne le nom complet (prénom + nom), pratique pour l'affichage.
+     *
+     * Exemples :
+     *   - getFirstName() = 'Kemi',    getLastName() = 'Adéola'  → 'Kemi Adéola'
+     *   - getFirstName() = 'Kemi',    getLastName() = null       → 'Kemi'
+     *   - getFirstName() = null,      getLastName() = null       → ''  (ancien compte)
+     *
+     * trim() évite l'espace superflu si l'un des deux champs est null (concaténation
+     * de null + espace = ' ' en PHP avant le trim).
+     *
+     * Utilisé dans : base.html.twig (À améliorer), emails transactionnels.
+     */
+    public function getFullName(): string
+    {
+        // On coalesce null → '' pour éviter les warnings de concaténation
+        return trim(($this->firstName ?? '') . ' ' . ($this->lastName ?? ''));
     }
 }

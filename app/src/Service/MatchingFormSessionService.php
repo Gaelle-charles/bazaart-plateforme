@@ -199,6 +199,36 @@ final class MatchingFormSessionService
         $session->remove(self::SESSION_KEY);
     }
 
+    /**
+     * Pré-remplit UNIQUEMENT le nom affiché (display_name) en session matching.
+     *
+     * Utilisé après l'inscription : si l'utilisateur a saisi un nom affiché
+     * (facultatif) à l'inscription, on le mémorise ici pour que l'onboarding
+     * (étape 1) le pré-remplisse automatiquement via getSessionData()['display_name'].
+     *
+     * Pourquoi une méthode dédiée plutôt qu'un merge manuel dans le contrôleur ?
+     *   La structure interne de la session ('bazaart_matching_form' + clé 'display_name')
+     *   reste encapsulée dans CE service (source de vérité unique). Le contrôleur n'a
+     *   pas à connaître la clé de session ni la forme du tableau (cf. CLAUDE.md §12 :
+     *   pas de logique métier dans les contrôleurs).
+     *
+     * On préserve les autres données matching éventuellement présentes (cas d'un
+     * artiste venu du formulaire matching de la home) : on ne réécrit que display_name.
+     */
+    public function prefillDisplayName(SessionInterface $session, string $displayName): void
+    {
+        // Lecture du sous-tableau existant (peut être [] si la session est vierge).
+        $existing = $session->get(self::SESSION_KEY, []);
+        if (!is_array($existing)) {
+            // Sécurité défensive : si la valeur en session n'est pas un tableau
+            // (état corrompu improbable), on repart d'un tableau vide.
+            $existing = [];
+        }
+
+        $existing['display_name'] = $displayName;
+        $session->set(self::SESSION_KEY, $existing);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // MÉTHODES PRIVÉES : sauvegarde et validation par étape
     // ─────────────────────────────────────────────────────────────────────────

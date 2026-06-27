@@ -45,6 +45,12 @@ class AuthService
             $this->passwordHasher->hashPassword($user, $dto->password)
         );
 
+        // Enregistre le prénom et le nom saisis à l'inscription.
+        // Ces champs sont obligatoires dans RegisterDTO (fromArray() retourne null si absents),
+        // donc ici ils sont toujours des chaînes non vides.
+        $user->setFirstName($dto->firstName);
+        $user->setLastName($dto->lastName);
+
         // isVerified reste à false (valeur par défaut dans User::$isVerified).
         // Le compte ne sera pleinement actif qu'après confirmation de l'email.
         // Le contrôleur appelant enverra l'email de confirmation après ce persist.

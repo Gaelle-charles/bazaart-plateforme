@@ -164,8 +164,14 @@ class AuthController extends AbstractController
             $dto = RegisterDTO::fromArray($request->request->all());
 
             if ($dto === null) {
-                // Le fromArray() retourne null si email, password OU confirm_password sont absents
-                $error = 'Les champs email, mot de passe et confirmation sont obligatoires.';
+                // RegisterDTO::fromArray() retourne null si l'un des champs OBLIGATOIRES est absent :
+                //   - first_name (prénom)
+                //   - last_name (nom de famille)
+                //   - email
+                //   - password
+                //   - confirm_password
+                // Le display_name (nom affiché) est lui facultatif → null ne cause pas ce message.
+                $error = 'Le prénom, le nom, l\'email, le mot de passe et sa confirmation sont obligatoires.';
             } elseif (!$dto->isEmailValid()) {
                 $error = 'Adresse email invalide.';
             } elseif (!$dto->isPasswordStrong()) {
@@ -189,6 +195,23 @@ class AuthController extends AbstractController
                     // propage pas — l'utilisateur peut demander un renvoi depuis
                     // la page "vérifie ta boîte mail".
                     $this->emailVerificationService->sendVerificationEmail($user);
+
+                    // ── Carryover du nom affiché (display_name) ─────────────────
+                    //
+                    // Si l'utilisateur a saisi un nom affiché / nom de scène à l'inscription
+                    // (champ facultatif), on le mémorise en session matching AVANT de rediriger.
+                    // L'onboarding (étape 1) le pré-remplira automatiquement.
+                    //
+                    // La manipulation de session est ENTIÈREMENT déléguée au service dédié
+                    // (prefillDisplayName) : le contrôleur ne connaît ni la clé de session
+                    // ni la forme du tableau (cf. CLAUDE.md §12). Le service préserve les
+                    // autres données matching déjà présentes (cas artiste venu de la home).
+                    if ($dto->displayName !== null) {
+                        $this->matchingFormSession->prefillDisplayName(
+                            $request->getSession(),
+                            $dto->displayName
+                        );
+                    }
 
                     // Stocke l'email en session pour pré-remplir la page "vérifie ta boîte"
                     // et pour le formulaire de renvoi.
