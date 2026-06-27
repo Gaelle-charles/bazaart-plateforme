@@ -388,8 +388,24 @@ class SeedCoursesCommand extends Command
                 ->setOrderPosition(1)
                 ->setIsFreePreview(false);
 
+            // Leçon CE-1.3 — Réservée aux inscrits
+            // Fonds européens : 3e leçon du module pour boucler le panorama des financements.
+            $lessonCE1_3 = new Lesson();
+            $lessonCE1_3
+                ->setTitle('L\'Union européenne et les fonds culturels')
+                ->setDescription(
+                    'Europe Créative, fonds structurels, coopération internationale : '
+                    . 'naviguer les dispositifs européens de financement de la culture.'
+                )
+                ->setVideoBunnyId(null)
+                ->setVideoUrl('https://www.youtube.com/embed/placeholder-ce-1-3')
+                ->setDurationSeconds(1200)      // 20 minutes
+                ->setOrderPosition(2)
+                ->setIsFreePreview(false);
+
             $moduleCE1->addLesson($lessonCE1_1);
             $moduleCE1->addLesson($lessonCE1_2);
+            $moduleCE1->addLesson($lessonCE1_3);
 
             // ── Module CE-2 : Dossier de subvention ───────────────────────────
             $moduleCE2 = new CourseModule();
