@@ -7,17 +7,18 @@
     (src/screens-public.jsx) en HTML/CSS pur Twig. Elle est la vitrine
     principale de l'association et de la plateforme.
 
-    Sections produites (ordre réel du HTML) :
-      1. Navbar sticky (rendue par base.html.twig via {% block navbar %})
+    Sections produites (ordre réel du HTML, après réorganisation audit item 7) :
+      1. Navbar (rendue par base.html.twig via {% block navbar %})
       2. Hero 100vh photo fixe (H1 animé par title-reveal.js + sous-titre + 2 CTAs)
-      3. Marquee bande défilante (CSS pur, pause au survol)
-      4. SaaS pitch (fond --ink, liste de features)
-      5. Vidéo de présentation (grille texte + vidéo, index 01)
-      6. Opportunités (flux BDD, 3 cartes max, index 02)
-      7. Communauté (live fictif + fils de discussion, index 03)
-      8. CTA inscription (fond --accent = lime)
-      9. Hubs (3 colonnes, bordures partagées, index 04)
-     10. Footer (rendu par base.html.twig via {% block footer %})
+      3. Matching / swipe (section "Ton matching")
+      4. SaaS pitch "On fait le tri. Tu fais le choix." (fond --ink)
+      5. Hubs (3 colonnes, bordures partagées, index 01) — remontée ici (item 7)
+      6. Vidéo de présentation "En 3 étapes" (grille texte + vidéo, index 02)
+      7. Opportunités (flux BDD, 3 cartes max, index 03)
+      8. Communauté (live fictif + fils de discussion, index 04)
+      9. Témoignages (3 cartes, index 05) — nouvelle section (item 8)
+     10. CTA inscription (fond --accent = jaune doré)
+     11. Footer (rendu par base.html.twig via {% block footer %})
 
     Polices : Archivo Black (--display) + Space Grotesk (--body)
               + JetBrains Mono (--mono) + Instrument Serif (--serif)
@@ -3643,8 +3644,8 @@
             {# En-tête de section — réutilise les classes existantes lp-section-header* #}
             <div class="lp-section-header">
                 <div class="lp-section-header__left">
-                    {# Numéro de section — renumérotation séquentielle après réorganisation :
-                       Vidéo=01, Opportunités=02, Communauté=03, Hubs=04 (déplacée en fin). #}
+                    {# Numéro de section — renumérotation après réorganisation audit (item 7) :
+                       Hubs=01, Vidéo=02, Opportunités=03, Communauté=04, Témoignages=05. #}
                     <span class="lp-section-header__index" aria-hidden="true">02</span>
                     <h2 class="lp-section-header__title" id="lp-video-title">
                         Un outil aux services des artistes

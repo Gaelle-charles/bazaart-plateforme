@@ -242,7 +242,7 @@
     }
 
     .btn-annual:hover:not(:disabled) {
-        background: #b8e040; /* lime légèrement plus foncé au survol */
+        background: var(--accent); opacity: .88; /* jaune doré charte, légèrement atténué au survol */
     }
 
     .btn-annual:disabled {
@@ -311,7 +311,10 @@
         background: var(--ink);
         color: var(--bg);
     }
-    .pr-compare .pr-compare__yes { color: var(--accent-2, #FF6B2C); font-weight: 700; }
+    /* ✓ standard en encre (état de validation neutre, item 9 : l'orange est réservé
+       aux actions secondaires, pas aux coches). La colonne annuelle, mise en avant,
+       garde ses ✓ en jaune doré (règle ci-dessous). */
+    .pr-compare .pr-compare__yes { color: var(--ink); font-weight: 700; }
     /* Dans la colonne annuelle (fond sombre), le ✓ passe en jaune doré */
     .pr-compare .pr-compare__col-annual.pr-compare__yes { color: var(--accent); }
     .pr-compare .pr-compare__no { color: var(--ink-mute, #9a9a9a); }
