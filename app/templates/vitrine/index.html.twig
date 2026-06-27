@@ -1382,7 +1382,16 @@
 .lp-cta {
     background:  var(--accent); /* lime vif */
     border-top:  1px solid var(--ink);
+    /* Espace au-dessus de la section CTA "Rejoindre gratuitement" (demande Gaëlle).
+       Marge crème qui détache le bloc jaune de la section précédente. */
+    margin-top:  72px;
 }
+
+/* Sur la home, on annule la marge blanche au-dessus du footer : la section CTA
+   jaune se connecte directement au footer (pas d'espace crème entre les deux).
+   La règle globale .lp-footer { margin-top:64px } reste valable pour /resources,
+   /forum, etc. (dont la dernière section n'a pas de padding propre). */
+body.page-home .lp-footer { margin-top: 0; }
 
 .lp-cta__grid {
     display:               grid;
@@ -4091,6 +4100,9 @@
            au moment de la conversion.
            ⚠️ Témoignages FICTIFS : à remplacer par de vrais retours d'artistes.
         ════════════════════════════════════════════════════════════════ #}
+        {# Section témoignages MASQUÉE temporairement (demande Gaëlle, 2026-06-27).
+           Pour la réactiver : remplacer « {% if false %} » par « {% if true %} ». #}
+        {% if false %}
         <section class="lp-testimonials lp-container" aria-labelledby="lp-testimonials-title">
             <div class="lp-section-header">
                 <div class="lp-section-header__left">
@@ -4154,6 +4166,7 @@
 
             </div>{# /.lp-testimonials__grid #}
         </section>
+        {% endif %}{# /section témoignages masquée #}
 
         <section class="lp-cta" id="section-cta" aria-labelledby="lp-cta-title">
             <div class="lp-container">
@@ -4171,7 +4184,7 @@
                         #}
                         <h2 class="lp-cta__h2" id="lp-cta-title">
                             Rejoindre<br>
-                            gratuitement.
+                            gratuitement
                         </h2>
                     </div>
 
