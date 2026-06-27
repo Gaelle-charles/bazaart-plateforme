@@ -509,6 +509,20 @@
 /* NOTE : la règle .js-hero-scroll-active .lp-hero__ctas-reveal (opacity:0)
    a été supprimée. Les CTAs ne sont plus jamais masqués par le JS. */
 
+/* Réassurance "1 mois offert" sous les CTAs du hero (nouveauté audit).
+   Petit texte blanc cassé, lisible sur le hero sombre, aligné avec les boutons. */
+.lp-hero__trial {
+    position:    relative;
+    z-index:     4;
+    margin-top:  12px;
+    font-size:   13px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    color:       rgba(255, 255, 255, .82);
+}
+/* Le "1 mois offert" est mis en valeur en jaune doré (couleur d'accent charte). */
+.lp-hero__trial strong { color: var(--accent); font-weight: 700; }
+
 /* ── Coordonnées géographiques : discret en haut à droite ───────────────
    Auparavant .lp-hero__meta contenait eyebrow + coordonnées (flex row).
    Désormais l'eyebrow est dans le flux du bloc de contenu centré.
@@ -1304,6 +1318,66 @@
    par un simple formulaire d'inscription email + bouton.
 ────────────────────────────────────────────────────────────────────── */
 
+/* ── TÉMOIGNAGES (item 8 de l'audit) ─────────────────────────────────────
+   Grille de 3 cartes, bordures partagées (même esprit "grille d'affiche" que
+   les hubs). Cartes sur fond crème, citation en italique, avatar à initiales. */
+.lp-testimonials__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border: 1px solid var(--ink);
+}
+.lp-testimonial {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 28px 24px;
+    background: var(--bg);
+    border-right: 1px solid var(--line-soft);
+}
+.lp-testimonial:last-child { border-right: none; }
+/* Étoiles en jaune doré (accent charte) */
+.lp-testimonial__stars {
+    color: var(--accent);
+    font-size: 14px;
+    letter-spacing: 3px;
+}
+.lp-testimonial__quote {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.55;
+    font-style: italic;
+    color: var(--ink);
+}
+/* Auteur ancré en bas de carte (margin-top:auto) pour aligner les 3 cartes */
+.lp-testimonial__author {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: auto;
+}
+.lp-testimonial__avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+.lp-testimonial__name { font-weight: 700; font-size: 14px; color: var(--ink); }
+.lp-testimonial__role { font-size: 12px; color: var(--ink-mute); }
+@media (max-width: 768px) {
+    /* Empilement vertical sur mobile : bordures basses au lieu de bordures droites */
+    .lp-testimonials__grid { grid-template-columns: 1fr; }
+    .lp-testimonial { border-right: none; border-bottom: 1px solid var(--line-soft); }
+    .lp-testimonial:last-child { border-bottom: none; }
+}
+
 .lp-cta {
     background:  var(--accent); /* lime vif */
     border-top:  1px solid var(--ink);
@@ -1794,6 +1868,17 @@
     display:  flex;
     gap:      6px;
     flex-wrap: wrap;
+    align-items: center; /* aligne le libellé "Correspond à :" avec les badges */
+}
+
+/* Micro-libellé contextuel devant les badges (item 3 de l'audit).
+   Discret, non encadré, pour distinguer le libellé des badges eux-mêmes. */
+.swipe-card__why-label {
+    font-family:    var(--mono);
+    font-size:      10px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color:          var(--ink-mute, #6b6b6b);
 }
 
 /* Petit tag discret pour chaque critère positif */
@@ -1869,10 +1954,14 @@
 
 /* ── COLONNE DROITE : bloc "Comment ça marche" ────────────────────────────
    Explique le fonctionnement du matching, à droite de la zone de swipe. */
+/* Item 4 de l'audit : l'encadré "Comment ça marche" est mis en valeur pour
+   guider le nouvel utilisateur dès la première visite. Bordure + barre latérale
+   + fond jaune doré léger (couleur d'accent charte) pour le détacher du reste. */
 .swipe-howto {
-    border:     1px solid var(--line-soft);
-    padding:    18px;
-    background: var(--bg-alt);
+    border:      1.5px solid var(--accent);
+    border-left: 4px solid var(--accent);
+    padding:     18px;
+    background:  rgba(255, 203, 16, 0.10); /* jaune doré à 10% */
 }
 .swipe-howto__title {
     font-family:    var(--mono);
@@ -1881,6 +1970,18 @@
     text-transform: uppercase;
     color:          var(--ink);
     margin:         0 0 12px;
+    /* Petit point doré devant le titre pour renforcer le repère visuel. */
+    display:        flex;
+    align-items:    center;
+    gap:            7px;
+}
+.swipe-howto__title::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    flex-shrink: 0;
 }
 .swipe-howto__steps {
     margin:       0;
@@ -2789,19 +2890,27 @@
                    (Option 1 validée). Aucune animation d'opacité : ni CSS ni JS
                    ne les masque. Avec ou sans JS, avec ou sans scroll. #}
                 <div class="lp-hero__ctas-reveal">
-                    <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--dark">
+                    {# Item 2 + item 9 de l'audit : hiérarchie des CTA inversée.
+                       "Rejoindre gratuitement" devient le bouton PRINCIPAL : placé en
+                       premier (gauche) et en JAUNE DORÉ plein (.lp-btn--accent = fond
+                       --accent #FFCB10 + texte --ink), très visible sur le hero sombre.
+                       Jaune/or = action principale (s'inscrire) selon la charte. #}
+                    <a href="{{ path('app_register') }}" class="lp-btn lp-btn--accent">
+                        Rejoindre gratuitement
+                    </a>
+                    {# "Explorer les opportunités" devient SECONDAIRE : style ghost/outline
+                       (bordure blanche, fond transparent) via .lp-hero .lp-btn--ghost. #}
+                    <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--ghost">
                         Explorer les opportunit&eacute;s
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M5 12h14M13 5l7 7-7 7"/>
                         </svg>
                     </a>
-                    {# S4 : style inline supprimé — les règles .lp-hero .lp-btn--ghost
-                       définissent déjà color:#fff et border-color:rgba(255,255,255,0.5).
-                       Le style inline était redondant et moins maintenable. #}
-                    <a href="{{ path('app_register') }}" class="lp-btn lp-btn--ghost">
-                        Rejoindre gratuitement
-                    </a>
                 </div>{# /.lp-hero__ctas-reveal #}
+
+                {# Nouveauté audit : réassurance "1 mois offert" sous les CTAs du hero.
+                   Point médian "·" (PAS de tiret cadratin, préférence éditoriale). #}
+                <p class="lp-hero__trial">1&nbsp;mois offert &middot; acc&egrave;s complet</p>
 
             </div>{# /.lp-hero__sticky #}
 
@@ -3032,6 +3141,13 @@
                                 {# Rendu discret, visible sur la carte active — aide a comprendre
                                    la logique de matching. N'alourdit pas la carte. #}
                                 <div class="swipe-card__why" aria-label="Raisons du match">
+                                    {# Item 3 de l'audit : libellé contextuel "Correspond à :" devant
+                                       les badges, pour que l'utilisateur comprenne la logique du match.
+                                       Affiché UNIQUEMENT si au moins un critère est positif (sinon on
+                                       n'aurait qu'un libellé orphelin sans badge). #}
+                                    {%- if match.breakdown.disciplines > 0 or match.breakdown.looking_for > 0 or match.breakdown.territory > 0 -%}
+                                        <span class="swipe-card__why-label">Correspond &agrave;&nbsp;:</span>
+                                    {%- endif -%}
                                     {%- if match.breakdown.disciplines > 0 -%}
                                         <span class="swipe-card__why-tag">Discipline</span>
                                     {%- endif -%}
@@ -3392,6 +3508,130 @@
 
 
         {# ════════════════════════════════════════════════════════════════
+           SECTION HUBS — remontée ici (item 7 de l'audit UX).
+           Positionnée juste après la section plateforme (« On fait le tri.
+           Tu fais le choix. ») et avant « En 3 étapes » : les éléments de
+           crédibilité (120 projets, 78% de réussite, 280 artistes, 4,7/5)
+           sont ainsi vus AVANT le CTA d'inscription final.
+        ════════════════════════════════════════════════════════════════ #}
+        <section class="lp-hubs lp-container" aria-labelledby="lp-hubs-title">
+
+            {# Section header avec index, titre, sous-titre #}
+            <div class="lp-section-header">
+                <div class="lp-section-header__left">
+                    <span class="lp-section-header__index" aria-hidden="true">01</span>
+                    <h2 class="lp-section-header__title" id="lp-hubs-title">
+                        Les trois hubs de l'asso
+                    </h2>
+                    <span class="lp-section-header__sub">événement · ingénierie · transmission</span>
+                </div>
+            </div>
+
+            {# Grille des 3 hubs #}
+            <div class="lp-hubs__grid">
+
+                {# ── Hub 01 : EVENT ── #}
+                <article class="lp-hub lp-hub--bordered" aria-labelledby="lp-hub-event-title">
+                    <div class="lp-hub__header">
+                        <span class="lp-hub__no">HUB 01</span>
+                        {# Chip lime — couleur prototypée pour EVENT #}
+                        <span class="lp-chip lp-chip--lime">Programmation</span>
+                    </div>
+                    <h3 class="lp-hub__name" id="lp-hub-event-title">EVENT</h3>
+                    <p class="lp-hub__desc">
+                        On produit. Soirées de restitution, vernissages alternatifs,
+                        plateaux mixtes — on met les artistes BazaArt sur scène,
+                        en vrai, devant des gens.
+                    </p>
+                    {# Micro-liste de stats en bas de colonne #}
+                    <div class="lp-hub__stats">
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>18 événements / an</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>3 villes</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>9 000 spectateurs cumulés</span>
+                        </div>
+                    </div>
+                </article>
+
+                {# ── Hub 02 : INGÉNIERIE CULTURELLE ── #}
+                <article class="lp-hub lp-hub--bordered" aria-labelledby="lp-hub-ing-title">
+                    <div class="lp-hub__header">
+                        <span class="lp-hub__no">HUB 02</span>
+                        {# Chip neutre sable — couleur --bg-alt pour ce hub #}
+                        <span class="lp-chip lp-chip--sand">Accompagnement</span>
+                    </div>
+                    {#
+                        "INGÉNIERIE CULTURELLE" — le retour à la ligne entre les
+                        deux mots est géré naturellement par white-space:normal sur
+                        .lp-hub__name (CSS). Le <br> a été retiré car il provoquait
+                        un espace vide au-dessus du texte dans l'animation title-reveal.js
+                        (le bloc droit commençait par une ligne fantôme de hauteur non nulle).
+                        Avec white-space:normal et clamp(20px,9cqi,46px), "INGÉNIERIE"
+                        et "CULTURELLE" passent sur 2 lignes dès que la fonte dépasse
+                        la largeur disponible de la colonne (1fr dans 3 colonnes de grid).
+                    #}
+                    <h3 class="lp-hub__name" id="lp-hub-ing-title">INGÉNIERIE CULTURELLE</h3>
+                    <p class="lp-hub__desc">
+                        On structure. Conseil aux artistes et aux structures sur
+                        le montage de projets, les financements croisés, et la
+                        conduite d'une production de A à Z.
+                    </p>
+                    <div class="lp-hub__stats">
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>120 projets accompagnés</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>78% taux de réussite</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>Réseau de 40 financeurs</span>
+                        </div>
+                    </div>
+                </article>
+
+                {# ── Hub 03 : FORMATION ── #}
+                <article class="lp-hub" aria-labelledby="lp-hub-form-title">
+                    <div class="lp-hub__header">
+                        <span class="lp-hub__no">HUB 03</span>
+                        {# Chip orange — accent-2 pour FORMATION #}
+                        <span class="lp-chip lp-chip--orange">Transmission</span>
+                    </div>
+                    <h3 class="lp-hub__name" id="lp-hub-form-title">FORMATION</h3>
+                    <p class="lp-hub__desc">
+                        On forme. Cycles courts (fiscalité, droit, communication, IA)
+                        animés par des pairs et des experts. Gratuit pour les adhérents,
+                        abordable pour les autres.
+                    </p>
+                    <div class="lp-hub__stats">
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>12 cycles / an</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>280 artistes formés</span>
+                        </div>
+                        <div class="lp-hub__stat">
+                            <span class="lp-hub__stat-arrow">›</span>
+                            <span>Note moyenne 4,7 / 5</span>
+                        </div>
+                    </div>
+                </article>
+
+            </div>{# /.lp-hubs__grid #}
+        </section>
+
+        {# ════════════════════════════════════════════════════════════════
            MODIFICATION D — SECTION VIDÉO DE PRÉSENTATION
            Intercalée entre SAAS PITCH et OPPORTUNITÉS.
            Vidéo MP4 locale servie via Symfony Asset (public/uploads/video/).
@@ -3405,7 +3645,7 @@
                 <div class="lp-section-header__left">
                     {# Numéro de section — renumérotation séquentielle après réorganisation :
                        Vidéo=01, Opportunités=02, Communauté=03, Hubs=04 (déplacée en fin). #}
-                    <span class="lp-section-header__index" aria-hidden="true">01</span>
+                    <span class="lp-section-header__index" aria-hidden="true">02</span>
                     <h2 class="lp-section-header__title" id="lp-video-title">
                         Un outil aux services des artistes
                     </h2>
@@ -3506,7 +3746,7 @@
 
             <div class="lp-section-header">
                 <div class="lp-section-header__left">
-                    <span class="lp-section-header__index" aria-hidden="true">02</span>
+                    <span class="lp-section-header__index" aria-hidden="true">03</span>
                     <h2 class="lp-section-header__title" id="lp-opps-title">
                         Prêt·e à trouver tes opportunités ?
                     </h2>
@@ -3681,7 +3921,7 @@
 
             <div class="lp-section-header">
                 <div class="lp-section-header__left">
-                    <span class="lp-section-header__index" aria-hidden="true">03</span>
+                    <span class="lp-section-header__index" aria-hidden="true">04</span>
                     <h2 class="lp-section-header__title" id="lp-community-title">
                         La communauté en direct
                     </h2>
@@ -3844,6 +4084,76 @@
              Le prototype avait un pricing 9,90€ qui n'est pas V1. On le remplace
              par un CTA d'inscription simple + formulaire email inline.
         ════════════════════════════════════════════════════════════════ #}
+        {# ════════════════════════════════════════════════════════════════
+           SECTION TÉMOIGNAGES (item 8 de l'audit UX) — placée juste avant le
+           grand CTA jaune "Rejoindre gratuitement" pour rassurer le visiteur
+           au moment de la conversion.
+           ⚠️ Témoignages FICTIFS : à remplacer par de vrais retours d'artistes.
+        ════════════════════════════════════════════════════════════════ #}
+        <section class="lp-testimonials lp-container" aria-labelledby="lp-testimonials-title">
+            <div class="lp-section-header">
+                <div class="lp-section-header__left">
+                    <span class="lp-section-header__index" aria-hidden="true">05</span>
+                    <h2 class="lp-section-header__title" id="lp-testimonials-title">
+                        Ils ont trouv&eacute; leur opportunit&eacute;
+                    </h2>
+                    <span class="lp-section-header__sub">ce qu'ils en disent</span>
+                </div>
+            </div>
+
+            <div class="lp-testimonials__grid">
+
+                {# Témoignage 1 #}
+                <article class="lp-testimonial">
+                    <div class="lp-testimonial__stars" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+                    <p class="lp-testimonial__quote">
+                        &laquo;&nbsp;En trois semaines, j'ai trouv&eacute; une r&eacute;sidence que je n'aurais jamais
+                        rep&eacute;r&eacute;e seule. La s&eacute;lection est vraiment cibl&eacute;e.&nbsp;&raquo;
+                    </p>
+                    <div class="lp-testimonial__author">
+                        <div class="lp-testimonial__avatar" aria-hidden="true">SA</div>
+                        <div>
+                            <div class="lp-testimonial__name">Sarah</div>
+                            <div class="lp-testimonial__role">Photographe</div>
+                        </div>
+                    </div>
+                </article>
+
+                {# Témoignage 2 #}
+                <article class="lp-testimonial">
+                    <div class="lp-testimonial__stars" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+                    <p class="lp-testimonial__quote">
+                        &laquo;&nbsp;Les alertes m'ont signal&eacute; un appel &agrave; projets parfait pour mon EP.
+                        J'ai candidat&eacute;, j'ai &eacute;t&eacute; retenu.&nbsp;&raquo;
+                    </p>
+                    <div class="lp-testimonial__author">
+                        <div class="lp-testimonial__avatar" aria-hidden="true">KW</div>
+                        <div>
+                            <div class="lp-testimonial__name">Kwame</div>
+                            <div class="lp-testimonial__role">Musicien</div>
+                        </div>
+                    </div>
+                </article>
+
+                {# Témoignage 3 #}
+                <article class="lp-testimonial">
+                    <div class="lp-testimonial__stars" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+                    <p class="lp-testimonial__quote">
+                        &laquo;&nbsp;Le forum m'a permis de rencontrer d'autres artistes et de monter
+                        un projet collectif. Un vrai point d'ancrage.&nbsp;&raquo;
+                    </p>
+                    <div class="lp-testimonial__author">
+                        <div class="lp-testimonial__avatar" aria-hidden="true">AI</div>
+                        <div>
+                            <div class="lp-testimonial__name">A&iuml;cha</div>
+                            <div class="lp-testimonial__role">Plasticienne</div>
+                        </div>
+                    </div>
+                </article>
+
+            </div>{# /.lp-testimonials__grid #}
+        </section>
+
         <section class="lp-cta" id="section-cta" aria-labelledby="lp-cta-title">
             <div class="lp-container">
                 <div class="lp-cta__grid">
@@ -3890,6 +4200,11 @@
                                 </svg>
                             </button>
                         </form>
+                        {# Nouveauté audit (A2) : réassurance sous le champ email.
+                           Point médian "·", PAS de tiret cadratin. #}
+                        <p class="lp-cta__legal" style="margin-top:10px;font-weight:700;">
+                            1&nbsp;mois offert &middot; Aucune CB requise
+                        </p>
                         {# Lien "Déjà membre" discret #}
                         <p class="lp-cta__legal" style="margin-top:12px;">
                             Déjà membre ?
@@ -3905,133 +4220,6 @@
         </section>
 
 
-        {# ════════════════════════════════════════════════════════════════
-           MODIFICATION A — SECTION HUBS déplacée ici (dernière section de contenu)
-           Originellement positionnée juste après le marquee hero (section 4).
-           Placée APRÈS le CTA inscription pour deux raisons :
-             1. Narrative : on présente la plateforme (SAAS, opps, communauté,
-                CTA) avant de présenter l'association physique (les hubs).
-                Le visiteur comprend d'abord ce qu'il peut faire, puis d'où ça vient.
-             2. Conversion : le CTA inscription est plus efficace après les
-                sections "plateforme" — les hubs arrivent ensuite pour ancrer
-                la légitimité de l'association.
-        ════════════════════════════════════════════════════════════════ #}
-        <section class="lp-hubs lp-container" aria-labelledby="lp-hubs-title">
-
-            {# Section header avec index, titre, sous-titre #}
-            <div class="lp-section-header">
-                <div class="lp-section-header__left">
-                    <span class="lp-section-header__index" aria-hidden="true">04</span>
-                    <h2 class="lp-section-header__title" id="lp-hubs-title">
-                        Les trois hubs de l'asso
-                    </h2>
-                    <span class="lp-section-header__sub">événement · ingénierie · transmission</span>
-                </div>
-            </div>
-
-            {# Grille des 3 hubs #}
-            <div class="lp-hubs__grid">
-
-                {# ── Hub 01 : EVENT ── #}
-                <article class="lp-hub lp-hub--bordered" aria-labelledby="lp-hub-event-title">
-                    <div class="lp-hub__header">
-                        <span class="lp-hub__no">HUB 01</span>
-                        {# Chip lime — couleur prototypée pour EVENT #}
-                        <span class="lp-chip lp-chip--lime">Programmation</span>
-                    </div>
-                    <h3 class="lp-hub__name" id="lp-hub-event-title">EVENT</h3>
-                    <p class="lp-hub__desc">
-                        On produit. Soirées de restitution, vernissages alternatifs,
-                        plateaux mixtes — on met les artistes BazaArt sur scène,
-                        en vrai, devant des gens.
-                    </p>
-                    {# Micro-liste de stats en bas de colonne #}
-                    <div class="lp-hub__stats">
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>18 événements / an</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>3 villes</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>9 000 spectateurs cumulés</span>
-                        </div>
-                    </div>
-                </article>
-
-                {# ── Hub 02 : INGÉNIERIE CULTURELLE ── #}
-                <article class="lp-hub lp-hub--bordered" aria-labelledby="lp-hub-ing-title">
-                    <div class="lp-hub__header">
-                        <span class="lp-hub__no">HUB 02</span>
-                        {# Chip neutre sable — couleur --bg-alt pour ce hub #}
-                        <span class="lp-chip lp-chip--sand">Accompagnement</span>
-                    </div>
-                    {#
-                        "INGÉNIERIE CULTURELLE" — le retour à la ligne entre les
-                        deux mots est géré naturellement par white-space:normal sur
-                        .lp-hub__name (CSS). Le <br> a été retiré car il provoquait
-                        un espace vide au-dessus du texte dans l'animation title-reveal.js
-                        (le bloc droit commençait par une ligne fantôme de hauteur non nulle).
-                        Avec white-space:normal et clamp(20px,9cqi,46px), "INGÉNIERIE"
-                        et "CULTURELLE" passent sur 2 lignes dès que la fonte dépasse
-                        la largeur disponible de la colonne (1fr dans 3 colonnes de grid).
-                    #}
-                    <h3 class="lp-hub__name" id="lp-hub-ing-title">INGÉNIERIE CULTURELLE</h3>
-                    <p class="lp-hub__desc">
-                        On structure. Conseil aux artistes et aux structures sur
-                        le montage de projets, les financements croisés, et la
-                        conduite d'une production de A à Z.
-                    </p>
-                    <div class="lp-hub__stats">
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>120 projets accompagnés</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>78% taux de réussite</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>Réseau de 40 financeurs</span>
-                        </div>
-                    </div>
-                </article>
-
-                {# ── Hub 03 : FORMATION ── #}
-                <article class="lp-hub" aria-labelledby="lp-hub-form-title">
-                    <div class="lp-hub__header">
-                        <span class="lp-hub__no">HUB 03</span>
-                        {# Chip orange — accent-2 pour FORMATION #}
-                        <span class="lp-chip lp-chip--orange">Transmission</span>
-                    </div>
-                    <h3 class="lp-hub__name" id="lp-hub-form-title">FORMATION</h3>
-                    <p class="lp-hub__desc">
-                        On forme. Cycles courts (fiscalité, droit, communication, IA)
-                        animés par des pairs et des experts. Gratuit pour les adhérents,
-                        abordable pour les autres.
-                    </p>
-                    <div class="lp-hub__stats">
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>12 cycles / an</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>280 artistes formés</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>Note moyenne 4,7 / 5</span>
-                        </div>
-                    </div>
-                </article>
-
-            </div>{# /.lp-hubs__grid #}
-        </section>
 
     </main>
 

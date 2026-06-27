@@ -865,15 +865,18 @@
 
             {% else %}
                 {#
-                    Utilisateur NON connecté → Connexion + Rejoindre.
-                    Ordre imposé par la spec : Connexion (secondaire) puis Rejoindre (primaire).
-                    "Connexion" = ghost (transparent), "Rejoindre" = lime (CTA vert).
+                    Utilisateur NON connecté → Se connecter + S'inscrire.
+                    Ordre imposé par la spec : "Se connecter" (secondaire) puis "S'inscrire" (primaire).
+                    "Se connecter" = ghost (transparent, lien sobre).
+                    "S'inscrire"   = nav-btn--lime = CTA principal de la charte.
+                    NB : malgré son nom, .nav-btn--lime utilise --accent = #FFCB10 (JAUNE DORÉ),
+                    couleur d'action principale de la charte (item 9 de l'audit). Pas de vert.
                 #}
                 <a href="{{ path('app_login') }}" class="nav-btn nav-btn--ghost">
-                    Connexion
+                    Se connecter
                 </a>
                 <a href="{{ path('app_register') }}" class="nav-btn nav-btn--lime">
-                    Rejoindre
+                    S'inscrire
                 </a>
             {% endif %}
 
@@ -917,9 +920,9 @@
         <a href="{{ path('app_dashboard') }}" class="nav-mobile-item">Mon espace</a>
         <a href="{{ path('app_logout') }}" class="nav-mobile-item danger">Se déconnecter</a>
     {% else %}
-        <a href="{{ path('app_login') }}" class="nav-mobile-item">Connexion</a>
+        <a href="{{ path('app_login') }}" class="nav-mobile-item">Se connecter</a>
         <a href="{{ path('app_register') }}" class="nav-mobile-item"
-           style="color:var(--accent, #FFCB10);">Rejoindre</a>
+           style="color:var(--accent, #FFCB10);">S'inscrire</a>
     {% endif %}
 
 </nav>

@@ -250,13 +250,107 @@
         cursor: not-allowed;
     }
 
-    /* ── Section formations (séparée en bas) ────────────────────────────── */
-    .pr-formations {
-        margin-top: 64px;
-        border-top: 1px solid var(--ink);
-        padding-top: 40px;
-        padding-bottom: 40px;
+    /* ── Bandeau "1 mois offert" (nouveauté audit) ──────────────────────────
+       En haut de page, avant les prix. Fond encre + accent jaune doré pour
+       être bien repérable sans écraser les cartes tarifaires. */
+    .pr-trial-banner {
+        margin-top: 32px;
+        background: var(--ink);
+        color: var(--bg);
+        border: 1px solid var(--ink);
+        padding: 18px 24px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
     }
+    .pr-trial-banner__tag {
+        font-family: var(--mono, monospace);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--ink);
+        background: var(--accent);
+        padding: 4px 10px;
+        white-space: nowrap;
+    }
+    .pr-trial-banner__text { font-size: 15px; font-weight: 600; }
+    .pr-trial-banner__text strong { color: var(--accent); }
+
+    /* ── Tableau comparatif Gratuit / Mensuel / Annuel (item 5 audit) ────────
+       Bordures partagées façon "grille d'affiche". Colonne annuelle mise en
+       valeur (fond encre + accents jaune doré sur les ✓). */
+    .pr-compare {
+        margin-top: 56px;
+        border: 1px solid var(--ink);
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 14px;
+    }
+    .pr-compare th, .pr-compare td {
+        border: 1px solid var(--line-soft, rgba(13,13,13,.18));
+        padding: 12px 14px;
+        text-align: center;
+    }
+    .pr-compare thead th {
+        font-family: var(--mono, monospace);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        background: var(--bg-alt, #E8E5DC);
+    }
+    /* Première colonne (libellés de fonctionnalités) alignée à gauche */
+    .pr-compare tbody th {
+        text-align: left;
+        font-weight: 600;
+        background: var(--bg);
+    }
+    /* Colonne "Annuel" mise en avant : fond encre, texte crème */
+    .pr-compare .pr-compare__col-annual {
+        background: var(--ink);
+        color: var(--bg);
+    }
+    .pr-compare .pr-compare__yes { color: var(--accent-2, #FF6B2C); font-weight: 700; }
+    /* Dans la colonne annuelle (fond sombre), le ✓ passe en jaune doré */
+    .pr-compare .pr-compare__col-annual.pr-compare__yes { color: var(--accent); }
+    .pr-compare .pr-compare__no { color: var(--ink-mute, #9a9a9a); }
+    .pr-compare__note {
+        margin-top: 12px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--ink-mute, #6b6b6b);
+        max-width: 760px;
+    }
+
+    /* ── Section formations : encadré distinct (item 6 audit) ────────────────
+       Auparavant simple note en bas de page. Désormais encadré bordé + fond
+       contrasté + icône d'information, pour éviter la frustration post-achat. */
+    .pr-formations {
+        margin-top: 56px;
+        border: 1.5px solid var(--ink);
+        background: var(--bg-alt, #E8E5DC);
+        padding: 22px 26px;
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+    }
+    /* Pastille icône "information" */
+    .pr-formations__icon {
+        flex-shrink: 0;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: var(--ink);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--display, sans-serif);
+        font-size: 18px;
+        font-weight: 700;
+    }
+    .pr-formations__body { flex: 1; }
 
     .pr-formations__label {
         font-family: var(--mono, 'JetBrains Mono', monospace);
@@ -309,6 +403,13 @@
         .pr-title {
             font-size: clamp(40px, 12vw, 72px);
         }
+
+        /* Le tableau comparatif reste lisible sur mobile : on autorise un
+           défilement horizontal via son conteneur .pr-compare-wrap. */
+        .pr-compare { font-size: 12.5px; min-width: 480px; }
+        .pr-compare th, .pr-compare td { padding: 10px 8px; }
+        /* L'encadré formations passe en colonne sur petit écran */
+        .pr-formations { flex-direction: column; }
     }
     </style>
 {% endblock %}
@@ -324,6 +425,16 @@
     subtitle: 'Choisis ton abonnement et accède à tout Bazaart en illimité : opportunités, alertes, annuaires et messagerie privée.'
 } %}
 
+{# ── BANDEAU "1 MOIS OFFERT" (nouveauté audit) ────────────────────────────────
+   Visible en haut de page, avant les blocs de prix. Met en avant l'essai gratuit
+   d'un mois offert à tout nouvel inscrit (ADR-0028). #}
+<div class="pr-trial-banner">
+    <span class="pr-trial-banner__tag">Nouvel inscrit&nbsp;?</span>
+    <span class="pr-trial-banner__text">
+        Ton premier mois est <strong>offert</strong>, accès à tout sans engagement.
+    </span>
+</div>
+
 {# ── BANNIERE "ABONNEMENT ACTIF" — visible uniquement si l'utilisateur est abonné #}
 {% if hasActiveSubscription and activeSubscription is not null %}
     {#
@@ -334,7 +445,7 @@
         <span class="pr-active-banner__text">
             &#10003; Tu es abonne·e
             {# On affiche le libellé du plan en français selon la valeur en BDD #}
-            — plan {{ activeSubscription.plan == 'monthly' ? 'mensuel' : 'annuel' }},
+            &middot; plan {{ activeSubscription.plan == 'monthly' ? 'mensuel' : 'annuel' }},
             valable jusqu'au {{ activeSubscription.currentPeriodEnd|date('d/m/Y') }}
         </span>
         <a href="{{ path('app_subscription_manage') }}" class="pr-active-banner__link">
@@ -420,8 +531,8 @@
          # On arrondit à 2 décimales avec le filtre Twig |round.
          #}
         <p class="pr-price__equiv">
-            soit {{ annualMonthlyEquivalent }} &euro;/mois
-            — economisez {{ ((9.9 * 12 - 79) | round(2))|number_format(2, ',', ' ') }} &euro;
+            soit {{ annualMonthlyEquivalent }} &euro;/mois,
+            economisez {{ ((9.9 * 12 - 79) | round(2))|number_format(2, ',', ' ') }} &euro;
         </p>
 
         {# Liste des avantages — identique au mensuel + bonus "2 mois offerts" #}
@@ -452,7 +563,7 @@
                 </button>
             {% else %}
                 <button type="submit" class="btn-annual">
-                    S'ABONNER &#8212; OFFRE ANNUELLE
+                    S'ABONNER &middot; OFFRE ANNUELLE
                 </button>
             {% endif %}
 
@@ -464,6 +575,53 @@
 </div>
 {# /GRILLE #}
 
+{# ── TABLEAU COMPARATIF Gratuit / Mensuel / Annuel (item 5 de l'audit) ───────
+   Conteneur .pr-compare-wrap : autorise le scroll horizontal sur mobile pour
+   garder le tableau lisible (overflow-x:auto). #}
+<div class="pr-compare-wrap" style="overflow-x:auto;margin-top:8px;">
+    <table class="pr-compare">
+        <thead>
+            <tr>
+                <th scope="col">Fonctionnalit&eacute;</th>
+                <th scope="col">Gratuit<br><small>(1 mois offert)</small></th>
+                <th scope="col">Mensuel<br><small>9,90&nbsp;&euro;</small></th>
+                <th scope="col" class="pr-compare__col-annual">Annuel<br><small>79&nbsp;&euro;/an</small></th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th scope="row">Forum communautaire</th>
+                <td class="pr-compare__yes">&#10003;</td>
+                <td class="pr-compare__yes">&#10003;</td>
+                <td class="pr-compare__col-annual pr-compare__yes">&#10003;</td>
+            </tr>
+            <tr>
+                <th scope="row">Ressourcerie compl&egrave;te + alertes</th>
+                <td class="pr-compare__yes">&#10003;<sup>*</sup></td>
+                <td class="pr-compare__yes">&#10003;</td>
+                <td class="pr-compare__col-annual pr-compare__yes">&#10003;</td>
+            </tr>
+            <tr>
+                <th scope="row">Messagerie priv&eacute;e</th>
+                <td class="pr-compare__yes">&#10003;<sup>*</sup></td>
+                <td class="pr-compare__yes">&#10003;</td>
+                <td class="pr-compare__col-annual pr-compare__yes">&#10003;</td>
+            </tr>
+            <tr>
+                <th scope="row">Lives</th>
+                <td class="pr-compare__yes">&#10003;<sup>*</sup></td>
+                <td class="pr-compare__yes">&#10003;</td>
+                <td class="pr-compare__col-annual pr-compare__yes">&#10003;</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+<p class="pr-compare__note">
+    <sup>*</sup> Accès complet pendant le 1er mois offert. Ensuite, l'accès gratuit
+    devient limité (consultation réduite des opportunités, sans alertes, messagerie
+    ni lives). Abonne-toi pour conserver l'accès illimité à tout Bazaart.
+</p>
+
 {# ── SECTION FORMATIONS — note de bas de page tarifaire ─────────────────────── #}
 {#
  # Rappel important : les formations sont payées séparément de l'abonnement.
@@ -471,14 +629,18 @@
  # On l'indique clairement pour éviter toute confusion chez l'utilisateur.
  #}
 <div class="pr-formations">
-    <p class="pr-formations__label">FORMATIONS</p>
-    <p class="pr-formations__text">
-        Les formations sont disponibles a l'achat individuel sur leur page
-        dédiée. L'abonnement ne les inclut pas.
-    </p>
-    <a href="{{ path('app_course_index') }}" class="pr-formations__link">
-        Voir le catalogue formations &#8594;
-    </a>
+    {# Icône d'information pour signaler une note importante #}
+    <div class="pr-formations__icon" aria-hidden="true">&#8505;</div>
+    <div class="pr-formations__body">
+        <p class="pr-formations__label">FORMATIONS</p>
+        <p class="pr-formations__text">
+            Les formations sont disponibles à l'achat individuel sur leur page
+            dédiée. <strong>L'abonnement ne les inclut pas.</strong>
+        </p>
+        <a href="{{ path('app_course_index') }}" class="pr-formations__link">
+            Voir le catalogue formations &#8594;
+        </a>
+    </div>
 </div>
 
 {% endblock %}
