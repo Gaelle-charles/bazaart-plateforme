@@ -52,6 +52,13 @@
 #}
 {% block footer %}{% endblock %}
 
+{#
+    On neutralise la barre de navigation basse globale (base.html.twig) :
+    le dashboard a DÉJÀ sa propre barre basse en mobile (.sd-side devient un
+    "bottom tab bar"). Sans ça, deux barres se superposeraient en bas.
+#}
+{% block bottom_nav %}{% endblock %}
+
 {% block stylesheets %}
 {{ parent() }}
 {#

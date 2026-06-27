@@ -1,0 +1,155 @@
+{#
+ # _partials/bottom_nav.html.twig — Barre de navigation basse (mobile) pour utilisateur connecté
+ #
+ # Affichée sur TOUTES les pages de la plateforme (sauf dashboard et admin, qui
+ # ont déjà leur propre barre) dès que l'utilisateur est connecté.
+ #
+ # Inclus via {% block bottom_nav %} dans base.html.twig.
+ #   - base_dashboard.html.twig neutralise ce block (il a déjà sa .sd-side).
+ #   - base_admin.html.twig le neutralise aussi (back-office).
+ #
+ # Pattern "bottom tab bar" (iOS/Android) : visible UNIQUEMENT en mobile (< 768px).
+ # Sur desktop, la navigation principale (top nav) suffit → la barre est masquée.
+ #
+ # Cohérence visuelle avec la barre basse du dashboard (.sd-side mobile) :
+ #   fond --ink, 60px de haut, icône au-dessus d'un label court, indicateur actif doré.
+ #}
+{% set route = app.request.attributes.get('_route') %}
+
+<nav class="ubn" aria-label="Navigation rapide">
+
+    {# Mon espace — app_dashboard redirige les admins vers leur dashboard dédié #}
+    <a href="{{ path('app_dashboard') }}"
+       class="ubn__link {{ route == 'app_dashboard' ? 'ubn__link--active' : '' }}">
+        <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11 12 4l9 7v9h-6v-6h-6v6H3z"/>
+        </svg>
+        Espace
+    </a>
+
+    {# Opportunités (ressources publiées) #}
+    <a href="{{ path('app_resource_index') }}"
+       class="ubn__link {{ route starts with 'app_resource' ? 'ubn__link--active' : '' }}">
+        <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/>
+        </svg>
+        Opportunit&eacute;s
+    </a>
+
+    {# Forum communautaire #}
+    <a href="{{ path('app_forum_index') }}"
+       class="ubn__link {{ route starts with 'app_forum_' ? 'ubn__link--active' : '' }}">
+        <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        Forum
+    </a>
+
+    {# Messagerie privée #}
+    <a href="{{ path('app_messaging_index') }}"
+       class="ubn__link {{ route starts with 'app_messaging_' ? 'ubn__link--active' : '' }}">
+        <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M22 11.4a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L4 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9 8.5 8.5 0 0 1 8.5 8.5z"/>
+        </svg>
+        Messages
+    </a>
+
+    {# Notifications — badge de non-lus (même fonction Twig que la sidebar dashboard) #}
+    {% set ubnUnread = unread_notifications_count() %}
+    <a href="{{ path('app_notification_index') }}"
+       class="ubn__link {{ route == 'app_notification_index' ? 'ubn__link--active' : '' }}">
+        <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 8a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/>
+            <path d="M10 18a2 2 0 0 0 4 0"/>
+        </svg>
+        Notifs
+        {% if ubnUnread > 0 %}
+            <span class="ubn__badge" aria-label="{{ ubnUnread }} notification(s) non lue(s)">
+                {{ ubnUnread > 9 ? '9+' : ubnUnread }}
+            </span>
+        {% endif %}
+    </a>
+
+</nav>
+
+{#
+    CSS scoppé (.ubn-*). Placé dans le partial pour n'être chargé QUE lorsque la
+    barre est rendue (utilisateur connecté, hors dashboard/admin). Cohérent avec
+    le reste du code (styles inline déjà utilisés partout, CSP les autorise).
+#}
+<style>
+    /* Masquée par défaut (desktop) : la top nav suffit sur grand écran. */
+    .ubn { display: none; }
+
+    @media (max-width: 767px) {
+        /* Barre fixe en bas de l'écran, façon bottom tab bar mobile. */
+        .ubn {
+            display: flex;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 900;
+            height: 60px;
+            background: var(--ink, #0D0D0D);
+            border-top: 1px solid rgba(242, 239, 230, .2);
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+        /* Chaque onglet : icône au-dessus d'un label court. */
+        .ubn__link {
+            flex: 1 0 auto;
+            min-width: 64px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            padding: 6px 8px;
+            color: var(--bg, #F2EFE6);
+            text-decoration: none;
+            font-size: 9px;
+            letter-spacing: .03em;
+            white-space: nowrap;
+            border-top: 2px solid transparent;
+            position: relative;
+        }
+        .ubn__icon {
+            width: 20px;
+            height: 20px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.6;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        /* Onglet actif : texte + indicateur haut en jaune doré (charte). */
+        .ubn__link--active {
+            color: var(--accent, #FFCB10);
+            border-top-color: var(--accent, #FFCB10);
+        }
+        /* Badge de notifications non lues (orange charte). */
+        .ubn__badge {
+            position: absolute;
+            top: 5px;
+            right: 14px;
+            min-width: 15px;
+            height: 15px;
+            padding: 0 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent-2, #FF6B2C);
+            color: #fff;
+            font-size: 8px;
+            font-weight: 700;
+            border-radius: 8px;
+            line-height: 1;
+        }
+        /* On réserve la hauteur de la barre en bas du contenu (anti-recouvrement). */
+        body {
+            padding-bottom: 60px;
+        }
+    }
+</style>

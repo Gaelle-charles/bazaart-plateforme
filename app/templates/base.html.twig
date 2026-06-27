@@ -960,6 +960,20 @@
 {% include '_footer.html.twig' %}
 {% endblock %}
 
+{#
+    ── BARRE DE NAVIGATION BASSE (mobile, utilisateur connecté) ──────────────────
+    Affichée sur toutes les pages de la plateforme dès qu'un utilisateur est connecté.
+    Les layouts qui ont déjà leur propre barre la neutralisent :
+      - base_dashboard.html.twig (sa .sd-side devient une barre basse en mobile)
+      - base_admin.html.twig (back-office)
+    Visible uniquement en mobile (< 768px) ; cachée sur desktop (la top nav suffit).
+#}
+{% block bottom_nav %}
+    {% if app.user %}
+        {% include '_partials/bottom_nav.html.twig' %}
+    {% endif %}
+{% endblock %}
+
 {# ── SCRIPTS ────────────────────────────────────────────────────────────── #}
 {#
     Les scripts nav sont ici plutôt que dans un fichier externe pour éviter
