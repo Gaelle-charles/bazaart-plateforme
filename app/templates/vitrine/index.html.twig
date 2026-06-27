@@ -3670,43 +3670,20 @@ body.page-home .lp-section-header { padding-block: 44px; }
                         <h2 class="lp-section-header__title" id="lp-swipe-title">
                             Ton matching
                         </h2>
-                        <span class="lp-section-header__sub">profil à compléter</span>
+                        <span class="lp-section-header__sub">réponds à quelques questions</span>
                     </div>
                 </div>
 
                 {#
-                    ÉTAT VERROUILLÉ — Utilisateur connecté dont le profil n'est pas
-                    complet (profileComplete=false, décidé CÔTÉ SERVEUR : aucune carte
-                    n'est rendue, donc pas de flash d'affichage avant masquage).
-                    On invite à compléter le profil via l'onboarding (app_onboarding_step1).
-                    Cartes fantômes floues en fond pour donner envie + overlay de CTA.
+                    FORMULAIRE INLINE, Utilisateur connecté au profil incomplet.
+                    Il remplit DIRECTEMENT le formulaire de matching ICI : aucune
+                    redirection vers /onboarding/etape-1 (demande Gaëlle).
+                    La soumission (POST /matching/form, MatchingFormController::submit)
+                    sauvegarde son profil via OnboardingService, puis le ramène à la
+                    home avec ses cartes de matching. Les données sont pré-remplies
+                    depuis la session si elles existent.
                 #}
-                <div class="matching-locked">
-
-                    {# Cartes fantômes floues en arrière-plan (décoratives) #}
-                    <div class="matching-locked__cards" aria-hidden="true">
-                        <div class="matching-locked__card matching-locked__card--1"></div>
-                        <div class="matching-locked__card matching-locked__card--2"></div>
-                        <div class="matching-locked__card matching-locked__card--3"></div>
-                    </div>
-
-                    {# Bloc central de déverrouillage #}
-                    <div class="matching-locked__overlay">
-                        <div class="matching-locked__icon" aria-hidden="true">&#127919;</div>
-                        <h3 class="matching-locked__title">Ton matching t'attend</h3>
-                        <p class="matching-locked__text">
-                            Dis-nous qui tu es&nbsp;: discipline, territoire, objectifs.
-                            En 2 minutes, on trouve les opportunit&eacute;s faites pour toi.
-                        </p>
-                        <a href="{{ path('app_onboarding_step1') }}" class="matching-locked__cta">
-                            Compl&eacute;ter mon profil &rarr;
-                        </a>
-                        <p class="matching-locked__reassurance">
-                            Gratuit &middot; Sans engagement &middot; 1 mois offert
-                        </p>
-                    </div>
-
-                </div>{# /.matching-locked #}
+                {% include 'matching/_matching_form.html.twig' %}
 
             {# ─── ETAT 4 : VISITEUR NON connecté → formulaire d'accroche ──────────────
                 On affiche le formulaire de matching au visiteur (accroche). Mais dès le
