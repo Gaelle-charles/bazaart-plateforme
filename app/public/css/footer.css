@@ -179,7 +179,7 @@
  *   = ratio de contraste élevé (conforme WCAG AA).
  */
 .lp-footer__logo img {
-    height:    64px; /* logo réduit (80 -> 64) */
+    height:    44px; /* logo réduit (80 -> 64 -> 44) */
     width:     auto;
     max-width: 100%;
     display:   block;
@@ -310,12 +310,23 @@
 }
 
 /*
- * Mobile (≤ 768px) : 1 seule colonne. Tout s'empile.
- * Le copyright passe en colonne aussi (texte + version sur deux lignes).
+ * Mobile (≤ 768px) : footer COMPACT (il était trop long en pleine pile).
+ * On garde 2 colonnes pour les listes de liens (Plateforme | Legal) au lieu de
+ * tout empiler ; la colonne "asso" (description) passe en pleine largeur au-dessus.
+ * Logo plus petit et espacements réduits pour raccourcir la hauteur.
  */
 @media (max-width: 768px) {
     .lp-footer__grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr 1fr; /* 2 colonnes (au lieu de 1) */
+        gap:                   18px 20px;
+        margin-top:            24px;
+        padding-top:           24px;
+    }
+
+    /* La colonne "asso" (1er enfant = le <div> description) prend toute la largeur,
+       posée au-dessus des deux colonnes de liens. */
+    .lp-footer__grid > div:first-child {
+        grid-column: 1 / -1;
     }
 
     .lp-footer__copy {
@@ -323,18 +334,18 @@
         gap:            8px;
     }
 
-    /* Logo : légèrement plus petit sur mobile pour proportionner */
+    /* Logo nettement plus petit sur mobile */
     .lp-footer__logo img {
-        height: 56px;
+        height: 34px;
     }
 
-    /* Padding en haut réduit sur mobile */
+    /* Padding en haut réduit sur mobile (footer plus court) */
     .lp-footer__logo {
-        padding-top: 32px;
+        padding-top: 24px;
     }
 
     /* Espacement au-dessus du footer réduit sur mobile */
     .lp-footer {
-        margin-top: 40px;
+        margin-top: 32px;
     }
 }
