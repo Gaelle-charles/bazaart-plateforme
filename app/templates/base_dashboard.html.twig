@@ -37,11 +37,17 @@
  #}
 
 {#
-    On vide le bloc navbar car la sidebar remplace intégralement
-    la barre de navigation publique de base.html.twig.
-    Les utilisateurs connectés n'ont pas besoin de la nav vitrine.
+    Classe body "is-dashboard" : permet de cibler le dashboard en CSS.
+    On NE vide PLUS le bloc navbar : la top nav globale (.nav de base.html.twig)
+    est désormais RENDUE, mais :
+      - en DESKTOP, elle est masquée (la sidebar gauche fait la navigation) ;
+      - en MOBILE, elle est AFFICHÉE (même top nav que les autres pages) et la
+        sd-topbar du dashboard est masquée → chrome cohérente partout
+        (top nav + barre du bas .ubn). Voir CSS plus bas.
 #}
-{% block navbar %}{% endblock %}
+{% block body_class %}is-dashboard{% endblock %}
+
+{# Le bloc navbar n'est plus surchargé : la .nav du parent s'affiche (cf. CSS). #}
 
 {#
     Le footer public n'est pas inclus dans le dashboard : la sidebar latérale
@@ -562,6 +568,20 @@
     /* Paddings topbar et flash réduits */
     .sd-topbar { padding: 0 16px; }
     .sd-flash   { margin: 8px 16px 0; }
+}
+
+/* ── TOP NAV GLOBALE sur le dashboard : desktop masquée, mobile affichée ──────
+   But : avoir la MÊME top navbar (.nav de base.html.twig) sur le dashboard en
+   mobile que sur le reste du site. En desktop, le dashboard garde sa sidebar
+   gauche et n'a pas besoin de la top nav. */
+@media (min-width: 768px) {
+    /* Desktop : on cache la top nav globale sur le dashboard (la sidebar suffit). */
+    body.is-dashboard .nav { display: none; }
+}
+@media (max-width: 767px) {
+    /* Mobile : la top nav globale (.nav) s'affiche (comportement par défaut),
+       et on masque la sd-topbar du dashboard pour ne pas doubler les barres. */
+    body.is-dashboard .sd-topbar { display: none; }
 }
 
 </style>
