@@ -2988,6 +2988,95 @@ body.page-home .lp-footer { margin-top: 0; }
         gap:                   28px;
     }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   RAFFINEMENT VISUEL HOMEPAGE (CSS additif, scoppé body.page-home)
+   But : "plus de classe" et de la profondeur, par les OMBRES (pas d'arrondis).
+   Aucun contenu modifié. Identité conservée (jaune / noir / rouge, fond crème,
+   angles droits, bordures 1.5px). Transitions courtes et discrètes.
+   Tout est scoppé a body.page-home pour n'impacter QUE l'accueil.
+   ════════════════════════════════════════════════════════════════════════════ */
+body.page-home {
+    /* Tokens d'ombre : profondeur douce et diffuse, sans halo dur */
+    --sh-card:   0 16px 38px -22px rgba(14, 13, 11, .42);
+    --sh-hover:  0 30px 60px -26px rgba(14, 13, 11, .5);
+    --sh-btn:    0 10px 22px -10px rgba(14, 13, 11, .45);
+    --sh-yellow: 0 14px 32px -12px rgba(240, 190, 0, .6);
+    /* Réchauffement : crème un peu plus chaud, noir un peu plus profond et chaud */
+    --bg:  #F3EEE3;
+    --ink: #0E0D0B;
+}
+
+/* ── Cartes statiques : profondeur au repos + lift discret au survol ────────── */
+body.page-home .lp-opp-card,
+body.page-home .lp-hub,
+body.page-home .lp-live,
+body.page-home .lp-testimonial {
+    box-shadow: var(--sh-card);
+    transition: transform .16s, box-shadow .16s, background .16s;
+}
+body.page-home .lp-opp-card:hover,
+body.page-home .lp-hub:hover,
+body.page-home .lp-live:hover,
+body.page-home .lp-testimonial:hover {
+    transform:  translateY(-5px);
+    box-shadow: var(--sh-hover);
+}
+/* Carte matching : ombre SEULE. Son transform est piloté par swipe.js (drag),
+   on n'ajoute donc ni translate ni transition sur transform (sinon drag cassé). */
+body.page-home .swipe-card {
+    box-shadow: var(--sh-card);
+}
+
+/* ── Boutons : ombre douce au repos, lift + flèche qui glisse au survol ─────── */
+body.page-home .lp-btn { box-shadow: var(--sh-btn); }
+body.page-home .lp-btn--accent { box-shadow: var(--sh-yellow); }
+body.page-home .lp-btn:hover {
+    transform:  translateY(-3px);
+    box-shadow: var(--sh-hover);
+}
+body.page-home .lp-btn svg { transition: transform .16s; }
+body.page-home .lp-btn:hover svg { transform: translateX(3px); }
+
+/* ── Champs de saisie : anneau jaune au focus + fond legerement plus clair ──── */
+body.page-home .ob-input:focus,
+body.page-home .mf-wrap .ob-input:focus,
+body.page-home .lp-cta__input:focus,
+body.page-home .mf-field__input:focus {
+    outline:    none;
+    box-shadow: 0 0 0 4px rgba(255, 209, 26, .45);
+    background: #FBF8F1;
+}
+
+/* ── Tuiles de discipline : survol souleve, selection appuyee ──────────────── */
+body.page-home .mf-wrap .ob-disc-item label {
+    transition: background .12s, border-color .12s, transform .16s, box-shadow .16s;
+}
+body.page-home .mf-wrap .ob-disc-item label:hover {
+    transform:    translateY(-2px);
+    box-shadow:   var(--sh-card);
+    border-color: var(--ink);
+}
+body.page-home .mf-wrap .ob-disc-item input:checked + label {
+    box-shadow:   var(--sh-card);
+    border-color: var(--ink);
+}
+
+/* ── Hero : voile de lisibilite plus dense a GAUCHE et en BAS ───────────────── */
+body.page-home .lp-hero__bg::after {
+    background:
+        linear-gradient(to right,
+            rgba(14, 13, 11, .58) 0%,
+            rgba(14, 13, 11, .14) 42%,
+            rgba(14, 13, 11, 0)   72%),
+        linear-gradient(to bottom,
+            rgba(14, 13, 11, .12) 0%,
+            rgba(14, 13, 11, .45) 55%,
+            rgba(14, 13, 11, .74) 100%);
+}
+
+/* ── Rythme typographique : en-tetes de section plus aeres ─────────────────── */
+body.page-home .lp-section-header { padding-block: 44px; }
 </style>
 {% endblock %}
 
