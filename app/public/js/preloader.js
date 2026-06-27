@@ -48,13 +48,16 @@
     var logo    = document.getElementById('bzrt-preloader-logo');
     if (!overlay || !canvas) { return; }
 
-    /* ── Règle d'affichage : arrivée OU hard refresh seulement ─────────────── */
-    var nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || null;
-    var isReload     = nav ? (nav.type === 'reload') : false;
-    var firstArrival = true;
-    try { firstArrival = !sessionStorage.getItem('bzrt_splash_seen'); } catch (e) {}
-    if (!isReload && !firstArrival) { return; } /* navigation interne -> pas de splash */
-    try { sessionStorage.setItem('bzrt_splash_seen', '1'); } catch (e) {}
+    /* ── Règle d'affichage : UNE SEULE FOIS, à la toute première session ─────────
+       On utilise localStorage (PERSISTANT) : le splash ne s'affiche qu'au tout
+       premier passage de l'utilisateur (première session). Ensuite, plus jamais :
+       ni sur les reloads, ni sur les navigations internes, ni sur les sessions
+       suivantes (la clé localStorage survit à la fermeture du navigateur).
+       (Demande Gaëlle.) Pour le revoir : effacer la clé "bzrt_splash_seen". */
+    var alreadySeen = false;
+    try { alreadySeen = !!localStorage.getItem('bzrt_splash_seen'); } catch (e) {}
+    if (alreadySeen) { return; } /* déjà vu une fois -> on ne le réaffiche jamais */
+    try { localStorage.setItem('bzrt_splash_seen', '1'); } catch (e) {}
 
     overlay.classList.add('is-active');
 
