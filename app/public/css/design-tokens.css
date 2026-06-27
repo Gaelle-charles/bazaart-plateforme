@@ -646,3 +646,17 @@ body[data-theme="dark"] {
   white-space: nowrap;
   border:      0;
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+   FILET DE SÉCURITÉ GLOBAL : titres jamais coupés horizontalement
+   ──────────────────────────────────────────────────────────────────────
+   overflow-wrap:break-word autorise la coupure d'un MOT trop long pour la
+   largeur disponible (sinon, sur mobile, un titre mot-unique en Archivo Black
+   comme "CONFIDENTIALITE", un nom d'artiste long, etc. déborde et se fait
+   rogner par un overflow:hidden parent). N'affecte QUE les mots trop longs :
+   les titres normaux ne changent pas. Les titres animés (title-reveal) gardent
+   leur comportement car .tr-word impose white-space:nowrap (géré à part). */
+h1, h2, h3, h4 {
+  overflow-wrap: break-word;
+  word-break:    break-word;
+}
