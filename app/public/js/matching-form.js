@@ -76,6 +76,25 @@
 
         if (!form) { return; }
 
+        // ── Fermeture de la modal d'inscription (visiteurs) ──────────────────
+        // Trois moyens de fermer : croix, clic sur le backdrop, touche Échap.
+        if (signupCta) {
+            var signupCloseBtn = document.getElementById('mf-signup-close');
+            if (signupCloseBtn) {
+                signupCloseBtn.addEventListener('click', function () { closeSignupCta(signupCta); });
+            }
+            // Clic sur le backdrop (la zone .mf-signup-cta elle-même, hors du contenu)
+            signupCta.addEventListener('click', function (e) {
+                if (e.target === signupCta) { closeSignupCta(signupCta); }
+            });
+            // Touche Échap si la modal est ouverte
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && !signupCta.hasAttribute('hidden')) {
+                    closeSignupCta(signupCta);
+                }
+            });
+        }
+
         // Étape courante (1-indexée)
         var currentStep = 1;
 
@@ -104,10 +123,17 @@
                 // saveStepAjax() appelle TOUJOURS son callback (succès comme échec
                 // réseau), donc la redirection est garantie.
                 if (!isLoggedIn) {
-                    // On désactive le bouton pour éviter un double-clic pendant l'AJAX.
+                    // VISITEUR : au lieu d'une redirection BRUTALE vers /login, on
+                    // sauvegarde l'étape en session PUIS on ouvre une MODAL "crée ton
+                    // compte pour aller plus loin". Le visiteur garde ses réponses
+                    // (déjà en session → pré-remplissage de l'inscription/onboarding)
+                    // et décide en connaissance de cause (créer un compte / se connecter
+                    // / fermer et continuer à explorer le formulaire).
                     btnNext.disabled = true;
                     saveStepAjax(currentStep, form, function () {
-                        window.location.href = registerUrl;
+                        showSignupCta(signupCta);
+                        // Ré-activé : la modal est fermable, le visiteur peut re-cliquer.
+                        btnNext.disabled = false;
                     });
                     return;
                 }
@@ -146,8 +172,8 @@
                 if (!isLoggedIn) {
                     e.preventDefault();
                     saveStepAjax(currentStep, form, function () {
-                        // Afficher l'encart inscription au lieu de soumettre
-                        showSignupCta(signupCta, btnSubmit);
+                        // Afficher la modal inscription au lieu de soumettre
+                        showSignupCta(signupCta);
                     });
                 }
                 // Pour les artistes : la soumission continue normalement (POST classique)
@@ -460,25 +486,31 @@
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Masque le formulaire et affiche l'encart d'incitation à l'inscription.
-     * Appelé quand un visiteur clique sur "Voir mes matchs" à l'étape 3.
+     * Ouvre la MODAL d'incitation à l'inscription (visiteurs non connectés).
+     * Appelée au clic sur "Continuer" ou "Voir mes matchs". Le formulaire reste
+     * intact DERRIÈRE la modal (overlay + backdrop) : si le visiteur ferme la
+     * modal, il retrouve son formulaire exactement où il en était.
      *
-     * @param {HTMLElement|null} signupCta - Encart d'inscription
-     * @param {HTMLButtonElement|null} btnSubmit - Bouton de soumission (à masquer)
+     * @param {HTMLElement|null} signupCta - La modal (#mf-signup-cta)
      */
-    function showSignupCta(signupCta, btnSubmit) {
-        if (signupCta) {
-            signupCta.removeAttribute('hidden');
-            // Scroll vers l'encart pour que l'utilisateur le voie
-            signupCta.scrollIntoView({ behavior: TRANSITION_MS > 0 ? 'smooth' : 'auto', block: 'nearest' });
-            // Focus sur le premier CTA (accessibilité)
-            var firstBtn = signupCta.querySelector('a, button');
-            if (firstBtn) { setTimeout(function () { firstBtn.focus(); }, TRANSITION_MS); }
-        }
-        // Masque les boutons de navigation (le formulaire est "terminé")
-        if (btnSubmit) { btnSubmit.setAttribute('hidden', ''); }
-        var btnPrev = document.getElementById('mf-btn-prev');
-        if (btnPrev)  { btnPrev.setAttribute('hidden', ''); }
+    function showSignupCta(signupCta) {
+        if (!signupCta) { return; }
+        signupCta.removeAttribute('hidden');
+        // Verrouille le scroll de la page tant que la modal est ouverte
+        document.body.style.overflow = 'hidden';
+        // Focus sur le bouton de fermeture (accessibilité)
+        var closeBtn = document.getElementById('mf-signup-close');
+        if (closeBtn) { setTimeout(function () { closeBtn.focus(); }, TRANSITION_MS); }
+    }
+
+    /**
+     * Ferme la modal d'inscription et restaure le scroll de la page.
+     * @param {HTMLElement|null} signupCta
+     */
+    function closeSignupCta(signupCta) {
+        if (!signupCta) { return; }
+        signupCta.setAttribute('hidden', '');
+        document.body.style.overflow = '';
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

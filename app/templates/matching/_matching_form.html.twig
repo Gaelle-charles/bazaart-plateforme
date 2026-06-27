@@ -329,22 +329,39 @@
         Caché par défaut — affiché par JS quand le formulaire est complété et
         que l'utilisateur n'est pas connecté.
     #}
+    {#
+        MODAL "crée ton compte pour aller plus loin" (visiteurs uniquement).
+        Affichée par matching-form.js au clic sur "Continuer" / "Voir mes matchs",
+        à la place d'une redirection brutale vers /login. Les réponses du visiteur
+        sont déjà sauvegardées en session (saveStepAjax) : l'onboarding post-inscription
+        les pré-remplit. role=dialog + aria-modal pour l'accessibilité.
+    #}
     {% if not matchingForm_isLoggedIn %}
-    <div class="mf-signup-cta" id="mf-signup-cta" hidden aria-live="polite">
+    <div class="mf-signup-cta" id="mf-signup-cta" hidden
+         role="dialog" aria-modal="true" aria-labelledby="mf-signup-title">
         <div class="mf-signup-cta__inner">
+            {# Bouton de fermeture : referme la modal et laisse le formulaire intact #}
+            <button type="button" class="mf-signup-cta__close" id="mf-signup-close" aria-label="Fermer">
+                &times;
+            </button>
+            <div class="mf-signup-cta__icon" aria-hidden="true">&#128274;</div>
+            <h3 class="mf-signup-cta__title" id="mf-signup-title">
+                Crée ton compte pour aller plus loin
+            </h3>
             <p class="mf-signup-cta__msg">
-                Tes réponses sont sauvegardées !
-                Crée ton compte artiste pour découvrir tes opportunités.
+                Tes réponses sont déjà enregistr&eacute;es. Cr&eacute;e ton compte artiste
+                pour d&eacute;couvrir tes opportunit&eacute;s : on pr&eacute;-remplit le reste pour toi.
             </p>
             <div class="mf-signup-cta__btns">
                 {#
                     Le lien /register?intent=artist indique à AuthController
                     qu'après inscription, l'utilisateur doit être redirigé vers
                     l'onboarding avec pré-remplissage depuis la session.
+                    Bouton principal en jaune doré (--accent) = action principale (charte).
                 #}
                 <a
                     href="{{ path('app_register', { intent: 'artist' }) }}"
-                    class="lp-btn lp-btn--dark"
+                    class="lp-btn lp-btn--accent"
                     id="mf-register-link"
                 >
                     Créer mon compte artiste

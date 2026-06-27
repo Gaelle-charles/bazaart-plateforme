@@ -2808,31 +2808,77 @@ body.page-home .lp-footer { margin-top: 0; }
 }
 
 /* Encart incitation inscription visiteur */
+/* Modal "crée ton compte pour aller plus loin" (visiteur).
+   Affichée par matching-form.js au clic sur Continuer / Voir mes matchs, au lieu
+   d'une redirection brutale vers /login. Le visiteur garde ses réponses (déjà
+   sauvegardées en session) et décide en connaissance de cause. */
 .mf-signup-cta {
-    margin-top: 20px;
-    padding:    20px;
-    background: var(--ink);
-    text-align: center;
+    position:        fixed;
+    inset:           0;
+    z-index:         1000;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    padding:         20px;
+    background:      rgba(13, 13, 13, .6); /* backdrop sombre */
 }
+/* [hidden] doit l'emporter sur display:flex ci-dessus */
+.mf-signup-cta[hidden] { display: none; }
 .mf-signup-cta__inner {
+    position:       relative;
+    background:     var(--ink);
+    color:          var(--bg);
+    text-align:     center;
+    padding:        38px 30px 30px;
+    max-width:      440px;
+    width:          100%;
+    border:         1px solid var(--accent);
+    box-shadow:     0 12px 50px rgba(0,0,0,.4);
     display:        flex;
     flex-direction: column;
     align-items:    center;
-    gap:            16px;
+    gap:            14px;
+}
+.mf-signup-cta__icon { font-size: 2rem; }
+.mf-signup-cta__title {
+    font-family:    var(--display);
+    font-size:      clamp(20px, 3vw, 26px);
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    margin:         0;
+    color:          var(--bg);
 }
 .mf-signup-cta__msg {
     font-size:   15px;
     line-height: 1.5;
-    color:       var(--bg);
+    color:       rgba(255, 255, 255, .78);
     margin:      0;
-    max-width:   420px;
+    max-width:   380px;
 }
 .mf-signup-cta__btns {
     display:         flex;
     gap:             10px;
     flex-wrap:       wrap;
     justify-content: center;
+    margin-top:      4px;
 }
+/* Le bouton "J'ai déjà un compte" (ghost) reste lisible sur le fond sombre */
+.mf-signup-cta .lp-btn--ghost { color: #fff; border-color: rgba(255,255,255,.45); }
+.mf-signup-cta .lp-btn--ghost:hover { background: rgba(255,255,255,.1); border-color: #fff; }
+/* Bouton de fermeture (croix) en haut à droite de la modal */
+.mf-signup-cta__close {
+    position:   absolute;
+    top:        8px;
+    right:      10px;
+    background: none;
+    border:     none;
+    color:      rgba(255, 255, 255, .6);
+    font-size:  26px;
+    line-height: 1;
+    cursor:     pointer;
+    padding:    4px 8px;
+}
+.mf-signup-cta__close:hover { color: #fff; }
 
 /* Note noscript */
 .mf-noscript-hint {
