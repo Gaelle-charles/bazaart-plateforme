@@ -127,6 +127,31 @@ security:
         # Le webhook Stripe (/stripe/webhook) est PUBLIC_ACCESS par nature (appel serveur Stripe).
         - { path: ^/tarifs, roles: PUBLIC_ACCESS }
         - { path: ^/stripe/webhook, roles: PUBLIC_ACCESS }
+        # ── Formations — catalogue PUBLIC, espace apprenant PROTÉGÉ ────────────
+        # ORDRE IMPORTANT : access_control évalue de haut en bas, la PREMIÈRE règle
+        # qui matche gagne. On place donc les sous-routes sensibles AVANT la règle
+        # publique générale ^/formations, sinon elles deviendraient publiques.
+        #
+        # Sous-routes authentifiées (défense en profondeur : ces routes ont DÉJÀ un
+        # #[IsGranted] au niveau contrôleur, on double la protection au firewall) :
+        #   - /formations/{slug}/learn[...]  → parcours apprenant (leçons, progression)
+        #   - /formations/{slug}/enroll      → inscription à une formation
+        #   - /formations/{slug}/payer       → paiement Stripe d'une formation payante
+        #   - /formations/paiement-succes|annule → callbacks de paiement
+        #
+        # learn + enroll : IS_AUTHENTICATED_FULLY pour S'ALIGNER sur le contrôleur
+        # (#[IsGranted('IS_AUTHENTICATED_FULLY')]). Ainsi un visiteur non connecté est
+        # REDIRIGÉ vers /login par le firewall (bonne UX) au lieu de recevoir un 403
+        # côté contrôleur. IS_AUTHENTICATED_FULLY exclut l'auth via cookie remember-me.
+        - { path: '^/formations/[^/]+/learn', roles: IS_AUTHENTICATED_FULLY }
+        - { path: '^/formations/[^/]+/enroll', roles: IS_AUTHENTICATED_FULLY }
+        # payer + paiement : ROLE_USER, cohérent avec leur #[IsGranted('ROLE_USER')]
+        - { path: '^/formations/[^/]+/payer', roles: ROLE_USER }
+        - { path: ^/formations/paiement, roles: ROLE_USER }
+        # Catalogue (/formations) et page de vente (/formations/{slug}) : PUBLICS.
+        # Objectif : un visiteur non connecté peut parcourir l'offre de formations
+        # (donner envie + indexation SEO) avant de créer un compte.
+        - { path: ^/formations, roles: PUBLIC_ACCESS }
         # Tout le reste : authentification requise
         - { path: ^/, roles: ROLE_USER }
 
