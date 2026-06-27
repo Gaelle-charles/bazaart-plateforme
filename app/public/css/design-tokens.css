@@ -41,15 +41,15 @@
   ---------------------------------------------------------- */
 
   /* Fond de page */
-  --bg:          #F2EFE6;  /* crème ocre chaud — fond principal */
-  --bg-alt:      #EAE6D9;  /* crème légèrement plus sombre — zones alternées, filter bar */
+  --bg:          #F3EEE3;  /* crème ocre chaud, réchauffé : fond principal */
+  --bg-alt:      #EAE6D9;  /* crème légèrement plus sombre : zones alternées, filter bar */
 
   /* Encre (texte & bordures) */
-  --ink:         #0D0D0D;  /* quasi-noir — texte principal, bordures structurantes */
-  --ink-mute:    #5b584f;  /* gris chaud — texte secondaire, légendes */
+  --ink:         #0E0D0B;  /* quasi-noir chaud : texte principal, bordures structurantes */
+  --ink-mute:    #5b584f;  /* gris chaud : texte secondaire, légendes */
 
   /* Lignes / bordures */
-  --line:        #0d0d0d;       /* bordure forte — même valeur que --ink */
+  --line:        #0E0D0B;       /* bordure forte : même valeur que --ink */
   --line-soft:   rgba(13,13,13,.14); /* bordure douce — séparateurs discrets */
 
   /* Accents principaux (configurables en live dans le prototype) */
