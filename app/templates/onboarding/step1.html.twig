@@ -196,12 +196,30 @@
 }
 
 @media (max-width: 580px) {
+    /* Sur mobile, on GARDE les deux choix "Je suis artiste" / "Je suis une
+       structure" sur la MÊME LIGNE (demande Gaëlle), en version compacte
+       pour qu'ils tiennent côte à côte sur petit écran. */
     .ob-choices {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr 1fr;
     }
+    /* La séparation reste verticale (border-left), pas horizontale. */
     .ob-choice + .ob-choice {
-        border-left: none;
-        border-top: 1px solid var(--ink);
+        border-left: 1px solid var(--ink);
+        border-top: none;
+    }
+    /* Cartes plus compactes pour tenir à deux sur la largeur mobile */
+    .ob-choice label {
+        padding: 20px 12px;
+    }
+    .ob-choice__icon {
+        font-size: 28px;
+        margin-bottom: 10px;
+    }
+    .ob-choice__title {
+        font-size: 14px;
+    }
+    .ob-choice__desc {
+        font-size: 12px;
     }
 }
 </style>
