@@ -2815,7 +2815,7 @@
            CINQ ETATS (geres par Twig selon les variables du HomeController) :
              1. isArtist = true + profileComplete = true + pas de limite atteinte
                 → Section swipe complete avec cartes + boutons + alerte
-             2. isArtist = true + swipeLimitReached = true (gratuit, limite hebdo)
+             2. isArtist = true + swipeLimitReached = true (gratuit, limite quotidienne)
                 → Ecran paywall incitant a l'abonnement
              3. isArtist = true + profileComplete = false
                 → Formulaire multi-etapes pour completer le profil
@@ -2849,8 +2849,8 @@
                 Utilise par swipe.js pour le compteur "X / Y matchs".
 
                 data-subscribed : true si l'utilisateur est abonne ou admin (paywall Lot D).
-                data-remaining  : nombre de consultations restantes cette semaine (paywall).
-                data-limit      : limite hebdomadaire pour les utilisateurs gratuits.
+                data-remaining  : nombre de consultations restantes aujourd'hui (paywall).
+                data-limit      : limite quotidienne pour les utilisateurs gratuits (3/jour).
                 data-record-view-csrf : token CSRF pour POST /swipe/record-view.
                 data-pricing-url : URL de la page tarifs (pour la redirection JS).
 
@@ -2860,7 +2860,7 @@
             data-total-matches="{{ swipeCount }}"
             data-subscribed="{{ isSubscribed ? 'true' : 'false' }}"
             data-remaining="{{ isSubscribed ? '999' : swipeRemainingViews }}"
-            data-limit="{{ swipeWeeklyLimit }}"
+            data-limit="{{ swipeDailyLimit }}"
             data-record-view-csrf="{{ swipeRecordViewCsrf ?? '' }}"
             data-pricing-url="{{ path('app_pricing') }}"
         >
@@ -2876,8 +2876,8 @@
                 que l'etat "profil complet" : on ne montre pas les cartes si la limite est atteinte.
             #}
 
-            {# ─── ETAT 2 (Lot D) : Limite hebdomadaire atteinte pour utilisateur gratuit ─ #}
-            {# Affiche une incitation a s'abonner avant de montrer les cartes. #}
+            {# ─── ETAT 2 (Lot D) : Limite quotidienne atteinte pour utilisateur gratuit ─── #}
+            {# Affiche une incitation a s'abonner. Le compteur se remet a zero chaque minuit UTC. #}
             {% if isArtist and swipeLimitReached %}
 
                 <div class="lp-section-header">
@@ -2898,16 +2898,16 @@
                 <div class="swipe-paywall" role="status">
                     <div class="swipe-paywall__inner">
                         <p class="swipe-paywall__msg">
-                            Tu as consulte tes {{ swipeWeeklyLimit }} matchs gratuits de la semaine.
+                            Tu as consulté tes {{ swipeDailyLimit }} matchs gratuits du jour.
                         </p>
                         <p class="swipe-paywall__hint">
-                            Passe a l'abonnement pour un acces illimite au matching, au catalogue complet, a la messagerie et aux alertes.
+                            Passe à l'abonnement pour un accès illimité au matching, au catalogue complet, à la messagerie et aux alertes.
                         </p>
                         <a href="{{ path('app_pricing') }}" class="lp-btn lp-btn--accent swipe-paywall__cta">
-                            Decouvrir l'abonnement
+                            Découvrir l'abonnement
                         </a>
                         <p class="swipe-paywall__reset">
-                            Le compteur se remet a zero chaque lundi.
+                            Le compteur se remet à zéro chaque minuit.
                         </p>
                     </div>
                 </div>
@@ -4056,7 +4056,15 @@
     SECURITE CONTENU : ce script est dans /public/js/ (pas inline),
     donc pas de problème CSP avec nonce.
 #}
-{% if isArtist is defined and isArtist %}
+{#
+    swipe.js est charge uniquement si l'utilisateur est artiste ET que la limite
+    quotidienne n'est pas atteinte (swipeLimitReached = false).
+    En etat paywall (swipeLimitReached = true), il n'y a aucune carte swipe dans le
+    DOM : charger le script serait inutile (aucun element .swipe-card a cibler).
+    On economise un aller-reseau et on evite le flash de swipe-has-js qui n'est
+    utile que pour masquer les formulaires fallback des cartes.
+#}
+{% if isArtist is defined and isArtist and not (swipeLimitReached is defined and swipeLimitReached) %}
     <script>
         /* Ajout immediat de swipe-has-js pour eviter le flash du fallback.
            Ce petit inline doit preceder le chargement de swipe.js (defer).

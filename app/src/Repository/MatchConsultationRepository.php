@@ -12,8 +12,13 @@ use Doctrine\Persistence\ManagerRegistry;
 /**
  * Repository pour les consultations de matchs (MatchConsultation).
  *
- * Utilisé par SubscriptionChecker pour compter les consultations hebdomadaires
- * d'un utilisateur non abonné (paywall freemium ADR-0022, Lot D).
+ * Utilisé par SubscriptionChecker pour compter les consultations d'un utilisateur non abonné
+ * (paywall freemium ADR-0022, Lot D).
+ *
+ * MISE À JOUR JUIN 2026 — passage hebdomadaire → quotidien :
+ *   La méthode principale pour le paywall est désormais countForUserToday().
+ *   countForUserThisWeek() est conservée car elle peut être utilisée ailleurs
+ *   (statistiques admin, scripts de migration, etc.).
  *
  * @extends ServiceEntityRepository<MatchConsultation>
  */
@@ -59,6 +64,46 @@ class MatchConsultationRepository extends ServiceEntityRepository
             ->andWhere('mc.viewedAt >= :weekStart')
             ->setParameter('user', $user)
             ->setParameter('weekStart', $weekStart)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return (int) $result;
+    }
+
+    /**
+     * Compte le nombre de consultations de l'utilisateur pour le jour en cours (UTC).
+     *
+     * FENÊTRE QUOTIDIENNE :
+     *   Jour calendaire UTC = de 00:00:00 UTC à 23:59:59 UTC du même jour.
+     *   La fenêtre se réinitialise automatiquement à chaque minuit UTC.
+     *
+     *   Calcul du début de la fenêtre :
+     *     - On prend l'instant présent en UTC
+     *     - On remet l'heure à 00:00:00 via setTime(0, 0, 0)
+     *   Exemple : si on est mercredi 27/06/2026 à 14h30 UTC,
+     *     $dayStart vaut "2026-06-27 00:00:00 UTC".
+     *
+     * Cette méthode fait une requête SELECT COUNT → aucune entité n'est chargée en mémoire.
+     * Elle est rapide grâce à l'index composite (user_id, viewed_at).
+     *
+     * @param User $user L'utilisateur dont on compte les consultations
+     * @return int       Nombre de consultations depuis minuit UTC aujourd'hui
+     */
+    public function countForUserToday(User $user): int
+    {
+        // Calcule le début du jour calendaire courant en UTC.
+        // DateTimeImmutable est immuable : setTime() retourne un NOUVEL objet.
+        $now      = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        $dayStart = $now->setTime(0, 0, 0);
+
+        // Requête COUNT : on compte les consultations dont viewedAt >= minuit UTC aujourd'hui.
+        // Le résultat est un scalaire entier, pas d'entités chargées en mémoire.
+        $result = $this->createQueryBuilder('mc')
+            ->select('COUNT(mc.id)')
+            ->where('mc.user = :user')
+            ->andWhere('mc.viewedAt >= :dayStart')
+            ->setParameter('user', $user)
+            ->setParameter('dayStart', $dayStart)
             ->getQuery()
             ->getSingleScalarResult();
 

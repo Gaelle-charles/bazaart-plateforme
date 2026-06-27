@@ -13,13 +13,18 @@ use App\Repository\SubscriptionRepository;
  *
  * Ce service répond à deux questions :
  *   1. L'utilisateur est-il abonné ? (isSubscribed)
- *   2. Combien de consultations de matchs lui reste-t-il cette semaine ? (getRemainingMatchViews)
+ *   2. Combien de consultations de matchs lui reste-t-il aujourd'hui ? (getRemainingMatchViews)
  *
- * RÈGLES MÉTIER (ADR-0022) :
+ * RÈGLES MÉTIER (ADR-0022 — mise à jour juin 2026) :
  *   - ROLE_ADMIN : accès illimité à tout, isSubscribed() = true par convention
  *     (les admins ne sont JAMAIS bloqués, même sans abonnement Stripe)
  *   - Abonné (Subscription::isActive()) : accès illimité à tout
- *   - Gratuit (ni admin ni abonné) : 3 consultations de matchs par semaine ISO
+ *   - Gratuit (ni admin ni abonné) : 3 consultations de matchs par jour (fenêtre quotidienne)
+ *
+ * PASSAGE HEBDO → QUOTIDIEN (juin 2026) :
+ *   La limite était initialement par semaine ISO (lundi → dimanche).
+ *   Elle est désormais quotidienne : minuit UTC → 23:59:59 UTC du même jour.
+ *   Cela permet une rotation plus fréquente et incite davantage à consulter chaque jour.
  *
  * CE SERVICE NE CONTIENT PAS DE LOGIQUE HTTP :
  *   Il ne redirige pas, ne throw pas d'exceptions de sécurité.
@@ -37,10 +42,12 @@ use App\Repository\SubscriptionRepository;
 final class SubscriptionChecker
 {
     /**
-     * Nombre maximum de consultations de matchs par semaine pour les utilisateurs gratuits.
-     * Défini dans l'ADR-0022 : "3 consultations / semaine puis → /tarifs".
+     * Nombre maximum de consultations de matchs par jour pour les utilisateurs gratuits.
+     *
+     * Défini dans l'ADR-0022 — mis à jour juin 2026 : "3 consultations / jour puis → /tarifs".
+     * La fenêtre quotidienne court de minuit UTC à 23:59:59 UTC (réinitialisée chaque jour à minuit).
      */
-    public const int FREE_WEEKLY_MATCH_LIMIT = 3;
+    public const int FREE_DAILY_MATCH_LIMIT = 3;
 
     /**
      * Injection des dépendances via le constructeur (autowiring).
@@ -93,13 +100,16 @@ final class SubscriptionChecker
     }
 
     /**
-     * Retourne le nombre de consultations de matchs restantes pour la semaine en cours.
+     * Retourne le nombre de consultations de matchs restantes pour le jour en cours.
      *
      * Pour les abonnés et admins : retourne PHP_INT_MAX (illimité par convention).
-     * Pour les utilisateurs gratuits : retourne max(0, limite - consultations_cette_semaine).
+     * Pour les utilisateurs gratuits : retourne max(0, limite - consultations_aujourd_hui).
      *
-     * Exemple pour un utilisateur gratuit qui a déjà vu 2 matchs cette semaine :
-     *   getRemainingMatchViews($user) → 1 (3 - 2 = 1 consultation restante)
+     * La fenêtre quotidienne est calculée en UTC : de minuit (00:00:00) à 23:59:59 du même jour.
+     * Elle se réinitialise automatiquement à chaque minuit UTC.
+     *
+     * Exemple pour un utilisateur gratuit qui a déjà vu 2 matchs aujourd'hui :
+     *   getRemainingMatchViews($user) → 1 (3 - 2 = 1 consultation restante aujourd'hui)
      *
      * @param User $user L'utilisateur connecté
      * @return int Nombre de consultations restantes (PHP_INT_MAX = illimité)
@@ -111,25 +121,26 @@ final class SubscriptionChecker
             return PHP_INT_MAX;
         }
 
-        // Compte les consultations de la semaine ISO en cours
-        $usedThisWeek = $this->consultationRepository->countForUserThisWeek($user);
+        // Compte les consultations du jour en cours (depuis minuit UTC)
+        $usedToday = $this->consultationRepository->countForUserToday($user);
 
         // max(0, ...) garantit qu'on ne retourne jamais un nombre négatif
-        // (au cas où un bug aurait créé plus d'entrées que la limite)
-        return max(0, self::FREE_WEEKLY_MATCH_LIMIT - $usedThisWeek);
+        // (au cas où un bug aurait créé plus d'entrées que la limite quotidienne)
+        return max(0, self::FREE_DAILY_MATCH_LIMIT - $usedToday);
     }
 
     /**
-     * Retourne true si l'utilisateur gratuit peut encore voir des matchs cette semaine.
+     * Retourne true si l'utilisateur gratuit peut encore voir des matchs aujourd'hui.
      *
      * Raccourci booléen pour les conditions dans les controllers et le Twig.
      *   canViewMoreMatches($user) → true : on affiche les cartes
      *   canViewMoreMatches($user) → false : on affiche l'écran tarifs
      *
+     * La limite se réinitialise automatiquement à minuit UTC chaque jour.
      * Pour les abonnés et admins : toujours true.
      *
      * @param User $user L'utilisateur connecté
-     * @return bool true si l'utilisateur peut voir un match de plus
+     * @return bool true si l'utilisateur peut voir un match de plus aujourd'hui
      */
     public function canViewMoreMatches(User $user): bool
     {

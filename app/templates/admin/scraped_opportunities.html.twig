@@ -190,6 +190,15 @@
         white-space: nowrap;
     }
 
+    /* Discipline artistique — affichée sous le chip de type, style secondaire */
+    .adm-disciplines {
+        margin-top: 4px;
+        font-size: 10px;
+        color: var(--ink-mute);
+        font-style: italic;
+        line-height: 1.4;
+    }
+
     /* Badge "Vérifié" — fond vert acide */
     .adm-badge-verified {
         display: inline-flex;
@@ -714,7 +723,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <thead>
                     <tr>
                         <th>Titre / Description</th>
-                        <th>Type</th>
+                        <th>Type / Discipline</th>
                         <th>Source</th>
                         <th>Deadline</th>
                         <th>Score Afro</th>
@@ -745,12 +754,19 @@ document.addEventListener('DOMContentLoaded', function () {
                                 {% endif %}
                             </td>
 
-                            {# Type de ressource détecté par le scraper #}
-                            <td>
+                            {# Type de ressource et discipline artistique détectés par le scraper #}
+                            <td style="min-width:120px;">
                                 {% if opp.type %}
                                     <span class="adm-chip">{{ opp.type }}</span>
                                 {% else %}
                                     <span style="color:var(--ink-mute);">—</span>
+                                {% endif %}
+                                {#
+                                    Disciplines : chaîne CSV libre remplie par le LLM (ex : "Musique, Danse").
+                                    Affichée en secondaire sous le type, tronquée à 40 chars pour lisibilité.
+                                #}
+                                {% if opp.disciplines %}
+                                    <div class="adm-disciplines">{{ opp.disciplines|slice(0, 40) }}{{ opp.disciplines|length > 40 ? '…' : '' }}</div>
                                 {% endif %}
                             </td>
 
@@ -792,23 +808,36 @@ document.addEventListener('DOMContentLoaded', function () {
                                         ✎ Modifier
                                     </a>
 
-                                    {# Bouton principal : valider et publier l'opportunité #}
+                                    {#
+                                      Bouton principal : valider et publier l'opportunité.
+                                      data-turbo="false" : force une navigation classique (pas de fetch Turbo).
+                                        → Garantit un vrai rechargement de page = scroll en haut = flash visible.
+                                      onclick sur le bouton (pas onsubmit sur le form) : évite le bug d'escaping
+                                        JS qui survenait quand le titre contenait des guillemets " (le |e('js')
+                                        échappait " en \" mais la balise HTML s'arrêtait quand même sur le ").
+                                    #}
                                     <form method="post"
-                                          action="{{ path('app_admin_scraped_opportunity_verify', {id: opp.id}) }}"
-                                          onsubmit="return confirm('Vérifier et ajouter « {{ opp.title|e('js') }} » aux Opportunités ?')">
+                                          data-turbo="false"
+                                          action="{{ path('app_admin_scraped_opportunity_verify', {id: opp.id}) }}">
                                         <input type="hidden" name="_token"
                                                value="{{ csrf_token('verify_scraped_' ~ opp.id) }}">
-                                        <button type="submit" class="adm-btn-verify">✓ Vérifier</button>
+                                        <button type="submit" class="adm-btn-verify"
+                                                onclick="return confirm('Vérifier et publier cette opportunité ?')">
+                                            ✓ Vérifier
+                                        </button>
                                     </form>
 
                                     {# Bouton secondaire : rejeter (hors sujet, doublon, non pertinent) #}
                                     <form method="post"
+                                          data-turbo="false"
                                           action="{{ path('app_admin_scraped_opportunity_reject', {id: opp.id}) }}"
-                                          onsubmit="return confirm('Rejeter « {{ opp.title|e('js') }} » ?')"
                                           style="display:inline;">
                                         <input type="hidden" name="_token"
                                                value="{{ csrf_token('reject_scraped_' ~ opp.id) }}">
-                                        <button type="submit" class="adm-btn-reject">✗ Rejeter</button>
+                                        <button type="submit" class="adm-btn-reject"
+                                                onclick="return confirm('Rejeter cette opportunité ?')">
+                                            ✗ Rejeter
+                                        </button>
                                     </form>
 
                                     {#
@@ -819,12 +848,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
                                     {# Archiver : offre déjà passée ou plus pertinente — pas de publication #}
                                     <form method="post"
+                                          data-turbo="false"
                                           action="{{ path('app_admin_scraped_opportunity_archive', {id: opp.id}) }}"
-                                          onsubmit="return confirm('Archiver « {{ opp.title|e('js') }} » comme offre passée ?')"
                                           style="display:inline;">
                                         <input type="hidden" name="_token"
                                                value="{{ csrf_token('archive_scraped_' ~ opp.id) }}">
-                                        <button type="submit" class="adm-btn-archive" title="Archiver — offre passée ou plus pertinente">
+                                        <button type="submit" class="adm-btn-archive"
+                                                title="Archiver — offre passée ou plus pertinente"
+                                                onclick="return confirm('Archiver cette opportunité ?')">
                                             ⏱ Archive
                                         </button>
                                     </form>
@@ -835,12 +866,14 @@ document.addEventListener('DOMContentLoaded', function () {
                                       Utile pour les guides, articles, rapports, etc.
                                     #}
                                     <form method="post"
+                                          data-turbo="false"
                                           action="{{ path('app_admin_scraped_opportunity_documentation', {id: opp.id}) }}"
-                                          onsubmit="return confirm('Publier « {{ opp.title|e('js') }} » comme Documentation ?')"
                                           style="display:inline;">
                                         <input type="hidden" name="_token"
                                                value="{{ csrf_token('doc_scraped_' ~ opp.id) }}">
-                                        <button type="submit" class="adm-btn-doc" title="Publier comme Documentation (guide, article, rapport)">
+                                        <button type="submit" class="adm-btn-doc"
+                                                title="Publier comme Documentation (guide, article, rapport)"
+                                                onclick="return confirm('Publier comme Documentation ?')">
                                             📄 Doc
                                         </button>
                                     </form>
@@ -851,12 +884,14 @@ document.addEventListener('DOMContentLoaded', function () {
                                       Peut prendre quelques secondes (requêtes HTTP + éventuel LLM).
                                     #}
                                     <form method="post"
+                                          data-turbo="false"
                                           action="{{ path('app_admin_scraped_opportunity_to_source', {id: opp.id}) }}"
-                                          onsubmit="return confirm('Transformer le site de « {{ opp.title|e('js') }} » en source de scraping ? (peut prendre quelques secondes)')"
                                           style="display:inline;">
                                         <input type="hidden" name="_token"
                                                value="{{ csrf_token('to_source_scraped_' ~ opp.id) }}">
-                                        <button type="submit" class="adm-btn-to-source" title="Créer une source de scraping pour cet organisme">
+                                        <button type="submit" class="adm-btn-to-source"
+                                                title="Créer une source de scraping pour cet organisme"
+                                                onclick="return confirm('Créer une source de scraping pour cet organisme ? (quelques secondes)')">
                                             + Source
                                         </button>
                                     </form>
@@ -882,7 +917,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <thead>
                     <tr>
                         <th>Titre</th>
-                        <th>Type</th>
+                        <th>Type / Discipline</th>
                         <th>Source</th>
                         <th>Deadline</th>
                         <th>Score Afro</th>
@@ -902,9 +937,12 @@ document.addEventListener('DOMContentLoaded', function () {
                                     {% endif %}
                                 </div>
                             </td>
-                            <td>
+                            <td style="min-width:120px;">
                                 {% if opp.type %}
                                     <span class="adm-chip">{{ opp.type }}</span>
+                                {% endif %}
+                                {% if opp.disciplines %}
+                                    <div class="adm-disciplines">{{ opp.disciplines|slice(0, 40) }}{{ opp.disciplines|length > 40 ? '…' : '' }}</div>
                                 {% endif %}
                             </td>
                             <td class="adm-date">{{ opp.sourceSite ?: '—' }}</td>
@@ -945,7 +983,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <thead>
                     <tr>
                         <th>Titre</th>
-                        <th>Type</th>
+                        <th>Type / Discipline</th>
                         <th>Source</th>
                         <th>Deadline</th>
                         <th>Score Afro</th>
@@ -965,9 +1003,12 @@ document.addEventListener('DOMContentLoaded', function () {
                                     {% endif %}
                                 </div>
                             </td>
-                            <td>
+                            <td style="min-width:120px;">
                                 {% if opp.type %}
                                     <span class="adm-chip">{{ opp.type }}</span>
+                                {% endif %}
+                                {% if opp.disciplines %}
+                                    <div class="adm-disciplines">{{ opp.disciplines|slice(0, 40) }}{{ opp.disciplines|length > 40 ? '…' : '' }}</div>
                                 {% endif %}
                             </td>
                             <td class="adm-date">{{ opp.sourceSite ?: '—' }}</td>
@@ -1017,7 +1058,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <thead>
                     <tr>
                         <th>Titre</th>
-                        <th>Type</th>
+                        <th>Type / Discipline</th>
                         <th>Source</th>
                         <th>Deadline</th>
                         <th>Score Afro</th>
@@ -1102,7 +1143,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <thead>
                     <tr>
                         <th>Titre / Description</th>
-                        <th>Type</th>
+                        <th>Type / Discipline</th>
                         <th>Source</th>
                         <th>Deadline</th>
                         <th>Score Afro</th>
@@ -1183,22 +1224,27 @@ document.addEventListener('DOMContentLoaded', function () {
                                       (rejectScrapedOpportunity) avec le meme token CSRF.
                                     #}
                                     <form method="post"
+                                          data-turbo="false"
                                           action="{{ path('app_admin_scraped_opportunity_reject', {id: opp.id}) }}"
-                                          onsubmit="return confirm('Rejeter et supprimer du backlog ?')"
                                           style="display:inline;">
                                         <input type="hidden" name="_token"
                                                value="{{ csrf_token('reject_scraped_' ~ opp.id) }}">
-                                        <button type="submit" class="adm-btn-reject">Rejeter</button>
+                                        <button type="submit" class="adm-btn-reject"
+                                                onclick="return confirm('Rejeter et supprimer du backlog ?')">
+                                            Rejeter
+                                        </button>
                                     </form>
 
                                     {# Archiver : deadline passée, on formalise l'archivage manuellement #}
                                     <form method="post"
+                                          data-turbo="false"
                                           action="{{ path('app_admin_scraped_opportunity_archive', {id: opp.id}) }}"
-                                          onsubmit="return confirm('Archiver « {{ opp.title|e('js') }} » ?')"
                                           style="display:inline;">
                                         <input type="hidden" name="_token"
                                                value="{{ csrf_token('archive_scraped_' ~ opp.id) }}">
-                                        <button type="submit" class="adm-btn-archive" title="Archiver manuellement">
+                                        <button type="submit" class="adm-btn-archive"
+                                                title="Archiver manuellement"
+                                                onclick="return confirm('Archiver cette opportunité ?')">
                                             ⏱ Archive
                                         </button>
                                     </form>
@@ -1209,12 +1255,14 @@ document.addEventListener('DOMContentLoaded', function () {
                                       pour les capter automatiquement.
                                     #}
                                     <form method="post"
+                                          data-turbo="false"
                                           action="{{ path('app_admin_scraped_opportunity_to_source', {id: opp.id}) }}"
-                                          onsubmit="return confirm('Créer une source de scraping pour ce site ? (peut prendre quelques secondes)')"
                                           style="display:inline;">
                                         <input type="hidden" name="_token"
                                                value="{{ csrf_token('to_source_scraped_' ~ opp.id) }}">
-                                        <button type="submit" class="adm-btn-to-source" title="Créer une source de scraping pour cet organisme">
+                                        <button type="submit" class="adm-btn-to-source"
+                                                title="Créer une source de scraping pour cet organisme"
+                                                onclick="return confirm('Créer une source de scraping ? (quelques secondes)')">
                                             + Source
                                         </button>
                                     </form>

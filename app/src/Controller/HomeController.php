@@ -117,8 +117,8 @@ final class HomeController extends AbstractController
      *   alertCsrfToken       string|null    — Token CSRF spécifique à la création d'alerte
      *   isArtist             bool           — L'utilisateur connecté est-il un artiste ?
      *   isSubscribed         bool           — L'utilisateur est-il abonné (ou admin) ? (Lot D)
-     *   swipeRemainingViews  int            — Consultations de matchs restantes cette semaine (Lot D)
-     *   swipeLimitReached    bool           — Limite hebdomadaire atteinte ? (Lot D)
+     *   swipeRemainingViews  int            — Consultations de matchs restantes aujourd'hui (Lot D)
+     *   swipeLimitReached    bool           — Limite quotidienne atteinte ? (Lot D)
      *   swipeRecordViewCsrf  string|null    — Token CSRF pour POST /swipe/record-view (Lot D)
      */
     #[Route('/', name: 'app_home')]
@@ -160,8 +160,8 @@ final class HomeController extends AbstractController
         // Initialisées avec les valeurs "accès libre" par défaut.
         // Seront recalculées si l'utilisateur est artiste connecté.
         $isSubscribed        = false; // L'utilisateur est-il abonné (ou admin) ?
-        $swipeRemainingViews = 0;     // Consultations de matchs restantes cette semaine
-        $swipeLimitReached   = false; // Limite hebdomadaire atteinte ?
+        $swipeRemainingViews = 0;     // Consultations de matchs restantes aujourd'hui
+        $swipeLimitReached   = false; // Limite quotidienne atteinte ?
         $swipeRecordViewCsrf = null;  // Token CSRF pour POST /swipe/record-view
 
         // getUser() retourne null si non connecté, sinon l'objet utilisateur.
@@ -176,13 +176,14 @@ final class HomeController extends AbstractController
             // isSubscribed() = true si ROLE_ADMIN OU abonnement Stripe actif.
             $isSubscribed = $this->subscriptionChecker->isSubscribed($user);
 
-            // Nombre de consultations restantes cette semaine ISO.
+            // Nombre de consultations restantes aujourd'hui (fenêtre quotidienne UTC).
             // Pour les abonnés/admins : PHP_INT_MAX (qu'on convertit en -1 pour le JS).
-            // Pour les gratuits : entre 0 et FREE_WEEKLY_MATCH_LIMIT.
+            // Pour les gratuits : entre 0 et FREE_DAILY_MATCH_LIMIT.
+            // La fenêtre se réinitialise à minuit UTC chaque jour.
             $rawRemaining        = $this->subscriptionChecker->getRemainingMatchViews($user);
             // On borne à un entier raisonnable pour le Twig (PHP_INT_MAX serait absurde à afficher)
             $swipeRemainingViews = $isSubscribed ? PHP_INT_MAX : $rawRemaining;
-            // La limite est atteinte si l'utilisateur n'est PAS abonné et n'a plus de consultation
+            // La limite est atteinte si l'utilisateur n'est PAS abonné et n'a plus de consultation aujourd'hui
             $swipeLimitReached   = !$isSubscribed && $rawRemaining <= 0;
 
             // ── Token CSRF pour l'endpoint record-view (Lot D) ───────────────────
@@ -383,14 +384,15 @@ final class HomeController extends AbstractController
             // ── Variables paywall freemium (Lot D ADR-0022) ──────────────────────
             // isSubscribed : true si ROLE_ADMIN OU abonnement Stripe actif
             'isSubscribed'         => $isSubscribed,
-            // swipeRemainingViews : nombre de consultations restantes (PHP_INT_MAX si abonné/admin)
+            // swipeRemainingViews : nombre de consultations restantes aujourd'hui (PHP_INT_MAX si abonné/admin)
             'swipeRemainingViews'  => $swipeRemainingViews,
-            // swipeLimitReached : true si utilisateur gratuit ayant atteint sa limite hebdo
+            // swipeLimitReached : true si utilisateur gratuit ayant atteint sa limite quotidienne
             'swipeLimitReached'    => $swipeLimitReached,
             // swipeRecordViewCsrf : token CSRF pour POST /swipe/record-view (null si non artiste)
             'swipeRecordViewCsrf'  => $swipeRecordViewCsrf,
-            // swipeWeeklyLimit : la constante limite pour affichage dans l'UI
-            'swipeWeeklyLimit'     => SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT,
+            // swipeDailyLimit : la constante limite quotidienne pour affichage dans l'UI
+            // (renommée depuis swipeWeeklyLimit — passage hebdo → quotidien, juin 2026)
+            'swipeDailyLimit'      => SubscriptionChecker::FREE_DAILY_MATCH_LIMIT,
         ]);
     }
 }

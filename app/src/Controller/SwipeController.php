@@ -143,10 +143,13 @@ final class SwipeController extends AbstractController
             // Limite déjà atteinte avant cette consultation.
             // On ne crée pas de nouvelle entrée (déjà à 0 ou moins).
             // Le front doit afficher l'écran tarifs. Retour 403 = "accès refusé".
+            // Limite quotidienne déjà atteinte avant cette consultation.
+            // On ne crée pas de nouvelle entrée (déjà à 0 ou moins).
+            // Le front doit afficher l'écran tarifs. Retour 403 = "accès refusé".
             return new JsonResponse([
-                'error'      => 'Limite de consultations hebdomadaires atteinte.',
+                'error'      => 'Limite de consultations quotidiennes atteinte.',
                 'remaining'  => 0,
-                'limit'      => SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT,
+                'limit'      => SubscriptionChecker::FREE_DAILY_MATCH_LIMIT,
                 'subscribed' => false,
                 'pricing_url' => '/tarifs',
             ], Response::HTTP_FORBIDDEN);
@@ -168,7 +171,8 @@ final class SwipeController extends AbstractController
 
         return new JsonResponse([
             'remaining'  => $remainingAfter,
-            'limit'      => SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT,
+            // FREE_DAILY_MATCH_LIMIT = 3 (renommé depuis FREE_WEEKLY_MATCH_LIMIT, juin 2026)
+            'limit'      => SubscriptionChecker::FREE_DAILY_MATCH_LIMIT,
             'subscribed' => false,
         ]);
     }
