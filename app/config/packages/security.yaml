@@ -45,7 +45,16 @@ security:
             form_login:
                 login_path: app_login
                 check_path: app_login
-                default_target_path: app_dashboard
+                # success_handler : notre handler personnalisé prend le relais APRÈS une
+                # authentification réussie. Il implémente la logique de redirection :
+                #   1. Target path mémorisé avant /login (comportement standard Symfony)
+                #   2. Données matching en session → home #swipe-section
+                #   3. Admin → app_admin_dashboard
+                #   4. Défaut → app_dashboard
+                # NB : quand success_handler est défini, default_target_path est ignoré
+                # par Symfony. On le conserve en commentaire comme documentation de fallback.
+                success_handler: App\Security\LoginSuccessHandler
+                # default_target_path: app_dashboard  # ignoré si success_handler est défini
                 username_parameter: email
                 password_parameter: password
             logout:

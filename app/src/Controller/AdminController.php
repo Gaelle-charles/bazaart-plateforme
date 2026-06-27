@@ -357,9 +357,11 @@ class AdminController extends AbstractController
                 return $this->redirectToRoute('app_admin_users');
             }
 
-            // Si la case "admin" est cochée, on lui donne le rôle directement
+            // Si la case "admin" est cochée, on lui ajoute ROLE_ADMIN.
+            // On CONSERVE ROLE_ARTIST (posé par AuthService::register, ADR-0029) pour
+            // ne pas recréer un compte "user seul" si l'admin est rétrogradé plus tard.
             if ($request->request->get('is_admin')) {
-                $user->setRoles(['ROLE_ADMIN']);
+                $user->setRoles(['ROLE_ARTIST', 'ROLE_ADMIN']);
                 $this->em->flush();
             }
 
@@ -434,7 +436,13 @@ class AdminController extends AbstractController
 
         if (in_array('ROLE_ADMIN', $roles, true)) {
             // Retire ROLE_ADMIN
-            $user->setRoles(array_values(array_filter($roles, fn($r) => $r !== 'ROLE_ADMIN' && $r !== 'ROLE_USER')));
+            $roles = array_values(array_filter($roles, fn($r) => $r !== 'ROLE_ADMIN' && $r !== 'ROLE_USER'));
+            // ADR-0029 : on garantit qu'un compte rétrogradé reste au moins artiste
+            // (jamais "user seul"). Si ROLE_ARTIST manquait, on le rajoute.
+            if (!in_array('ROLE_ARTIST', $roles, true)) {
+                $roles[] = 'ROLE_ARTIST';
+            }
+            $user->setRoles($roles);
             $this->addFlash('success', sprintf('"%s" n\'est plus administrateur.', $user->getEmail()));
         } else {
             // Ajoute ROLE_ADMIN

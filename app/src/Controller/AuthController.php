@@ -351,16 +351,37 @@ class AuthController extends AbstractController
                     return $loginResponse;
                 }
 
-                // Même logique de redirection que pour un premier clic :
-                // si intent=artist ou des données matching sont en session → onboarding.
+                // ── Redirection post-confirmation (second clic sur un lien déjà utilisé) ─
+                //
+                // Même logique que pour le premier clic (ci-dessous) :
+                // si intent=artist ou des données matching sont en session → home matching.
+                //
+                // DÉCISION ARCHITECTURE (juin 2026) :
+                //   On ne redirige plus vers app_onboarding_step2 mais vers la home,
+                //   section #swipe-section. Le formulaire de matching est désormais
+                //   INLINE sur la home (pas d'onboarding séparé pour le flux matching).
+                //   - Profil complet : la section affiche les cartes de swipe.
+                //   - Profil incomplet : la section affiche le formulaire pré-rempli.
+                //
+                // LIMITE CONNUE (inchangée) :
+                //   Si l'utilisateur confirme son email dans un AUTRE navigateur que
+                //   celui où il a rempli le formulaire, la session est différente →
+                //   pas de données matching → retombe sur le dashboard. Acceptable V1.
                 $intent = $request->getSession()->get(self::SESSION_INTENT_KEY);
                 $hasMatchingData = $this->matchingFormSession->hasSessionData($request->getSession());
                 if ($intent === 'artist' || $hasMatchingData) {
+                    // On nettoie l'intent (les données matching sont lues par la home,
+                    // pas ici — on ne les supprime donc pas à ce stade).
                     $request->getSession()->remove(self::SESSION_INTENT_KEY);
-                    return $this->redirectToRoute('app_onboarding_step2');
+
+                    // Redirection vers la home, section matching.
+                    // '#swipe-section' est un fragment côté client (ancre HTML) :
+                    // le serveur ne le reçoit jamais, on doit le concaténer manuellement.
+                    return $this->redirectToRoute('app_home', ['_fragment' => 'swipe-section']);
                 }
 
-                // Le gating renverra l'utilisateur vers l'onboarding si besoin
+                // Pas de matching en cours → dashboard classique.
+                // Le gating demandera à l'utilisateur de compléter son profil si besoin.
                 return $this->redirectToRoute('app_dashboard');
 
             } catch (VerifyEmailExceptionInterface) {
@@ -465,34 +486,49 @@ class AuthController extends AbstractController
             return $loginResponse;
         }
 
-        // ── Carryover matching : redirection vers l'onboarding si intent=artist ─
+        // ── Carryover matching : redirection vers la home section matching ──────
         //
         // Cas de figure :
         //   1. Le visiteur a rempli le formulaire matching de la home (données en session)
         //   2. Il a cliqué "Créer mon compte artiste" → ?intent=artist stocké en session
         //   3. Il a créé son compte + confirmé son email
-        //   4. ICI : on le redirige vers l'étape 2 de l'onboarding (disciplines),
-        //      qui sera pré-remplie depuis la session via OnboardingController.
+        //   4. ICI : on le redirige vers la home, section #swipe-section.
+        //      - Profil complet (display_name + location + disciplines + lookingFor) :
+        //        la section affichera directement les cartes de swipe.
+        //      - Profil incomplet : la section affichera le formulaire inline pré-rempli
+        //        depuis la session (carryover — les données sont lues par HomeController).
         //
-        // LIMITE CONNUE (à signaler à l'utilisateur si besoin) :
+        // DÉCISION ARCHITECTURE (juin 2026) :
+        //   On ne redirige plus vers app_onboarding_step2 mais vers la home.
+        //   Le formulaire de matching est désormais INLINE sur la home — pas d'onboarding
+        //   séparé pour ce flux. La route app_onboarding_step2 reste accessible directement
+        //   pour les artistes qui veulent compléter leur profil hors du flux matching.
+        //
+        // LIMITE CONNUE (inchangée) :
         //   Si l'utilisateur confirme son email dans un AUTRE navigateur ou onglet
         //   que celui dans lequel il a rempli le formulaire matching, la session
         //   (intent + données matching) ne sera pas partagée et le pré-remplissage
-        //   sera absent. Dans ce cas, l'onboarding s'affichera vide mais fonctionnel.
+        //   sera absent. Dans ce cas, l'utilisateur atterrit sur le dashboard.
         //   Ce cas est rare et acceptable pour V1.
         $intent = $request->getSession()->get(self::SESSION_INTENT_KEY);
         $hasMatchingData = $this->matchingFormSession->hasSessionData($request->getSession());
 
         if ($intent === 'artist' || $hasMatchingData) {
-            // Nettoyage de l'intent (pas des données matching — OnboardingController les vide)
+            // Nettoyage de l'intent de session.
+            // Les données matching elles-mêmes (bazaart_matching_form) sont conservées :
+            // HomeController/MatchingFormSessionService les liront pour le pré-remplissage.
             $request->getSession()->remove(self::SESSION_INTENT_KEY);
 
-            // Redirection vers l'étape 2 de l'onboarding (disciplines) avec pré-remplissage
-            return $this->redirectToRoute('app_onboarding_step2');
+            // Redirection vers la home, section matching.
+            // '_fragment' est le paramètre Symfony pour générer une ancre HTML (#swipe-section).
+            // Le fragment est un concept côté client (le serveur ne le reçoit jamais)
+            // mais redirectToRoute() l'ajoute dans l'URL de la réponse HTTP 302.
+            return $this->redirectToRoute('app_home', ['_fragment' => 'swipe-section']);
         }
 
-        // Cas normal (sans intent artist) : redirection vers le dashboard.
-        // Le gating onboarding proposera à l'utilisateur de compléter son profil.
+        // Cas normal (sans intent artist et sans données matching) :
+        // redirection vers le dashboard. Le gating proposera à l'utilisateur de
+        // compléter son profil si besoin.
         return $this->redirectToRoute('app_dashboard');
     }
 

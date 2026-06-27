@@ -40,7 +40,14 @@ class AuthService
 
         $user = new User();
         $user->setEmail($dto->email);
-        $user->setRoles(['ROLE_USER']);
+        // ADR-0029 (Option A) : tout nouvel inscrit reçoit ROLE_ARTIST dès la création
+        // du compte, et plus seulement après complétion du profil. Objectif : ne plus
+        // avoir de comptes "ROLE_USER seul" (statut intermédiaire ambigu côté admin) ;
+        // chaque compte est artiste par défaut. Les structures reçoivent ROLE_STRUCTURE
+        // en plus, via la validation admin (StructureService).
+        // NB : on ne stocke QUE le rôle supplémentaire ; User::getRoles() ajoute
+        // automatiquement ROLE_USER, et la hiérarchie (ROLE_ARTIST: [ROLE_USER]) l'implique.
+        $user->setRoles(['ROLE_ARTIST']);
         $user->setPassword(
             $this->passwordHasher->hashPassword($user, $dto->password)
         );
