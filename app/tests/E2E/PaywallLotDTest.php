@@ -80,17 +80,17 @@ class PaywallLotDTest extends AbstractE2ETestCase
     }
 
     /**
-     * La home affiche l'encart paywall quand un artiste gratuit a atteint sa limite hebdo.
+     * La home affiche l'encart paywall quand un artiste gratuit a atteint sa limite journalière.
      *
-     * On pré-crée FREE_WEEKLY_MATCH_LIMIT enregistrements MatchConsultation
+     * On pré-crée FREE_DAILY_MATCH_LIMIT enregistrements MatchConsultation
      * pour simuler la limite atteinte.
      */
     public function testHome_GratuitLimiteAtteinte_AffichePaywall(): void
     {
         $user = $this->createArtistUser('gratuit-limite@test.fr');
 
-        // Crée le nombre maximum de consultations pour la semaine en cours
-        $this->creerConsultations($user, SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT);
+        // Crée le nombre maximum de consultations pour le jour en cours
+        $this->creerConsultations($user, SubscriptionChecker::FREE_DAILY_MATCH_LIMIT);
 
         $this->loginAs($user);
         $this->client->request('GET', '/');
@@ -101,7 +101,7 @@ class PaywallLotDTest extends AbstractE2ETestCase
 
         // L'encart paywall DOIT être affiché
         $this->assertSelectorExists('.swipe-paywall',
-            'L\'encart paywall doit s\'afficher quand la limite hebdomadaire est atteinte.'
+            'L\'encart paywall doit s\'afficher quand la limite journalière est atteinte.'
         );
     }
 
@@ -114,7 +114,7 @@ class PaywallLotDTest extends AbstractE2ETestCase
         $this->creerAbonnementActif($user);
 
         // On crée aussi des consultations pour vérifier qu'elles sont ignorées pour un abonné
-        $this->creerConsultations($user, SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT + 1);
+        $this->creerConsultations($user, SubscriptionChecker::FREE_DAILY_MATCH_LIMIT + 1);
 
         $this->loginAs($user);
         $this->client->request('GET', '/');
@@ -322,8 +322,8 @@ class PaywallLotDTest extends AbstractE2ETestCase
     /**
      * POST /swipe/record-view incrémente le compteur pour un utilisateur gratuit.
      *
-     * Condition : artiste gratuit, 0 consultations cette semaine.
-     * Résultat : 200 + remaining = FREE_WEEKLY_MATCH_LIMIT - 1.
+     * Condition : artiste gratuit, 0 consultations aujourd'hui.
+     * Résultat : 200 + remaining = FREE_DAILY_MATCH_LIMIT - 1.
      */
     public function testRecordView_GratuitPremierAppel_IncrementeCompteur(): void
     {
@@ -362,9 +362,9 @@ class PaywallLotDTest extends AbstractE2ETestCase
             'La réponse doit contenir un champ remaining entier.'
         );
         $this->assertSame(
-            SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT - 1,
+            SubscriptionChecker::FREE_DAILY_MATCH_LIMIT - 1,
             $data['remaining'],
-            'Après le 1er enregistrement, remaining doit valoir ' . (SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT - 1) . '.'
+            'Après le 1er enregistrement, remaining doit valoir ' . (SubscriptionChecker::FREE_DAILY_MATCH_LIMIT - 1) . '.'
         );
         $this->assertFalse($data['subscribed'] ?? true,
             'L\'utilisateur gratuit doit avoir subscribed = false.'
@@ -387,15 +387,15 @@ class PaywallLotDTest extends AbstractE2ETestCase
     /**
      * POST /swipe/record-view retourne 403 quand la limite est déjà atteinte.
      *
-     * Condition : FREE_WEEKLY_MATCH_LIMIT consultations déjà enregistrées cette semaine.
+     * Condition : FREE_DAILY_MATCH_LIMIT consultations déjà enregistrées aujourd'hui.
      * Résultat : 403 Forbidden + champ pricing_url dans la réponse.
      */
     public function testRecordView_LimiteAtteinte_Retourne403(): void
     {
         $user = $this->createArtistUser('artiste-limite@test.fr');
 
-        // On pré-remplit le compteur jusqu'à la limite
-        $this->creerConsultations($user, SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT);
+        // On pré-remplit le compteur jusqu'à la limite journalière
+        $this->creerConsultations($user, SubscriptionChecker::FREE_DAILY_MATCH_LIMIT);
 
         $this->loginAs($user);
 
@@ -503,18 +503,18 @@ class PaywallLotDTest extends AbstractE2ETestCase
     }
 
     /**
-     * Vérifie que le reset hebdomadaire fonctionne :
-     * des consultations de la semaine PRÉCÉDENTE ne comptent pas.
+     * Vérifie que le reset quotidien fonctionne :
+     * des consultations d'un jour PRÉCÉDENT ne comptent pas.
      *
-     * On simule des consultations de la semaine dernière en manipulant
+     * On simule des consultations d'avant-hier en manipulant
      * directement la date viewedAt via Doctrine (bypass constructeur).
      */
     public function testRecordView_ConsultationsAnciennesSemaine_NePasCompter(): void
     {
         $user = $this->createArtistUser('artiste-reset@test.fr');
 
-        // Crée des consultations datées de la semaine précédente (>= 8 jours)
-        $this->creerConsultationsAnciennes($user, SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT);
+        // Crée des consultations datées d'avant-hier (hors de la fenêtre du jour en cours)
+        $this->creerConsultationsAnciennes($user, SubscriptionChecker::FREE_DAILY_MATCH_LIMIT);
 
         $this->loginAs($user);
 
@@ -531,17 +531,17 @@ class PaywallLotDTest extends AbstractE2ETestCase
             ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest'],
         );
 
-        // Doit retourner 200 (pas 403) : les consultations de la semaine précédente
-        // ne comptent pas dans le compteur de cette semaine.
+        // Doit retourner 200 (pas 403) : les consultations d'avant-hier
+        // ne comptent pas dans le compteur du jour en cours.
         $this->assertResponseStatusCodeSame(200,
-            'Des consultations de la semaine précédente ne doivent pas bloquer l\'utilisateur.'
+            'Des consultations d\'un jour précédent ne doivent pas bloquer l\'utilisateur.'
         );
 
         $data = json_decode((string) $this->client->getResponse()->getContent(), associative: true);
         $this->assertSame(
-            SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT - 1,
+            SubscriptionChecker::FREE_DAILY_MATCH_LIMIT - 1,
             $data['remaining'] ?? -1,
-            'Après le reset hebdomadaire, l\'utilisateur doit retrouver ses ' . SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT . ' consultations.'
+            'Après le reset quotidien, l\'utilisateur doit retrouver ses ' . SubscriptionChecker::FREE_DAILY_MATCH_LIMIT . ' consultations.'
         );
     }
 
@@ -551,7 +551,7 @@ class PaywallLotDTest extends AbstractE2ETestCase
 
     /**
      * Crée N enregistrements MatchConsultation pour l'utilisateur,
-     * datés d'AUJOURD'HUI (semaine en cours).
+     * datés d'AUJOURD'HUI (jour en cours, fenêtre minuit UTC → minuit UTC).
      *
      * @param User $user  L'utilisateur pour lequel créer les consultations
      * @param int  $count Nombre de consultations à créer
@@ -566,10 +566,10 @@ class PaywallLotDTest extends AbstractE2ETestCase
     }
 
     /**
-     * Crée N enregistrements MatchConsultation datés de la SEMAINE PRÉCÉDENTE.
+     * Crée N enregistrements MatchConsultation datés d'AVANT-HIER (hors du jour en cours).
      *
-     * Permet de tester le reset hebdomadaire : ces consultations ne doivent PAS
-     * être comptées dans le compteur de la semaine en cours.
+     * Permet de tester le reset quotidien : ces consultations ne doivent PAS
+     * être comptées dans le compteur du jour en cours (minuit UTC → minuit UTC).
      *
      * On injecte viewedAt via ReflectionClass car il est readonly dans le constructeur.
      *
@@ -578,9 +578,9 @@ class PaywallLotDTest extends AbstractE2ETestCase
      */
     private function creerConsultationsAnciennes(User $user, int $count): void
     {
-        // Date de la semaine précédente : lundi dernier - 1 jour = dimanche avant-dernier
-        // Pour être sûr d'être hors de la semaine en cours, on prend -8 jours.
-        $lastWeek = new \DateTimeImmutable('-8 days', new \DateTimeZone('UTC'));
+        // Avant-hier en UTC : garantit d'être hors de la fenêtre du jour en cours,
+        // quelle que soit l'heure à laquelle le test s'exécute.
+        $lastWeek = new \DateTimeImmutable('-2 days', new \DateTimeZone('UTC'));
 
         // Utilise la réflexion pour injecter une date passée dans viewedAt (readonly).
         // ReflectionClass est l'approche standard pour les tests d'entités Doctrine
@@ -591,7 +591,7 @@ class PaywallLotDTest extends AbstractE2ETestCase
 
         for ($i = 0; $i < $count; $i++) {
             $consultation = new MatchConsultation($user, null);
-            // Écrase la date initialisée dans le constructeur avec la date de la semaine passée
+            // Écrase la date initialisée dans le constructeur avec la date d'avant-hier
             $viewedAtProp->setValue($consultation, $lastWeek);
             $this->em->persist($consultation);
         }

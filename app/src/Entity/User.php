@@ -61,6 +61,27 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?\DateTimeInterface $anonymizedAt = null;
 
     /**
+     * Date de fin de l'essai gratuit d'un mois (ADR-0028).
+     *
+     * Initialisée à createdAt + 1 mois dans le cycle de vie PrePersist.
+     * Pendant que maintenant < trialEndsAt, l'utilisateur a accès à tout le premium
+     * exactement comme s'il était abonné — sans aucune action de sa part.
+     *
+     * Passé cette date (ou si null pour les anciens comptes non backfillés),
+     * l'accès bascule vers le mode gratuit (3 matchings/jour).
+     *
+     * Null → compte créé avant l'introduction de l'essai ET non backfillé.
+     *         Un backfill SQL est prévu en production au moment du déploiement
+     *         (cf. ADR-0028 §Conséquences) : UPDATE users SET trial_ends_at = NOW() + INTERVAL '1 month'
+     *         WHERE trial_ends_at IS NULL. Cette migration ne fait que le schéma.
+     *
+     * Convention Doctrine : nullable: true (les anciens comptes n'ont pas de trialEndsAt
+     * tant que le backfill n'est pas fait ; côté PHP on traite null comme "essai absent/expiré").
+     */
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $trialEndsAt = null;
+
+    /**
      * Hash SHA-256 du token de réinitialisation de mot de passe.
      *
      * SÉCURITÉ : on ne stocke JAMAIS le token en clair en BDD.
@@ -150,7 +171,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\PrePersist]
     public function initCreatedAt(): void
     {
+        // Initialise la date de création au moment où l'entité est d'abord persistée.
+        // \DateTime (mutable) est utilisé pour cohérence avec les autres champs datetime de cette entité.
         $this->createdAt = new \DateTime();
+
+        // ADR-0028 : tout nouveau compte bénéficie d'1 mois d'essai gratuit dès l'inscription.
+        // On clone createdAt pour ne PAS le muter (DateTime est mutable en PHP —
+        // un simple ->modify('+1 month') sur $this->createdAt aurait décalé la date d'inscription).
+        // Résultat : trialEndsAt = date d'inscription + exactement 1 mois calendaire.
+        $this->trialEndsAt = (clone $this->createdAt)->modify('+1 month');
     }
 
     public function getId(): ?int
@@ -398,5 +427,63 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     {
         $this->lookingForOther = $lookingForOther;
         return $this;
+    }
+
+    // ─── Getters / Setters — Essai gratuit (ADR-0028) ───────────────────────
+
+    /**
+     * Retourne la date de fin de l'essai gratuit d'un mois.
+     *
+     * Null → compte antérieur au déploiement de l'ADR-0028 et non encore backfillé.
+     *        Dans ce cas, isInTrial() retourne false (on traite null comme "pas d'essai").
+     *
+     * Non null → date limite au-delà de laquelle le compte revient au mode gratuit.
+     */
+    public function getTrialEndsAt(): ?\DateTimeInterface
+    {
+        return $this->trialEndsAt;
+    }
+
+    /**
+     * Définit la date de fin de l'essai gratuit.
+     *
+     * Usage normal : initialisé automatiquement dans initCreatedAt() (PrePersist).
+     * Usage admin : permet de prolonger ou révoquer l'essai manuellement si besoin.
+     *
+     * @param \DateTimeInterface|null $trialEndsAt Date de fin, ou null pour désactiver l'essai.
+     */
+    public function setTrialEndsAt(?\DateTimeInterface $trialEndsAt): static
+    {
+        $this->trialEndsAt = $trialEndsAt;
+        return $this;
+    }
+
+    /**
+     * Indique si le compte est actuellement dans sa période d'essai gratuit.
+     *
+     * Retourne true si et seulement si :
+     *   - trialEndsAt n'est pas null (compte avec essai)
+     *   - ET la date de fin est dans le futur (essai pas encore expiré)
+     *
+     * On compare avec \DateTimeImmutable (instance fraîche = "maintenant") pour éviter
+     * toute dérive liée à une instance de DateTime mise en cache.
+     *
+     * Utilisé par SubscriptionChecker::isSubscribed() pour déverrouiller le premium.
+     * Aucune interaction avec Stripe — c'est un accès "offert" côté BDD.
+     *
+     * ADR-0028 : l'essai débloque l'intégralité des fonctionnalités premium pendant 1 mois.
+     */
+    public function isInTrial(): bool
+    {
+        // Null = pas d'essai défini (compte antérieur au backfill ou essai révoqué)
+        if ($this->trialEndsAt === null) {
+            return false;
+        }
+
+        // Compare la fin d'essai avec l'instant présent.
+        // \DateTimeImmutable est préféré à new \DateTime() ici :
+        // il est immuable (aucun risque de le modifier par accident) et recommandé
+        // dans les comparaisons temporelles ponctuelles.
+        return $this->trialEndsAt > new \DateTimeImmutable();
     }
 }

@@ -17,11 +17,12 @@ use Symfony\Bundle\SecurityBundle\Security;
 /**
  * SubscriptionCheckerTest — Tests unitaires du service de vérification d'abonnement.
  *
- * Ce service est le cœur du paywall freemium (ADR-0022, Lot D).
- * On teste les trois acteurs :
+ * Ce service est le cœur du paywall freemium (ADR-0022 + ADR-0028).
+ * On teste les quatre acteurs :
  *   1. ROLE_ADMIN → toujours abonné (jamais bloqué), consultations illimitées
- *   2. Abonné actif (Subscription::isActive() = true) → accès illimité
- *   3. Utilisateur gratuit → limité à 3 consultations par semaine
+ *   2. Essai gratuit en cours (trialEndsAt dans le futur) → accès premium (ADR-0028)
+ *   3. Abonné actif (Subscription::isActive() = true) → accès illimité
+ *   4. Utilisateur gratuit → limité à FREE_DAILY_MATCH_LIMIT consultations par jour
  *
  * STRATÉGIE DE TEST :
  *   Tests UNITAIRES : pas de BDD, pas de kernel Symfony.
@@ -190,7 +191,7 @@ class SubscriptionCheckerTest extends TestCase
 
         // Le repository de consultations ne doit PAS être appelé pour un abonné
         $this->consultationRepo->expects($this->never())
-            ->method('countForUserThisWeek');
+            ->method('countForUserToday');
 
         $user = new User();
         $remaining = $this->checker->getRemainingMatchViews($user);
@@ -212,7 +213,7 @@ class SubscriptionCheckerTest extends TestCase
 
         // Pas d'appel au repository de consultations pour un admin
         $this->consultationRepo->expects($this->never())
-            ->method('countForUserThisWeek');
+            ->method('countForUserToday');
 
         $user = new User();
         $remaining = $this->checker->getRemainingMatchViews($user);
@@ -224,7 +225,7 @@ class SubscriptionCheckerTest extends TestCase
 
     /**
      * Un utilisateur gratuit qui n'a pas encore consulté de matchs cette semaine
-     * a le maximum de consultations disponibles (FREE_WEEKLY_MATCH_LIMIT = 3).
+     * a le maximum de consultations disponibles (FREE_DAILY_MATCH_LIMIT = 3).
      */
     public function testGetRemainingMatchViews_GratuitSansConsultation_RetourneMax(): void
     {
@@ -233,14 +234,14 @@ class SubscriptionCheckerTest extends TestCase
         $this->subscriptionRepo->method('findActiveByUser')->willReturn(null);
 
         // 0 consultations utilisées cette semaine
-        $this->consultationRepo->method('countForUserThisWeek')
+        $this->consultationRepo->method('countForUserToday')
             ->willReturn(0);
 
         $user = new User();
         $remaining = $this->checker->getRemainingMatchViews($user);
 
         $this->assertSame(
-            SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT,
+            SubscriptionChecker::FREE_DAILY_MATCH_LIMIT,
             $remaining,
             'Un utilisateur gratuit sans consultation doit avoir 3 vues disponibles.'
         );
@@ -255,7 +256,7 @@ class SubscriptionCheckerTest extends TestCase
         $this->subscriptionRepo->method('findActiveByUser')->willReturn(null);
 
         // 2 consultations utilisées cette semaine
-        $this->consultationRepo->method('countForUserThisWeek')
+        $this->consultationRepo->method('countForUserToday')
             ->willReturn(2);
 
         $user = new User();
@@ -276,9 +277,9 @@ class SubscriptionCheckerTest extends TestCase
         $this->security->method('isGranted')->willReturn(false);
         $this->subscriptionRepo->method('findActiveByUser')->willReturn(null);
 
-        // Limite atteinte : 3 consultations utilisées (= FREE_WEEKLY_MATCH_LIMIT)
-        $this->consultationRepo->method('countForUserThisWeek')
-            ->willReturn(SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT);
+        // Limite atteinte : 3 consultations utilisées (= FREE_DAILY_MATCH_LIMIT)
+        $this->consultationRepo->method('countForUserToday')
+            ->willReturn(SubscriptionChecker::FREE_DAILY_MATCH_LIMIT);
 
         $user = new User();
         $remaining = $this->checker->getRemainingMatchViews($user);
@@ -300,8 +301,8 @@ class SubscriptionCheckerTest extends TestCase
         $this->subscriptionRepo->method('findActiveByUser')->willReturn(null);
 
         // Plus de consultations que la limite (ne devrait pas arriver mais sécurité)
-        $this->consultationRepo->method('countForUserThisWeek')
-            ->willReturn(SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT + 5);
+        $this->consultationRepo->method('countForUserToday')
+            ->willReturn(SubscriptionChecker::FREE_DAILY_MATCH_LIMIT + 5);
 
         $user = new User();
         $remaining = $this->checker->getRemainingMatchViews($user);
@@ -329,7 +330,7 @@ class SubscriptionCheckerTest extends TestCase
         $this->subscriptionRepo->method('findActiveByUser')->willReturn(null);
 
         // 1 consultation utilisée sur 3 → 2 restantes
-        $this->consultationRepo->method('countForUserThisWeek')->willReturn(1);
+        $this->consultationRepo->method('countForUserToday')->willReturn(1);
 
         $user = new User();
         $canView = $this->checker->canViewMoreMatches($user);
@@ -351,8 +352,8 @@ class SubscriptionCheckerTest extends TestCase
         $this->subscriptionRepo->method('findActiveByUser')->willReturn(null);
 
         // Limite atteinte
-        $this->consultationRepo->method('countForUserThisWeek')
-            ->willReturn(SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT);
+        $this->consultationRepo->method('countForUserToday')
+            ->willReturn(SubscriptionChecker::FREE_DAILY_MATCH_LIMIT);
 
         $user = new User();
         $canView = $this->checker->canViewMoreMatches($user);
@@ -393,8 +394,8 @@ class SubscriptionCheckerTest extends TestCase
         $this->subscriptionRepo->method('findActiveByUser')->willReturn(null);
 
         // L'utilisateur a déjà consommé ses 3 consultations
-        $this->consultationRepo->method('countForUserThisWeek')
-            ->willReturn(3); // = FREE_WEEKLY_MATCH_LIMIT
+        $this->consultationRepo->method('countForUserToday')
+            ->willReturn(3); // = FREE_DAILY_MATCH_LIMIT
 
         $user = new User();
 
@@ -402,22 +403,146 @@ class SubscriptionCheckerTest extends TestCase
         $canView = $this->checker->canViewMoreMatches($user);
 
         $this->assertFalse($canView,
-            'La 4e consultation d\'un utilisateur gratuit doit être bloquée (limite = 3/semaine).'
+            'La 4e consultation d\'un utilisateur gratuit doit être bloquée (limite = 3/jour).'
         );
     }
 
     /**
-     * Vérifie la constante FREE_WEEKLY_MATCH_LIMIT vaut bien 3.
+     * Vérifie que la constante FREE_DAILY_MATCH_LIMIT vaut bien 3.
      *
      * Ce test protège contre une modification accidentelle de la constante.
      * Si on change la limite, ce test échoue explicitement et force une décision consciente.
+     * (ADR-0022 mis à jour juin 2026 : limite passée de hebdomadaire → quotidienne)
      */
-    public function testConstante_WeeklyLimit_VautTrois(): void
+    public function testConstante_DailyLimit_VautTrois(): void
     {
         $this->assertSame(
             3,
-            SubscriptionChecker::FREE_WEEKLY_MATCH_LIMIT,
-            'La limite hebdomadaire doit être de 3 consultations (ADR-0022).'
+            SubscriptionChecker::FREE_DAILY_MATCH_LIMIT,
+            'La limite quotidienne doit être de 3 consultations (ADR-0022).'
+        );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TESTS : Essai gratuit d'1 mois (ADR-0028)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Un utilisateur dont l'essai est en cours est considéré comme abonné.
+     *
+     * Condition : User::isInTrial() = true (trialEndsAt dans le futur)
+     *             Pas d'abonnement Stripe.
+     *
+     * L'essai doit court-circuiter la vérification Stripe :
+     * findActiveByUser() ne doit PAS être appelé (optimisation).
+     *
+     * ADR-0028 : "branché à isSubscribed() pour tout débloquer d'un coup".
+     */
+    public function testIsSubscribed_EssaiEnCours_RetourneTrue(): void
+    {
+        // Pas admin
+        $this->security->method('isGranted')
+            ->with('ROLE_ADMIN')
+            ->willReturn(false);
+
+        // On vérifie que Stripe n'est PAS interrogé pendant un essai actif
+        // (court-circuit ADR-0028 : l'essai passe avant le check Stripe)
+        $this->subscriptionRepo->expects($this->never())
+            ->method('findActiveByUser');
+
+        // Crée un User avec un essai qui expire dans 15 jours
+        $user = new User();
+        // On injecte directement trialEndsAt via le setter (l'essai est en cours)
+        $user->setTrialEndsAt(new \DateTime('+15 days'));
+
+        $result = $this->checker->isSubscribed($user);
+
+        $this->assertTrue($result,
+            'Un utilisateur dont l\'essai est en cours doit être considéré comme abonné (ADR-0028).'
+        );
+    }
+
+    /**
+     * Un utilisateur dont l'essai est en cours a des consultations illimitées.
+     *
+     * isSubscribed() = true → getRemainingMatchViews() = PHP_INT_MAX.
+     * Ce test vérifie que le court-circuit de l'essai remonte bien jusqu'au compteur.
+     */
+    public function testGetRemainingMatchViews_EssaiEnCours_RetourneIllimite(): void
+    {
+        // Pas admin, pas d'abonnement Stripe
+        $this->security->method('isGranted')->willReturn(false);
+        $this->subscriptionRepo->expects($this->never())
+            ->method('findActiveByUser');
+        // Le repository de consultations ne doit pas être appelé non plus
+        $this->consultationRepo->expects($this->never())
+            ->method('countForUserToday');
+
+        $user = new User();
+        $user->setTrialEndsAt(new \DateTime('+15 days'));
+
+        $remaining = $this->checker->getRemainingMatchViews($user);
+
+        $this->assertSame(PHP_INT_MAX, $remaining,
+            'Un utilisateur en essai doit avoir PHP_INT_MAX consultations restantes (illimité).'
+        );
+    }
+
+    /**
+     * Un utilisateur dont l'essai est EXPIRÉ et sans abonnement n'est PAS abonné.
+     *
+     * Condition : trialEndsAt dans le passé, pas d'abonnement Stripe.
+     *
+     * C'est le cas normal 30 jours après l'inscription : retour au mode gratuit.
+     * L'utilisateur repasse à 3 consultations/jour.
+     */
+    public function testIsSubscribed_EssaiExpire_SansAbonnement_RetourneFalse(): void
+    {
+        // Pas admin
+        $this->security->method('isGranted')
+            ->with('ROLE_ADMIN')
+            ->willReturn(false);
+
+        // Aucun abonnement Stripe actif
+        $this->subscriptionRepo->method('findActiveByUser')
+            ->willReturn(null);
+
+        // Essai expiré (trialEndsAt dans le passé)
+        $user = new User();
+        $user->setTrialEndsAt(new \DateTime('-1 day'));
+
+        $result = $this->checker->isSubscribed($user);
+
+        $this->assertFalse($result,
+            'Un utilisateur dont l\'essai est expiré et sans abonnement doit être en mode gratuit.'
+        );
+    }
+
+    /**
+     * Après expiration de l'essai, l'utilisateur est limité à FREE_DAILY_MATCH_LIMIT.
+     *
+     * Scénario : essai expiré hier, 0 consultations aujourd'hui.
+     * Résultat attendu : getRemainingMatchViews() = FREE_DAILY_MATCH_LIMIT (3).
+     */
+    public function testGetRemainingMatchViews_EssaiExpire_RetourneLimiteQuotidienne(): void
+    {
+        // Pas admin, pas d'abonnement Stripe
+        $this->security->method('isGranted')->willReturn(false);
+        $this->subscriptionRepo->method('findActiveByUser')->willReturn(null);
+
+        // 0 consultations utilisées aujourd'hui
+        $this->consultationRepo->method('countForUserToday')->willReturn(0);
+
+        // Essai expiré : l'utilisateur est maintenant en mode gratuit
+        $user = new User();
+        $user->setTrialEndsAt(new \DateTime('-1 day'));
+
+        $remaining = $this->checker->getRemainingMatchViews($user);
+
+        $this->assertSame(
+            SubscriptionChecker::FREE_DAILY_MATCH_LIMIT,
+            $remaining,
+            'Après expiration de l\'essai, l\'utilisateur retrouve la limite quotidienne gratuite (3/jour).'
         );
     }
 }

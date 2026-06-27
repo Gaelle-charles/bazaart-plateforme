@@ -12,14 +12,19 @@ use App\Repository\SubscriptionRepository;
  * SubscriptionChecker — Service central du paywall freemium (ADR-0022, Lot D).
  *
  * Ce service répond à deux questions :
- *   1. L'utilisateur est-il abonné ? (isSubscribed)
+ *   1. L'utilisateur a-t-il un accès premium ? (isSubscribed)
  *   2. Combien de consultations de matchs lui reste-t-il aujourd'hui ? (getRemainingMatchViews)
  *
- * RÈGLES MÉTIER (ADR-0022 — mise à jour juin 2026) :
- *   - ROLE_ADMIN : accès illimité à tout, isSubscribed() = true par convention
- *     (les admins ne sont JAMAIS bloqués, même sans abonnement Stripe)
- *   - Abonné (Subscription::isActive()) : accès illimité à tout
- *   - Gratuit (ni admin ni abonné) : 3 consultations de matchs par jour (fenêtre quotidienne)
+ * RÈGLES MÉTIER (ADR-0022 mis à jour + ADR-0028 — juin 2026) :
+ *   - ROLE_ADMIN    : accès illimité à tout, isSubscribed() = true par convention
+ *                     (les admins ne sont JAMAIS bloqués, même sans abonnement Stripe)
+ *   - Essai gratuit : tout compte inscrit bénéficie d'1 mois de premium automatique
+ *                     (User::$trialEndsAt initialisé à createdAt + 1 mois — ADR-0028)
+ *   - Abonné Stripe : abonnement actif (Subscription::isActive()) → accès illimité
+ *   - Gratuit       : ni admin, ni essai en cours, ni abonné → 3 consultations/jour
+ *
+ * isSubscribed() signifie donc désormais « a un accès premium » :
+ *   admin  OU  essai en cours  OU  abonnement Stripe actif.
  *
  * PASSAGE HEBDO → QUOTIDIEN (juin 2026) :
  *   La limite était initialement par semaine ISO (lundi → dimanche).
@@ -69,27 +74,40 @@ final class SubscriptionChecker
     /**
      * Retourne true si l'utilisateur a accès aux fonctionnalités premium.
      *
-     * LOGIQUE :
+     * LOGIQUE (ADR-0022 + ADR-0028) :
      *   1. Si l'utilisateur est ROLE_ADMIN → true (accès illimité, jamais bloqué)
-     *   2. Si l'utilisateur a un abonnement Stripe actif → true
-     *   3. Sinon → false (utilisateur gratuit)
+     *   2. Si l'utilisateur est dans son essai gratuit d'1 mois → true (ADR-0028)
+     *   3. Si l'utilisateur a un abonnement Stripe actif → true
+     *   4. Sinon → false (utilisateur gratuit, 3 matchings/jour)
      *
      * Cette méthode est le point d'entrée unique pour la vérification d'abonnement.
      * Tous les voters et controllers du paywall passent par ici.
+     * getRemainingMatchViews() et canViewMoreMatches() héritent automatiquement
+     * de cette logique (ils appellent isSubscribed() en premier).
      *
      * @param User $user L'utilisateur connecté (non null car on appelle depuis des routes protégées)
-     * @return bool true si accès premium, false si utilisateur gratuit
+     * @return bool true si accès premium (admin, essai ou abonnement), false si utilisateur gratuit
      */
     public function isSubscribed(User $user): bool
     {
-        // Règle admin : jamais bloqué, toujours accès premium.
+        // ── 1. Règle admin : jamais bloqué, toujours accès premium ──────────
         // On utilise $this->security->isGranted() qui respecte la role_hierarchy de security.yaml.
         // ROLE_ADMIN hérite de ROLE_ARTIST, ROLE_STRUCTURE, etc. selon la config.
         if ($this->security->isGranted('ROLE_ADMIN')) {
             return true;
         }
 
-        // Vérifie l'abonnement Stripe actif via SubscriptionRepository.
+        // ── 2. Essai gratuit d'1 mois (ADR-0028) ────────────────────────────
+        // Tout compte inscrit depuis la V1 part avec trialEndsAt = createdAt + 1 mois.
+        // User::isInTrial() compare trialEndsAt avec "maintenant" (DateTimeImmutable) :
+        //   → retourne true si le mois n'est pas encore écoulé.
+        // Si l'essai est en cours, on court-circuite ici : pas besoin d'interroger Stripe.
+        if ($user->isInTrial()) {
+            return true;
+        }
+
+        // ── 3. Abonnement Stripe actif ───────────────────────────────────────
+        // Vérifie l'abonnement Stripe via SubscriptionRepository.
         // findActiveByUser() retourne null si pas d'abonnement actif.
         $subscription = $this->subscriptionRepository->findActiveByUser($user);
 
