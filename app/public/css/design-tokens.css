@@ -624,3 +624,25 @@ body[data-theme="dark"] {
 .fade-up {
   animation: fadeUp .4s ease forwards;
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+   UTILITAIRE ACCESSIBILITÉ : contenu réservé aux lecteurs d'écran
+   ──────────────────────────────────────────────────────────────────────
+   .sr-only masque visuellement un élément tout en le gardant accessible
+   aux technologies d'assistance. DÉFINIE GLOBALEMENT ici car utilisée sur
+   plusieurs pages (onboarding, formulaires, etc.).
+   IMPORTANT : sans position:absolute, un élément .sr-only resterait dans le
+   flux (et, dans une grille, occuperait une cellule) : c'était la cause d'un
+   décalage des boutons sur /onboarding/etape-1 (la définition n'existait que
+   dans le style de la home, pas globalement). */
+.sr-only {
+  position:    absolute;
+  width:       1px;
+  height:      1px;
+  padding:     0;
+  margin:      -1px;
+  overflow:    hidden;
+  clip-path:   inset(50%);
+  white-space: nowrap;
+  border:      0;
+}

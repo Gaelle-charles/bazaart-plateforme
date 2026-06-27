@@ -53,11 +53,12 @@
 {% block footer %}{% endblock %}
 
 {#
-    On neutralise la barre de navigation basse globale (base.html.twig) :
-    le dashboard a DÉJÀ sa propre barre basse en mobile (.sd-side devient un
-    "bottom tab bar"). Sans ça, deux barres se superposeraient en bas.
+    On NE neutralise PLUS la barre de navigation basse globale (.ubn de base.html.twig).
+    Décision : une SEULE barre du bas partout (la .ubn), y compris sur le dashboard.
+    En mobile, la sidebar .sd-side est masquée (display:none, voir CSS @media) et c'est
+    la .ubn qui prend le relais. En desktop, .sd-side reste la sidebar gauche
+    (et .ubn est cachée). On laisse donc le block bottom_nav du parent s'afficher.
 #}
-{% block bottom_nav %}{% endblock %}
 
 {% block stylesheets %}
 {{ parent() }}
@@ -463,28 +464,13 @@
  */
 @media (max-width: 767px) {
 
-    /* ── Barre basse fixe ── */
+    /* ── En mobile, la sidebar du dashboard est MASQUÉE ──────────────────────
+       C'est la barre du bas globale .ubn (base.html.twig / _partials/bottom_nav)
+       qui sert de navigation sur mobile, IDENTIQUE sur toutes les pages (dashboard
+       comme communauté). On évite ainsi d'avoir deux barres du bas différentes.
+       La sidebar .sd-side reste la colonne gauche en DESKTOP (hors de ce @media). */
     .sd-side {
-        /* Repositionnement : plus de colonne gauche, barre collée au bas de l'écran */
-        top: auto;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100%;
-        min-height: 0;
-        height: 60px;
-        /* Flex horizontal au lieu de vertical */
-        flex-direction: row;
-        align-items: stretch;
-        /* Pas de slide-in : la barre est toujours visible */
-        transform: none;
-        /* Scroll horizontal si les liens débordent (10 liens sur petits écrans) */
-        overflow-x: auto;
-        overflow-y: hidden;
-        /* Séparateur discret en haut */
-        border-top: 1px solid rgba(242,239,230,.2);
-        /* Transition supprimée (inutile, plus de slide) */
-        transition: none;
+        display: none;
     }
 
     /* Classe --open inutile mais on s'assure qu'elle ne perturbe pas */
