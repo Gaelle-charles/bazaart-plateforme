@@ -97,9 +97,13 @@ class ArtistProfileController extends AbstractController
         return $this->render('artist_profile/edit.html.twig', [
             'profile'        => $profile,        // null si nouveau profil, objet si existant
             'allDisciplines' => $allDisciplines, // pour la section "Disciplines artistiques"
-            // Liste des pays européens triés alphabétiquement (FR) pour le <select> de localisation.
-            // Country::casesSortedFr() est appelé ici pour centraliser le tri dans l'enum.
-            'countries'      => Country::casesSortedFr(),
+            // Liste des pays regroupés par optgroup pour le <select> de localisation.
+            // casesGroupedFr() retourne array<string, list<Country>> :
+            //   'France et Outre-mer' → [France, Guadeloupe, Guyane, ...]
+            //   'Europe'              → [Albanie, Allemagne, ...]
+            // Le template artist_profile/edit.html.twig itère sur ces groupes
+            // pour rendre des <optgroup> dans le <select name="location">.
+            'countries'      => Country::casesGroupedFr(),
         ]);
     }
 

@@ -178,9 +178,13 @@ class OnboardingController extends AbstractController
             // Le template les utilise pour pré-sélectionner les disciplines si le profil
             // n'existe pas encore (premier passage à l'étape 2).
             'matching_session_data' => $matchingSessionData,
-            // Liste des pays européens triés alphabétiquement pour le <select> de localisation.
-            // Le champ location reste un string en BDD — on stocke le nom français du pays.
-            'countries'            => Country::casesSortedFr(),
+            // Liste des pays regroupés par optgroup pour le <select> de localisation.
+            // casesGroupedFr() retourne array<string, list<Country>> :
+            //   'France et Outre-mer' → [France, Guadeloupe, Guyane, ...]
+            //   'Europe'              → [Albanie, Allemagne, ...]
+            // Le template onboarding/step2.html.twig itère sur ces groupes
+            // pour rendre des <optgroup> dans le <select name="location">.
+            'countries'            => Country::casesGroupedFr(),
         ]);
     }
 

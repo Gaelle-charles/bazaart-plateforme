@@ -178,13 +178,20 @@
                         Elle contient le tableau Country::casesSortedFr() = pays triés A→Z en FR.
                     #}
 
-                    {# Détermine si la valeur courante est une ancienne saisie libre (hors liste) #}
+                    {#
+                        Détermine si la valeur courante est une ancienne saisie libre (hors liste).
+                        Depuis le passage aux optgroups, matchingForm_countries est un tableau
+                        associatif de type array<string, list<Country>>.
+                        On doit parcourir TOUS les groupes pour vérifier l'appartenance.
+                    #}
                     {% set location_in_list = false %}
                     {% if saved_location is not empty %}
-                        {% for c in matchingForm_countries %}
-                            {% if c.value == saved_location %}
-                                {% set location_in_list = true %}
-                            {% endif %}
+                        {% for groupLabel, countriesInGroup in matchingForm_countries %}
+                            {% for c in countriesInGroup %}
+                                {% if c.value == saved_location %}
+                                    {% set location_in_list = true %}
+                                {% endif %}
+                            {% endfor %}
                         {% endfor %}
                     {% endif %}
 
@@ -202,16 +209,26 @@
                         {% endif %}
 
                         {# Ancienne saisie libre non présente dans la liste → option de secours
-                           pour ne pas écraser silencieusement la valeur existante en BDD. #}
+                           pour ne pas écraser silencieusement la valeur existante en BDD.
+                           Placée AVANT les optgroups pour rester visible en tête de liste. #}
                         {% if saved_location is not empty and not location_in_list %}
                             <option value="{{ saved_location }}" selected>{{ saved_location }} (ancienne saisie)</option>
                         {% endif %}
 
-                        {# Boucle sur les pays européens triés alphabétiquement #}
-                        {% for c in matchingForm_countries %}
-                            <option value="{{ c.value }}" {{ saved_location == c.value ? 'selected' : '' }}>
-                                {{- c.value -}}
-                            </option>
+                        {#
+                            Boucle sur les groupes de pays (optgroups).
+                            matchingForm_countries = array<string, list<Country>> :
+                              Clé = libellé du groupe ("France et Outre-mer", "Europe")
+                              Valeur = liste des Country cases dans ce groupe
+                        #}
+                        {% for groupLabel, countriesInGroup in matchingForm_countries %}
+                            <optgroup label="{{ groupLabel }}">
+                                {% for c in countriesInGroup %}
+                                    <option value="{{ c.value }}" {{ saved_location == c.value ? 'selected' : '' }}>
+                                        {{- c.value -}}
+                                    </option>
+                                {% endfor %}
+                            </optgroup>
                         {% endfor %}
                     </select>
                 </div>

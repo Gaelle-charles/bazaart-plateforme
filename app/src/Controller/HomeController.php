@@ -364,10 +364,13 @@ final class HomeController extends AbstractController
             // '' si inconnu → le champ s'affiche vide, l'artiste saisit.
             'matchingForm_displayName'   => $matchingForm_displayName,
             'matchingForm_location'      => $matchingForm_location,
-            // Liste des pays européens triés alphabétiquement (FR) pour le <select> de localisation.
-            // Country::casesSortedFr() retourne un tableau de Country cases triés par label.
-            // Le tri est centralisé dans l'enum pour être cohérent avec les autres controllers.
-            'matchingForm_countries'     => Country::casesSortedFr(),
+            // Liste des pays regroupés par optgroup pour le <select> de localisation.
+            // casesGroupedFr() retourne array<string, list<Country>> :
+            //   'France et Outre-mer' → [France, Guadeloupe, Guyane, ...]
+            //   'Europe'              → [Albanie, Allemagne, ...]
+            // Le template _matching_form.html.twig itère sur ces groupes pour
+            // rendre des <optgroup> dans le <select name="location">.
+            'matchingForm_countries'     => Country::casesGroupedFr(),
 
             // ── Section swipe matching (Lot C) ───────────────────────────────────
             // Chaque match est un tableau avec les clés : resource_id, title,

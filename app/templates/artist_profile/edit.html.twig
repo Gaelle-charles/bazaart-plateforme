@@ -442,13 +442,20 @@
                     {# Valeur courante depuis le profil BDD (ou vide si nouveau profil) #}
                     {% set current_location = profile ? profile.location : '' %}
 
-                    {# Détermine si la valeur courante est dans la liste des pays #}
+                    {#
+                        Détermine si la valeur courante est dans la liste des pays.
+                        La variable 'countries' est désormais un tableau groupé :
+                          array<string, list<Country>>
+                        On parcourt TOUS les groupes pour tester l'appartenance.
+                    #}
                     {% set location_in_list = false %}
                     {% if current_location is not empty %}
-                        {% for c in countries %}
-                            {% if c.value == current_location %}
-                                {% set location_in_list = true %}
-                            {% endif %}
+                        {% for groupLabel, countriesInGroup in countries %}
+                            {% for c in countriesInGroup %}
+                                {% if c.value == current_location %}
+                                    {% set location_in_list = true %}
+                                {% endif %}
+                            {% endfor %}
                         {% endfor %}
                     {% endif %}
 
@@ -465,16 +472,26 @@
                         {% endif %}
 
                         {# Ancienne saisie libre non présente dans la liste → option de secours
-                           pour ne pas écraser silencieusement la valeur lors d'un enregistrement. #}
+                           pour ne pas écraser silencieusement la valeur lors d'un enregistrement.
+                           Placée avant les optgroups pour rester visible en tête de liste. #}
                         {% if current_location is not empty and not location_in_list %}
                             <option value="{{ current_location }}" selected>{{ current_location }} (ancienne saisie)</option>
                         {% endif %}
 
-                        {# Boucle sur les pays européens triés alphabétiquement #}
-                        {% for c in countries %}
-                            <option value="{{ c.value }}" {{ current_location == c.value ? 'selected' : '' }}>
-                                {{- c.value -}}
-                            </option>
+                        {#
+                            Boucle sur les groupes de pays (optgroups).
+                            countries = array<string, list<Country>> :
+                              Clé = libellé du groupe ("France et Outre-mer", "Europe")
+                              Valeur = liste des Country cases dans ce groupe
+                        #}
+                        {% for groupLabel, countriesInGroup in countries %}
+                            <optgroup label="{{ groupLabel }}">
+                                {% for c in countriesInGroup %}
+                                    <option value="{{ c.value }}" {{ current_location == c.value ? 'selected' : '' }}>
+                                        {{- c.value -}}
+                                    </option>
+                                {% endfor %}
+                            </optgroup>
                         {% endfor %}
                     </select>
                 </div>
