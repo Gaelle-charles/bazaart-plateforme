@@ -79,12 +79,15 @@
 /* Nom de l'artiste en très grand Archivo Black — style "affiche" */
 .ap-hero__name {
     font-family: var(--display);   /* 'Archivo Black' défini dans design-tokens.css */
-    font-size: clamp(36px, 6vw, 72px);
+    font-size: clamp(28px, 6vw, 72px); /* min réduit 36 -> 28 pour les noms longs en mobile */
     line-height: .9;
     text-transform: uppercase;
     color: var(--bg);              /* crème sur fond noir */
     margin: 0 0 var(--space-md) 0;
     letter-spacing: -.01em;
+    /* Un nom d'artiste long (mot unique) doit se couper au lieu de déborder/être coupé. */
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 /* Rangée de chips de disciplines + ville */
