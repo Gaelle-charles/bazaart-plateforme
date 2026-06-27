@@ -723,7 +723,9 @@
     display:        flex;
     flex-direction: column;
     gap:            20px;
-    min-height:     520px;
+    /* Hauteur réduite après retrait des stats par carte (demande Gaëlle) :
+       les cartes s'adaptent désormais à leur contenu (header + titre + description). */
+    min-height:     340px;
     /* ─── CORRECTION OVERFLOW GRID ─────────────────────────────────────
        Problème : par défaut, les cellules CSS Grid ont min-width: auto.
        Cela signifie qu'elles NE PEUVENT PAS rétrécir sous la taille de
@@ -833,28 +835,7 @@
     flex:        1; /* pousse les stats en bas */
 }
 
-/* Bloc de stats en bas de chaque hub */
-.lp-hub__stats {
-    margin-top:   auto;
-    border-top:   1px solid var(--line-soft);
-    padding-top:  16px;
-    display:      flex;
-    flex-direction: column;
-    gap:          8px;
-}
-
-/* Ligne de stat individuelle — mono, layout flex */
-.lp-hub__stat {
-    display:         flex;
-    justify-content: space-between;
-    font-family:     var(--mono);
-    font-size:       11px;
-    letter-spacing:  .04em;
-}
-
-.lp-hub__stat-arrow {
-    color: var(--ink-mute);
-}
+/* (Les stats par carte hub ont été retirées : CSS .lp-hub__stats supprimé.) */
 
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -2165,6 +2146,95 @@ body.page-home .lp-footer { margin-top: 0; }
     margin-inline: auto;
 }
 
+/* ── ÉCRAN VERROUILLÉ MATCHING (profil incomplet) ─────────────────────────
+   Affiché côté serveur quand profileComplete=false (utilisateur connecté).
+   Cartes fantômes floues en fond + overlay sombre invitant à compléter le profil.
+   Couleurs adaptées à la charte : --accent (jaune doré) pour le CTA, --ink pour
+   l'overlay, --bg-alt pour les cartes fantômes. */
+.matching-locked {
+    position: relative;
+    min-height: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 24px;
+}
+/* Cartes fantômes empilées (décoratives, non interactives) */
+.matching-locked__cards {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    pointer-events: none;
+    overflow: hidden;
+}
+.matching-locked__card {
+    flex: 1;
+    border-radius: 8px;
+    background: var(--bg-alt, #E8E5DC);
+    filter: blur(6px);
+    opacity: 0.5;
+    border: 1px solid rgba(0,0,0,0.08);
+    min-height: 360px;
+}
+.matching-locked__card--2 { opacity: 0.35; transform: scale(0.97); }
+.matching-locked__card--3 { opacity: 0.2; transform: scale(0.94); }
+/* Overlay central de déverrouillage */
+.matching-locked__overlay {
+    position: relative;
+    z-index: 2;
+    background: var(--ink, #0D0D0D);
+    color: #ffffff;
+    border-radius: 12px;
+    padding: 2.5rem 2rem;
+    text-align: center;
+    max-width: 440px;
+    width: 90%;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+}
+.matching-locked__icon { font-size: 2.5rem; margin-bottom: 1rem; }
+.matching-locked__title {
+    font-size: clamp(1.25rem, 3vw, 1.75rem);
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    font-family: var(--display);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+.matching-locked__text {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.75);
+    margin-bottom: 1.5rem;
+}
+.matching-locked__cta {
+    display: inline-block;
+    background: var(--accent, #FFCB10);
+    color: var(--ink, #0D0D0D);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.8125rem;
+    padding: 0.875rem 1.75rem;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: opacity 0.2s;
+}
+.matching-locked__cta:hover { opacity: 0.88; }
+.matching-locked__reassurance {
+    margin-top: 1rem;
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.05em;
+}
+/* Mobile (≤ 768px) : on resserre l'overlay et les cartes */
+@media (max-width: 768px) {
+    .matching-locked__cards { gap: 0.5rem; padding: 0.5rem; }
+    .matching-locked__card { min-height: 300px; }
+    .matching-locked__overlay { padding: 2rem 1.25rem; }
+}
+
 /* ── PROFIL INCOMPLET ────────────────────────────────────────────────── */
 .swipe-incomplete-profile {
     margin-top:  32px;
@@ -3387,19 +3457,43 @@ body.page-home .lp-footer { margin-top: 0; }
                         <h2 class="lp-section-header__title" id="lp-swipe-title">
                             Ton matching
                         </h2>
-                        <span class="lp-section-header__sub">réponds à quelques questions</span>
+                        <span class="lp-section-header__sub">profil à compléter</span>
                     </div>
                 </div>
 
                 {#
-                    FORMULAIRE MULTI-ETAPES — Artiste connecté, profil incomplet.
-                    On inclut le même formulaire que pour les visiteurs.
-                    La différence est gérée par le champ _logged_in et le controller :
-                    pour les artistes connectés, la soumission sauvegarde directement
-                    le profil via OnboardingService, puis redirige vers la home (swipe).
-                    Les données sont pré-remplies depuis la session si elles existent.
+                    ÉTAT VERROUILLÉ — Utilisateur connecté dont le profil n'est pas
+                    complet (profileComplete=false, décidé CÔTÉ SERVEUR : aucune carte
+                    n'est rendue, donc pas de flash d'affichage avant masquage).
+                    On invite à compléter le profil via l'onboarding (app_onboarding_step1).
+                    Cartes fantômes floues en fond pour donner envie + overlay de CTA.
                 #}
-                {% include 'matching/_matching_form.html.twig' %}
+                <div class="matching-locked">
+
+                    {# Cartes fantômes floues en arrière-plan (décoratives) #}
+                    <div class="matching-locked__cards" aria-hidden="true">
+                        <div class="matching-locked__card matching-locked__card--1"></div>
+                        <div class="matching-locked__card matching-locked__card--2"></div>
+                        <div class="matching-locked__card matching-locked__card--3"></div>
+                    </div>
+
+                    {# Bloc central de déverrouillage #}
+                    <div class="matching-locked__overlay">
+                        <div class="matching-locked__icon" aria-hidden="true">&#127919;</div>
+                        <h3 class="matching-locked__title">Ton matching t'attend</h3>
+                        <p class="matching-locked__text">
+                            Dis-nous qui tu es&nbsp;: discipline, territoire, objectifs.
+                            En 2 minutes, on trouve les opportunit&eacute;s faites pour toi.
+                        </p>
+                        <a href="{{ path('app_onboarding_step1') }}" class="matching-locked__cta">
+                            Compl&eacute;ter mon profil &rarr;
+                        </a>
+                        <p class="matching-locked__reassurance">
+                            Gratuit &middot; Sans engagement &middot; 1 mois offert
+                        </p>
+                    </div>
+
+                </div>{# /.matching-locked #}
 
             {# ─── ETAT 4 : VISITEUR NON connecté → formulaire d'accroche ──────────────
                 On affiche le formulaire de matching au visiteur (accroche). Mais dès le
@@ -3553,21 +3647,6 @@ body.page-home .lp-footer { margin-top: 0; }
                         plateaux mixtes — on met les artistes BazaArt sur scène,
                         en vrai, devant des gens.
                     </p>
-                    {# Micro-liste de stats en bas de colonne #}
-                    <div class="lp-hub__stats">
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>18 événements / an</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>3 villes</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>9 000 spectateurs cumulés</span>
-                        </div>
-                    </div>
                 </article>
 
                 {# ── Hub 02 : INGÉNIERIE CULTURELLE ── #}
@@ -3593,20 +3672,6 @@ body.page-home .lp-footer { margin-top: 0; }
                         le montage de projets, les financements croisés, et la
                         conduite d'une production de A à Z.
                     </p>
-                    <div class="lp-hub__stats">
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>120 projets accompagnés</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>78% taux de réussite</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>Réseau de 40 financeurs</span>
-                        </div>
-                    </div>
                 </article>
 
                 {# ── Hub 03 : FORMATION ── #}
@@ -3622,20 +3687,6 @@ body.page-home .lp-footer { margin-top: 0; }
                         animés par des pairs et des experts. Gratuit pour les adhérents,
                         abordable pour les autres.
                     </p>
-                    <div class="lp-hub__stats">
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>12 cycles / an</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>280 artistes formés</span>
-                        </div>
-                        <div class="lp-hub__stat">
-                            <span class="lp-hub__stat-arrow">›</span>
-                            <span>Note moyenne 4,7 / 5</span>
-                        </div>
-                    </div>
                 </article>
 
             </div>{# /.lp-hubs__grid #}
