@@ -282,7 +282,7 @@
 .lp-footer__copy {
     margin-top:      32px;
     padding-top:     16px;
-    padding-bottom:  24px; /* espace sous le copyright = espace en bas du footer (réduit 32 -> 24) */
+    padding-bottom:  12px; /* réduit : la ligne de crédit ci-dessous porte l'espace bas */
     border-top:      1px solid rgba(255, 255, 255, 0.12);
     display:         flex;
     justify-content: space-between;
@@ -291,6 +291,24 @@
     letter-spacing:  .08em;
     /* Blanc à 40% : très discret, informatif uniquement */
     color:           rgba(255, 255, 255, 0.40);
+}
+
+/* Ligne de crédit "Site réalisé avec ♥ par Gaelle Code", tout en bas du footer */
+.lp-footer__credit {
+    padding-bottom:  24px;
+    text-align:      center;
+    font-family:     var(--mono, 'JetBrains Mono', monospace);
+    font-size:       11px;
+    letter-spacing:  .04em;
+    color:           rgba(255, 255, 255, 0.45);
+}
+.lp-footer__credit a {
+    color:                 rgba(255, 255, 255, 0.78);
+    text-decoration:       underline;
+    text-underline-offset: 2px;
+}
+.lp-footer__credit a:hover {
+    color: var(--accent);
 }
 
 
