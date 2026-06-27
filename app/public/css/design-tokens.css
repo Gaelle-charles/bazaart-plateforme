@@ -657,5 +657,11 @@ body[data-theme="dark"] {
    La vraie solution pour les titres mot-unique trop grands = réduire leur taille
    en mobile (fait au cas par cas dans les pages concernées), pas couper les lettres. */
 h1, h2, h3, h4 {
-  overflow-wrap: break-word;
+  /* Césure automatique FR (le document est en lang="fr") : un mot trop long pour
+     la largeur se coupe AVEC UN TIRET à une frontière de syllabe (lisible), au lieu
+     d'être rogné (overflow:hidden) ou cassé lettre par lettre. overflow-wrap reste
+     en filet de secours pour les mots sans point de césure. */
+  hyphens:         auto;
+  -webkit-hyphens: auto;
+  overflow-wrap:   break-word;
 }
