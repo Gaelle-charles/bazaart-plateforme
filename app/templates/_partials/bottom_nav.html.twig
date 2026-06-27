@@ -16,9 +16,14 @@
  #}
 {% set route = app.request.attributes.get('_route') %}
 
+{#
+    Barre du bas IDENTIQUE à la sidebar du dashboard : MÊMES 9 onglets, MÊME ordre,
+    MÊMES icônes. Objectif : une seule et unique navigation (plus de "deux navbars
+    différentes"). La barre défile horizontalement si les onglets dépassent.
+#}
 <nav class="ubn" aria-label="Navigation rapide">
 
-    {# Mon espace — app_dashboard redirige les admins vers leur dashboard dédié #}
+    {# 1. Tableau de bord — app_dashboard (redirige les admins vers leur dashboard) #}
     <a href="{{ path('app_dashboard') }}"
        class="ubn__link {{ route == 'app_dashboard' ? 'ubn__link--active' : '' }}">
         <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -27,26 +32,17 @@
         Espace
     </a>
 
-    {# Opportunités (ressources publiées) #}
-    <a href="{{ path('app_resource_index') }}"
-       class="ubn__link {{ route starts with 'app_resource' ? 'ubn__link--active' : '' }}">
+    {# 2. Profil public artiste #}
+    <a href="{{ path('app_artist_profile_show') }}"
+       class="ubn__link {{ route == 'app_artist_profile_show' ? 'ubn__link--active' : '' }}">
         <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="9"/>
-            <path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/>
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M4 21a8 8 0 0 1 16 0"/>
         </svg>
-        Opportunit&eacute;s
+        Profil
     </a>
 
-    {# Forum communautaire #}
-    <a href="{{ path('app_forum_index') }}"
-       class="ubn__link {{ route starts with 'app_forum_' ? 'ubn__link--active' : '' }}">
-        <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-        Forum
-    </a>
-
-    {# Messagerie privée #}
+    {# 3. Messagerie privée #}
     <a href="{{ path('app_messaging_index') }}"
        class="ubn__link {{ route starts with 'app_messaging_' ? 'ubn__link--active' : '' }}">
         <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -55,7 +51,38 @@
         Messages
     </a>
 
-    {# Notifications — badge de non-lus (même fonction Twig que la sidebar dashboard) #}
+    {# 4. Opportunités (ressources publiées) #}
+    <a href="{{ path('app_resource_index') }}"
+       class="ubn__link {{ route starts with 'app_resource' ? 'ubn__link--active' : '' }}">
+        <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/>
+        </svg>
+        Opps
+    </a>
+
+    {# 5. Forum communautaire #}
+    <a href="{{ path('app_forum_index') }}"
+       class="ubn__link {{ route starts with 'app_forum_' ? 'ubn__link--active' : '' }}">
+        <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        Forum
+    </a>
+
+    {# 6. Articles & Blog #}
+    <a href="{{ path('app_article_index') }}"
+       class="ubn__link {{ route starts with 'app_article_' ? 'ubn__link--active' : '' }}">
+        <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+        Articles
+    </a>
+
+    {# 7. Notifications — badge de non-lus (même fonction Twig que la sidebar dashboard) #}
     {% set ubnUnread = unread_notifications_count() %}
     <a href="{{ path('app_notification_index') }}"
        class="ubn__link {{ route == 'app_notification_index' ? 'ubn__link--active' : '' }}">
@@ -69,6 +96,25 @@
                 {{ ubnUnread > 9 ? '9+' : ubnUnread }}
             </span>
         {% endif %}
+    </a>
+
+    {# 8. Mes données (RGPD) #}
+    <a href="{{ path('app_rgpd_index') }}"
+       class="ubn__link {{ route starts with 'app_rgpd_' ? 'ubn__link--active' : '' }}">
+        <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        Donn&eacute;es
+    </a>
+
+    {# 9. Paramètres — édition du profil artiste #}
+    <a href="{{ path('app_artist_profile_edit') }}"
+       class="ubn__link {{ route == 'app_artist_profile_edit' ? 'ubn__link--active' : '' }}">
+        <svg class="ubn__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        R&eacute;glages
     </a>
 
 </nav>
