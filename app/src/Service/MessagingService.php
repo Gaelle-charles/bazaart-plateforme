@@ -208,6 +208,20 @@ class MessagingService
 
         $participant->markAsRead();
         $this->em->flush();
+
+        // ── Marque aussi les NOTIFICATIONS "new_message" de cette conversation comme lues ──
+        //
+        // Sans ça, ouvrir la conversation marquait le participant comme lu (la conv
+        // n'apparaît plus "non lue"), MAIS les notifications "new_message" liées à
+        // cette conversation restaient NON lues → le badge Notifications restait affiché
+        // alors que l'utilisateur a bien lu ses messages. On les passe en lues ici.
+        // relatedEntityType='conversation' + relatedEntityId = id de la conversation
+        // (cf. sendMessage() qui crée la notification avec ces mêmes valeurs).
+        $this->notificationService->markReadForRelatedEntity(
+            $user,
+            'conversation',
+            (int) $conversation->getId(),
+        );
     }
 
     // ─── Utilitaires ─────────────────────────────────────────────────────────

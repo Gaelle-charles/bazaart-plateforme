@@ -151,4 +151,38 @@ class NotificationRepository extends ServiceEntityRepository
             ->getQuery()
             ->execute();
     }
+
+    /**
+     * Marque comme lues les notifications NON lues d'un utilisateur LIÉES à une
+     * entité précise (relatedEntityType + relatedEntityId).
+     *
+     * Cas d'usage : quand l'utilisateur OUVRE une conversation, les notifications
+     * "new_message" pointant vers cette conversation doivent passer en lues
+     * (sinon le badge Notifications reste affiché alors que les messages sont lus).
+     * Réutilisable pour d'autres entités (ex : ouvrir un thread forum marque les
+     * notifications "new_reply" de ce thread comme lues).
+     *
+     * Même approche UPDATE DQL groupé que markAllAsReadForUser() (un seul UPDATE,
+     * bypass du Unit of Work — pas d'entités Notification chargées dans ce flux).
+     *
+     * @return int Nombre de notifications marquées lues (0 si aucune)
+     */
+    public function markReadForRelatedEntity(User $user, string $relatedEntityType, int $relatedEntityId): int
+    {
+        return (int) $this->createQueryBuilder('n')
+            ->update()
+            ->set('n.isRead', ':isRead')
+            ->set('n.readAt', ':now')
+            ->andWhere('n.recipient = :user')
+            ->andWhere('n.relatedEntityType = :etype')
+            ->andWhere('n.relatedEntityId = :eid')
+            ->andWhere('n.isRead = false')
+            ->setParameter('isRead', true)
+            ->setParameter('now', new \DateTime())
+            ->setParameter('user', $user)
+            ->setParameter('etype', $relatedEntityType)
+            ->setParameter('eid', $relatedEntityId)
+            ->getQuery()
+            ->execute();
+    }
 }

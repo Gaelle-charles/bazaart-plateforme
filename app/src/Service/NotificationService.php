@@ -193,4 +193,25 @@ class NotificationService
         // (page /notifications ou action "Tout marquer comme lu").
         $this->em->clear(Notification::class);
     }
+
+    /**
+     * Marque comme lues les notifications de l'utilisateur liées à une entité
+     * (ex : ouvrir une conversation → notifications "new_message" de cette conversation).
+     *
+     * Évite que le badge Notifications reste affiché après lecture des messages.
+     *
+     * @return int Nombre de notifications marquées lues
+     */
+    public function markReadForRelatedEntity(User $user, string $relatedEntityType, int $relatedEntityId): int
+    {
+        $count = $this->notificationRepository->markReadForRelatedEntity($user, $relatedEntityType, $relatedEntityId);
+
+        // Comme pour markAllAsRead : l'UPDATE DQL bypass le Unit of Work. On ne vide
+        // le cache QUE si des notifications ont été modifiées (évite un clear inutile).
+        if ($count > 0) {
+            $this->em->clear(Notification::class);
+        }
+
+        return $count;
+    }
 }
