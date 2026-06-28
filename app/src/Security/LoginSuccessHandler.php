@@ -90,45 +90,42 @@ class LoginSuccessHandler implements AuthenticationSuccessHandlerInterface
      */
     public function onAuthenticationSuccess(Request $request, TokenInterface $token): ?Response
     {
-        // ── PRIORITÉ 1 : Target path standard ────────────────────────────────────
-        //
-        // Avant que l'utilisateur arrive sur /login, Symfony Security peut avoir
-        // mémorisé l'URL qu'il tentait d'atteindre (ex: /dashboard, /admin).
-        // Cette URL est stockée dans la session sous la clé interne de TargetPathTrait.
-        //
-        // CAS TYPIQUE : l'utilisateur clique sur un lien vers /mon-profil (page protégée),
-        // il n'est pas connecté → firewall le redirige vers /login en sauvant l'URL.
-        // Après connexion, il doit retourner sur /mon-profil, pas sur la home.
-        //
-        // On respecte ce comportement standard car c'est une attente UX fondamentale.
-        // La logique matching passe APRÈS ce cas.
-        $targetPath = $this->getTargetPath($request->getSession(), self::FIREWALL_NAME);
+        $session = $request->getSession();
 
-        if ($targetPath !== null && $targetPath !== '') {
-            // getTargetPath() supprime automatiquement la clé de session après lecture.
-            // On retourne directement la redirection sans passer par les règles suivantes.
-            return new RedirectResponse($targetPath);
-        }
-
-        // ── PRIORITÉ 2 : Données de matching en session ──────────────────────────
+        // ── PRIORITÉ 1 : Données de matching en session ──────────────────────────
         //
-        // Si la session contient des réponses du formulaire matching de la home
-        // (clé 'bazaart_matching_form' non vide), c'est que l'utilisateur a commencé
-        // le formulaire multi-étapes AVANT de se connecter.
+        // Si la session contient des réponses du formulaire matching de la home,
+        // l'utilisateur était en train de faire un matching AVANT de s'authentifier.
+        // Son intention première est de RETOURNER AU MATCHING : on la fait passer
+        // AVANT le target_path standard.
         //
-        // On le renvoie sur la home, ancre #swipe-section.
-        //   → Profil complet (display_name + location + disciplines + lookingFor remplis) :
-        //     la section affichera les cartes de swipe directement.
-        //   → Profil incomplet : la section affichera le formulaire pré-rempli avec
-        //     les données de session (carryover).
+        // POURQUOI avant le target_path ? Bug constaté : un visiteur qui avait cliqué
+        // un lien protégé (ex. "Forum") AVANT de faire le matching avait un
+        // target_path=/forum mémorisé, qui détournait la redirection vers le forum
+        // au lieu du matching. On purge donc ce target_path obsolète ici.
         //
-        // NOTE TECHNIQUE : on concatène '#swipe-section' manuellement car generate()
-        // ne prend pas en charge les fragments d'URL (l'ancre # est côté client,
-        // pas côté serveur — les serveurs HTTP ne la reçoivent jamais).
-        if ($this->matchingFormSession->hasSessionData($request->getSession())) {
+        // → Profil complet : la section #swipe-section affiche les cartes de swipe.
+        // → Profil incomplet : elle affiche le formulaire pré-rempli (carryover session).
+        //
+        // NOTE : on concatène '#swipe-section' à la main car generate() ne gère pas
+        // les fragments d'URL (l'ancre # est côté client).
+        if ($this->matchingFormSession->hasSessionData($session)) {
+            // On retire un éventuel target_path obsolète pour qu'il ne resurgisse pas
+            // à la prochaine authentification.
+            $this->removeTargetPath($session, self::FIREWALL_NAME);
             return new RedirectResponse(
                 $this->router->generate('app_home') . '#swipe-section'
             );
+        }
+
+        // ── PRIORITÉ 2 : Target path standard ────────────────────────────────────
+        //
+        // Si l'utilisateur tentait d'atteindre une page protégée AVANT /login
+        // (ex. /mon-profil), Symfony a mémorisé l'URL : on l'y renvoie après connexion.
+        $targetPath = $this->getTargetPath($session, self::FIREWALL_NAME);
+
+        if ($targetPath !== null && $targetPath !== '') {
+            return new RedirectResponse($targetPath);
         }
 
         // ── PRIORITÉ 3 : Admin → tableau de bord admin ───────────────────────────
