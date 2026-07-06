@@ -1,20 +1,22 @@
 {#
  # matching/_matching_form.html.twig
  #
- # Section matching home : formulaire multi-étapes visible (3 étapes)
- # pour les visiteurs non connectés et les artistes avec profil incomplet.
+ # Section matching home : formulaire multi-étapes (3 étapes) affiché aux
+ # UTILISATEURS CONNECTÉS au profil incomplet (artiste ou non).
  #
- # DEUX CAS D'USAGE :
- #   A) Visiteur non connecté
- #      Peut remplir les 3 étapes librement.
- #      A la dernière étape, un bouton "Voir mes matchs" le redirige vers
- #      l'inscription artiste (/register?intent=artist). Ses réponses sont
- #      stockées en session pour pré-remplir l'onboarding après inscription.
+ # ADR-0033 (2026-07-06) : ce partial n'est PLUS JAMAIS inclus pour un visiteur
+ # non connecté — HomeController::index() ne le prépare que si
+ # $user instanceof User (cf. $needsMatchingForm). Un visiteur voit désormais
+ # matching/_matching_login_wall.html.twig à la place ("se connecter d'abord,
+ # remplir ensuite"). L'ancien cas d'usage "visiteur non connecté" (remplissage
+ # libre + redirection vers /register au clic "Continuer") a été retiré du
+ # markup et de matching-form.js — voir l'historique Git pour l'ancienne version
+ # si besoin de retrouver ce comportement.
  #
- #   B) Artiste connecté avec profil incomplet
- #      Même formulaire, mais la soumission finale appelle directement
- #      POST /matching/form (action du formulaire) et sauvegarde le profil
- #      via OnboardingService. Redirige ensuite vers la home avec section swipe.
+ # USAGE UNIQUE : Artiste connecté (ou utilisateur connecté pas encore artiste)
+ #   avec profil incomplet. La soumission finale appelle POST /matching/form
+ #   (action du formulaire) et sauvegarde le profil via OnboardingService.
+ #   Redirige ensuite vers la home avec la section swipe.
  #
  # VARIABLES TRANSMISES PAR HomeController :
  #   matchingForm_disciplines    : Discipline[]         — toutes les disciplines
@@ -22,7 +24,6 @@
  #   matchingForm_legalStatuses  : LegalStatus[]        — tous les cas enum
  #   matchingForm_savedData      : array                — données session pré-remplissage
  #                                 {discipline_ids:[], looking_for:[], looking_for_other:'', legal_status:null}
- #   matchingForm_isLoggedIn     : bool                 — utilisateur connecté ?
  #   matchingForm_csrfToken      : string               — token CSRF pour le POST
  #
  # ARCHITECTURE JS :
@@ -37,6 +38,20 @@
  #   - La barre de progression est aria-live="polite" (mise à jour par JS)
  #   - Focus géré par matching-form.js lors de la navigation entre étapes
  #   - prefers-reduced-motion : transitions JS désactivées (voir matching-form.js)
+ #
+ # DESIGN (volet frontend ADR-0033 §4) :
+ #   Structure reprise du wizard du prototype "BazaArt - Matching Swipe" :
+ #   carte .match-card, barre de progression en segments (.progress/.bars),
+ #   intro .match-intro, champs .fields-2, aide .match-help, actions
+ #   .wiz-actions. Les IDs et classes FONCTIONNELS lus par matching-form.js
+ #   (matching-form-wrap, matching-multi-form, mf-progress, mf-btn-prev/next/submit,
+ #   .mf-step, .mf-step-dot, .mf-progress__label...) sont CONSERVÉS À L'IDENTIQUE :
+ #   les classes de mise en page (.match-card, .progress, .bars, .step,
+ #   .match-intro, .fields-2, .field-label, .match-help, .wiz-actions) sont
+ #   posées EN PLUS, en habillage visuel pur — voir matching-form.js si un
+ #   doute existe sur un sélecteur avant de le renommer.
+ #   Couleurs/fonts : charte ACTUELLE du site (var(--accent), var(--display)...),
+ #   pas les valeurs codées en dur du prototype.
 #}
 
 {# ── Extraction des valeurs pré-remplies depuis la session ─────────────────── #}
@@ -75,19 +90,21 @@
     La route nommée 'app_matching_form_step' pointe vers POST /matching/step.
 #}
 <div
-    class="mf-wrap"
+    class="mf-wrap match-card"
     id="matching-form-wrap"
-    data-logged-in="{{ matchingForm_isLoggedIn ? 'true' : 'false' }}"
     data-step-url="{{ path('app_matching_form_step') }}"
-    {# URL d'inscription : lue par matching-form.js pour rediriger un visiteur
-       non connecté dès le clic sur "Continuer" (cf. ADR-0026). #}
-    data-register-url="{{ path('app_register', { intent: 'artist' }) }}"
     aria-label="Formulaire de matching en plusieurs étapes"
 >
 
-    {# ── Barre de progression (3 étapes) ──────────────────────────────────── #}
+    {#
+        ── Barre de progression (3 étapes) ──────────────────────────────────
+        .progress/.bars/.step : habillage visuel repris du prototype (segments
+        + label mono). Les classes fonctionnelles .mf-progress / .mf-step-dot /
+        .mf-step-dot--active / .mf-progress__label restent lues telles quelles
+        par matching-form.js (updateProgress()) — ne pas les renommer.
+    #}
     <div
-        class="mf-progress"
+        class="mf-progress progress"
         role="progressbar"
         aria-valuemin="1"
         aria-valuemax="3"
@@ -96,10 +113,12 @@
         aria-label="Étape 1 sur 3"
         id="mf-progress"
     >
-        <div class="mf-step-dot mf-step-dot--active" data-step="1" title="Étape 1 : Toi (nom, localisation, disciplines)"></div>
-        <div class="mf-step-dot" data-step="2" title="Étape 2 : Ce que tu recherches"></div>
-        <div class="mf-step-dot" data-step="3" title="Étape 3 : Ton statut (optionnel)"></div>
-        <span class="mf-progress__label" id="mf-progress-label">Étape 1 / 3</span>
+        <div class="bars">
+            <div class="mf-step-dot mf-step-dot--active" data-step="1" title="Étape 1 : Toi (nom, localisation, disciplines)"></div>
+            <div class="mf-step-dot" data-step="2" title="Étape 2 : Ce que tu recherches"></div>
+            <div class="mf-step-dot" data-step="3" title="Étape 3 : Ton statut (optionnel)"></div>
+        </div>
+        <span class="mf-progress__label step" id="mf-progress-label">Étape 1 / 3</span>
     </div>
 
     {# ── Formulaire HTML — soumis en POST au controller matching ──────────── #}
@@ -114,9 +133,6 @@
         {# Token CSRF — protège le POST final contre les soumissions croisées #}
         <input type="hidden" name="_csrf_token" value="{{ matchingForm_csrfToken }}">
 
-        {# Indique si l'utilisateur est connecté (traitement différent côté serveur) #}
-        <input type="hidden" name="_logged_in" value="{{ matchingForm_isLoggedIn ? '1' : '0' }}">
-
         {# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
            ÉTAPE 1 : Disciplines artistiques
         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ #}
@@ -129,7 +145,7 @@
             <legend class="mf-step__legend" id="mf-step1-legend">
                 Parle-nous de <span class="mf-it">toi</span>
             </legend>
-            <p class="mf-step__hint">
+            <p class="mf-step__hint match-intro">
                 Ton nom, ta localisation et tes pratiques artistiques : ces informations sont nécessaires pour te proposer des opportunités pertinentes.
             </p>
 
@@ -141,14 +157,14 @@
                « complet » et débloque le matching (cf. MatchingProfileChecker).
                POST keys : display_name / location (mêmes clés qu'OnboardingStep2DTO,
                pour que le Flux B et le carryover onboarding fonctionnent sans glue). #}
-            <div class="mf-text-fields">
+            <div class="mf-text-fields fields-2">
                 <div class="mf-field">
-                    <label class="mf-field__label" for="mf-display-name">
+                    <label class="mf-field__label field-label" for="mf-display-name">
                         Ton nom d'artiste
                     </label>
                     <input
                         type="text"
-                        class="mf-field__input ob-input"
+                        class="mf-field__input ob-input input"
                         id="mf-display-name"
                         name="display_name"
                         value="{{ saved_display_name }}"
@@ -159,7 +175,7 @@
                     >
                 </div>
                 <div class="mf-field">
-                    <label class="mf-field__label" for="mf-location">
+                    <label class="mf-field__label field-label" for="mf-location">
                         Ta localisation
                     </label>
                     {#
@@ -196,7 +212,7 @@
                     {% endif %}
 
                     <select
-                        class="mf-field__input ob-input"
+                        class="mf-field__input ob-input input"
                         id="mf-location"
                         name="location"
                         required
@@ -235,7 +251,7 @@
             </div>
 
             {# Sous-titre disciplines #}
-            <p class="mf-step__sublabel">Tes disciplines artistiques</p>
+            <p class="mf-step__sublabel field-label">Tes disciplines artistiques</p>
 
             {# Champ de filtre pour chercher rapidement dans la liste de disciplines #}
             <div class="mf-disc-filter-wrap">
@@ -272,7 +288,7 @@
             <legend class="mf-step__legend" id="mf-step2-legend">
                 Que <span class="mf-it">recherches-tu</span> ?
             </legend>
-            <p class="mf-step__hint">
+            <p class="mf-step__hint match-intro">
                 Coche tout ce qui correspond à tes besoins. Ces informations permettent de personnaliser les opportunités proposées.
             </p>
 
@@ -302,7 +318,7 @@
                 Ton <span class="mf-it">statut</span>
                 <span class="mf-optional-badge">optionnel</span>
             </legend>
-            <p class="mf-step__hint">
+            <p class="mf-step__hint match-intro">
                 Ton statut juridique permet de te proposer les opportunités auxquelles tu es éligible. Tu peux passer cette étape.
             </p>
 
@@ -319,8 +335,13 @@
         {# ── Navigation entre étapes ─────────────────────────────────────── #}
         {# Ces boutons sont gérés par matching-form.js.
            Sans JS : seul le bouton de soumission finale est visible.
-           Le bouton "Suivant" est type="button" (n'envoie PAS le formulaire). #}
-        <div class="mf-actions" id="mf-actions">
+           Le bouton "Suivant" est type="button" (n'envoie PAS le formulaire).
+
+           .grow : espaceur repris du prototype (wiz-actions .grow{flex:1}).
+           Pousse "Continuer"/"Trouver mes matchs" à DROITE même quand
+           "Retour" est caché (étape 1) — avec justify-content:space-between
+           seul, un unique bouton visible se retrouverait à GAUCHE. #}
+        <div class="mf-actions wiz-actions" id="mf-actions">
 
             {# Bouton "Retour" : caché à l'étape 1, visible aux étapes 2 et 3 #}
             <button
@@ -333,6 +354,8 @@
                 Retour
             </button>
 
+            <span class="grow" aria-hidden="true"></span>
+
             {# Bouton "Suivant" : visible aux étapes 1 et 2 (géré par JS) #}
             <button
                 type="button"
@@ -344,25 +367,15 @@
             </button>
 
             {# Bouton de soumission finale : visible à l'étape 3 (JS),
-               ou toujours visible sans JS (fallback).
-               Pour les visiteurs non connectés : libellé "Voir mes matchs"
-               Pour les artistes : libellé "Trouver mes matchs" #}
+               ou toujours visible sans JS (fallback). #}
             <button
                 type="submit"
                 class="mf-btn-submit ob-btn-next"
                 id="mf-btn-submit"
-                {% if matchingForm_isLoggedIn %}
-                    aria-label="Enregistrer mon profil et voir mes matchs"
-                {% else %}
-                    aria-label="Continuer vers l'inscription pour voir mes matchs"
-                {% endif %}
+                aria-label="Enregistrer mon profil et voir mes matchs"
                 hidden
             >
-                {% if matchingForm_isLoggedIn %}
-                    Trouver mes matchs
-                {% else %}
-                    Voir mes matchs
-                {% endif %}
+                Trouver mes matchs
             </button>
 
         </div>
@@ -381,58 +394,10 @@
 
     </form>
 
-    {#
-        ENCART D'INCITATION VISITEUR (affiché après la dernière étape par JS,
-        ou après soumission si visiteur non connecté côté serveur).
-        Caché par défaut — affiché par JS quand le formulaire est complété et
-        que l'utilisateur n'est pas connecté.
-    #}
-    {#
-        MODAL "crée ton compte pour aller plus loin" (visiteurs uniquement).
-        Affichée par matching-form.js au clic sur "Continuer" / "Voir mes matchs",
-        à la place d'une redirection brutale vers /login. Les réponses du visiteur
-        sont déjà sauvegardées en session (saveStepAjax) : l'onboarding post-inscription
-        les pré-remplit. role=dialog + aria-modal pour l'accessibilité.
-    #}
-    {% if not matchingForm_isLoggedIn %}
-    <div class="mf-signup-cta" id="mf-signup-cta" hidden
-         role="dialog" aria-modal="true" aria-labelledby="mf-signup-title">
-        <div class="mf-signup-cta__inner">
-            {# Bouton de fermeture : referme la modal et laisse le formulaire intact #}
-            <button type="button" class="mf-signup-cta__close" id="mf-signup-close" aria-label="Fermer">
-                &times;
-            </button>
-            <div class="mf-signup-cta__icon" aria-hidden="true">&#128274;</div>
-            <h3 class="mf-signup-cta__title" id="mf-signup-title">
-                Crée ton compte pour aller plus loin
-            </h3>
-            <p class="mf-signup-cta__msg">
-                Tes réponses sont déjà enregistr&eacute;es. Cr&eacute;e ton compte artiste
-                pour d&eacute;couvrir tes opportunit&eacute;s : on pr&eacute;-remplit le reste pour toi.
-            </p>
-            <div class="mf-signup-cta__btns">
-                {#
-                    Le lien /register?intent=artist indique à AuthController
-                    qu'après inscription, l'utilisateur doit être redirigé vers
-                    l'onboarding avec pré-remplissage depuis la session.
-                    Bouton principal en jaune doré (--accent) = action principale (charte).
-                #}
-                <a
-                    href="{{ path('app_register', { intent: 'artist' }) }}"
-                    class="lp-btn lp-btn--accent"
-                    id="mf-register-link"
-                >
-                    Créer mon compte artiste
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M5 12h14M13 5l7 7-7 7"/>
-                    </svg>
-                </a>
-                <a href="{{ path('app_login') }}" class="lp-btn lp-btn--ghost">
-                    J'ai déjà un compte
-                </a>
-            </div>
-        </div>
-    </div>
-    {% endif %}
+    {# ADR-0033 : la modal "crée ton compte pour aller plus loin" (#mf-signup-cta)
+       a été retirée. Elle n'était affichée QUE pour un visiteur non connecté —
+       cas qui ne se produit plus jamais pour ce partial (cf. doc-comment en tête
+       de fichier). Le markup, son CSS (.mf-signup-cta*) et la logique JS associée
+       (showSignupCta/closeSignupCta dans matching-form.js) ont été retirés ensemble. #}
 
 </div>{# /.mf-wrap #}

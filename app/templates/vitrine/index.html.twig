@@ -52,7 +52,7 @@
      --bg        : #F2EFE6  (fond sable)
      --ink       : #0D0D0D  (quasi-noir)
      --accent    : #FFCB10  (lime)
-     --accent-2  : #FF6B2C  (orange)
+     --accent-2  : #F62B1C  (orange)
      --display   : 'Archivo Black'
      --body      : 'Space Grotesk'
      --mono      : 'JetBrains Mono'
@@ -560,8 +560,8 @@
 }
 
 .lp-hero__h1-orange {
-    /* Rouge #F62B1D (remplace l'orange --accent-2) — uniquement sur le titre du hero. */
-    color: #F62B1D;
+    /* Rouge #F62B1C (remplace l'orange --accent-2) — uniquement sur le titre du hero. */
+    color: #F62B1C;
 }
 
 .lp-hero__h1-lime {
@@ -1660,6 +1660,82 @@ body.page-home .lp-footer { margin-top: 0; }
 
 
 /* ──────────────────────────────────────────────────────────────────────
+   MUR DE CONNEXION MATCHING (ADR-0033, volet design)
+   Préfixe CSS : .mlw- (matching login wall).
+
+   Premier écran vu par un visiteur NON connecté sur la section matching
+   (état 4, cf. plus bas). Structure inspirée du hero .feat-head du
+   prototype "BazaArt - Matching Swipe" (eyebrow + gros titre + sous-titre
+   + repère de réassurance + CTAs), mais avec la charte ACTUELLE du site :
+   jaune doré --accent, Archivo Black --display, pas les couleurs/fonts du
+   prototype. Les CTAs réutilisent .lp-btn/.lp-btn--accent/.lp-btn--outline
+   (cf. plus bas dans ce fichier) pour hériter des hovers déjà en place.
+────────────────────────────────────────────────────────────────────── */
+
+.mlw-wrap {
+    max-width:    720px;
+    margin:       8px 0 0;
+    padding:      48px 44px;
+    background:   var(--bg-alt);
+    border:       1.5px solid var(--ink);
+    /* Bande jaune doré à gauche : repère visuel "c'est ICI qu'il faut agir",
+       même esprit que le carré lime de .lp-eyebrow mais plus affirmé pour
+       ce premier écran de conversion. */
+    border-left:  6px solid var(--accent);
+}
+
+.mlw-eyebrow { margin-bottom: 18px; }
+
+/* Gros titre Archivo Black — même famille que .lp-section-header__title
+   et .feat-head h1 du prototype, mais taille adaptée à une carte (pas un
+   hero pleine largeur). */
+.mlw-title {
+    font-family:    var(--display);
+    font-size:      clamp(32px, 5vw, 52px);
+    line-height:    .92;
+    letter-spacing: -.02em;
+    text-transform: uppercase;
+    color:          var(--ink);
+    margin:         0 0 18px;
+}
+
+.mlw-lead {
+    font-size:   clamp(16px, 1.8vw, 19px);
+    line-height: 1.5;
+    color:       var(--ink);
+    max-width:   520px;
+    margin:      0 0 14px;
+}
+
+/* Repère "3 étapes · Modifiable à tout moment" — mono discret, esprit
+   .feat-meta du prototype. Réassure avant le clic d'inscription. */
+.mlw-meta {
+    font-family:    var(--mono);
+    font-size:      11px;
+    font-weight:    700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color:          var(--ink-mute);
+    margin:         0 0 32px;
+}
+
+.mlw-ctas {
+    display:   flex;
+    gap:       14px;
+    flex-wrap: wrap;
+}
+
+/* Les couleurs/hover des deux CTA viennent de .lp-btn--accent / .lp-btn--outline
+   (déjà posées dans le markup). .mlw-cta ne gère que la mise en page propre
+   à ce bloc (largeur mobile). */
+@media (max-width: 640px) {
+    .mlw-wrap  { padding: 32px 24px; }
+    .mlw-ctas  { flex-direction: column; }
+    .mlw-cta   { width: 100%; }
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
    SECTION SWIPE — Section matching (ADR-0021 Lot C)
    Placée juste après le hero, avant le marquee.
    Préfixe CSS : .swipe- pour éviter toute collision.
@@ -1715,10 +1791,14 @@ body.page-home .lp-footer { margin-top: 0; }
     inset:          0;
     background:     var(--bg);
     border:         1px solid var(--ink);
-    padding:        28px 24px;
+    /* Plus de padding ici : le badge de score (.swipe-card__header) doit
+       aller à bord perdu, comme .dcard du prototype. Le padding vit
+       désormais sur .swipe-card__body (cf. plus bas). overflow:hidden
+       évite que le bloc encre du header ne déborde des coins de la carte. */
+    padding:        0;
+    overflow:       hidden;
     display:        flex;
     flex-direction: column;
-    gap:            16px;
     cursor:         grab;
     will-change:    transform;    /* hint GPU : accélère les animations de drag */
     /* La carte n'est pas visible par défaut — seule la "active" l'est */
@@ -1763,31 +1843,68 @@ body.page-home .lp-footer { margin-top: 0; }
 ──────────────────────────────────────────────────────────────────────── */
 
 /* ── EN-TÊTE DE CARTE ─────────────────────────────────────────────────── */
+/* Anatomie reprise de .dcard-head du prototype : bloc score à bord perdu à
+   gauche + zone du type de ressource à droite, séparés de bord à bord par
+   une bordure basse — pas de padding sur le conteneur (chaque enfant a le
+   sien) pour que le bloc score touche vraiment les bords de la carte. */
 .swipe-card__header {
-    display:         flex;
-    align-items:     center;
-    justify-content: space-between;
+    display:        flex;
+    align-items:    stretch;
+    border-bottom:  1.5px solid var(--ink);
 }
 
-/* Badge score (/100) — indicateur compact de pertinence */
+/* Badge de SCORE PROÉMINENT : fond encre plein, chiffre en jaune doré,
+   grande taille — c'est le premier élément que l'œil accroche sur la carte
+   (esprit .dcard-score du prototype, avec les couleurs de la charte actuelle). */
 .swipe-card__score {
-    display:     flex;
-    align-items: baseline;
-    gap:         2px;
+    display:         flex;
+    flex-direction:  column;
+    align-items:     flex-start;
+    justify-content: center;
+    gap:             2px;
+    padding:         14px 18px;
+    background:      var(--ink);
+    min-width:       92px;
 }
 
 .swipe-card__score-number {
     font-family: var(--display);
-    font-size:   24px;
-    color:       var(--ink);
-    line-height: 1;
+    font-size:   30px;
+    color:       var(--accent);
+    line-height: .9;
 }
 
 .swipe-card__score-label {
-    font-family: var(--mono);
-    font-size:   11px;
-    color:       var(--ink-mute);
-    letter-spacing: .06em;
+    font-family:    var(--mono);
+    font-size:      9px;
+    font-weight:    700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color:          var(--accent);
+    opacity:        .82;
+}
+
+/* Zone du type de ressource, à droite du badge score */
+.swipe-card__tags {
+    display:         flex;
+    align-items:     center;
+    justify-content: flex-end;
+    flex:            1;
+    padding:         0 16px;
+}
+
+/* ── CORPS DE LA CARTE ─────────────────────────────────────────────────────
+   Porte le padding + le gap qui vivaient auparavant sur .swipe-card entier
+   (nécessaire pour que .swipe-card__header aille à bord perdu). flex:1 +
+   min-height:0 : le corps occupe tout l'espace restant sous le header et
+   peut rétrécir sans forcer la carte à grandir (contexte flex imbriqué). */
+.swipe-card__body {
+    padding:        22px 20px 18px;
+    display:        flex;
+    flex-direction: column;
+    gap:            14px;
+    flex:           1;
+    min-height:     0;
 }
 
 /* ── LOGO DE L'ORGANISME ──────────────────────────────────────────────── */
@@ -1922,25 +2039,60 @@ body.page-home .lp-footer { margin-top: 0; }
     flex-direction: column;
 }
 
-/* ── BOUTONS D'ACTION (sous la carte) ─────────────────────────────────────
-   Disposition en ligne : "Passer" ancré à GAUCHE, "Intéressé(e)" à DROITE.
-   C'est le vrai geste de swipe (refus à gauche, intérêt à droite). */
+/* ── BOUTONS D'ACTION (sous la carte) — anatomie ".deck-controls" ─────────
+   Repris du prototype : boutons RONDS centrés sous la pile, plutôt que des
+   boutons rectangulaires plein-largeur ancrés aux extrémités. Le geste réel
+   (passer à gauche, intéressé·e à droite) reste communiqué par la couleur
+   (rouge/accent) et les icônes flèche/cœur, plus par la position. */
 .swipe-actions {
     display:         flex;
     flex-direction:  row;
-    justify-content: space-between;
+    justify-content: center;
     align-items:     center;
-    gap:             12px;
-    margin-top:      16px;
+    gap:             18px;
+    margin-top:      22px;
 }
 
-/* On retire l'ancien width:100% : chaque bouton garde sa largeur naturelle,
-   et space-between les pousse aux deux extrémités sous la carte. */
-.swipe-btn-pass,
-.swipe-btn-fav {
-    flex:            0 0 auto;
+/* Bouton rond de contrôle du deck (.swbtn du prototype). Icône seule,
+   aria-label/title portent le texte accessible (cf. markup). */
+.swbtn {
+    flex:           0 0 auto;
+    width:          58px;
+    height:         58px;
+    border-radius:  50%;
+    border:         2px solid var(--ink);
+    background:     var(--bg);
+    display:        flex;
+    align-items:    center;
     justify-content: center;
-    gap:             8px;
+    box-shadow:     var(--sh-btn, 0 10px 22px -10px rgba(14, 13, 11, .45));
+    transition:     transform .15s, box-shadow .15s, background .15s, color .15s, border-color .15s;
+}
+.swbtn:hover {
+    transform:  translateY(-3px);
+    box-shadow: var(--sh-hover, 0 30px 60px -26px rgba(14, 13, 11, .5));
+}
+
+/* Variante "Passer" : contour rouge (--accent-2), plein rouge au survol */
+.swbtn--nope {
+    color:        var(--accent-2);
+    border-color: var(--accent-2);
+}
+.swbtn--nope:hover {
+    background: var(--accent-2);
+    color:      #fff;
+}
+
+/* Variante "Intéressé(e)" : plein jaune doré (l'action mise en avant) */
+.swbtn--like {
+    color:        var(--ink);
+    background:   var(--accent);
+    border-color: var(--ink);
+    box-shadow:   var(--sh-yellow, 0 14px 32px -12px rgba(240, 190, 0, .6));
+}
+.swbtn--like:hover {
+    background: var(--ink);
+    color:      var(--accent);
 }
 
 /* ── COLONNE DROITE : bloc "Comment ça marche" ────────────────────────────
@@ -2383,8 +2535,17 @@ body.page-home .lp-footer { margin-top: 0; }
 }
 
 @media (max-width: 480px) {
-    .swipe-card {
-        padding: 20px 16px;
+    /* Le padding vit désormais sur .swipe-card__body (cf. plus haut) —
+       .swipe-card lui-même n'a plus de padding (bord perdu du score). */
+    .swipe-card__body {
+        padding: 18px 16px 14px;
+    }
+    .swipe-card__score {
+        padding: 12px 14px;
+        min-width: 76px;
+    }
+    .swipe-card__score-number {
+        font-size: 24px;
     }
 
     .swipe-guest-cta__btns {
@@ -2407,127 +2568,75 @@ body.page-home .lp-footer { margin-top: 0; }
 
 
 /* ──────────────────────────────────────────────────────────────────────
-   FORMULAIRE MULTI-ÉTAPES MATCHING (home, visiteur et profil incomplet)
-   Préfixe CSS : .mf- (matching form)
+   FORMULAIRE MULTI-ÉTAPES MATCHING (home, utilisateur connecté au profil
+   incomplet — ADR-0033)
+   Préfixe CSS : .mf- (fonctionnel, lu par matching-form.js) + habillage
+   visuel .match-card/.progress/.bars/.step/.match-intro/.fields-2/
+   .tile-grid/.match-help/.wiz-actions repris du prototype "BazaArt -
+   Matching Swipe" (charte ACTUELLE : var(--accent), var(--display)...).
 
    Réutilise les classes .ob-* de l'onboarding (définis dans base_app.html.twig
    ou dans les templates d'onboarding). Les classes .ob-* sont définies dans
-   les templates onboarding — on les redéfinit ici pour la vitrine.
+   les templates onboarding — on les redéfinit ici pour la vitrine, sous le
+   sélecteur ".mf-wrap" pour ne jamais affecter l'onboarding lui-même.
+
+   NOTE : les anciennes classes .mf-layout/.mf-intro__* (intro "3 étapes" à
+   gauche du formulaire, écran d'accroche visiteur) ont été retirées : ce
+   cas d'usage n'existe plus depuis ADR-0033 (le formulaire n'est jamais
+   affiché à un visiteur — mur de connexion à la place, cf. .mlw-* plus haut).
 ────────────────────────────────────────────────────────────────────── */
 
-/* Conteneur global du formulaire */
+/* Conteneur global du formulaire — carte "match-card" du prototype */
 .mf-wrap {
-    max-width:    680px;
+    max-width:    760px;
     margin:       24px 0 0;
     padding:      28px 24px;
-    border:       1px solid var(--ink);
+    border:       1.5px solid var(--ink);
     background:   var(--bg-alt, #EAE6D9);
 }
 
-/* ── Layout 2 colonnes : intro "3 étapes" à gauche + formulaire à droite ────
-   Affiché pour les visiteurs (état accroche). Sur mobile, empilement vertical
-   (l'intro passe au-dessus du formulaire). */
-.mf-layout {
-    display:               grid;
-    grid-template-columns: 0.9fr 1.1fr;
-    gap:                   40px;
-    align-items:           start;
-    margin-top:            24px;
-}
-/* Dans la grille, le formulaire occupe toute sa colonne (on neutralise sa
-   largeur max et sa marge haute, désormais gérées par .mf-layout). */
-.mf-layout .mf-wrap { margin-top: 0; max-width: none; }
-
-.mf-intro { padding-top: 4px; }
-/* Eyebrow avec petit tiret doré devant (repère visuel charte) */
-.mf-intro__eyebrow {
-    font-family:    var(--mono);
-    font-size:      11px;
-    text-transform: uppercase;
-    letter-spacing: .12em;
-    color:          var(--ink-mute);
-    display:        inline-flex;
-    align-items:    center;
-    gap:            8px;
-}
-.mf-intro__eyebrow::before {
-    content: "";
-    width: 18px;
-    height: 2px;
-    background: var(--accent);
-}
-/* Paragraphe d'accroche (le "paragraphe design" demandé) */
-.mf-intro__lead {
-    font-size:   clamp(18px, 2.4vw, 24px);
-    line-height: 1.35;
-    font-weight: 600;
-    color:       var(--ink);
-    margin:      14px 0 24px;
-}
-.mf-intro__lead em { font-style: italic; }
-/* Liste des 3 étapes */
-.mf-intro__steps {
-    list-style: none;
-    margin:     0;
-    padding:    0;
-    display:    flex;
-    flex-direction: column;
-    gap:        18px;
-}
-.mf-intro__step { display: flex; gap: 14px; align-items: flex-start; }
-/* Numéro de l'étape : carré jaune doré, chiffre Archivo Black */
-.mf-intro__num {
-    flex-shrink:     0;
-    width:           30px;
-    height:          30px;
-    background:      var(--accent);
-    color:           var(--ink);
-    font-family:     var(--display);
-    font-size:       15px;
-    display:         flex;
-    align-items:     center;
-    justify-content: center;
-    border:          1px solid var(--ink);
-}
-.mf-intro__step-title { display: block; font-weight: 700; font-size: 15px; color: var(--ink); }
-.mf-intro__step-text  { display: block; font-size: 13px; line-height: 1.5; color: var(--ink-mute); margin-top: 2px; }
-.mf-intro__reassurance {
-    margin-top:     26px;
-    font-family:    var(--mono);
-    font-size:      11px;
-    letter-spacing: .05em;
-    color:          var(--ink-mute);
-}
-/* Mobile : une seule colonne, l'intro au-dessus du formulaire */
-@media (max-width: 860px) {
-    .mf-layout { grid-template-columns: 1fr; gap: 26px; }
+/* Sur grand écran, la carte respire davantage (esprit .match-card du
+   prototype : padding généreux 44px/48px). Les très petits écrans gardent
+   le padding compact défini plus bas (media max-width:768px). */
+@media (min-width: 640px) {
+    .match-card.mf-wrap { padding: 40px 40px; }
 }
 
-/* Barre de progression (3 points-étapes) */
+/* ── Barre de progression (segments + label — .progress/.bars/.step) ────
+   .mf-progress / .mf-step-dot / .mf-step-dot--active / .mf-progress__label
+   restent les sélecteurs FONCTIONNELS mis à jour par matching-form.js
+   (updateProgress()) : ne pas les renommer. .bars/.step ne sont que des
+   classes de mise en page supplémentaires posées dans le markup. */
 .mf-progress {
     display:       flex;
     align-items:   center;
-    gap:           6px;
-    margin-bottom: 24px;
+    gap:           16px;
+    margin-bottom: 28px;
+}
+
+.mf-progress .bars {
+    display: flex;
+    gap:     8px;
 }
 
 .mf-step-dot {
-    width:      28px;
-    height:     4px;
+    width:      34px;
+    height:     6px;
     background: var(--line-soft, #ddd);
     transition: background .15s;
 }
 .mf-step-dot--active { background: var(--accent); }
 .mf-step-dot--done   { background: var(--ink); }
 
+/* .step (posée en plus de .mf-progress__label) : label mono à droite des
+   segments, esprit ".progress .step" du prototype. */
 .mf-progress__label {
     font-family:    var(--mono);
-    font-size:      10px;
+    font-size:      12px;
     font-weight:    700;
     letter-spacing: .10em;
     text-transform: uppercase;
     color:          var(--ink-mute);
-    margin-left:    8px;
 }
 
 /* Chaque étape (fieldset) */
@@ -2558,7 +2667,7 @@ body.page-home .lp-footer { margin-top: 0; }
     font-style:     italic;
     text-transform: none;
     font-weight:    400;
-    color:          var(--accent-2, #FF6B2C);
+    color:          var(--accent-2, #F62B1C);
 }
 
 /* Badge "optionnel" discret */
@@ -2582,6 +2691,16 @@ body.page-home .lp-footer { margin-top: 0; }
     color:       var(--ink-mute);
     margin:      0 0 16px;
     line-height: 1.5;
+}
+
+/* .match-intro : variante plus affirmée du hint, posée en plus de
+   .mf-step__hint sur l'intro de chaque étape (esprit .match-intro du
+   prototype : plus grand, plus aéré, largeur de lecture confortable). */
+.mf-step__hint.match-intro {
+    font-size:   15px;
+    line-height: 1.55;
+    max-width:   640px;
+    margin:      0 0 24px;
 }
 
 /* ── Champs nom + localisation (étape 1, Option B) ──────────────────────────
@@ -2630,13 +2749,21 @@ body.page-home .lp-footer { margin-top: 0; }
    Note : en Symfony/Twig, il n'y a pas de "if class exists" CSS — on accepte
    la duplication légère ; ces règles sont idempotentes. */
 
-/* Grille de disciplines */
-.mf-wrap .ob-disc-grid {
+/* ── Grille commune "tuiles cliquables" (.tile-grid) ─────────────────────
+   Posée sur les 3 groupes de sélection du formulaire : disciplines
+   (.ob-disc-grid), objectifs (.ob-options/.mf-options-group) et statut
+   juridique (.ob-options). Un SEUL point de vérité pour le layout en
+   grille — les règles .ob-disc-grid / .ob-options ci-dessous ne gèrent
+   plus que des cas particuliers (aucun pour l'instant). */
+.mf-wrap .tile-grid {
     display:               grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap:                   8px;
+    gap:                   10px;
     margin-top:            8px;
+    margin-bottom:         16px;
 }
+
+/* Grille de disciplines */
 .mf-wrap .ob-disc-item input[type="checkbox"] {
     position: absolute; opacity: 0; width: 0; height: 0;
 }
@@ -2644,12 +2771,13 @@ body.page-home .lp-footer { margin-top: 0; }
     display:     flex;
     align-items: center;
     gap:         8px;
-    padding:     10px 12px;
-    border:      1px solid var(--line-soft);
+    padding:     14px 12px;
+    height:      100%;
+    border:      1.5px solid var(--line-soft);
     cursor:      pointer;
     font-size:   13px;
     color:       var(--ink);
-    transition:  background .10s, border-color .10s;
+    transition:  background .10s, border-color .10s, transform .12s, box-shadow .12s;
 }
 .mf-wrap .ob-disc-item label:hover { background: var(--bg); }
 .mf-wrap .ob-disc-item input:checked + label {
@@ -2657,33 +2785,28 @@ body.page-home .lp-footer { margin-top: 0; }
     border-color: var(--ink);
     font-weight:  700;
 }
-.mf-wrap .ob-disc-icon { font-size: 15px; flex-shrink: 0; }
+.mf-wrap .ob-disc-icon { font-size: 17px; flex-shrink: 0; }
 
-/* Options lookingFor */
-.mf-wrap .ob-options,
-.mf-wrap .mf-options-group {
-    display:        flex;
-    flex-direction: column;
-    gap:            0;
-    margin-bottom:  16px;
-}
-.mf-wrap .ob-option-item input[type="checkbox"] {
+/* Options lookingFor + statut juridique — même anatomie de tuile que les
+   disciplines (bordure pleine 1.5px, pas de bordures "empilées" comme
+   l'ancienne liste verticale). */
+.mf-wrap .ob-option-item input[type="checkbox"],
+.mf-wrap .ob-option-item input[type="radio"] {
     position: absolute; opacity: 0; width: 0; height: 0;
 }
 .mf-wrap .ob-option-item label {
     display:     flex;
     align-items: flex-start;
-    gap:         14px;
+    gap:         12px;
     padding:     14px 16px;
-    border:      1px solid var(--line-soft);
-    border-bottom: none;
+    height:      100%;
+    border:      1.5px solid var(--line-soft);
     cursor:      pointer;
     font-size:   13px;
     color:       var(--ink);
     line-height: 1.4;
-    transition:  background .10s;
+    transition:  background .10s, border-color .10s, transform .12s, box-shadow .12s;
 }
-.mf-wrap .ob-option-item:last-child label { border-bottom: 1px solid var(--line-soft); }
 .mf-wrap .ob-option-item label:hover { background: var(--bg); }
 .mf-wrap .ob-option-item input:checked + label {
     background:   var(--accent);
@@ -2708,10 +2831,8 @@ body.page-home .lp-footer { margin-top: 0; }
 }
 .mf-wrap .mf-autre-field.visible { display: block; }
 
-/* Options legalStatus (radios) */
-.mf-wrap .ob-option-item input[type="radio"] {
-    position: absolute; opacity: 0; width: 0; height: 0;
-}
+/* Options legalStatus (radios) — le masquage de l'input radio est déjà géré
+   par la règle combinée input[type="checkbox"], input[type="radio"] plus haut. */
 .mf-wrap .ob-radio-visual {
     width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px;
     border: 2px solid var(--ink); border-radius: 50%; background: var(--bg);
@@ -2748,6 +2869,14 @@ body.page-home .lp-footer { margin-top: 0; }
     letter-spacing: .04em;
 }
 
+/* .match-help : aide de fin de groupe (disciplines / statut), posée en plus
+   de .ob-hint. Esprit ".match-help" du prototype : mono discret, un peu
+   plus d'air au-dessus pour la détacher visuellement de la grille de tuiles. */
+.mf-wrap .match-help {
+    margin-top:     14px;
+    text-transform: uppercase;
+}
+
 /* Bloc erreur */
 .mf-error {
     background: #fff0f0;
@@ -2764,7 +2893,17 @@ body.page-home .lp-footer { margin-top: 0; }
     align-items:     center;
     justify-content: space-between;
     gap:             10px;
-    margin-top:      20px;
+    margin-top:      28px;
+}
+
+/* .grow (posée en plus de .mf-actions, cf. .wiz-actions du prototype) :
+   absorbe l'espace disponible pour pousser "Continuer"/"Trouver mes matchs"
+   à DROITE, y compris à l'étape 1 où "Retour" est caché (un seul bouton
+   visible se retrouverait sinon à GAUCHE avec justify-content:space-between
+   seul, faute d'un second élément pour équilibrer la ligne). */
+.wiz-actions .grow,
+.mf-actions .grow {
+    flex: 1;
 }
 
 /* Bouton "Retour" — même style que ob-btn-back */
@@ -2785,7 +2924,9 @@ body.page-home .lp-footer { margin-top: 0; }
 }
 .mf-wrap .ob-btn-back:hover, .mf-btn-prev:hover { color: var(--ink); border-color: var(--ink); }
 
-/* Bouton "Continuer" / "Voir mes matchs" */
+/* Bouton "Continuer" / "Voir mes matchs" — largeur au contenu (le .grow
+   ci-dessus s'occupe déjà de pousser ce bouton à droite ; flex:1 ferait
+   entrer en compétition les deux éléments et casserait l'alignement). */
 .mf-wrap .ob-btn-next, .mf-btn-next, .mf-btn-submit {
     font-family:    var(--display);
     font-size:      12px;
@@ -2799,7 +2940,6 @@ body.page-home .lp-footer { margin-top: 0; }
     cursor:         pointer;
     border-radius:  0;
     transition:     background .12s, color .12s;
-    flex:           1;
     text-align:     center;
 }
 .mf-wrap .ob-btn-next:hover, .mf-btn-next:hover, .mf-btn-submit:hover {
@@ -2807,78 +2947,10 @@ body.page-home .lp-footer { margin-top: 0; }
     color:      var(--ink);
 }
 
-/* Encart incitation inscription visiteur */
-/* Modal "crée ton compte pour aller plus loin" (visiteur).
-   Affichée par matching-form.js au clic sur Continuer / Voir mes matchs, au lieu
-   d'une redirection brutale vers /login. Le visiteur garde ses réponses (déjà
-   sauvegardées en session) et décide en connaissance de cause. */
-.mf-signup-cta {
-    position:        fixed;
-    inset:           0;
-    z-index:         1000;
-    display:         flex;
-    align-items:     center;
-    justify-content: center;
-    padding:         20px;
-    background:      rgba(13, 13, 13, .6); /* backdrop sombre */
-}
-/* [hidden] doit l'emporter sur display:flex ci-dessus */
-.mf-signup-cta[hidden] { display: none; }
-.mf-signup-cta__inner {
-    position:       relative;
-    background:     var(--ink);
-    color:          var(--bg);
-    text-align:     center;
-    padding:        38px 30px 30px;
-    max-width:      440px;
-    width:          100%;
-    border:         1px solid var(--accent);
-    box-shadow:     0 12px 50px rgba(0,0,0,.4);
-    display:        flex;
-    flex-direction: column;
-    align-items:    center;
-    gap:            14px;
-}
-.mf-signup-cta__icon { font-size: 2rem; }
-.mf-signup-cta__title {
-    font-family:    var(--display);
-    font-size:      clamp(20px, 3vw, 26px);
-    text-transform: uppercase;
-    letter-spacing: .02em;
-    margin:         0;
-    color:          var(--bg);
-}
-.mf-signup-cta__msg {
-    font-size:   15px;
-    line-height: 1.5;
-    color:       rgba(255, 255, 255, .78);
-    margin:      0;
-    max-width:   380px;
-}
-.mf-signup-cta__btns {
-    display:         flex;
-    gap:             10px;
-    flex-wrap:       wrap;
-    justify-content: center;
-    margin-top:      4px;
-}
-/* Le bouton "J'ai déjà un compte" (ghost) reste lisible sur le fond sombre */
-.mf-signup-cta .lp-btn--ghost { color: #fff; border-color: rgba(255,255,255,.45); }
-.mf-signup-cta .lp-btn--ghost:hover { background: rgba(255,255,255,.1); border-color: #fff; }
-/* Bouton de fermeture (croix) en haut à droite de la modal */
-.mf-signup-cta__close {
-    position:   absolute;
-    top:        8px;
-    right:      10px;
-    background: none;
-    border:     none;
-    color:      rgba(255, 255, 255, .6);
-    font-size:  26px;
-    line-height: 1;
-    cursor:     pointer;
-    padding:    4px 8px;
-}
-.mf-signup-cta__close:hover { color: #fff; }
+/* ADR-0033 : la modal "crée ton compte pour aller plus loin" (.mf-signup-cta*)
+   a été retirée — le formulaire multi-étapes n'est plus jamais accessible aux
+   visiteurs non connectés (mur de connexion à la place), donc cette modal ne
+   pouvait plus jamais être affichée. CSS + markup + JS retirés ensemble. */
 
 /* Note noscript */
 .mf-noscript-hint {
@@ -2894,17 +2966,18 @@ body.page-home .lp-footer { margin-top: 0; }
 /* Responsive */
 @media (max-width: 768px) {
     .mf-wrap { padding: 20px 16px; }
-    .mf-wrap .ob-disc-grid {
+    .mf-wrap .tile-grid {
         grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     }
     .mf-actions { flex-direction: column; }
+    /* Colonne empilée : le .grow (pensé pour une ligne horizontale) n'a
+       plus lieu d'être — on le masque pour ne pas ajouter d'espace vide. */
+    .mf-actions .grow { display: none; }
     .mf-btn-prev, .mf-btn-next, .mf-btn-submit {
         width: 100%;
         justify-content: center;
         text-align: center;
     }
-    .mf-signup-cta__btns { flex-direction: column; width: 100%; }
-    .mf-signup-cta__btns .lp-btn { width: 100%; justify-content: center; }
 }
 
 /* prefers-reduced-motion : pas de transition pour le formulaire multi-étapes */
@@ -3047,18 +3120,30 @@ body.page-home .mf-field__input:focus {
     background: #FBF8F1;
 }
 
-/* ── Tuiles de discipline : survol souleve, selection appuyee ──────────────── */
-body.page-home .mf-wrap .ob-disc-item label {
+/* ── Tuiles (disciplines / objectifs / statut) : survol souleve, selection appuyee ──
+   .ob-option-item couvre à la fois lookingFor (checkbox) et legalStatus
+   (radio) — même partial CSS .ob-options pour les deux (cf. plus haut). */
+body.page-home .mf-wrap .ob-disc-item label,
+body.page-home .mf-wrap .ob-option-item label {
     transition: background .12s, border-color .12s, transform .16s, box-shadow .16s;
 }
-body.page-home .mf-wrap .ob-disc-item label:hover {
+body.page-home .mf-wrap .ob-disc-item label:hover,
+body.page-home .mf-wrap .ob-option-item label:hover {
     transform:    translateY(-2px);
     box-shadow:   var(--sh-card);
     border-color: var(--ink);
 }
-body.page-home .mf-wrap .ob-disc-item input:checked + label {
+body.page-home .mf-wrap .ob-disc-item input:checked + label,
+body.page-home .mf-wrap .ob-option-item input:checked + label {
     box-shadow:   var(--sh-card);
     border-color: var(--ink);
+}
+
+/* ── Cartes "match-card" (wizard) et "mur de connexion" : même profondeur
+   discrète que les autres cartes de la home. ────────────────────────────── */
+body.page-home .match-card,
+body.page-home .mlw-wrap {
+    box-shadow: var(--sh-card);
 }
 
 /* ── Hero : voile de lisibilite plus dense a GAUCHE et en BAS ───────────────── */
@@ -3211,20 +3296,22 @@ body.page-home .lp-section-header { padding-block: 44px; }
 
 
         {# ════════════════════════════════════════════════════════════════
-           LOT C — SECTION MATCHING / SWIPE (ADR-0021)
+           LOT C — SECTION MATCHING / SWIPE (ADR-0021, révisée ADR-0033)
            Placée JUSTE APRES LE HERO, avant le marquee.
 
-           CINQ ETATS (geres par Twig selon les variables du HomeController) :
+           QUATRE ETATS (geres par Twig selon les variables du HomeController) :
              1. isArtist = true + profileComplete = true + pas de limite atteinte
                 → Section swipe complete avec cartes + boutons + alerte
              2. isArtist = true + swipeLimitReached = true (gratuit, limite quotidienne)
                 → Ecran paywall incitant a l'abonnement
-             3. isArtist = true + profileComplete = false
+             3. app.user existant (artiste ou non) + profil incomplet
                 → Formulaire multi-etapes pour completer le profil
-             4. app.user existant mais sans ROLE_ARTIST
-                → Encart "Completez votre profil artiste" (lien onboarding)
-             5. Visiteur non connecte
-                → Formulaire multi-etapes pour decouvrir les matchs + inscription
+             4. Visiteur non connecte (ADR-0033 : mur de connexion)
+                → matching/_matching_login_wall.html.twig : accroche courte + CTA
+                  "Se connecter" / "S'inscrire pour matcher". Le formulaire
+                  multi-étapes n'est PLUS JAMAIS rendu pour un visiteur —
+                  HomeController ne le prépare que pour un utilisateur CONNECTÉ
+                  au profil incomplet (cf. HomeController::index()).
 
            PROGRESSIVE ENHANCEMENT :
              Sans JS, le premier formulaire POST "Interessé(e)" fonctionne
@@ -3376,18 +3463,31 @@ body.page-home .lp-section-header { padding-block: 44px; }
                                 {# La carte n-1 (index > 0) est aria-hidden sans JS #}
                                 {{ loop.first ? '' : 'aria-hidden="true" tabindex="-1"' }}
                             >
-                                {# ── En-tete de la carte : type + score ─────────────── #}
+                                {#
+                                    ── En-tete de la carte : badge de score (proéminent, fond
+                                    encre) + type ─────────────────────────────────────────
+                                    Anatomie reprise de .dcard-head/.dcard-score du prototype :
+                                    le score est le PREMIER élément visuel de la carte, dans un
+                                    bloc plein fond encre / texte jaune doré, à bord perdu (pas
+                                    de padding de carte autour). Le type (chip) reste à droite.
+                                #}
                                 <div class="swipe-card__header">
-                                    <span class="lp-chip lp-chip--sand" aria-label="Type : {{ match.resource_type }}">
-                                        {{ match.resource_type }}
-                                    </span>
-
-                                    {# Badge score : indicateur visuel de la pertinence du match #}
                                     <div class="swipe-card__score" aria-label="Score de matching : {{ match.score }} sur 100">
-                                        <span class="swipe-card__score-number">{{ match.score }}</span>
-                                        <span class="swipe-card__score-label">/100</span>
+                                        <span class="swipe-card__score-number">{{ match.score }}%</span>
+                                        <span class="swipe-card__score-label">Match</span>
+                                    </div>
+                                    <div class="swipe-card__tags">
+                                        <span class="lp-chip lp-chip--sand" aria-label="Type : {{ match.resource_type }}">
+                                            {{ match.resource_type }}
+                                        </span>
                                     </div>
                                 </div>
+
+                                {# ── Corps de la carte : logo, titre, métas, why, lien ──────
+                                   Regroupé dans .swipe-card__body pour porter le padding qui
+                                   vivait auparavant sur .swipe-card entier (nécessaire pour que
+                                   .swipe-card__header puisse aller à bord perdu, cf. ci-dessus). #}
+                                <div class="swipe-card__body">
 
                                 {# ── Logo de l'organisme (si disponible) ─────────────── #}
                                 {%- if match.logo_url -%}
@@ -3495,50 +3595,59 @@ body.page-home .lp-section-header { padding-block: 44px; }
                                 >
                                     <input type="hidden" name="_token" value="{{ csrf_token('resource_favorite_' ~ match.resource_id) }}">
                                     <button type="submit" class="lp-btn lp-btn--accent" style="width:100%;justify-content:center;">
-                                        Interessé(e) — Ajouter en favori
+                                        Interessé(e) &middot; Ajouter en favori
                                     </button>
                                 </form>
                                 {% endif %}
+
+                                </div>{# /.swipe-card__body #}
 
                             </article>
                             {% endfor %}
 
                         </div>{# /.swipe-deck #}
 
-                            {# ── Boutons d'action SOUS la carte : Passer (gauche) | Interesse (droite) ── #}
-                            <div class="swipe-actions" role="group" aria-label="Actions de swipe">
+                            {#
+                                ── Boutons d'action SOUS la carte : Passer (gauche) | Interesse (droite) ──
+                                Anatomie reprise de .deck-controls/.swbtn du prototype : boutons
+                                RONDS, icône seule. L'intitulé visible ("Passer"/"Intéressé(e)")
+                                est retiré du rendu visuel mais reste disponible pour les
+                                technologies d'assistance via aria-label (déjà présent) — aucune
+                                perte d'accessibilité, juste un habillage plus compact et proche
+                                du prototype. .lp-btn est retiré (le style rond .swbtn est autonome,
+                                incompatible avec le padding/la forme rectangulaire de .lp-btn).
+                            #}
+                            <div class="swipe-actions deck-controls" role="group" aria-label="Actions de swipe">
                                 {# Bouton "Passer" = swipe gauche = ignorer #}
                                 <button
                                     type="button"
-                                    class="swipe-btn-pass lp-btn lp-btn--ghost"
+                                    class="swipe-btn-pass swbtn swbtn--nope"
                                     aria-label="Passer cette opportunite"
                                     title="Passer (fleche gauche)"
                                 >
                                     {# Icone fleche gauche en SVG #}
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                         <path d="M19 12H5M12 19l-7-7 7-7"/>
                                     </svg>
-                                    Passer
                                 </button>
 
                                 {# Bouton "Interesse(e)" = swipe droite = ajouter en favori #}
                                 <button
                                     type="button"
-                                    class="swipe-btn-fav lp-btn lp-btn--accent"
+                                    class="swipe-btn-fav swbtn swbtn--like"
                                     aria-label="Ajouter en favori"
                                     title="Interessé(e) (fleche droite)"
                                 >
-                                    Interess&eacute;(e)
                                     {# Icone coeur en SVG #}
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                                     </svg>
                                 </button>
                             </div>
 
-                            {# ── Raccourcis clavier (info discrete) ───────────────────── #}
-                            <p class="swipe-hint" aria-hidden="true">
-                                Utilisez les fleches ou glissez les cartes
+                            {# ── Raccourcis clavier (info discrete) — esprit .deck-hint du prototype ── #}
+                            <p class="swipe-hint deck-hint" aria-hidden="true">
+                                Glisse &rarr; Int&eacute;ress&eacute;(e) &middot; &larr; Passer &middot; Clavier &larr;/&rarr;
                             </p>
 
                         </div>{# /.swipe-main #}
@@ -3685,64 +3794,14 @@ body.page-home .lp-section-header { padding-block: 44px; }
                 #}
                 {% include 'matching/_matching_form.html.twig' %}
 
-            {# ─── ETAT 4 : VISITEUR NON connecté → formulaire d'accroche ──────────────
-                On affiche le formulaire de matching au visiteur (accroche). Mais dès le
-                clic sur "Continuer", matching-form.js le redirige vers la page
-                d'inscription (il n'est pas connecté) : l'accès réel au matching nécessite
-                un compte (cf. ADR-0026). Ses réponses de l'étape 1 sont sauvegardées en
-                session avant la redirection, pour pré-remplir l'inscription/onboarding. #}
+            {# ─── ETAT 4 : VISITEUR NON connecté → mur de connexion (ADR-0033) ────────
+                Le formulaire multi-étapes n'est plus jamais rendu aux visiteurs.
+                matching/_matching_login_wall.html.twig affiche une accroche courte
+                (titre + phrase + 2 CTAs "Se connecter" / "S'inscrire pour matcher").
+                Voir ce partial pour le détail du mécanisme de redirection post-auth. #}
             {% else %}
 
-                <div class="lp-section-header">
-                    <div class="lp-section-header__left">
-                        <span class="lp-section-header__index" aria-hidden="true">00</span>
-                        <h2 class="lp-section-header__title" id="lp-swipe-title">
-                            Ton matching
-                        </h2>
-                        <span class="lp-section-header__sub">trouve les opportunités faites pour toi</span>
-                    </div>
-                </div>
-
-                {# Layout 2 colonnes : intro "3 étapes" (gauche) + formulaire (droite). #}
-                <div class="mf-layout">
-
-                    {# ── Colonne gauche : paragraphe design + les 3 étapes ── #}
-                    <aside class="mf-intro">
-                        <span class="mf-intro__eyebrow">En 3 &eacute;tapes</span>
-                        <p class="mf-intro__lead">
-                            Dis-nous qui tu es et ce que tu cherches. En 2 minutes, on
-                            s&eacute;lectionne les opportunit&eacute;s <em>faites pour toi</em>.
-                        </p>
-                        <ol class="mf-intro__steps">
-                            <li class="mf-intro__step">
-                                <span class="mf-intro__num" aria-hidden="true">1</span>
-                                <div>
-                                    <span class="mf-intro__step-title">Parle-nous de toi</span>
-                                    <span class="mf-intro__step-text">Discipline, territoire, objectifs. Plus tu es pr&eacute;cis, plus on est pertinent.</span>
-                                </div>
-                            </li>
-                            <li class="mf-intro__step">
-                                <span class="mf-intro__num" aria-hidden="true">2</span>
-                                <div>
-                                    <span class="mf-intro__step-title">On fait le tri</span>
-                                    <span class="mf-intro__step-text">On s&eacute;lectionne les appels &agrave; projets, dispositifs et financements qui te correspondent.</span>
-                                </div>
-                            </li>
-                            <li class="mf-intro__step">
-                                <span class="mf-intro__num" aria-hidden="true">3</span>
-                                <div>
-                                    <span class="mf-intro__step-title">Tu avances</span>
-                                    <span class="mf-intro__step-text">Candidate et active tes alertes pour ne rien manquer des prochaines.</span>
-                                </div>
-                            </li>
-                        </ol>
-                        <p class="mf-intro__reassurance">Gratuit &middot; Sans engagement &middot; 1 mois offert</p>
-                    </aside>
-
-                    {# ── Colonne droite : formulaire multi-étapes existant ── #}
-                    {% include 'matching/_matching_form.html.twig' %}
-
-                </div>{# /.mf-layout #}
+                {% include 'matching/_matching_login_wall.html.twig' %}
 
             {% endif %}
 
@@ -4558,20 +4617,20 @@ body.page-home .lp-section-header { padding-block: 44px; }
 
 {#
     Script matching-form.js — chargé uniquement si le formulaire multi-étapes
-    est potentiellement présent.
+    est potentiellement présent dans le DOM.
 
-    Le formulaire apparaît dans deux états (cf. ADR-0026) :
-      - État 3 : utilisateur CONNECTÉ dont le profil n'est pas complet.
-      - État 4 : VISITEUR non connecté (accroche → redirection inscription au clic).
-    Dans les deux cas, le profil n'est pas complet : on charge donc le script tant
-    que profileComplete est faux (et hors paywall, où aucun formulaire n'apparaît).
+    ADR-0033 : le formulaire n'apparaît plus que dans UN SEUL état — État 3,
+    utilisateur CONNECTÉ dont le profil n'est pas complet (app.user vrai).
+    Un visiteur non connecté voit le mur de connexion (aucun #matching-form-wrap
+    dans le DOM) : inutile de charger ce script pour lui.
 
-    Le script est sûr si le formulaire est absent : init() sort immédiatement
-    si #matching-form-wrap est introuvable dans le DOM.
+    Le script reste défensivement sûr si le formulaire est absent : init() sort
+    immédiatement si #matching-form-wrap est introuvable dans le DOM. Le garde
+    "app.user" ci-dessous évite simplement un aller-réseau inutile pour les visiteurs.
 
     defer : non-bloquant, exécuté après le parsing du DOM.
 #}
-{% if (profileComplete is not defined or not profileComplete) and (swipeLimitReached is not defined or not swipeLimitReached) %}
+{% if app.user and (profileComplete is not defined or not profileComplete) and (swipeLimitReached is not defined or not swipeLimitReached) %}
     <script src="{{ asset('js/matching-form.js') }}" defer></script>
 {% endif %}
 {% endblock %}

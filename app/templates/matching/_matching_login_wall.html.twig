@@ -1,0 +1,104 @@
+{#
+ # matching/_matching_login_wall.html.twig
+ #
+ # MUR DE CONNEXION affiché aux VISITEURS NON CONNECTÉS, à la place du
+ # formulaire multi-étapes de matching (ADR-0033 : "se connecter d'abord,
+ # remplir ensuite" — révise ADR-0026, qui laissait les visiteurs remplir le
+ # formulaire avant de s'inscrire).
+ #
+ # CONTEXTE D'INCLUSION :
+ #   templates/vitrine/index.html.twig inclut ce partial dans l'État 4/5 de la
+ #   section #swipe-section (branche "else" — utilisateur non authentifié).
+ #   Le formulaire multi-étapes (matching/_matching_form.html.twig) n'est lui
+ #   JAMAIS rendu pour un visiteur : HomeController ne le prépare que si
+ #   $user instanceof User (cf. HomeController::index(), $needsMatchingForm).
+ #
+ # MARKUP ET DESIGN :
+ #   Volet design (ADR-0033 §4) : structure inspirée du hero .feat-head du
+ #   prototype "BazaArt - Matching Swipe" (eyebrow + gros titre + sous-titre
+ #   + repère "3 étapes") mais avec la charte ACTUELLE du site (jaune doré
+ #   --accent, pas les couleurs/fonts du prototype). Ce mur est le tout
+ #   PREMIER écran vu par un visiteur qui clique sur "Matching" : il doit
+ #   donner envie de créer un compte, d'où le soin apporté ici.
+ #   Les classes .mlw-* sont stylées dans templates/vitrine/index.html.twig
+ #   (bloc {% block stylesheets %}, section MUR DE CONNEXION MATCHING).
+ #
+ # CTA "Se connecter" :
+ #   Pointe vers app_login avec ?_target_path=<url de la section matching>.
+ #   AuthController::login() lit ce paramètre sur GET et le sauvegarde en
+ #   session via TargetPathTrait::saveTargetPath() — mécanisme STANDARD Symfony
+ #   (Symfony\Component\Security\Http\Util\TargetPathTrait, le même que celui
+ #   utilisé par LoginSuccessHandler). LoginSuccessHandler::onAuthenticationSuccess()
+ #   lit ensuite cette valeur (priorité 2, juste après les données de matching
+ #   en session) et redirige l'utilisateur directement vers le matching une
+ #   fois connecté.
+ #
+ # CTA "S'inscrire" :
+ #   Pointe vers app_register avec ?intent=matching. AuthController::register()
+ #   capte ce paramètre et le transmet à EmailVerificationService::sendVerificationEmail(),
+ #   qui l'inclut dans le LIEN de confirmation signé (extraParams). L'intention
+ #   survit ainsi à un clic sur le lien depuis un AUTRE appareil que celui de
+ #   l'inscription (cf. ADR-0033, volet "intention portée par le lien" —
+ #   AuthController::verifyEmail() / resolveMatchingRedirectAfterVerification()).
+#}
+
+{% set matching_section_url = path('app_home') ~ '#swipe-section' %}
+
+<div class="mlw-wrap" id="matching-login-wall">
+
+    {# Eyebrow : réutilise le composant .lp-eyebrow déjà stylé site-wide
+       (petit carré jaune doré + texte mono uppercase) — inspiré du
+       "Fonctionnalité · Matching" du prototype, sans dupliquer de CSS. #}
+    <span class="lp-eyebrow mlw-eyebrow">Fonctionnalit&eacute; &middot; Matching</span>
+
+    {#
+        id="lp-swipe-title" : la <section id="swipe-section"> est labellisée par
+        aria-labelledby="lp-swipe-title" (cf. vitrine/index.html.twig). Les états
+        1/2/3 posent cet id sur leur propre <h2> — l'état 4 (ce partial) doit
+        faire de même, sinon la référence ARIA est orpheline pour les visiteurs
+        non connectés (lecteurs d'écran : section sans nom accessible).
+    #}
+    <h2 class="mlw-title" id="lp-swipe-title">Ton matching</h2>
+
+    <p class="mlw-lead">
+        Connecte-toi (ou cr&eacute;e ton compte) pour d&eacute;couvrir les
+        opportunit&eacute;s s&eacute;lectionn&eacute;es pour ton profil d'artiste.
+    </p>
+
+    {# Repère de réassurance avant l'inscription (esprit du .feat-meta du
+       prototype) : rassure sur le temps nécessaire, sans donner de fausse
+       précision (on ne peut pas mesurer "2 minutes" réellement). #}
+    <p class="mlw-meta">3 &eacute;tapes &middot; Modifiable &agrave; tout moment</p>
+
+    <div class="mlw-ctas">
+        {#
+            Hiérarchie des CTA selon la charte : le jaune doré (--accent) est
+            réservé à l'action PRINCIPALE. Ici, l'action qu'on veut encourager
+            en priorité est la création de compte (c'est la conversion visée
+            par ce mur) — "S'inscrire" est donc en style plein jaune doré,
+            "Se connecter" (retour d'un utilisateur déjà inscrit) en style
+            outline discret, cohérent avec .lp-btn--outline utilisé ailleurs
+            sur la home (ex. bouton "Connexion" de la nav).
+        #}
+        {# Classes .lp-btn / .lp-btn--accent réutilisées : on hérite gratuitement
+           du hover (translation + ombre) déjà défini pour body.page-home .lp-btn.
+           .mlw-cta reste posée pour le layout propre au mur (largeur mobile, etc). #}
+        <a
+            href="{{ path('app_register', { intent: 'matching' }) }}"
+            class="mlw-cta mlw-cta--register lp-btn lp-btn--accent"
+        >
+            S'inscrire pour matcher
+        </a>
+
+        {# _target_path : lu par AuthController::login() sur GET (cf. commentaire
+           ci-dessus). Pas de paramètre réservé Symfony ici — c'est une simple
+           query string, portée par une clé de session standard côté serveur. #}
+        <a
+            href="{{ path('app_login', { _target_path: matching_section_url }) }}"
+            class="mlw-cta mlw-cta--login lp-btn lp-btn--outline"
+        >
+            Se connecter
+        </a>
+    </div>
+
+</div>

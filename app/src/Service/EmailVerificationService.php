@@ -70,9 +70,16 @@ class EmailVerificationService
      * En cas d'échec SMTP, l'erreur est loguée sans remonter d'exception
      * (même comportement que PasswordResetService::sendResetEmail()).
      *
-     * @param User $user L'utilisateur qui vient de s'inscrire
+     * @param User        $user   L'utilisateur qui vient de s'inscrire
+     * @param string|null $intent Intention portée par le LIEN de confirmation.
+     *                            Seule la valeur 'matching' est actuellement traitée
+     *                            (ADR-0033) : elle est ajoutée aux extraParams SIGNÉS
+     *                            de l'URL, ce qui la rend DEVICE-INDEPENDENT — contrairement
+     *                            à un signal en session, elle survit à un clic sur le lien
+     *                            depuis un autre appareil que celui de l'inscription.
+     *                            null = comportement inchangé (aucun paramètre ajouté).
      */
-    public function sendVerificationEmail(User $user): void
+    public function sendVerificationEmail(User $user, ?string $intent = null): void
     {
         // ── Étape 1 : Générer la signature ───────────────────────────────────
         //
@@ -83,16 +90,26 @@ class EmailVerificationService
         //
         // Le résultat est un objet SignatureComponents qui contient l'URL signée
         // avec les paramètres d'expiration et la signature HMAC ajoutés en query string.
+
+        // 4e paramètre de generateSignature() : paramètres ajoutés EN CLAIR dans l'URL
+        // (et inclus dans la signature HMAC — donc infalsifiables sans invalider le lien).
+        //   - 'id' est indispensable : au moment du clic, l'utilisateur n'est PAS connecté,
+        //     donc le contrôleur a besoin de l'id présent dans l'URL (?id=...) pour charger
+        //     le bon User AVANT de valider la signature.
+        //   - 'intent' (ADR-0033) : ajouté UNIQUEMENT si $intent === 'matching'. Porté par
+        //     le lien lui-même, il permet à AuthController::verifyEmail() de savoir que
+        //     l'utilisateur doit atterrir sur la section matching, SANS dépendre d'un
+        //     signal de session (qui serait absent si le lien est cliqué sur un autre appareil).
+        $extraParams = ['id' => (string) $user->getId()];
+        if ($intent === 'matching') {
+            $extraParams['intent'] = 'matching';
+        }
+
         $signatureComponents = $this->verifyEmailHelper->generateSignature(
             'app_verify_email',
             (string) $user->getId(),
             $user->getEmail(),
-            // 4e paramètre : paramètres ajoutés EN CLAIR dans l'URL (et inclus dans la signature).
-            // Indispensable ici : au moment du clic, l'utilisateur n'est PAS connecté, donc le
-            // contrôleur a besoin de l'id présent dans l'URL (?id=...) pour charger le bon User
-            // AVANT de valider la signature. Sans ce paramètre, l'URL n'avait pas de ?id= et la
-            // vérification échouait systématiquement (redirection vers /register).
-            ['id' => (string) $user->getId()],
+            $extraParams,
         );
 
         // L'URL complète avec signature, valide pour 1 heure

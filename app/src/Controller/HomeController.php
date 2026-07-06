@@ -34,11 +34,14 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
  *   Si l'utilisateur est connecté et a ROLE_ARTIST, on calcule ses matchs
  *   via MatchingService et on les passe au template pour la section swipe.
  *
- * ÉVOLUTION JUIN 2026 (décision Gaëlle, hors ADR-0021/0023) :
- *   La connexion est désormais OBLIGATOIRE pour accéder au matching.
+ * ÉVOLUTION ADR-0033 (2026-07-06, révise ADR-0026) :
+ *   La connexion est OBLIGATOIRE pour accéder au matching, et ce DÈS le mur
+ *   d'accroche (fini le formulaire visible par les visiteurs de l'ADR-0026
+ *   "mise à jour accroche par le formulaire" — cf. cet ADR pour l'historique).
  *   Le Twig gère maintenant ces états :
- *     1. Visiteur non connecté → CTA "Connecte-toi" (géré côté Twig uniquement,
- *        ce controller ne prépare aucune donnée de formulaire pour ce cas)
+ *     1. Visiteur non connecté → mur de connexion (matching/_matching_login_wall.html.twig,
+ *        géré côté Twig uniquement, ce controller ne prépare aucune donnée de formulaire
+ *        pour ce cas)
  *     2. Utilisateur connecté avec profil complet (ROLE_ARTIST) → section swipe
  *     3. Utilisateur connecté avec profil incomplet (artiste ou non) → formulaire matching
  */
@@ -267,21 +270,23 @@ final class HomeController extends AbstractController
 
         // ── Données pour le formulaire matching home ──────────────────────────────
         //
-        // RÈGLE (ADR-0026, ajustée juin 2026) :
-        //   Le formulaire de matching est affiché à TOUS ceux qui n'ont pas encore un
-        //   profil complet : les VISITEURS non connectés ET les utilisateurs connectés
-        //   au profil incomplet. La différence de comportement est gérée côté JS
-        //   (matching-form.js) :
-        //     - visiteur non connecté → au clic "Continuer", redirigé vers l'inscription ;
-        //     - utilisateur connecté  → remplit et valide le formulaire normalement.
+        // RÈGLE (ADR-0033, révise ADR-0026) :
+        //   Le formulaire de matching n'est plus JAMAIS préparé pour un visiteur non
+        //   connecté. Un visiteur voit désormais un MUR DE CONNEXION
+        //   (matching/_matching_login_wall.html.twig, rendu directement par le Twig
+        //   sans données du controller) : "se connecter d'abord, remplir ensuite".
+        //   Le formulaire multi-étapes reste réservé aux utilisateurs CONNECTÉS au
+        //   profil incomplet (artiste ou non).
         //
-        // Cas où le formulaire est préparé : profil PAS complet (visiteur OU connecté
-        //   incomplet). $profileComplete vaut false par défaut (initialisé en haut de la
-        //   méthode) et n'est mis à true que pour un artiste connecté au profil complet.
+        // Cas où le formulaire est préparé : utilisateur CONNECTÉ ET profil PAS complet.
+        //   $profileComplete vaut false par défaut (initialisé en haut de la méthode)
+        //   et n'est mis à true que pour un artiste connecté au profil complet.
         //
         // Cas où le formulaire N'est PAS préparé (aucun chargement SQL inutile) :
+        //   - Visiteur non connecté (quel que soit son profil, puisqu'il n'en a pas)
+        //     → le Twig affiche le mur de connexion.
         //   - Artiste connecté avec profil complet → le Twig affiche la section swipe.
-        $needsMatchingForm = !$profileComplete;
+        $needsMatchingForm = ($user instanceof User) && !$profileComplete;
         $matchingFormDisciplines = $needsMatchingForm
             ? $this->disciplineRepository->findAll()
             : [];
@@ -308,10 +313,12 @@ final class HomeController extends AbstractController
         $matchingForm_location    = '';
 
         if ($needsMatchingForm) {
-            // ATTENTION : $needsMatchingForm = !$profileComplete → ce bloc s'exécute
-            // AUSSI pour un VISITEUR non connecté ($user peut être null). On garde donc
-            // impérativement les vérifications "$user instanceof User" avant tout accès
-            // au profil artiste (sinon null->getArtistProfile() = erreur fatale).
+            // NOTE (ADR-0033) : $needsMatchingForm implique désormais TOUJOURS
+            // $user instanceof User (voir sa définition ci-dessus) — un visiteur non
+            // connecté ne rentre plus jamais dans ce bloc. PHPStan narrowe donc $user
+            // en User dans toute la portée de ce bloc (d'où l'absence de nouvelle
+            // vérification "$user instanceof User" ci-dessous : elle serait signalée
+            // "always true" au niveau 6).
 
             // Priorité 1 : données en session (saisie en cours)
             $sessionDisplayName = $matchingFormSessionData['display_name'] ?? null;
@@ -319,7 +326,7 @@ final class HomeController extends AbstractController
 
             if ($sessionDisplayName !== null && $sessionDisplayName !== '') {
                 $matchingForm_displayName = $sessionDisplayName;
-            } elseif ($user instanceof User && $user->getArtistProfile() !== null) {
+            } elseif ($user->getArtistProfile() !== null) {
                 // Priorité 2 : valeur existante en BDD (profil artiste partiel).
                 // getDisplayName() retourne string (non nullable) → on compare à '' directement.
                 $existingDisplayName = $user->getArtistProfile()->getDisplayName();
@@ -328,7 +335,7 @@ final class HomeController extends AbstractController
 
             if ($sessionLocation !== null && $sessionLocation !== '') {
                 $matchingForm_location = $sessionLocation;
-            } elseif ($user instanceof User && $user->getArtistProfile() !== null) {
+            } elseif ($user->getArtistProfile() !== null) {
                 // Priorité 2 : valeur existante en BDD (profil artiste partiel).
                 // getLocation() retourne ?string → null si non renseigné.
                 $existingLocation = $user->getArtistProfile()->getLocation();
@@ -351,13 +358,15 @@ final class HomeController extends AbstractController
             // ── Section communauté / forum ──────────────────────────────────────
             'recentThreads'   => $recentThreads,
 
-            // ── Formulaire multi-étapes matching (visiteur / profil incomplet) ──
-            // Ces variables alimentent le partial matching/_matching_form.html.twig
+            // ── Formulaire multi-étapes matching (utilisateur connecté, profil incomplet) ──
+            // Ces variables alimentent le partial matching/_matching_form.html.twig.
+            // NOTE (ADR-0033) : 'matchingForm_isLoggedIn' a été retiré — ce partial n'est
+            // plus JAMAIS inclus pour un visiteur non connecté (le Twig affiche le mur
+            // de connexion à la place), la variable était donc devenue toujours vraie.
             'matchingForm_disciplines'   => $matchingFormDisciplines,
             'matchingForm_lookingFor'    => ArtistLookingFor::cases(),
             'matchingForm_legalStatuses' => LegalStatus::cases(),
             'matchingForm_savedData'     => $matchingFormSessionData,
-            'matchingForm_isLoggedIn'    => ($user instanceof User),
             'matchingForm_csrfToken'     => $matchingFormCsrf,
             // Pré-remplissage Option B : nom et localisation pour les artistes
             // avec un profil existant (partiel ou complet) qui revoient le formulaire.

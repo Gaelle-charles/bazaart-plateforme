@@ -59,9 +59,11 @@ class SwipeLotCTest extends AbstractE2ETestCase
     /**
      * Vérifie que la home est accessible à 200 pour un visiteur non connecté.
      *
-     * État attendu : la section swipe affiche l'encart "Rejoindre la plateforme"
-     * (pas de swipe pour les visiteurs). Le reste de la page (hero, opportunités,
-     * communauté) doit rester intact.
+     * État attendu (ADR-0033, révisé) : depuis le mur de connexion matching, le
+     * formulaire multi-étapes n'est plus JAMAIS rendu pour un visiteur non connecté
+     * — il voit à la place #matching-login-wall (accroche + CTAs "Se connecter" /
+     * "S'inscrire pour matcher"). Cette assertion remplace l'ancienne attente sur
+     * #matching-form-wrap, devenue obsolète depuis ce changement de flux.
      */
     public function testHome_VisiteurNonConnecte_Retourne200(): void
     {
@@ -77,10 +79,17 @@ class SwipeLotCTest extends AbstractE2ETestCase
             'La section swipe doit exister dans le HTML même pour les non-connectés.'
         );
 
-        // Le formulaire multi-étapes de matching doit être présent pour les visiteurs.
-        // (état 5 : visiteur — anciennement .swipe-guest-cta, remplacé par le formulaire matching)
-        $this->assertSelectorExists('#matching-form-wrap',
-            'Le formulaire multi-étapes de matching doit être présent pour les visiteurs.'
+        // Le mur de connexion (et non le formulaire) doit être présent pour les visiteurs.
+        // (état 4 — cf. matching/_matching_login_wall.html.twig)
+        $this->assertSelectorExists('#matching-login-wall',
+            'Le mur de connexion matching doit être présent pour les visiteurs non connectés.'
+        );
+
+        // Garde-fou complémentaire : le formulaire multi-étapes ne doit JAMAIS être
+        // rendu pour un visiteur non connecté (HomeController ne le prépare que si
+        // $user instanceof User — cf. ADR-0033).
+        $this->assertSelectorNotExists('#matching-form-wrap',
+            'Le formulaire multi-étapes de matching ne doit PAS être rendu pour un visiteur non connecté.'
         );
     }
 

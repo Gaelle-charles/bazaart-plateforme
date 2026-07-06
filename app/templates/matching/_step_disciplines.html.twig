@@ -18,6 +18,11 @@
  #
  # ACCESSIBILITÉ : le groupe est labellisé par son id via aria-labelledby.
  #
+ # DESIGN (ADR-0033 §4) : la classe "tile-grid" est posée en plus de
+ # "ob-disc-grid" (structure du prototype "tuiles cliquables"). Elle ne
+ # change rien pour les autres consommateurs de ce partial (onboarding) :
+ # le style tuile n'est appliqué que sous ".mf-wrap" dans vitrine/index.html.twig.
+ #
  # NOTE SUR LES IDS HTML :
  #   Chaque checkbox a l'id "disc_{prefix}_{discipline.id}".
  #   Si field_prefix est vide, l'id est simplement "disc_{discipline.id}".
@@ -35,7 +40,7 @@
 </p>
 {% endif %}
 
-<div class="ob-disc-grid" role="group" aria-labelledby="{{ group_id }}">
+<div class="ob-disc-grid tile-grid" role="group" aria-labelledby="{{ group_id }}">
     {% for discipline in disciplines %}
         {#
             On vérifie si cette discipline est sélectionnée.
@@ -61,4 +66,4 @@
         </div>
     {% endfor %}
 </div>
-<p class="ob-hint">Coche tout ce qui correspond à ta pratique. Au moins une discipline est requise.</p>
+<p class="ob-hint match-help">Coche tout ce qui correspond à ta pratique. Au moins une discipline est requise.</p>

@@ -3,13 +3,19 @@
  *
  * RÔLE :
  *   Gère la navigation entre les 3 étapes du formulaire de matching affiché
- *   sur la page d'accueil pour les visiteurs non connectés et les artistes
- *   avec profil incomplet.
+ *   sur la page d'accueil aux utilisateurs CONNECTÉS avec un profil incomplet.
+ *
+ * ADR-0033 (2026-07-06) : ce script gérait auparavant DEUX publics (visiteurs
+ * non connectés + utilisateurs connectés). Depuis cet ADR, un visiteur non
+ * connecté ne voit plus jamais ce formulaire (mur de connexion à la place,
+ * cf. matching/_matching_login_wall.html.twig) — toute la logique spécifique
+ * aux visiteurs (redirection vers /register, modal "crée ton compte") a donc
+ * été retirée de ce fichier.
  *
  * PROGRESSIVE ENHANCEMENT :
  *   Sans ce script, le formulaire est entièrement fonctionnel :
  *     - Les fieldsets avec [hidden] sont masqués par HTML5 nativement.
- *     - Le bouton "Voir mes matchs" (type="submit") est visible et soumettable.
+ *     - Le bouton "Trouver mes matchs" (type="submit") est visible et soumettable.
  *     - Toutes les étapes sont soumises en une seule fois via POST.
  *     - Note : [hidden] masque les étapes 2 et 3 sans JS, donc l'utilisateur
  *       ne peut remplir que l'étape 1. Pour le fallback complet sans JS,
@@ -20,7 +26,6 @@
  *     - Barre de progression mise à jour dynamiquement
  *     - Validation locale avant de passer à l'étape suivante
  *     - Sauvegarde AJAX de chaque étape en session (POST /matching/step)
- *     - Affichage de l'encart inscription pour les visiteurs à la dernière étape
  *
  * GESTION DU CHAMP "AUTRE" :
  *   Le toggle de la zone textuelle "Autre" dans les options lookingFor
@@ -62,7 +67,8 @@
         var wrap = document.getElementById('matching-form-wrap');
         if (!wrap) {
             // Le formulaire n'est pas présent sur cette page (artiste avec profil complet,
-            // ou utilisateur non artiste connecté) — rien à faire.
+            // utilisateur non artiste connecté sans besoin de formulaire, ou visiteur non
+            // connecté — qui voit le mur de connexion depuis ADR-0033) — rien à faire.
             return;
         }
 
@@ -71,29 +77,8 @@
         var btnPrev   = document.getElementById('mf-btn-prev');
         var btnNext   = document.getElementById('mf-btn-next');
         var btnSubmit = document.getElementById('mf-btn-submit');
-        var signupCta = document.getElementById('mf-signup-cta');
-        var isLoggedIn = wrap.dataset.loggedIn === 'true';
 
         if (!form) { return; }
-
-        // ── Fermeture de la modal d'inscription (visiteurs) ──────────────────
-        // Trois moyens de fermer : croix, clic sur le backdrop, touche Échap.
-        if (signupCta) {
-            var signupCloseBtn = document.getElementById('mf-signup-close');
-            if (signupCloseBtn) {
-                signupCloseBtn.addEventListener('click', function () { closeSignupCta(signupCta); });
-            }
-            // Clic sur le backdrop (la zone .mf-signup-cta elle-même, hors du contenu)
-            signupCta.addEventListener('click', function (e) {
-                if (e.target === signupCta) { closeSignupCta(signupCta); }
-            });
-            // Touche Échap si la modal est ouverte
-            document.addEventListener('keydown', function (e) {
-                if (e.key === 'Escape' && !signupCta.hasAttribute('hidden')) {
-                    closeSignupCta(signupCta);
-                }
-            });
-        }
 
         // Étape courante (1-indexée)
         var currentStep = 1;
@@ -104,11 +89,10 @@
         // défilerait automatiquement jusqu'au formulaire matching).
         showStep(1, form, btnPrev, btnNext, btnSubmit, false);
 
-        // URL d'inscription (posée par le template via data-register-url) — sert à
-        // rediriger un visiteur non connecté au clic sur "Continuer" (cf. ADR-0026).
-        var registerUrl = wrap.dataset.registerUrl || '/register';
-
         // ── Bouton "Continuer" ───────────────────────────────────────────────
+        // ADR-0033 : ce formulaire n'est plus jamais affiché à un visiteur non
+        // connecté — on ne gère donc plus qu'un seul cas : sauvegarde best-effort
+        // en session (pour un éventuel rechargement de page) + navigation normale.
         if (btnNext) {
             btnNext.addEventListener('click', function () {
                 // Validation de l'étape courante avant de continuer
@@ -116,29 +100,6 @@
                     return;
                 }
 
-                // VISITEUR NON CONNECTÉ (cf. ADR-0026) : l'accès au matching nécessite
-                // un compte. Dès le clic sur "Continuer", on sauvegarde ses réponses de
-                // l'étape en session (pour pré-remplir l'inscription) PUIS on le redirige
-                // vers la page d'inscription.
-                // saveStepAjax() appelle TOUJOURS son callback (succès comme échec
-                // réseau), donc la redirection est garantie.
-                if (!isLoggedIn) {
-                    // VISITEUR : au lieu d'une redirection BRUTALE vers /login, on
-                    // sauvegarde l'étape en session PUIS on ouvre une MODAL "crée ton
-                    // compte pour aller plus loin". Le visiteur garde ses réponses
-                    // (déjà en session → pré-remplissage de l'inscription/onboarding)
-                    // et décide en connaissance de cause (créer un compte / se connecter
-                    // / fermer et continuer à explorer le formulaire).
-                    btnNext.disabled = true;
-                    saveStepAjax(currentStep, form, function () {
-                        showSignupCta(signupCta);
-                        // Ré-activé : la modal est fermable, le visiteur peut re-cliquer.
-                        btnNext.disabled = false;
-                    });
-                    return;
-                }
-
-                // Utilisateur connecté : sauvegarde best-effort + navigation normale.
                 saveStepAjax(currentStep, form);
                 currentStep++;
                 showStep(currentStep, form, btnPrev, btnNext, btnSubmit, true);
@@ -157,9 +118,9 @@
         }
 
         // ── Soumission du formulaire ─────────────────────────────────────────
-        // Pour les visiteurs non connectés : on intercepte la soumission,
-        // on sauvegarde en session via AJAX, et on redirige vers l'inscription.
-        // Pour les artistes connectés : on laisse le POST s'effectuer normalement.
+        // L'utilisateur est forcément connecté (cf. ADR-0033) : on laisse le POST
+        // s'effectuer normalement (MatchingFormController::submit(), Flux B) après
+        // validation locale de la dernière étape.
         if (btnSubmit) {
             btnSubmit.addEventListener('click', function (e) {
                 // Validation de la dernière étape avant soumission
@@ -167,16 +128,7 @@
                     e.preventDefault();
                     return;
                 }
-
-                // Pour les visiteurs : save en session + montrer l'encart inscription
-                if (!isLoggedIn) {
-                    e.preventDefault();
-                    saveStepAjax(currentStep, form, function () {
-                        // Afficher la modal inscription au lieu de soumettre
-                        showSignupCta(signupCta);
-                    });
-                }
-                // Pour les artistes : la soumission continue normalement (POST classique)
+                // Aucune interception : la soumission continue normalement (POST classique)
             });
         }
 
@@ -328,7 +280,11 @@
                 nameInput.focus();
                 return false;
             }
-            var locInput = form.querySelector('input[name="location"]');
+            // Le champ localisation est un <select> (pas un <input>) : on utilise un
+            // sélecteur sans préfixe de balise pour matcher <input>, <select> ET <textarea>.
+            // Avec 'input[name="location"]', querySelector renvoyait null → la localisation
+            // n'était jamais validée ni envoyée en session (bug carryover matching).
+            var locInput = form.querySelector('[name="location"]');
             if (locInput && locInput.value.trim() === '') {
                 showStepError(step, 'Indique ta localisation (ville, pays) pour continuer.');
                 locInput.focus();
@@ -429,7 +385,11 @@
             if (nameInput) {
                 fd.append('display_name', nameInput.value.trim());
             }
-            var locInput = form.querySelector('input[name="location"]');
+            // Le champ localisation est un <select> (pas un <input>) : on utilise un
+            // sélecteur sans préfixe de balise pour matcher <input>, <select> ET <textarea>.
+            // Avec 'input[name="location"]', querySelector renvoyait null → la localisation
+            // n'était jamais validée ni envoyée en session (bug carryover matching).
+            var locInput = form.querySelector('[name="location"]');
             if (locInput) {
                 fd.append('location', locInput.value.trim());
             }
@@ -481,37 +441,10 @@
         });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // AFFICHAGE DE L'ENCART INSCRIPTION (visiteurs)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Ouvre la MODAL d'incitation à l'inscription (visiteurs non connectés).
-     * Appelée au clic sur "Continuer" ou "Voir mes matchs". Le formulaire reste
-     * intact DERRIÈRE la modal (overlay + backdrop) : si le visiteur ferme la
-     * modal, il retrouve son formulaire exactement où il en était.
-     *
-     * @param {HTMLElement|null} signupCta - La modal (#mf-signup-cta)
-     */
-    function showSignupCta(signupCta) {
-        if (!signupCta) { return; }
-        signupCta.removeAttribute('hidden');
-        // Verrouille le scroll de la page tant que la modal est ouverte
-        document.body.style.overflow = 'hidden';
-        // Focus sur le bouton de fermeture (accessibilité)
-        var closeBtn = document.getElementById('mf-signup-close');
-        if (closeBtn) { setTimeout(function () { closeBtn.focus(); }, TRANSITION_MS); }
-    }
-
-    /**
-     * Ferme la modal d'inscription et restaure le scroll de la page.
-     * @param {HTMLElement|null} signupCta
-     */
-    function closeSignupCta(signupCta) {
-        if (!signupCta) { return; }
-        signupCta.setAttribute('hidden', '');
-        document.body.style.overflow = '';
-    }
+    // ADR-0033 : showSignupCta()/closeSignupCta() (modal "crée ton compte pour
+    // aller plus loin", visiteurs uniquement) ont été retirées — ce cas ne se
+    // produit plus jamais, le formulaire n'étant plus rendu pour un visiteur
+    // non connecté (mur de connexion à la place, cf. HomeController::index()).
 
     // ═══════════════════════════════════════════════════════════════════════════
     // FILTRE DE DISCIPLINES

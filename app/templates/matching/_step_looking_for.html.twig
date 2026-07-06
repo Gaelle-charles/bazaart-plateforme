@@ -17,6 +17,10 @@
  # Le JS cible les éléments par leur class (.mf-autre-field, .mf-cb-autre, .mf-other-input)
  # plutôt que par id pour pouvoir réutiliser ce partial plusieurs fois sur une page.
  # Cependant, les ids restent préfixés pour rester valides HTML.
+ #
+ # DESIGN (ADR-0033 §4) : "tile-grid" posée en plus de "ob-options"/"mf-options-group"
+ # (tuiles cliquables du prototype). Scoppé à ".mf-wrap" dans vitrine/index.html.twig,
+ # donc sans effet sur les autres consommateurs (onboarding).
 #}
 
 {% set fp = field_prefix is defined ? field_prefix : '' %}
@@ -25,7 +29,7 @@
 {% set autre_input_id = 'looking_for_other' ~ (fp ? '_' ~ fp : '') %}
 {% set group_aria = 'Ce que tu recherches sur Bazaart' %}
 
-<div class="ob-options mf-options-group" role="group" aria-label="{{ group_aria }}">
+<div class="ob-options mf-options-group tile-grid" role="group" aria-label="{{ group_aria }}">
     {% for option in looking_for_options %}
         {% set isChecked = option.value in selected_values %}
         {% set cbId = 'lf_' ~ option.value ~ (fp ? '_' ~ fp : '') %}

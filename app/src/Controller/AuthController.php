@@ -17,6 +17,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
+use Symfony\Component\Security\Http\Util\TargetPathTrait;
 use SymfonyCasts\Bundle\VerifyEmail\Exception\VerifyEmailExceptionInterface;
 
 /**
@@ -36,6 +37,12 @@ use SymfonyCasts\Bundle\VerifyEmail\Exception\VerifyEmailExceptionInterface;
  */
 class AuthController extends AbstractController
 {
+    // TargetPathTrait fournit saveTargetPath()/getTargetPath()/removeTargetPath() —
+    // les méthodes officielles Symfony pour lire/écrire l'URL cible mémorisée en
+    // session avant une redirection vers /login. Utilisé ici (ADR-0033) pour le
+    // mur de connexion matching : cf. login() ci-dessous.
+    use TargetPathTrait;
+
     /**
      * Injection par autowiring :
      *   - AuthService               : logique d'inscription (hachage, vérification doublon email)
@@ -50,9 +57,19 @@ class AuthController extends AbstractController
      */
     /**
      * Clé de session pour l'intent d'inscription.
-     * Valeur possible : 'artist' (indique que l'utilisateur vient du formulaire matching home).
+     * Valeur possible : 'matching' (indique que l'utilisateur vient du mur de connexion
+     * matching de la home, cf. ADR-0033 — 'artist' est l'ancienne valeur, normalisée
+     * en 'matching' dès la capture dans register()).
+     * Depuis ADR-0033, ce signal de SESSION n'est plus qu'un REPLI : l'intention
+     * "source de vérité" voyage désormais dans le LIEN de confirmation lui-même
+     * (cf. EmailVerificationService::sendVerificationEmail() et verifyEmail()).
      */
     private const SESSION_INTENT_KEY = 'bazaart_register_intent';
+
+    // Nom du firewall (security.yaml → firewalls.main). Même valeur que dans
+    // LoginSuccessHandler — TargetPathTrait en a besoin pour lire/écrire la bonne
+    // clé de session ('_security.main.target_path').
+    private const FIREWALL_NAME = 'main';
 
     public function __construct(
         private readonly AuthService                $authService,
@@ -77,13 +94,57 @@ class AuthController extends AbstractController
     // ─── Route : /login ───────────────────────────────────────────────────────
 
     #[Route('/login', name: 'app_login')]
-    public function login(AuthenticationUtils $authenticationUtils): Response
+    public function login(Request $request, AuthenticationUtils $authenticationUtils): Response
     {
         // Redirige si déjà connecté (vers le bon dashboard selon le rôle)
         if ($this->getUser()) {
             return $this->isGranted('ROLE_ADMIN')
                 ? $this->redirectToRoute('app_admin_dashboard')
                 : $this->redirectToRoute('app_dashboard');
+        }
+
+        // ── Captation de ?_target_path (ADR-0033, mur de connexion matching) ──
+        //
+        // Le mur de connexion (matching/_matching_login_wall.html.twig) pose un
+        // lien "Se connecter" avec ?_target_path=<url de la section matching>.
+        //
+        // POURQUOI le lire ICI plutôt que compter sur Symfony pour le faire seul ?
+        // Le mécanisme AUTOMATIQUE de Symfony (ExceptionListener::startAuthentication())
+        // ne mémorise le target_path en session QUE lorsqu'un utilisateur non connecté
+        // tente d'accéder à une page PROTÉGÉE (il intercepte une AccessDeniedException).
+        // Ici, la home et le mur de connexion sont des pages PUBLIQUES : aucune exception
+        // n'est levée, donc rien n'est mémorisé automatiquement. On reproduit donc
+        // manuellement le même mécanisme standard (TargetPathTrait::saveTargetPath()),
+        // que LoginSuccessHandler lira ensuite via getTargetPath() (priorité 2, juste
+        // après les données de matching en session — cf. LoginSuccessHandler).
+        //
+        // Sécurité (open redirect) : on n'accepte qu'un chemin RELATIF local.
+        //
+        // ⚠️ FAILLE CORRIGÉE (relecture ADR-0033) : la validation précédente
+        // rejetait uniquement '//evil.com' (protocol-relative avec DEUX slashs),
+        // mais laissait passer '/\evil.com'. Or les NAVIGATEURS normalisent le
+        // backslash '\' en slash '/' dans une URL avant de la résoudre : pour
+        // le navigateur, '/\evil.com' est ÉQUIVALENT à '//evil.com', donc une
+        // URL protocol-relative vers le domaine externe "evil.com" — exactement
+        // le même open-redirect, juste avec un caractère différent.
+        // LoginSuccessHandler fait ensuite `new RedirectResponse($targetPath)`
+        // SANS revalider : un lien "https://bazaart.fr/login?_target_path=/\evil.com"
+        // envoyé par email/SMS suffisait donc à rediriger un utilisateur qui clique
+        // "Se connecter" vers un site tiers juste après une authentification réussie
+        // sur le VRAI bazaart.fr — un vecteur de phishing crédible.
+        //
+        // Correction : on n'accepte un chemin QUE s'il commence par '/' ET que le
+        // caractère suivant n'est NI '/' NI '\' (aucun des deux ne doit pouvoir
+        // amorcer une URL protocol-relative). preg_match retourne 1 si ça matche.
+        if ($request->isMethod('GET')) {
+            $targetPath = $request->query->get('_target_path');
+            if (
+                is_string($targetPath)
+                && $targetPath !== ''
+                && preg_match('#^/(?![/\\\\])#', $targetPath) === 1
+            ) {
+                $this->saveTargetPath($request->getSession(), self::FIREWALL_NAME, $targetPath);
+            }
         }
 
         return $this->render('auth/login.html.twig', [
@@ -111,20 +172,30 @@ class AuthController extends AbstractController
                 : $this->redirectToRoute('app_dashboard');
         }
 
-        // ── Capture du paramètre ?intent=artist ────────────────────────────────
+        // ── Capture du paramètre ?intent=matching (ADR-0033) ───────────────────
         //
-        // Quand un visiteur vient du formulaire matching de la home
-        // (clic sur "Créer mon compte artiste"), on reçoit ?intent=artist.
-        // On stocke cet intent en session pour l'utiliser après la vérification
-        // d'email (cf. verifyEmail() ci-dessous).
+        // Le mur de connexion matching (matching/_matching_login_wall.html.twig)
+        // pose ?intent=matching sur le CTA "S'inscrire pour matcher".
+        //
+        // 'artist' reste accepté pour compatibilité : MatchingFormController::submit()
+        // conserve un Flux A résiduel (filet de sécurité contre un POST direct sans
+        // authentification, cf. sa doc) qui redirige encore vers /register?intent=artist.
+        // Les deux valeurs désignent la MÊME intention (revenir au matching après
+        // confirmation d'email) — on les normalise ici en une seule valeur 'matching'.
+        //
+        // On stocke l'intent en session pour l'utiliser au moment de l'envoi de l'email
+        // de confirmation (cf. sendVerificationEmail() plus bas) : l'intention est alors
+        // recopiée dans le LIEN signé (extraParams), ce qui la rend device-independent
+        // (cf. EmailVerificationService::sendVerificationEmail() et verifyEmail() ci-dessous).
         //
         // On ne lit l'intent QUE sur les GET (pas sur les POST de soumission du formulaire)
         // pour éviter qu'un POST malveillant manipule le flux de redirection.
         if ($request->isMethod('GET')) {
             $intent = $request->query->get('intent');
-            if ($intent === 'artist') {
-                // Stocke l'intent en session — survivra jusqu'à la vérification d'email
-                $request->getSession()->set(self::SESSION_INTENT_KEY, 'artist');
+            if ($intent === 'artist' || $intent === 'matching') {
+                // Stocke l'intent en session — survivra jusqu'à l'envoi de l'email
+                // de confirmation (POST de ce même formulaire, même session/appareil).
+                $request->getSession()->set(self::SESSION_INTENT_KEY, 'matching');
             }
         }
 
@@ -194,7 +265,16 @@ class AuthController extends AbstractController
                     // En cas d'échec SMTP, le service logge l'erreur mais ne la
                     // propage pas — l'utilisateur peut demander un renvoi depuis
                     // la page "vérifie ta boîte mail".
-                    $this->emailVerificationService->sendVerificationEmail($user);
+                    //
+                    // ADR-0033 : si l'intention "matching" a été capturée en session
+                    // (GET /register?intent=matching ci-dessus, même appareil/session que
+                    // ce POST), on la transmet au service pour qu'elle soit incluse dans
+                    // le LIEN signé lui-même — device-independent, contrairement à un
+                    // simple signal de session (cf. EmailVerificationService).
+                    $intentForLink = $request->getSession()->get(self::SESSION_INTENT_KEY) === 'matching'
+                        ? 'matching'
+                        : null;
+                    $this->emailVerificationService->sendVerificationEmail($user, $intentForLink);
 
                     // ── Carryover du nom affiché (display_name) ─────────────────
                     //
@@ -347,37 +427,23 @@ class AuthController extends AbstractController
                     'main'
                 );
 
-                if ($loginResponse !== null) {
-                    return $loginResponse;
-                }
-
                 // ── Redirection post-confirmation (second clic sur un lien déjà utilisé) ─
                 //
-                // Même logique que pour le premier clic (ci-dessous) :
-                // si intent=artist ou des données matching sont en session → home matching.
-                //
-                // DÉCISION ARCHITECTURE (juin 2026) :
-                //   On ne redirige plus vers app_onboarding_step2 mais vers la home,
-                //   section #swipe-section. Le formulaire de matching est désormais
-                //   INLINE sur la home (pas d'onboarding séparé pour le flux matching).
-                //   - Profil complet : la section affiche les cartes de swipe.
-                //   - Profil incomplet : la section affiche le formulaire pré-rempli.
-                //
-                // LIMITE CONNUE (inchangée) :
-                //   Si l'utilisateur confirme son email dans un AUTRE navigateur que
-                //   celui où il a rempli le formulaire, la session est différente →
-                //   pas de données matching → retombe sur le dashboard. Acceptable V1.
-                $intent = $request->getSession()->get(self::SESSION_INTENT_KEY);
-                $hasMatchingData = $this->matchingFormSession->hasSessionData($request->getSession());
-                if ($intent === 'artist' || $hasMatchingData) {
-                    // On nettoie l'intent (les données matching sont lues par la home,
-                    // pas ici — on ne les supprime donc pas à ce stade).
-                    $request->getSession()->remove(self::SESSION_INTENT_KEY);
+                // ADR-0033 : on vérifie D'ABORD l'intention portée par le LIEN
+                // (device-independent) via resolveMatchingRedirectAfterVerification().
+                // ATTENTION : ce contrôle doit précéder l'usage de $loginResponse — celui-ci
+                // est produit par LoginSuccessHandler, qui ne connaît PAS le paramètre
+                // ?intent= de cette requête (il ne lit que la session). Si on retournait
+                // $loginResponse en premier (comme avant ADR-0033), le contrôle d'intention
+                // ci-dessous ne serait JAMAIS atteint : $loginResponse est quasi-systématiquement
+                // non-null (voir sa propre doc), ce qui rendait ce bloc mort en pratique.
+                $matchingRedirect = $this->resolveMatchingRedirectAfterVerification($request);
+                if ($matchingRedirect !== null) {
+                    return $matchingRedirect;
+                }
 
-                    // Redirection vers la home, section matching.
-                    // '#swipe-section' est un fragment côté client (ancre HTML) :
-                    // le serveur ne le reçoit jamais, on doit le concaténer manuellement.
-                    return $this->redirectToRoute('app_home', ['_fragment' => 'swipe-section']);
+                if ($loginResponse !== null) {
+                    return $loginResponse;
                 }
 
                 // Pas de matching en cours → dashboard classique.
@@ -480,56 +546,76 @@ class AuthController extends AbstractController
 
         // ── Redirection post-vérification email ──────────────────────────────
         //
-        // Si Security a produit sa propre réponse (cas rare avec des listeners spéciaux
-        // comme remember_me, _target_path), on l'utilise en priorité.
-        if ($loginResponse !== null) {
-            return $loginResponse;
+        // ADR-0033 (RÉVISION) : PRIORITÉ à l'intention portée par le LIEN cliqué
+        // (?intent=matching dans l'URL signée), lue par resolveMatchingRedirectAfterVerification()
+        // AVANT toute autre logique. C'est la correction du bug cross-device :
+        // si l'utilisateur confirme son email depuis un AUTRE appareil que celui de
+        // l'inscription, LoginSuccessHandler (qui ne lit QUE la session de CET appareil,
+        // vierge de tout signal matching) redirige vers le dashboard par défaut.
+        // L'intention voyage désormais dans le LIEN lui-même — elle est donc disponible
+        // ICI, quel que soit l'appareil sur lequel le lien est ouvert.
+        $matchingRedirect = $this->resolveMatchingRedirectAfterVerification($request);
+        if ($matchingRedirect !== null) {
+            return $matchingRedirect;
         }
 
-        // ── Carryover matching : redirection vers la home section matching ──────
+        // Pas d'intention matching détectée : on retombe sur le comportement
+        // CENTRALISÉ de LoginSuccessHandler::onAuthenticationSuccess() (déclaré dans
+        // security.yaml → firewalls.main.form_login.success_handler), qui gère :
+        //   1. Données matching en session (résiduel — cf. resolveMatchingRedirectAfterVerification)
+        //   2. Target path standard Symfony  → page protégée initialement demandée
+        //   3. Rôle admin                    → tableau de bord admin
+        //   4. Défaut                        → dashboard utilisateur
         //
-        // Cas de figure :
-        //   1. Le visiteur a rempli le formulaire matching de la home (données en session)
-        //   2. Il a cliqué "Créer mon compte artiste" → ?intent=artist stocké en session
-        //   3. Il a créé son compte + confirmé son email
-        //   4. ICI : on le redirige vers la home, section #swipe-section.
-        //      - Profil complet (display_name + location + disciplines + lookingFor) :
-        //        la section affichera directement les cartes de swipe.
-        //      - Profil incomplet : la section affichera le formulaire inline pré-rempli
-        //        depuis la session (carryover — les données sont lues par HomeController).
-        //
-        // DÉCISION ARCHITECTURE (juin 2026) :
-        //   On ne redirige plus vers app_onboarding_step2 mais vers la home.
-        //   Le formulaire de matching est désormais INLINE sur la home — pas d'onboarding
-        //   séparé pour ce flux. La route app_onboarding_step2 reste accessible directement
-        //   pour les artistes qui veulent compléter leur profil hors du flux matching.
-        //
-        // LIMITE CONNUE (inchangée) :
-        //   Si l'utilisateur confirme son email dans un AUTRE navigateur ou onglet
-        //   que celui dans lequel il a rempli le formulaire matching, la session
-        //   (intent + données matching) ne sera pas partagée et le pré-remplissage
-        //   sera absent. Dans ce cas, l'utilisateur atterrit sur le dashboard.
-        //   Ce cas est rare et acceptable pour V1.
-        $intent = $request->getSession()->get(self::SESSION_INTENT_KEY);
-        $hasMatchingData = $this->matchingFormSession->hasSessionData($request->getSession());
+        // security->login() déclenche ce handler et renvoie SA réponse : $loginResponse
+        // est donc TOUJOURS non-null ici (fallback défensif conservé au cas où).
+        return $loginResponse ?? $this->redirectToRoute('app_dashboard');
+    }
 
-        if ($intent === 'artist' || $hasMatchingData) {
-            // Nettoyage de l'intent de session.
-            // Les données matching elles-mêmes (bazaart_matching_form) sont conservées :
-            // HomeController/MatchingFormSessionService les liront pour le pré-remplissage.
-            $request->getSession()->remove(self::SESSION_INTENT_KEY);
+    // ─────────────────────────────────────────────────────────────────────────
+    // MÉTHODE PRIVÉE : détermination de la redirection matching post-vérification
+    // ─────────────────────────────────────────────────────────────────────────
 
-            // Redirection vers la home, section matching.
-            // '_fragment' est le paramètre Symfony pour générer une ancre HTML (#swipe-section).
-            // Le fragment est un concept côté client (le serveur ne le reçoit jamais)
-            // mais redirectToRoute() l'ajoute dans l'URL de la réponse HTTP 302.
+    /**
+     * Détermine si l'utilisateur doit être redirigé vers la section matching de la
+     * home après confirmation d'email, et construit cette redirection si oui.
+     *
+     * ADR-0033 — ORDRE DE PRIORITÉ :
+     *   1. Intention portée par le LIEN cliqué (?intent=matching dans l'URL signée).
+     *      Device-independent : survit à un clic effectué depuis un autre appareil
+     *      que celui de l'inscription (c'est la correction apportée par l'ADR-0033).
+     *   2. Repli sur les anciens signaux de SESSION (intent en session + données
+     *      matching en session). Ne fonctionne QUE si la confirmation se fait sur
+     *      le MÊME appareil/navigateur que l'inscription — c'est justement la
+     *      limite que l'ADR-0033 corrige côté lien. Conservé uniquement pour la
+     *      compatibilité avec des liens envoyés juste avant ce changement (fenêtre
+     *      de validité du lien : 1 heure — ce repli devient sans objet ensuite).
+     *
+     * @return Response|null Réponse de redirection si une intention matching est
+     *                        détectée, sinon null (l'appelant applique alors son
+     *                        propre repli : $loginResponse ?? dashboard).
+     */
+    private function resolveMatchingRedirectAfterVerification(Request $request): ?Response
+    {
+        // Priorité 1 : LIEN (paramètre signé, inclus dans la signature HMAC —
+        // donc infalsifiable sans invalider le lien).
+        if ($request->query->get('intent') === 'matching') {
             return $this->redirectToRoute('app_home', ['_fragment' => 'swipe-section']);
         }
 
-        // Cas normal (sans intent artist et sans données matching) :
-        // redirection vers le dashboard. Le gating proposera à l'utilisateur de
-        // compléter son profil si besoin.
-        return $this->redirectToRoute('app_dashboard');
+        // Priorité 2 (repli, compatibilité) : anciens signaux de SESSION.
+        $sessionIntent   = $request->getSession()->get(self::SESSION_INTENT_KEY);
+        $hasMatchingData = $this->matchingFormSession->hasSessionData($request->getSession());
+
+        if ($sessionIntent === 'matching' || $sessionIntent === 'artist' || $hasMatchingData) {
+            // On nettoie l'intent (les données matching elles-mêmes sont lues par la
+            // home, pas ici — on ne les supprime donc pas à ce stade).
+            $request->getSession()->remove(self::SESSION_INTENT_KEY);
+
+            return $this->redirectToRoute('app_home', ['_fragment' => 'swipe-section']);
+        }
+
+        return null;
     }
 
     // ─── Route : /verifier-email/renvoyer ─────────────────────────────────────
@@ -607,7 +693,15 @@ class AuthController extends AbstractController
         }
 
         // ── Renvoyer l'email de confirmation ──────────────────────────────────
-        $this->emailVerificationService->sendVerificationEmail($user);
+        //
+        // ADR-0033 : on propage l'intention "matching" si elle est encore en session.
+        // Le renvoi se fait depuis la page "vérifie ta boîte mail", sur le MÊME appareil
+        // que l'inscription initiale (même session) : lire la session ici est donc fiable
+        // (contrairement à verifyEmail(), qui peut être atteint depuis un autre appareil).
+        $intentForLink = $request->getSession()->get(self::SESSION_INTENT_KEY) === 'matching'
+            ? 'matching'
+            : null;
+        $this->emailVerificationService->sendVerificationEmail($user, $intentForLink);
 
         $this->addFlash('success', 'Email de confirmation renvoyé. Vérifie ta boîte mail (et tes spams).');
 

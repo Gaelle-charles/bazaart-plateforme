@@ -12,12 +12,14 @@
  #   field_prefix           : string           — préfixe optionnel pour les ids HTML
  #   show_skip_note         : bool             — afficher la note "Ce champ est optionnel"
  #                                               Défaut : true.
+ # DESIGN (ADR-0033 §4) : "tile-grid" posée en plus de "ob-options" (tuiles
+ # cliquables du prototype). Scoppé à ".mf-wrap", sans effet sur l'onboarding.
 #}
 
 {% set fp = field_prefix is defined ? field_prefix : '' %}
 {% set show_skip_note = show_skip_note is defined ? show_skip_note : true %}
 
-<div class="ob-options" role="group" aria-label="Ton statut juridique">
+<div class="ob-options tile-grid" role="group" aria-label="Ton statut juridique">
     {% for option in legal_status_options %}
         {#
             Pré-sélection si l'artiste avait déjà choisi un statut.
@@ -45,7 +47,7 @@
 </div>
 
 {% if show_skip_note %}
-<p class="ob-hint" style="margin-top:12px;">
+<p class="ob-hint match-help" style="margin-top:12px;">
     Ce champ est optionnel. Tu pourras le renseigner ou le modifier à tout moment depuis ton profil.
 </p>
 {% endif %}
