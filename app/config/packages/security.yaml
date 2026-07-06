@@ -64,6 +64,12 @@ security:
                 # session). Le champ caché `_csrf_token` correspondant est ajouté dans
                 # auth/login.html.twig via `csrf_token('authenticate')` — le token_id doit
                 # être identique des deux côtés.
+                # NB : depuis l'activation du CSRF stateless (voir config/packages/csrf.yaml,
+                # `stateless_token_ids: [submit, authenticate, logout]`), `csrf_token('authenticate')`
+                # ne génère PLUS un token lié à la session serveur. La protection repose sur
+                # un cookie signé (HMAC avec APP_SECRET) : le token est vérifié cryptographiquement
+                # sans état stocké côté serveur, ce qui fonctionne même sans session active
+                # (utile par ex. juste après un logout, ou pour des clients sans cookie de session).
                 enable_csrf: true
                 csrf_parameter: '_csrf_token'
                 csrf_token_id: 'authenticate'
