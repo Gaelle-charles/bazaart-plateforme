@@ -142,7 +142,11 @@ class FeedReaderService
         // fetchFeedContentWithError() retourne ['xml' => null, 'error' => '...'] en cas
         // d'erreur HTTP ou réseau. Dans ce cas, on retourne FeedReadResult::failure()
         // pour que l'orchestrateur sache que c'est un vrai échec (pas juste un flux vide).
-        $fetchResult = $this->fetchFeedContentWithError($feedUrl, $source->getNom());
+        $fetchResult = $this->fetchFeedContentWithError(
+            $feedUrl,
+            $source->getNom(),
+            $source->isAllowInsecureSsl(),
+        );
         if ($fetchResult['xml'] === null) {
             // Échec de fetch : HTTP non-200 ou exception réseau
             return FeedReadResult::failure($fetchResult['error'] ?? 'Erreur de téléchargement inconnue');
@@ -219,15 +223,40 @@ class FeedReaderService
      * Cette méthode est privée et n'est appelée que par readWithResult().
      * Un objet dédié serait sur-engineering pour un usage aussi localisé.
      *
-     * @param string $url        URL du flux RSS/Atom à télécharger
-     * @param string $sourceName Nom de la source (pour les logs uniquement)
+     * @param string $url               URL du flux RSS/Atom à télécharger
+     * @param string $sourceName        Nom de la source (pour les logs uniquement)
+     * @param bool   $allowInsecureSsl  Si true, désactive verify_peer/verify_host POUR CE FETCH
+     *                                  uniquement (cf. ScrapingSource::allowInsecureSsl). Le trafic
+     *                                  reste chiffré — seule la vérification du certificat est sautée.
+     *                                  Défaut false : comportement standard, sécurisé.
      *
      * @return array{xml: string|null, error: string|null}
      */
-    private function fetchFeedContentWithError(string $url, string $sourceName): array
+    private function fetchFeedContentWithError(string $url, string $sourceName, bool $allowInsecureSsl = false): array
     {
         try {
-            $response = $this->httpClient->request('GET', $url, [
+            // ── Choix du client HTTP ─────────────────────────────────────────
+            // Par défaut, on utilise le client HTTP standard (vérification TLS active).
+            // Si la source est marquée allowInsecureSsl = true (ex: resartis.org, dont
+            // le certificat manque de son CA intermédiaire), on dérive un client via
+            // withOptions() : cela ne modifie PAS $this->httpClient de façon globale,
+            // seul CE fetch ponctuel ignore la vérification du certificat.
+            // Même pattern que AbstractScraper::fetchHtmlInsecure() côté HTML.
+            $client = $allowInsecureSsl
+                ? $this->httpClient->withOptions([
+                    'verify_peer' => false,   // Désactive la vérification du certificat serveur
+                    'verify_host' => false,   // Désactive aussi la vérification du nom d'hôte
+                ])
+                : $this->httpClient;
+
+            if ($allowInsecureSsl) {
+                $this->logger->info('[FeedReaderService] Fetch en mode SSL non vérifié (allowInsecureSsl=true)', [
+                    'source' => $sourceName,
+                    'url'    => $url,
+                ]);
+            }
+
+            $response = $client->request('GET', $url, [
                 'headers' => [
                     // User-Agent identifiable — transparent sur qui fait la requête.
                     // Les bots mal identifiés sont souvent bloqués par les sites culturels.

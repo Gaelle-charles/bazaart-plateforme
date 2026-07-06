@@ -272,6 +272,7 @@ class AdminScrapingSourceController extends AbstractController
      *   - estAgregateur     : indique si la source liste d'autres organismes
      *   - scraperSlug       : slug de la classe PHP custom (optionnel)
      *   - actif             : si false → ignorée par ScrapeOpportunitiesCommand
+     *   - allowInsecureSsl  : contournement TLS ciblé (voir ScrapingSource::allowInsecureSsl)
      *
      * Contraintes de validation :
      *   - nom requis, max 255 caractères
@@ -328,8 +329,11 @@ class AdminScrapingSourceController extends AbstractController
 
         // Les checkboxes HTML ne transmettent leur valeur que si cochées.
         // On compare à '1' (valeur que le template envoie pour les cases cochées).
-        $actif         = $request->request->get('actif') === '1';
-        $estAgregateur = $request->request->get('estAgregateur') === '1';
+        $actif            = $request->request->get('actif') === '1';
+        $estAgregateur    = $request->request->get('estAgregateur') === '1';
+        // Contournement SSL ciblé (voir ScrapingSource::allowInsecureSsl) — à cocher
+        // uniquement pour un domaine dont le certificat est réellement incomplet.
+        $allowInsecureSsl = $request->request->get('allowInsecureSsl') === '1';
 
         // Nouveau champ WS1 : publication automatique (préparatoire, sans effet V1)
         $autoPublish = $request->request->get('autoPublish') === '1';
@@ -455,6 +459,7 @@ class AdminScrapingSourceController extends AbstractController
         $source->setScraperSlug($scraperSlug);
         $source->setActif($actif);
         $source->setEstAgregateur($estAgregateur);
+        $source->setAllowInsecureSsl($allowInsecureSsl);
 
         // Nouveaux champs WS1 — éditables par l'admin
         $source->setFeedUrl($feedUrl);

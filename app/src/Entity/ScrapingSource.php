@@ -86,6 +86,33 @@ class ScrapingSource
     private ?string $paysZone = null;
 
     /**
+     * Autorise ce fetch à ignorer la vérification du certificat TLS (verify_peer/verify_host).
+     *
+     * ⚠️ CONTOURNEMENT CIBLÉ, PAS UNE DÉSACTIVATION GLOBALE DE LA SÉCURITÉ TLS.
+     * Ce flag est un contournement TECHNIQUE, pas une faille de sécurité volontaire :
+     * le trafic reste chiffré (HTTPS/TLS), seule la validation de la chaîne de
+     * certificats est sautée pour CE domaine précis.
+     *
+     * Cas d'usage identifié : resartis.org renvoie un certificat dont le CA
+     * intermédiaire n'est pas fourni par le serveur ("unable to get local issuer
+     * certificate"). Le bundle CA du container Docker est pourtant sain (d'autres
+     * sources HTTPS passent sans problème) — c'est spécifique à ce domaine, pas
+     * un problème générique de notre environnement.
+     *
+     * Défaut : false. Ne JAMAIS activer ce flag par défaut pour une nouvelle
+     * source — c'est un choix explicite de l'admin (ou du seed), au cas par cas,
+     * après avoir diagnostiqué une vraie erreur SSL (pas une erreur HTTP 403/404
+     * qui n'a rien à voir avec le certificat).
+     *
+     * Utilisé par FeedReaderService (pipeline RSS) — voir
+     * FeedReaderService::fetchFeedContentWithError(). Le pattern reprend celui
+     * de AbstractScraper::fetchHtmlInsecure() déjà utilisé côté HTML (ResartisScraper),
+     * mais celui-ci n'était pas branché sur le pipeline RSS avant ce correctif.
+     */
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $allowInsecureSsl = false;
+
+    /**
      * Indique si cette source est un agrégateur de ressources culturelles.
      *
      * Un agrégateur est un site qui liste et recense d'AUTRES organismes culturels,
@@ -513,6 +540,29 @@ class ScrapingSource
     public function setFeedUrl(?string $feedUrl): static
     {
         $this->feedUrl = $feedUrl;
+        return $this;
+    }
+
+    /**
+     * Indique si cette source est autorisée à contourner la vérification TLS.
+     *
+     * Convention Symfony is* pour les booléens (cohérent avec isActif(), isEstAgregateur()).
+     */
+    public function isAllowInsecureSsl(): bool
+    {
+        return $this->allowInsecureSsl;
+    }
+
+    /**
+     * Active ou désactive le contournement TLS pour cette source.
+     *
+     * ⚠️ À activer uniquement après diagnostic confirmant une erreur SSL
+     * ("unable to get local issuer certificate" ou équivalent) — pas pour
+     * contourner un HTTP 403/404 qui n'a rien à voir avec le certificat.
+     */
+    public function setAllowInsecureSsl(bool $allowInsecureSsl): static
+    {
+        $this->allowInsecureSsl = $allowInsecureSsl;
         return $this;
     }
 

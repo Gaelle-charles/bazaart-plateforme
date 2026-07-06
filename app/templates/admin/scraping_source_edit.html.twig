@@ -317,7 +317,7 @@
     }
     .ss-status--never_run { background: var(--bg-alt); color: var(--ink-mute); border-color: var(--line-soft); }
     .ss-status--success   { background: rgba(255, 203, 16,.2); color: #2a6e00; border-color: var(--accent); }
-    .ss-status--error     { background: rgba(255,107,44,.15); color: #c4400c; border-color: var(--accent-2); }
+    .ss-status--error     { background: rgba(246, 43, 28,.15); color: #c4400c; border-color: var(--accent-2); }
 
 </style>
 {% endblock %}
@@ -515,6 +515,34 @@
                     </div>
                 </div>
 
+                {# ── Contournement SSL ciblé (checkbox) ──────────────────────── #}
+                {#
+                   Certains domaines (ex: resartis.org) renvoient un certificat TLS
+                   incomplet ("unable to get local issuer certificate") : le CA
+                   intermédiaire n'est pas transmis par le serveur. Ce n'est PAS un
+                   problème de notre bundle CA (d'autres sources HTTPS fonctionnent).
+                   Cocher cette case désactive verify_peer/verify_host UNIQUEMENT
+                   pour cette source (le trafic reste chiffré) — actuellement câblé
+                   pour le pipeline RSS (FeedReaderService). Ne cocher qu'après avoir
+                   confirmé une vraie erreur SSL (pas un 403/404, qui n'a rien à voir).
+                #}
+                <div class="adm-checkbox-row">
+                    <input class="adm-checkbox"
+                           type="checkbox"
+                           id="allowInsecureSsl"
+                           name="allowInsecureSsl"
+                           value="1"
+                           {{ source.allowInsecureSsl ? 'checked' : '' }}>
+                    <div>
+                        <label class="adm-checkbox-label" for="allowInsecureSsl">Contourner la vérification SSL</label>
+                        <div class="adm-checkbox-desc">
+                            À cocher uniquement si le fetch échoue avec "unable to get local issuer
+                            certificate" (certificat incomplet côté serveur). Le trafic reste chiffré,
+                            seule la validation du certificat est sautée pour ce domaine.
+                        </div>
+                    </div>
+                </div>
+
                 {# ── Agrégateur (checkbox) ─────────────────────────────────── #}
                 {#
                    Un agrégateur est un site qui liste d'autres organismes culturels
@@ -706,7 +734,7 @@
                                 color: #a71d2a;
                                 border-color: var(--danger, #dc3545);
                             {% elseif failures >= 3 %}
-                                background: rgba(255,107,44,.15);
+                                background: rgba(246, 43, 28,.15);
                                 color: #c4400c;
                                 border-color: var(--accent-2);
                             {% else %}
