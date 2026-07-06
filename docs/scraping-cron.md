@@ -10,6 +10,7 @@ avec des cadences adaptées à leur coût et leur nature :
 | `app:read-feeds` | Flux RSS uniquement | **Toutes les 6h** | Léger (HTTP + XML) | `bazaart-feeds.log` |
 | `app:scrape-opportunities` | HTML+LLM et HTML+CSS | **3x/semaine** (lun/mer/ven 7h) | Coûteux (clé API LLM) | `bazaart-scraping.log` |
 | `app:discover-sources` | Agrégateurs (LLM) | **1x/semaine** (dimanche 6h UTC) | Coûteux (clé API LLM) | `bazaart-discover.log` |
+| `app:detect-feeds` | Sources non-RSS (HtmlLlm/HtmlCss) | **1x/mois** (1er du mois, 6h30 UTC) | Léger (HTTP seul, pas de LLM) | `bazaart-detect-feeds.log` |
 
 ### Pourquoi deux cadences ?
 
@@ -81,6 +82,13 @@ Ajouter les lignes suivantes :
 
 # ── Découverte de nouvelles sources : hebdo dimanche 6h UTC (LLM, suggestions admin)
 0 6 * * 0 /usr/bin/docker exec bazaart_platform_app php bin/console app:discover-sources --env=prod >> /var/log/bazaart-discover.log 2>&1
+
+# ── Détection de flux RSS sur les sources non-RSS : mensuel, 1er du mois 6h30 UTC ─
+# Commande LECTURE SEULE (n'écrit rien en BDD) : elle affiche juste un tableau de
+# candidats RSS/Atom trouvés pour les sources HtmlLlm/HtmlCss. Cadence mensuelle
+# car les sites changent rarement de structure — un log à consulter à froid par
+# l'admin, pas une action automatique (cf. workflow manuel dans DetectFeedsCommand).
+30 6 1 * * /usr/bin/docker exec bazaart_platform_app php bin/console app:detect-feeds --env=prod >> /var/log/bazaart-detect-feeds.log 2>&1
 ```
 
 ### Explication de l'expression cron RSS (`0 */6 * * *`)

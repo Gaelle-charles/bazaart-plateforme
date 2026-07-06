@@ -228,6 +228,42 @@ class SeedScrapingSourcesCommand extends Command
                 // Ces partenaires sont souvent des organismes culturels avec leurs propres opps.
                 'est_agregateur' => true,
             ],
+
+            // ── Nouvelles sources ajoutées juillet 2026 (demande Gaëlle) ────────────
+            //
+            // NOTE IMPORTANTE : "Res Artis" (resartis.org/feed/) avait été proposé comme
+            // nouvelle source mais est en réalité DÉJÀ présent en BDD depuis le seed initial
+            // (voir entrée "Resartis - Résidences d'artistes" ci-dessus, même URL exacte).
+            // La déduplication par URL (findByUrl) l'aurait de toute façon ignoré : pas
+            // d'entrée dupliquée ajoutée ici, juste ce commentaire pour la traçabilité.
+            [
+                'nom'            => "African Artists' Foundation",
+                'url'            => 'https://www.africanartists.org/feed',
+                'type'           => ScrapingSourceType::RSS,
+                // Pas de classe PHP dédiée : source RSS simple, GenericScraper/FeedReaderService
+                // suffit largement (cf. docs/scraping.md §10 "Cas 1 — Source RSS simple sans code").
+                'slug'           => null,
+                'discipline'     => 'Toutes disciplines',
+                // Fondation nigériane organisant notamment le LagosPhoto Festival et le
+                // Prix AAF — cœur de cible Bazaart (diaspora afro-atlantique). Vérifié
+                // joignable (HTTP 200) et flux RSS 2.0 valide au 07/07/2026.
+                'zone'           => 'Afrique',
+                'actif'          => true,
+                'est_agregateur' => false, // Source directe : publie ses propres appels/prix/résidences
+            ],
+            [
+                'nom'            => 'Zeitz MOCAA - Museum of Contemporary Art Africa',
+                'url'            => 'https://www.zeitzmocaa.museum/feed/',
+                'type'           => ScrapingSourceType::RSS,
+                'slug'           => null,
+                'discipline'     => 'Arts plastiques',
+                // Musée d'art contemporain africain (Cape Town) — publie notamment le
+                // "Museum Fellowship Programme" (appel à candidatures annuel avec UWC).
+                // Vérifié joignable (HTTP 200) et flux RSS 2.0 valide au 07/07/2026.
+                'zone'           => 'Afrique (Afrique du Sud)',
+                'actif'          => true,
+                'est_agregateur' => false, // Source directe : publie ses propres fellowships/appels
+            ],
         ];
 
         $created = 0;
