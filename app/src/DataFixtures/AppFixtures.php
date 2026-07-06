@@ -25,6 +25,7 @@ use App\Enum\CourseLevel;
 use App\Enum\CourseType;
 use App\Enum\ResourceStatus;
 use App\Enum\SubmitterRole;
+use App\Service\ResourceTypeMapper;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -322,26 +323,25 @@ class AppFixtures extends Fixture
     // =========================================================================
 
     /**
-     * Crée les 5 types de ressources de la Ressourcerie.
+     * Crée les types de ressources de la Ressourcerie.
      *
      * Comme pour les disciplines, ces types sont pré-définis et gérés par les
      * admins. Ils servent de catégories dans les filtres de recherche.
+     *
+     * ⚠️ RÉFÉRENTIEL UNIFIÉ (correction lot bugfix) : on utilise désormais
+     * ResourceTypeMapper::CANONICAL_TYPES — LA source unique de vérité, partagée
+     * avec LoadInitialDataCommand (seed prod). Avant ce commit, les deux listes
+     * divergeaient légèrement ("Financement" vs "Bourse & Financement", "Prix &
+     * concours" vs "Prix & Concours"), ce qui cassait le mapping LLM → ResourceType
+     * (le nom LLM normalisé ne retrouvait pas son type canonique selon l'environnement).
      *
      * @return array<string, ResourceType>
      */
     private function createResourceTypes(ObjectManager $manager): array
     {
-        $typesData = [
-            'Appel à projets'       => '📢',
-            'Résidence artistique'  => '🏠',
-            'Bourse & Financement'  => '💰',
-            'Formation'             => '🎓',
-            'Prix & Concours'       => '🏆',
-        ];
-
         $types = [];
 
-        foreach ($typesData as $name => $icon) {
+        foreach (ResourceTypeMapper::CANONICAL_TYPES as $name => $icon) {
             $type = new ResourceType();
             $type
                 ->setName($name)

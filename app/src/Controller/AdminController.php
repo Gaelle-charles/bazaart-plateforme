@@ -19,9 +19,12 @@ use App\Repository\ScrapedResourceRepository;
 use App\Repository\UserRepository;
 use App\Repository\DisciplineRepository;
 use App\Service\AuthService;
+use App\Service\DeadlineParserService;
 use App\Service\DisciplineMapperService;
+use App\Service\HtmlSanitizerService;
 use App\Service\NotificationService;
 use App\Service\OpportunityToSourcePromoter;
+use App\Service\ResourceTypeMapper;
 use App\Service\StructureService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
@@ -69,6 +72,23 @@ class AdminController extends AbstractController
         // OpportunityToSourcePromoter : orchestre la transformation d'une opportunité
         // scrapée en source de scraping (action "En faire une source").
         private readonly OpportunityToSourcePromoter $toSourcePromoter,
+        // ResourceTypeMapper : convertit un libellé de type texte libre (ScrapedResource::$type,
+        // rempli par le LLM) vers l'entité ResourceType canonique correspondante. Remplace
+        // l'ancien fallback findOneBy(...) ?? findOneBy('Autre') ?? findAll()[0] qui pouvait
+        // retomber sur un type totalement arbitraire (voir docblock de ResourceTypeMapper).
+        private readonly ResourceTypeMapper $resourceTypeMapper,
+        // DeadlineParserService : centralise le parsing "deadline texte → DateTime",
+        // avec borne de plausibilité (rejette les années aberrantes, ex: 2020).
+        // Remplace les 3 blocs dupliqués de DateTime::createFromFormat('d/m/Y'...) ?: ...
+        // qui existaient dans verifyScrapedOpportunity(), editResource() et
+        // documentationScrapedOpportunity().
+        private readonly DeadlineParserService $deadlineParser,
+        // HtmlSanitizerService::sanitizeRichText() : même correctif XSS que dans
+        // ResourceService — ici appliqué aux descriptions écrites par CE contrôleur
+        // (conversion ScrapedResource → Resource par un admin, et édition manuelle
+        // d'une Resource déjà publiée), qui alimentent le même champ affiché en
+        // `|raw` dans resource/show.html.twig.
+        private readonly HtmlSanitizerService $htmlSanitizer,
     ) {}
 
     /**
@@ -523,29 +543,34 @@ class AdminController extends AbstractController
             throw $this->createNotFoundException('Opportunité introuvable.');
         }
 
-        // Cherche le ResourceType correspondant, sinon prend le premier disponible
-        $resourceType = $this->resourceTypeRepository->findOneBy(['name' => $scraped->getType()])
-                     ?? $this->resourceTypeRepository->findOneBy(['name' => 'Autre'])
-                     ?? $this->resourceTypeRepository->findAll()[0]
-                     ?? null;
+        // Mappe le libellé libre du scraper/LLM vers le ResourceType canonique.
+        // ResourceTypeMapper ne retourne jamais null : repli garanti sur "Autre"
+        // (voir son docblock pour l'explication complète du bug corrigé ici).
+        $resourceType = $this->resourceTypeMapper->mapLabelToType($scraped->getType());
 
-        if ($resourceType === null) {
-            $this->addFlash('error', 'Aucun type de ressource trouvé en base. Crée d\'abord des types via les fixtures.');
-            return $this->redirectToRoute('app_admin_scraped_opportunities');
-        }
-
-        // Convertit la date limite texte en objet DateTime si possible
-        $deadline = null;
-        if ($scraped->getDeadline()) {
-            $deadline = \DateTime::createFromFormat('d/m/Y', $scraped->getDeadline())
-                     ?: \DateTime::createFromFormat('Y-m-d', $scraped->getDeadline())
-                     ?: null;
-        }
+        // Convertit la date limite texte en objet DateTime si possible.
+        // DeadlineParserService::parse() gère les 3 formats (ISO, FR court, FR long)
+        // ET rejette les années hors bornes de plausibilité (ex: deadlines "2020").
+        $deadline = $scraped->getDeadline() !== null
+            ? $this->deadlineParser->parse($scraped->getDeadline())
+            : null;
 
         // Crée la Resource publiée dans le tableau Opportunités
+        //
+        // Sécurité (audit XSS) : $scraped->getDescription() contient du HTML
+        // produit par le LLM d'enrichissement (balises <p><ul><li><strong>
+        // attendues d'après le prompt — cf. OpportunityEnrichmentService).
+        // On passe quand même par sanitizeRichText() ici : le prompt LLM n'est
+        // PAS une garantie de sécurité (prompt injection possible côté source
+        // scrapée), et cette Resource est affichée avec `|raw` dans
+        // resource/show.html.twig. Les balises légitimes du pipeline IA sont
+        // dans la même liste blanche (p/ul/li/strong) donc aucune perte de
+        // contenu attendue dans le cas nominal.
         $resource = new Resource();
         $resource->setTitle($scraped->getTitle());
-        $resource->setDescription($scraped->getDescription() ?: 'Description non disponible.');
+        $resource->setDescription(
+            $this->htmlSanitizer->sanitizeRichText($scraped->getDescription() ?: 'Description non disponible.')
+        );
         $resource->setExternalUrl($scraped->getUrl());
         $resource->setDeadline($deadline);
         $resource->setResourceType($resourceType);
@@ -967,6 +992,16 @@ class AdminController extends AbstractController
             return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
         }
 
+        // Sanitisation XSS AVANT la suite (voir commentaire détaillé plus bas, au
+        // moment du setDescription()). On re-vérifie l'absence de contenu ICI car
+        // sanitizeRichText() peut réduire une description à une chaîne vide si elle
+        // ne contenait que des balises dangereuses (ex: uniquement un <script>).
+        $description = $this->htmlSanitizer->sanitizeRichText($description);
+        if ($description === '') {
+            $this->addFlash('error', 'La description est obligatoire.');
+            return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
+        }
+
         // URL externe : si renseignée, longueur max 500 chars + format valide
         if ($externalUrl !== null) {
             if (mb_strlen($externalUrl) > 500) {
@@ -985,16 +1020,21 @@ class AdminController extends AbstractController
             return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
         }
 
-        // Deadline : si renseignée, doit être parseable en date stricte (format YYYY-MM-DD)
-        // Attention : createFromFormat() NE retourne PAS false pour une date invalide
-        // comme "2026-02-30" — il décale silencieusement au 2 mars. Il faut vérifier
-        // getLastErrors() pour détecter ce cas.
+        // Deadline : si renseignée, doit être parseable en date stricte (format YYYY-MM-DD).
+        // Délègue à DeadlineParserService::parse(), qui valide désormais le calendrier
+        // via checkdate() (rejette "2026-02-30" au lieu de le décaler silencieusement
+        // au 2 mars) ET la borne de plausibilité (rejette les années aberrantes).
+        // Ces deux garde-fous couvrent le cas documenté historiquement ici pour
+        // createFromFormat() seul.
         $deadlineDate = null;
         if ($deadlineStr !== null) {
-            $parsed = \DateTime::createFromFormat('Y-m-d', $deadlineStr);
-            $errors = \DateTime::getLastErrors();
-            if ($parsed === false || ($errors !== false && $errors['warning_count'] > 0)) {
-                $this->addFlash('error', 'La date limite n\'est pas valide (format attendu : YYYY-MM-DD, ex: 2026-06-15).');
+            $parsed = $this->deadlineParser->parse($deadlineStr);
+            if ($parsed === null) {
+                $this->addFlash(
+                    'error',
+                    'La date limite n\'est pas valide (format attendu : YYYY-MM-DD, ex: 2026-06-15) '
+                    . 'ou trop éloignée dans le passé/futur.'
+                );
                 return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
             }
             $deadlineDate = $parsed;
@@ -1002,6 +1042,9 @@ class AdminController extends AbstractController
 
         // ── Mise à jour de l'entité ──────────────────────────────────────────
         // PreUpdate lifecycle callback de Resource mettra à jour $updatedAt automatiquement.
+        // $description a déjà été passé par sanitizeRichText() plus haut (sécurité
+        // XSS — même champ que ResourceService::createResource() et
+        // verifyScrapedOpportunity(), rendu avec `|raw` dans resource/show.html.twig).
         $resource->setTitle($title);
         $resource->setDescription($description);
         $resource->setExternalUrl($externalUrl);
@@ -1306,19 +1349,22 @@ class AdminController extends AbstractController
         // ── Conversion deadline texte → DateTime ────────────────────────────────
         // Pour la documentation, la deadline est optionnelle : un article n'expire pas.
         // On tente quand même le parsing — si présent, on l'utilise.
-        $deadline = null;
-        if ($scraped->getDeadline() !== null && $scraped->getDeadline() !== '') {
-            $deadline = \DateTime::createFromFormat('d/m/Y', $scraped->getDeadline())
-                     ?: \DateTime::createFromFormat('Y-m-d', $scraped->getDeadline())
-                     ?: null;
-        }
+        // DeadlineParserService centralise les 3 formats + la borne de plausibilité
+        // (même logique que verifyScrapedOpportunity()).
+        $deadline = ($scraped->getDeadline() !== null && $scraped->getDeadline() !== '')
+            ? $this->deadlineParser->parse($scraped->getDeadline())
+            : null;
 
         // ── Création de la Resource publiée de type Documentation ───────────────
         // Même logique de propagation que verifyScrapedOpportunity() :
         // tous les champs enrichis (ADR-0016, ADR-0018, ADR-0019) sont propagés.
+        // Sécurité (audit XSS) : sanitizeRichText() ici aussi, voir le commentaire
+        // détaillé dans verifyScrapedOpportunity() ci-dessus.
         $resource = new Resource();
         $resource->setTitle($scraped->getTitle());
-        $resource->setDescription($scraped->getDescription() ?: 'Description non disponible.');
+        $resource->setDescription(
+            $this->htmlSanitizer->sanitizeRichText($scraped->getDescription() ?: 'Description non disponible.')
+        );
         $resource->setExternalUrl($scraped->getUrl());
         $resource->setDeadline($deadline);
         $resource->setResourceType($docType);

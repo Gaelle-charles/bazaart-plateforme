@@ -271,13 +271,23 @@ class ResourceRepository extends ServiceEntityRepository
      * On ne retourne que les années des ressources PUBLIÉES (statut Published),
      * et uniquement des deadlines non-nulles.
      *
-     * Si hideExpired = true, on exclut également les années dont toutes les
-     * ressources ont une deadline passée — mais ici on veut TOUTES les années
-     * disponibles pour le filtre (même les passées si on veut consulter l'historique).
-     * C'est intentionnel : l'utilisateur peut filtrer sur 2025 pour voir les
-     * opportunités passées de l'année dernière.
+     * ⚠️ CHANGEMENT (correction bug "années passées polluant le filtre") :
+     * Avant ce correctif, la méthode renvoyait TOUTES les années présentes en
+     * base, y compris des années passées (ex: 2020) issues de deadlines mal
+     * extraites par le scraper/LLM (voir DeadlineParserService::isDatePlausible()
+     * pour la borne de plausibilité appliquée désormais à l'extraction).
+     * Un menu "Année" avec "2020" dans un catalogue d'opportunités 2026 n'a pas
+     * de sens pour l'utilisateur — cette page ne sert pas à consulter un
+     * historique, uniquement à filtrer les opportunités À VENIR.
      *
-     * Tri : années décroissantes (l'année la plus récente en premier dans la liste).
+     * On ne retourne donc que les années >= année courante. Les deadlines
+     * passées (ou aberrantes) sont exclues du menu déroulant, mais restent
+     * visibles en base pour l'admin (cf. AdminController, qui ne filtre pas
+     * par hideExpired).
+     *
+     * Tri : années croissantes (l'année la plus proche en premier — plus utile
+     * pour un menu "Année" tourné vers le futur que l'ordre décroissant
+     * historique).
      *
      * Implémentation PostgreSQL : EXTRACT(YEAR FROM deadline) retourne un NUMERIC
      * côté SQL, qu'on convertit en int en PHP.
@@ -286,24 +296,31 @@ class ResourceRepository extends ServiceEntityRepository
      * n'est pas disponible en DQL pour EXTRACT.
      * Solution : requête DBAL native directe sur la connexion.
      *
-     * @return int[] Tableau d'années distinctes, ex: [2027, 2026, 2025]
+     * @return int[] Tableau d'années distinctes, à partir de l'année courante, ex: [2026, 2027, 2028]
      */
     public function findAvailableDeadlineYears(): array
     {
         // On utilise la connexion DBAL pour une requête native PostgreSQL.
         // EXTRACT(YEAR FROM deadline) retourne un float/numeric côté DBAL ;
         // on cast en INTEGER dans la requête pour récupérer directement des entiers.
+        //
+        // Le filtre "deadline >= début de l'année courante" élimine les années
+        // passées directement en SQL (plus efficace qu'un filtrage PHP après coup,
+        // et évite de charger des lignes inutiles).
+        $currentYear = (int) (new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris')))->format('Y');
+
         $conn = $this->getEntityManager()->getConnection();
         $sql  = "
             SELECT DISTINCT EXTRACT(YEAR FROM deadline)::INTEGER AS year
             FROM resources
             WHERE status = 'published'
               AND deadline IS NOT NULL
-            ORDER BY year DESC
+              AND EXTRACT(YEAR FROM deadline)::INTEGER >= :currentYear
+            ORDER BY year ASC
         ";
 
         /** @var array<array{year: int}> $rows */
-        $rows = $conn->fetchAllAssociative($sql);
+        $rows = $conn->fetchAllAssociative($sql, ['currentYear' => $currentYear]);
 
         // array_column() extrait la colonne 'year' de chaque ligne et retourne
         // un tableau plat d'entiers.

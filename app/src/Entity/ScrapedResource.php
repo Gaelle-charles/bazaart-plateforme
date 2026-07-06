@@ -21,6 +21,21 @@ use Doctrine\ORM\Mapping as ORM;
  */
 #[ORM\Entity(repositoryClass: ScrapedResourceRepository::class)]
 #[ORM\Table(name: 'scraped_resources')]
+// ── Index BDD (correction perf) ──────────────────────────────────────────────
+// Ces 4 colonnes sont systématiquement filtrées/triées par AdminController
+// (onglets par statut), ScrapedResourceRepository (findExpired, archiveExpired,
+// findForEnrichment...) et les commandes de scraping/enrichissement. Sans index,
+// PostgreSQL fait un scan séquentiel complet de la table à chaque requête —
+// négligeable tant que la table est petite, mais coûteux dès qu'elle grossit
+// (des milliers de lignes accumulées au fil des runs de scraping).
+//   - status       : filtré sur QUASIMENT toutes les requêtes (pending/verified/...)
+//   - deadline_date : utilisé par findExpired()/archiveExpired() (comparaison à "aujourd'hui")
+//   - source_site   : utilisé pour les stats par source et la détection de doublons par site
+//   - enriched_at   : utilisé par findForEnrichment() (filtre IS NULL fréquent)
+#[ORM\Index(name: 'idx_scraped_resources_status', columns: ['status'])]
+#[ORM\Index(name: 'idx_scraped_resources_deadline_date', columns: ['deadline_date'])]
+#[ORM\Index(name: 'idx_scraped_resources_source_site', columns: ['source_site'])]
+#[ORM\Index(name: 'idx_scraped_resources_enriched_at', columns: ['enriched_at'])]
 #[ORM\HasLifecycleCallbacks]
 class ScrapedResource
 {

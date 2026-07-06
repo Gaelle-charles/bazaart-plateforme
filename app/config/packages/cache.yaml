@@ -3,13 +3,28 @@ framework:
         # Unique name of your app: used to compute stable namespaces for cache keys.
         #prefix_seed: your_vendor_name/app_name
 
-        # The "app" cache stores to the filesystem by default.
-        # The data in this cache should persist between deploys.
-        # Other options include:
-
-        # Redis
-        #app: cache.adapter.redis
-        #default_redis_provider: redis://localhost
+        # ── Adapter Redis — ACTIVÉ (audit sécurité, juillet 2026) ──────────────────
+        #
+        # POURQUOI : le cache "app" par défaut de Symfony stocke sur le filesystem
+        # (cache.adapter.filesystem), dans var/cache/. Or c'est CE MÊME pool "app"
+        # que RateLimiterFactory utilise pour stocker les compteurs de rate limiting
+        # (login_throttling dans security.yaml + limiters de /register,
+        # /mot-de-passe-oublie, /verifier-email/renvoyer). Problème : `bin/console
+        # cache:clear` (exécuté à CHAQUE déploiement) vide var/cache/, ce qui remet TOUS
+        # les compteurs de tentatives à zéro — un attaquant peut bruteforcer ces routes
+        # en boucle en profitant de chaque déploiement. En passant ce pool sur Redis
+        # (process externe, non affecté par cache:clear qui ne touche que le
+        # filesystem), les compteurs anti-bruteforce survivent aux déploiements.
+        #
+        # Option retenue : `composer require predis/predis` (client Redis pur PHP,
+        # aucune recompilation d'image nécessaire — cf. option A du commentaire
+        # précédent, choix validé par Gaëlle le 06/07/2026).
+        #
+        # REDIS_URL est défini dans .env (dev = redis://redis:6379, nom du service
+        # Docker) et surchargé en prod via docker-compose.prod.yml
+        # (REDIS_URL: redis://bazaart_platform_redis:6379).
+        app: cache.adapter.redis
+        default_redis_provider: '%env(REDIS_URL)%'
 
         # APCu (not recommended with heavy random-write workloads as memory fragmentation can cause perf issues)
         #app: cache.adapter.apcu

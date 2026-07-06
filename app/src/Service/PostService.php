@@ -12,6 +12,7 @@ use App\Repository\CommentRepository;
 use App\Repository\PostLikeRepository;
 use App\Repository\PostRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
 
 /**
  * Logique métier du hub social.
@@ -24,6 +25,13 @@ class PostService
         private readonly PostRepository $postRepository,
         private readonly CommentRepository $commentRepository,
         private readonly PostLikeRepository $likeRepository,
+        // Security est injecté pour vérifier ROLE_ADMIN via isGranted() plutôt que
+        // de lire $user->getRoles() directement (audit sécurité) — isGranted() tient
+        // compte de la hiérarchie des rôles Symfony (role_hierarchy dans security.yaml),
+        // contrairement à un in_array() brut sur getRoles() qui ne verrait QUE les
+        // rôles explicitement stockés en base sur l'utilisateur, pas ceux hérités.
+        // Même pattern que ResourceService (cf. son constructeur).
+        private readonly Security $security,
     ) {}
 
     /**
@@ -107,9 +115,18 @@ class PostService
      */
     public function deletePost(Post $post, User $user): bool
     {
-        // Vérifie que l'utilisateur a le droit de supprimer ce post
+        // Vérifie que l'utilisateur a le droit de supprimer ce post.
+        //
+        // Sécurité (audit) : on utilise isGranted() plutôt que in_array() brut sur
+        // getRoles() — isGranted() applique la hiérarchie des rôles Symfony
+        // (role_hierarchy dans security.yaml : ROLE_ADMIN hérite de tous les autres),
+        // et surtout reste correct si un jour ROLE_ADMIN n'est plus accordé
+        // uniquement via un rôle direct sur $user (ex: attribut de session,
+        // impersonation Symfony...). $user est toujours l'utilisateur courant
+        // (passé depuis $this->getUser() dans PostController), donc isGranted()
+        // — qui vérifie le token de sécurité courant — est cohérent ici.
         $isAuthor = $post->getAuthor() === $user;
-        $isAdmin  = in_array('ROLE_ADMIN', $user->getRoles(), true);
+        $isAdmin  = $this->security->isGranted('ROLE_ADMIN');
 
         if (!$isAuthor && !$isAdmin) {
             return false;
@@ -125,8 +142,10 @@ class PostService
      */
     public function deleteComment(Comment $comment, User $user): bool
     {
+        // Même logique que deletePost() ci-dessus : isGranted() plutôt que
+        // in_array() sur getRoles() (audit sécurité).
         $isAuthor = $comment->getAuthor() === $user;
-        $isAdmin  = in_array('ROLE_ADMIN', $user->getRoles(), true);
+        $isAdmin  = $this->security->isGranted('ROLE_ADMIN');
 
         if (!$isAuthor && !$isAdmin) {
             return false;

@@ -31,6 +31,10 @@ class ResourceService
         // Security est injecté pour pouvoir vérifier les rôles de l'utilisateur
         // sans coupler la logique métier au Request ou au Controller.
         private readonly Security $security,
+        // HtmlSanitizerService::sanitizeRichText() : ferme la faille XSS stockée
+        // (audit sécurité) en nettoyant la description AVANT persistance — voir
+        // le commentaire détaillé dans createResource() ci-dessous.
+        private readonly HtmlSanitizerService $htmlSanitizer,
     ) {}
 
     /**
@@ -51,6 +55,36 @@ class ResourceService
 
         $description = trim($data['description'] ?? '');
         if ($description === '') {
+            return 'La description est obligatoire.';
+        }
+
+        // ─── Sécurité : sanitisation XSS AVANT persistance (audit sécurité) ──
+        //
+        // Cette description vient d'un POST utilisateur (route /resources/submit,
+        // réservée aux comptes authentifiés — artistes ET structures). Avant ce
+        // correctif, elle était persistée telle quelle, puis affichée avec `|raw`
+        // dans resource/show.html.twig : une soumission contenant
+        // `<script>...</script>` s'exécutait donc dans le navigateur de TOUT
+        // visiteur consultant la fiche (XSS stockée).
+        //
+        // On sanitise ICI, à l'écriture, pour TOUTES les soumissions — qu'elles
+        // soient auto-publiées (structure partenaire, admin) ou en attente de
+        // validation (artiste) : la validation admin manuelle des ressources
+        // PENDING n'est pas une garantie de sécurité suffisante (l'admin relit le
+        // contenu affiché en aperçu, pas le HTML brut stocké en base), donc on ne
+        // s'appuie pas dessus comme unique rempart.
+        //
+        // sanitizeRichText() applique une liste blanche stricte de balises
+        // (<p><ul><li><strong><a><br>) et retire tous les attributs dangereux
+        // (onclick, onerror, javascript:, etc. — cf. HtmlSanitizerService).
+        // On NE réutilise PAS sanitize() (strip total) : un artiste/une structure
+        // peut légitimement vouloir un peu de mise en forme (liste, gras, lien).
+        $description = $this->htmlSanitizer->sanitizeRichText($description);
+        if ($description === '') {
+            // Cas limite : la description ne contenait QUE des balises dangereuses
+            // ou vides (ex: uniquement un <script>...</script>) → après nettoyage,
+            // il ne reste plus de contenu exploitable. On traite ça comme une
+            // description manquante plutôt que de persister une chaîne vide.
             return 'La description est obligatoire.';
         }
 

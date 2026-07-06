@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+
 /**
  * DeadlineParserService — Convertit une deadline texte en \DateTimeImmutable.
  *
@@ -20,11 +23,33 @@ namespace App\Service;
  * MÉTHODES PUBLIQUES :
  *   - parse(string)           : attend une chaîne ENTIÈREMENT date (un seul token)
  *   - extractFromText(string) : SCANNE un texte libre pour y trouver une date limite
+ *   - isDatePlausible(DateTimeInterface) : vérifie qu'une date déjà parsée reste
+ *                                          dans une fenêtre d'années raisonnable
+ *                                          (utilisé aussi par app:reclassify-resources
+ *                                          pour auditer des deadlines déjà en BDD)
  *
  * CONTRAT COMMUN :
  *   - Ne lève JAMAIS d'exception — retourne null en cas d'échec
  *   - Les cas triviaux (vide, tiret, em-dash) retournent null immédiatement
  *   - Un format non reconnu retourne null (pas d'exception, pas de log)
+ *
+ * ── BORNE DE PLAUSIBILITÉ (correction bug "deadlines 2020") ──────────────────
+ * Avant ce correctif, une deadline mal extraite (ex : une date de publication
+ * confondue avec une date limite, ou une faute de saisie sur un site source)
+ * pouvait produire une année complètement aberrante (ex : 2020, ou 2099) qui
+ * passait quand même le parsing — les 3 regex ci-dessus ne valident QUE le
+ * FORMAT, pas la VRAISEMBLANCE de la date.
+ *
+ * Règle retenue : une date parsée est acceptée uniquement si son année est
+ * comprise entre l'année courante (inclus, même si le mois est déjà passé —
+ * ex : une deadline "10 janvier 2026" parsée en juillet 2026 reste plausible,
+ * il ne s'agit pas d'archiver mais de ne pas la rejeter comme aberrante)
+ * et l'année courante + 3 (au-delà, c'est plus probablement une erreur
+ * d'extraction qu'une vraie opportunité à si long terme).
+ *
+ * Une date hors bornes est traitée comme NON PARSABLE : parse() et
+ * extractFromText() retournent null (comme pour un format inconnu), avec un
+ * log de niveau WARNING pour permettre l'investigation a posteriori.
  */
 class DeadlineParserService
 {
@@ -85,6 +110,22 @@ class DeadlineParserService
         'inscriptions avant',
         'soumission avant',
     ];
+
+    /**
+     * @param LoggerInterface $logger Utilisé pour tracer les dates rejetées par la
+     *                                borne de plausibilité (niveau warning).
+     *                                Valeur par défaut NullLogger() : ce service est
+     *                                aussi instancié DIRECTEMENT (sans conteneur DI)
+     *                                dans plusieurs tests unitaires existants
+     *                                (DeadlineParserServiceTest, ScrapedResourceDedupTest)
+     *                                — le défaut évite de casser ces instanciations
+     *                                tout en laissant l'autowiring injecter le vrai
+     *                                logger Monolog en production.
+     */
+    public function __construct(
+        private readonly LoggerInterface $logger = new NullLogger(),
+    ) {
+    }
 
     /**
      * Tente de convertir une deadline texte en DateTimeImmutable.
@@ -252,48 +293,117 @@ class DeadlineParserService
      *   - Français court  : "31/05/2026" (avec ou sans zéros de padding)
      *   - Français long   : "31 mai 2026"
      *
+     * VALIDATION CALENDAIRE (checkdate) :
+     *   createFromFormat() NE retourne PAS false pour une date invalide comme
+     *   "2026-02-30" — il décale silencieusement au 2 mars, ce qui produirait
+     *   une deadline fantaisiste sans qu'aucune erreur ne soit visible.
+     *   On valide donc jour/mois/année avec checkdate() AVANT de construire
+     *   l'objet DateTime, pour les 3 formats.
+     *
+     * BORNE DE PLAUSIBILITÉ :
+     *   Une fois le format ET le calendrier validés, on vérifie encore que
+     *   l'année reste dans une fenêtre raisonnable via isDatePlausible()
+     *   (voir le docblock de classe). Une date hors bornes est traitée comme
+     *   non parsable (retour null, avec log warning).
+     *
      * @param string $token Un token date (chaîne courte, déjà trimée)
-     * @return \DateTimeImmutable|null Date parsée à minuit, ou null si format inconnu
+     * @return \DateTimeImmutable|null Date parsée à minuit, ou null si format
+     *                                 inconnu, calendrier invalide, ou année
+     *                                 hors bornes de plausibilité
      */
     private function parseDateToken(string $token): ?\DateTimeImmutable
     {
-        $token = trim($token);
+        $token  = trim($token);
+        $parsed = null;
 
         // ── Format 1 : ISO 8601 court (YYYY-MM-DD) ───────────────────────────
         // Exemple : "2026-05-31"
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $token)) {
-            $parsed = \DateTimeImmutable::createFromFormat('Y-m-d', $token);
-            if ($parsed !== false) {
-                return $parsed->setTime(0, 0, 0);
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $token, $m)) {
+            [, $year, $month, $day] = $m;
+            if (checkdate((int) $month, (int) $day, (int) $year)) {
+                $candidate = \DateTimeImmutable::createFromFormat('Y-m-d', $token);
+                if ($candidate !== false) {
+                    $parsed = $candidate->setTime(0, 0, 0);
+                }
             }
         }
 
         // ── Format 2 : français court (JJ/MM/AAAA) ───────────────────────────
         // Exemple : "31/05/2026" ou "1/5/2026" (jour/mois peuvent être sans zéro)
-        if (preg_match('/^\d{1,2}\/\d{1,2}\/\d{4}$/', $token)) {
-            $parsed = \DateTimeImmutable::createFromFormat('d/m/Y', $token);
-            if ($parsed !== false) {
-                return $parsed->setTime(0, 0, 0);
+        if ($parsed === null && preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $token, $m)) {
+            [, $day, $month, $year] = $m;
+            if (checkdate((int) $month, (int) $day, (int) $year)) {
+                $candidate = \DateTimeImmutable::createFromFormat('d/m/Y', $token);
+                if ($candidate !== false) {
+                    $parsed = $candidate->setTime(0, 0, 0);
+                }
             }
         }
 
         // ── Format 3 : français long ("JJ mois AAAA") ────────────────────────
         // Exemple : "31 mai 2026" ou "15 décembre 2026"
         // On capture les 3 groupes : jour, nom du mois, année.
-        if (preg_match('/^(\d{1,2})\s+(\w+)\s+(\d{4})$/iu', $token, $matches)) {
+        if ($parsed === null && preg_match('/^(\d{1,2})\s+(\w+)\s+(\d{4})$/iu', $token, $matches)) {
             $monthStr = mb_strtolower($matches[2]);
 
             if (isset(self::MONTHS_FR[$monthStr])) {
-                // Reconstruction en format JJ/MM/AAAA pour createFromFormat
-                $normalized = sprintf('%02d/%s/%s', (int) $matches[1], self::MONTHS_FR[$monthStr], $matches[3]);
-                $parsed     = \DateTimeImmutable::createFromFormat('d/m/Y', $normalized);
-                if ($parsed !== false) {
-                    return $parsed->setTime(0, 0, 0);
+                $day       = (int) $matches[1];
+                $month     = (int) self::MONTHS_FR[$monthStr];
+                $year      = (int) $matches[3];
+
+                if (checkdate($month, $day, $year)) {
+                    // Reconstruction en format JJ/MM/AAAA pour createFromFormat
+                    $normalized = sprintf('%02d/%02d/%04d', $day, $month, $year);
+                    $candidate  = \DateTimeImmutable::createFromFormat('d/m/Y', $normalized);
+                    if ($candidate !== false) {
+                        $parsed = $candidate->setTime(0, 0, 0);
+                    }
                 }
             }
         }
 
-        // ── Format inconnu ────────────────────────────────────────────────────
-        return null;
+        // ── Format inconnu ou calendrier invalide ────────────────────────────
+        if ($parsed === null) {
+            return null;
+        }
+
+        // ── Borne de plausibilité ─────────────────────────────────────────────
+        if (!$this->isDatePlausible($parsed)) {
+            $this->logger->warning(
+                '[DeadlineParserService] Date rejetée (hors borne de plausibilité) : '
+                . '"{token}" → {parsed} (année {year} hors de [année courante ; année courante + 3])',
+                [
+                    'token'  => $token,
+                    'parsed' => $parsed->format('Y-m-d'),
+                    'year'   => $parsed->format('Y'),
+                ]
+            );
+
+            return null;
+        }
+
+        return $parsed;
+    }
+
+    /**
+     * Vérifie qu'une date reste dans une fenêtre d'années raisonnable pour une
+     * deadline d'opportunité culturelle.
+     *
+     * Règle : année >= année courante (tolère un mois déjà passé dans l'année
+     * en cours) ET année <= année courante + 3.
+     *
+     * Utilisée en interne par parseDateToken() (parsing texte → date), et
+     * exposée publiquement pour auditer une date DÉJÀ stockée en base
+     * (ex : Resource::$deadline) sans repasser par le parsing texte —
+     * voir App\Command\ReclassifyResourcesCommand.
+     *
+     * @param \DateTimeInterface $date Date déjà construite (peu importe la source)
+     */
+    public function isDatePlausible(\DateTimeInterface $date): bool
+    {
+        $currentYear = (int) (new \DateTimeImmutable())->format('Y');
+        $year        = (int) $date->format('Y');
+
+        return $year >= $currentYear && $year <= $currentYear + 3;
     }
 }

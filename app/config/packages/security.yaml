@@ -57,6 +57,16 @@ security:
                 # default_target_path: app_dashboard  # ignoré si success_handler est défini
                 username_parameter: email
                 password_parameter: password
+                # ── Protection CSRF sur le formulaire de connexion (audit sécurité) ──
+                # Sans ça, un site tiers malveillant pouvait forcer le navigateur d'une
+                # victime à soumettre un POST vers /login (ex: pour verrouiller un compte
+                # via des tentatives échouées, ou dans certains scénarios de fixation de
+                # session). Le champ caché `_csrf_token` correspondant est ajouté dans
+                # auth/login.html.twig via `csrf_token('authenticate')` — le token_id doit
+                # être identique des deux côtés.
+                enable_csrf: true
+                csrf_parameter: '_csrf_token'
+                csrf_token_id: 'authenticate'
             logout:
                 path: app_logout
                 target: app_login

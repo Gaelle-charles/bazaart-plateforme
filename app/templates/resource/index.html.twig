@@ -16,7 +16,7 @@
  #   var(--bg)      = #F2EFE6  fond sable
  #   var(--ink)     = #0D0D0D  quasi-noir principal
  #   var(--accent)  = #FFCB10  lime (badge Type)
- #   var(--accent-2)= #FF6B2C  orange (badge Discipline + urgence)
+ #   var(--accent-2)= #F62B1C  orange (badge Discipline + urgence)
  #
  # Design : border-radius 0 partout, pas d'ombres, bordures 1px solid var(--ink)
  #
@@ -133,6 +133,16 @@
     .filter-bar__submit:hover {
         background: var(--accent);
         color: var(--ink);
+    }
+
+    /* ── Filtrage automatique (resource-filters.js) ──────────────────────
+       Le bouton "FILTRER" reste dans le DOM pour le repli sans JS (voir
+       commentaire dans le <form> plus bas). Quand resource-filters.js
+       s'execute, il pose la classe .filter-bar--js-active sur le <form> :
+       on masque alors le bouton, devenu inutile puisque le filtrage se
+       declenche desormais automatiquement au "change" de chaque select. */
+    .filter-bar--js-active .filter-bar__submit {
+        display: none;
     }
 
     /* Label "TRIER PAR" dans la barre secondaire */
@@ -610,10 +620,29 @@
    Organisation en deux lignes :
      Ligne 1 : recherche + type + discipline + bouton FILTRER
      Ligne 2 : annee deadline + pays/territoire + tri + (reset si filtres actifs)
+
+   Filtrage automatique (resource-filters.js) :
+     Chaque <select> de cette barre declenche la soumission du formulaire des
+     que sa valeur change (evenement "change"), sans attendre le clic sur
+     "FILTRER". Le champ recherche texte (name="q") est volontairement exclu
+     de ce comportement : on ne veut pas soumettre a chaque frappe, seulement
+     via la touche Entree (comportement natif du <form>) ou le bouton.
+
+   Repli sans JS (progressive enhancement) :
+     Le bouton "FILTRER" (id="resource-filter-submit") reste dans le DOM et
+     fonctionnel. resource-filters.js pose la classe "filter-bar--js-active"
+     sur ce <form> UNIQUEMENT s'il s'execute avec succes ; le CSS masque alors
+     le bouton (devenu redondant). Sans JS, la classe n'est jamais posee : le
+     bouton reste visible et le formulaire se soumet normalement au clic.
+
+   id="resource-filter-form" : ancre stable utilisee par resource-filters.js
+   (evite de dependre d'un selecteur de classe partage avec d'autres formulaires
+   eventuels de la page, ex. le toggle Catalogue/Matching ADR-0031).
 #}
 <form method="get"
       action="{{ path('app_resource_index') }}"
       class="filter-bar"
+      id="resource-filter-form"
       role="search"
       aria-label="Filtrer les opportunites">
 
@@ -635,8 +664,15 @@
                autocomplete="off"
                aria-label="Rechercher par mot-cle">
 
-        {# Select type de ressource (appel d'offres, residence, bourse...) #}
-        <select class="filter-bar__select" name="type" aria-label="Filtrer par type">
+        {#
+            Select type de ressource (appel d'offres, residence, bourse...).
+            data-auto-submit : marque explicitement ce select pour le filtrage
+            automatique (resource-filters.js). On evite un selecteur générique
+            sur toute la classe .filter-bar__select pour rester robuste si
+            d'autres selects (hors filtrage, ex. toggle ADR-0031) reutilisent
+            un jour ce style.
+        #}
+        <select class="filter-bar__select" name="type" data-auto-submit aria-label="Filtrer par type">
             <option value="">Tous les types</option>
             {% for type in types %}
                 <option value="{{ type.id }}"
@@ -646,8 +682,8 @@
             {% endfor %}
         </select>
 
-        {# Select discipline artistique #}
-        <select class="filter-bar__select" name="discipline" aria-label="Filtrer par discipline">
+        {# Select discipline artistique (data-auto-submit : voir commentaire ci-dessus) #}
+        <select class="filter-bar__select" name="discipline" data-auto-submit aria-label="Filtrer par discipline">
             <option value="">Toutes les disciplines</option>
             {% for disc in disciplines %}
                 <option value="{{ disc.id }}"
@@ -657,8 +693,13 @@
             {% endfor %}
         </select>
 
-        {# Bouton de soumission : fond encre + texte accent lime #}
-        <button type="submit" class="filter-bar__submit">
+        {#
+            Bouton de soumission : fond encre + texte accent lime.
+            id="resource-filter-submit" : repere stable pour resource-filters.js
+            (voir commentaire au debut du <form>). Masque en CSS uniquement
+            quand le JS est actif — reste le seul moyen de filtrer sans JS.
+        #}
+        <button type="submit" id="resource-filter-submit" class="filter-bar__submit">
             FILTRER
         </button>
 
@@ -683,7 +724,8 @@
             Si aucune annee disponible, le select est masque.
         #}
         {% if availableYears is not empty %}
-            <select class="filter-bar__select" name="year" aria-label="Filtrer par annee de deadline">
+            {# data-auto-submit : voir commentaire pres du select "type" plus haut #}
+            <select class="filter-bar__select" name="year" data-auto-submit aria-label="Filtrer par annee de deadline">
                 <option value="">Toutes les annees</option>
                 {% for yr in availableYears %}
                     <option value="{{ yr }}"
@@ -700,7 +742,8 @@
             (via ResourceRepository::findAvailableCountries()).
         #}
         {% if availableCountries is not empty %}
-            <select class="filter-bar__select" name="country" aria-label="Filtrer par pays ou territoire">
+            {# data-auto-submit : voir commentaire pres du select "type" plus haut #}
+            <select class="filter-bar__select" name="country" data-auto-submit aria-label="Filtrer par pays ou territoire">
                 <option value="">Tous les pays</option>
                 {% for c in availableCountries %}
                     <option value="{{ c }}"
@@ -711,8 +754,8 @@
             </select>
         {% endif %}
 
-        {# Select tri : recemment publiees (defaut) ou par deadline #}
-        <select class="filter-bar__select" name="sort" aria-label="Trier les resultats">
+        {# Select tri : recemment publiees (defaut) ou par deadline (data-auto-submit : idem) #}
+        <select class="filter-bar__select" name="sort" data-auto-submit aria-label="Trier les resultats">
             <option value="recent"   {% if currentSort == 'recent' %}selected{% endif %}>
                 Recemment publiees
             </option>
@@ -1081,4 +1124,16 @@
 {% endif %}
 {# ── Fin bloc resultats ── #}
 
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+{#
+    resource-filters.js — filtrage automatique de la barre de filtres.
+    Voir commentaire complet dans le <form id="resource-filter-form"> ci-dessus
+    et l'en-tete du fichier JS pour le detail du comportement (progressive
+    enhancement, selects data-auto-submit, champ recherche exclu).
+    "defer" : execution apres parsing complet du DOM, sans bloquer le rendu.
+#}
+<script src="{{ asset('js/resource-filters.js') }}" defer></script>
 {% endblock %}

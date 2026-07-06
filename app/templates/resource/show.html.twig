@@ -1125,29 +1125,37 @@
 
         {# ── Description complète ── #}
         {#
-           La description peut contenir du HTML structuré généré par Mistral
-           (balises p, ul, li, strong) via la commande app:enrich-opportunities
-           ou lors du scraping LLM (LlmExtractorService / OpportunityEnrichmentService).
+           La description peut contenir du HTML structuré (balises p, ul, li, strong)
+           généré par Mistral (app:enrich-opportunities / OpportunityEnrichmentService)
+           ou saisi par un artiste/une structure via le formulaire /resources/submit.
+           Elle peut aussi être du texte brut avec sauts de ligne (LlmExtractorService
+           sur page-liste — pas de HTML garanti dans ce cas, ce qui reste sans risque :
+           du texte brut sans balise s'affiche simplement comme texte brut via |raw).
 
-           ADR-0018 : la description est maintenant COMPLÈTE et STRUCTURÉE (plusieurs sections).
-           Elle peut aussi contenir du texte brut avec sauts de ligne si elle provient du
-           scraping liste (LlmExtractorService — pas de HTML garanti dans ce cas).
+           ── CORRECTIF XSS STOCKÉE (audit sécurité, juillet 2026) ──────────────────
+           AVANT ce correctif, ce commentaire affirmait que resource.description était
+           "alimenté exclusivement par le pipeline IA (jamais par saisie artiste libre)".
+           C'était FAUX : ResourceService::createResource() persistait déjà
+           $data['description'] (POST utilisateur, route /resources/submit ouverte aux
+           artistes ET structures) sans aucune sanitisation, avant d'être affiché ici
+           via |raw → XSS stockée exploitable par toute soumission contenant
+           <script>...</script> ou un attribut onXXX.
 
-           STRATÉGIE D'AFFICHAGE :
-             - Si la description contient des balises HTML (<p>, <ul>, etc.) : |raw
-               permet au navigateur de les interpréter. C'est le cas pour les descriptions
-               produites par OpportunityEnrichmentService (format HTML structuré garanti).
-             - Si la description est du texte brut (LlmExtractorService sur page-liste) :
-               |raw fonctionne aussi (le texte sans balises s'affiche comme texte brut).
+           Le correctif ne change PAS ce template (le |raw reste nécessaire pour
+           interpréter les balises p/ul/li/strong légitimes) : il agit à l'ÉCRITURE.
+           TOUTE valeur assignée à Resource::description passe désormais par
+           HtmlSanitizerService::sanitizeRichText() — liste blanche stricte
+           (<p><ul><li><strong><a><br>), tous attributs supprimés (sauf href validé
+           sur <a>) — dans :
+             - ResourceService::createResource()               (soumission artiste/structure)
+             - AdminController::verifyScrapedOpportunity()      (scraped → resource, opportunités)
+             - AdminController::documentationScrapedOpportunity() (scraped → resource, doc)
+             - AdminController::editResource()                  (édition manuelle admin)
+           Le |raw ci-dessous est donc sûr car la donnée est GARANTIE conforme à cette
+           liste blanche au moment de la persistance, plus par simple convention.
 
-           ATTENTION XSS : ce |raw est valide UNIQUEMENT parce que resource.description
-           est alimenté exclusivement par le pipeline IA (jamais par saisie artiste libre).
-           Le pipeline garantit que seules les balises sûres (<p><ul><li><strong>) sont émises.
-           NE PAS utiliser |raw si une soumission artiste ou structure peut écrire
-           directement dans ce champ sans sanitisation préalable.
-
-           Pour howToApply (texte LLM libre sans HTML garanti), on utilise |nl2br ci-dessus
-           (et NON |raw) — deux stratégies différentes selon la source du contenu.
+           Pour howToApply (texte LLM libre sans HTML garanti), on utilise |nl2br
+           (et NON |raw) — stratégie différente car ce champ n'a jamais de HTML légitime.
         #}
         <div class="resource-desc">
             {{ resource.description|raw }}

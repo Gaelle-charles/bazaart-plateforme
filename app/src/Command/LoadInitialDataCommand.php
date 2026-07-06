@@ -8,6 +8,7 @@ use App\Entity\Discipline;
 use App\Entity\ResourceType;
 use App\Repository\DisciplineRepository;
 use App\Repository\ResourceTypeRepository;
+use App\Service\ResourceTypeMapper;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -44,30 +45,24 @@ class LoadInitialDataCommand extends Command
 
         // --- Types de ressources ---
         // Chaque type correspond à une catégorie d'opportunité sur la plateforme.
-
-        $resourceTypes = [
-            ['name' => 'Résidence artistique',   'icon' => '🏡'],
-            ['name' => 'Appel à projets',         'icon' => '📢'],
-            ['name' => 'Financement',              'icon' => '💰'],
-            ['name' => 'Formation',                'icon' => '🎓'],
-            ['name' => 'Prix & concours',          'icon' => '🏆'],
-            ['name' => 'Diffusion & exposition',   'icon' => '🖼️'],
-            ['name' => 'Emploi & stage',           'icon' => '💼'],
-            // "Documentation" : ajouté pour l'action de reclassement admin
-            // (opportunités qui sont en réalité des guides, articles ou ressources textuelles).
-            // Idempotent : findOneBy vérifie l'existence avant création.
-            ['name' => 'Documentation',            'icon' => '📄'],
-            ['name' => 'Autre',                    'icon' => '📌'],
-        ];
+        //
+        // ⚠️ RÉFÉRENTIEL UNIFIÉ (correction lot bugfix) : cette liste vivait avant
+        // en double ici ET dans AppFixtures::createResourceTypes(), avec des noms
+        // LÉGÈREMENT différents ("Financement" ici vs "Bourse & Financement" dans
+        // les fixtures, "Prix & concours" vs "Prix & Concours"...). Cette divergence
+        // cassait le mapping LLM → ResourceType (ResourceTypeMapper::mapLabelToType())
+        // et le résolveur de GrantCsvImporter, qui s'attendent tous deux aux noms
+        // canoniques définis UNE SEULE FOIS dans ResourceTypeMapper::CANONICAL_TYPES.
+        $resourceTypes = ResourceTypeMapper::CANONICAL_TYPES;
 
         $typesCreated = 0;
-        foreach ($resourceTypes as $data) {
+        foreach ($resourceTypes as $name => $icon) {
             // findOneBy pour éviter les doublons si la commande est relancée
-            $existing = $this->typeRepository->findOneBy(['name' => $data['name']]);
+            $existing = $this->typeRepository->findOneBy(['name' => $name]);
             if ($existing === null) {
                 $type = new ResourceType();
-                $type->setName($data['name']);
-                $type->setIcon($data['icon']);
+                $type->setName($name);
+                $type->setIcon($icon);
                 $this->em->persist($type);
                 $typesCreated++;
             }
