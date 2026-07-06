@@ -17,7 +17,7 @@
     - Encre atténuée  : var(--ink-mute)
     - Séparateur doux : var(--line-soft)
     - Accent lime     : var(--accent)  = #FFCB10
-    - Accent orange   : var(--accent-2) = #FF6B2C
+    - Accent orange   : var(--accent-2) = #F62B1C
     - Display         : var(--display) = "Archivo Black"
     - Corps           : var(--body)    = "Space Grotesk"
     - Monospace       : var(--mono)    = "JetBrains Mono"
@@ -687,6 +687,20 @@
         </a>
     </div>
 {% endif %}
+
+{# ── Lien discret vers la charte du forum ────────────────────────────────
+   La charte est éditable par les admins depuis /admin/settings (clé
+   'forum_charter') et affichée aux membres sur /forum/charte.
+   Placé juste sous le hero, aligné à droite, sobre pour ne pas concurrencer
+   le CTA "Nouveau post".
+#}
+<div style="text-align: right; margin: -8px 0 16px;">
+    <a href="{{ path('app_forum_charter') }}"
+       style="font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+              color: var(--ink-mute); text-decoration: underline;">
+        <span aria-hidden="true">&#128203;</span> Charte du forum
+    </a>
+</div>
 
 {# ── TAB BAR ──────────────────────────────────────────────────────────────────
    Barre de filtres horizontale.

@@ -227,6 +227,34 @@ class ForumController extends AbstractController
         return $response;
     }
 
+    // ─── Charte du forum ──────────────────────────────────────────────────────
+
+    /**
+     * Affiche la charte du forum aux membres.
+     *
+     * Le texte est stocké dans app_settings (clé 'forum_charter'), éditable par
+     * les admins depuis /admin/settings. Décision Gaëlle : pas d'entité dédiée
+     * ni de migration pour un simple bloc de texte (Option A) — les admins sont
+     * déjà "modérateurs" via la hiérarchie de rôles (security.yaml), non touchée ici.
+     *
+     * ⚠️ ORDRE DES ROUTES : cette route DOIT être déclarée AVANT app_forum_category
+     * (`/forum/{categorySlug}`), sinon "charte" serait résolu comme un slug de
+     * catégorie (→ 404, cette action ne serait jamais atteinte). Le requirement
+     * `(?!charte$)[^/]+` ajouté sur categorySlug (cf. category() ci-dessous)
+     * protège en plus contre ce cas, en miroir du traitement déjà appliqué à
+     * "nouveau" sur threadSlug dans thread().
+     *
+     * Route : GET /forum/charte (name: app_forum_charter)
+     */
+    #[Route('/charte', name: 'charter', methods: ['GET'])]
+    public function charter(): Response
+    {
+        return $this->render('forum/charter.html.twig', [
+            // Texte brut (pas de HTML) — le template échappe puis applique nl2br.
+            'charterText' => $this->forumService->getCharterText(),
+        ]);
+    }
+
     // ─── Liste des threads d'une catégorie ────────────────────────────────────
 
     /**
@@ -236,8 +264,15 @@ class ForumController extends AbstractController
      * Le paramètre GET ?page=N détermine la page courante (défaut : page 1).
      *
      * Route : GET /forum/{categorySlug}
+     *
+     * Requirement 'categorySlug' => '(?!charte$)[^/]+' : exclut le mot réservé
+     * "charte" (route app_forum_charter ci-dessus) selon le même principe que
+     * l'exclusion de "nouveau" sur threadSlug dans thread(). Le `[^/]+` reproduit
+     * le comportement par défaut de Symfony pour un paramètre de route (pas de
+     * `/` dans la valeur) — nécessaire car ajouter un requirement personnalisé
+     * remplace entièrement le pattern implicite.
      */
-    #[Route('/{categorySlug}', name: 'category', methods: ['GET'])]
+    #[Route('/{categorySlug}', name: 'category', methods: ['GET'], requirements: ['categorySlug' => '(?!charte$)[^/]+'])]
     public function category(string $categorySlug, Request $request): Response
     {
         // Cherche la catégorie par son slug — retourne null si inexistante

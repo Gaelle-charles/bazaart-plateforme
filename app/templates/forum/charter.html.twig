@@ -1,0 +1,157 @@
+{% extends 'base_app.html.twig' %}
+
+{#
+ # forum/charter.html.twig — Charte du forum (page publique)
+ #
+ # Affiche le texte de la charte, éditable par les admins depuis /admin/settings
+ # (clé app_settings 'forum_charter'). Décision Gaëlle : stockage en BDD via
+ # AppSetting, pas d'entité dédiée ni de migration (Option A).
+ #
+ # Variable disponible :
+ #   - charterText : string — texte BRUT (pas de HTML) fourni par ForumService::getCharterText()
+ #
+ # ⚠️ SÉCURITÉ : charterText est un texte saisi par un admin, mais on applique
+ # quand même |e (échappement) avant |nl2br. On n'utilise JAMAIS |raw sur du
+ # contenu qui transite par un formulaire, même admin-only : c'est une bonne
+ # habitude de défense en profondeur (si un jour ce champ devient éditable par
+ # un rôle moins privilégié, aucune régression de sécurité à prévoir).
+ #}
+
+{% block title %}Charte du forum · Forum BazaArt{% endblock %}
+{% block page_title %}Forum{% endblock %}
+
+{# Cette page n'a pas de hero photo ni de <h1> dans son contenu :
+   on surcharge topbar_element pour que la topbar serve de titre principal
+   (même pattern que forum/category.html.twig). #}
+{% block topbar_element %}<h1 class="topbar__title">Charte du forum</h1>{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+{#
+    Styles spécifiques à la page charte.
+    Convention de nommage : préfixe ".fch-" (forum-charter).
+    Thème Street : bords francs, mono pour les métas, pas de box-shadow.
+#}
+<style>
+
+    /* ── Fil d'ariane ─────────────────────────────────────────────────────── */
+    .fch-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+    .fch-breadcrumb a {
+        color: var(--ink-mute);
+        text-decoration: none;
+        transition: color var(--transition-fast);
+    }
+    .fch-breadcrumb a:hover {
+        color: var(--ink);
+    }
+    .fch-breadcrumb a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+    .fch-breadcrumb__sep {
+        color: var(--line-soft);
+        font-size: 14px;
+    }
+    .fch-breadcrumb__current {
+        color: var(--ink);
+        font-weight: 700;
+    }
+
+    /* ── En-tête ──────────────────────────────────────────────────────────── */
+    .fch-header {
+        background: var(--ink);
+        color: var(--bg);
+        padding: 24px 28px;
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+    .fch-header__icon-wrap {
+        width: 52px;
+        height: 52px;
+        background: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        flex-shrink: 0;
+    }
+    .fch-header__title {
+        font-family: var(--display);
+        font-size: clamp(24px, 4vw, 34px);
+        text-transform: uppercase;
+        line-height: .95;
+        color: var(--bg);
+        margin: 0;
+    }
+
+    /* ── Corps du texte ───────────────────────────────────────────────────── */
+    .fch-body {
+        border: 1px solid var(--ink);
+        border-top: none;
+        background: var(--bg);
+        padding: 32px;
+        font-family: var(--body);
+        font-size: 15px;
+        line-height: 1.8;
+        color: var(--ink);
+    }
+
+    @media (max-width: 640px) {
+        .fch-header {
+            padding: 20px;
+        }
+        .fch-body {
+            padding: 20px;
+        }
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── FIL D'ARIANE ─────────────────────────────────────────────────────────── #}
+<nav class="fch-breadcrumb" aria-label="Fil d'ariane">
+    <a href="{{ path('app_forum_index') }}">Forum</a>
+    <span class="fch-breadcrumb__sep" aria-hidden="true">&rsaquo;</span>
+    <span class="fch-breadcrumb__current" aria-current="page">Charte</span>
+</nav>
+
+{# ── EN-TÊTE ───────────────────────────────────────────────────────────────── #}
+<div class="fch-header">
+    <div class="fch-header__icon-wrap" aria-hidden="true">&#128203;</div>
+    <h2 class="fch-header__title">Charte du forum</h2>
+</div>
+
+{# ── CORPS DE LA CHARTE ───────────────────────────────────────────────────────
+   charterText est du texte brut (pas de HTML), saisi par un admin depuis
+   /admin/settings. Conversion "nl2br maison" en filtres Twig natifs, car le
+   filtre |nl2br (twig/html-extra) n'est pas installé sur ce projet
+   (composer.json ne liste que twig/extra-bundle, pas twig/html-extra) :
+
+     1. |escape (alias |e) : échappe tout HTML présent dans le texte saisi
+        (défense en profondeur, même si le champ est admin-only).
+     2. |replace({"\n": "<br>\n"}) : convertit les retours à la ligne en <br>,
+        des balises injectées PAR NOUS, pas par l'admin.
+     3. |raw : sûr ICI UNIQUEMENT car l'étape 1 a déjà neutralisé tout HTML
+        provenant du texte saisi — le seul HTML restant est le <br> ajouté
+        par l'étape 2. Ne jamais appliquer |raw directement sur charterText.
+#}
+<div class="fch-body">
+    {{ charterText|escape|replace({"\n": "<br>\n"})|raw }}
+</div>
+
+{% endblock %}

@@ -44,6 +44,32 @@ class ForumService
      */
     private const RESERVED_SLUGS = ['nouveau', 'new'];
 
+    /**
+     * Texte par défaut de la charte du forum.
+     *
+     * Affiché tant qu'aucune valeur n'a été saisie par l'admin dans le setting
+     * 'forum_charter' (BDD, table app_settings). Ce texte vit ici plutôt que
+     * dans le template Twig pour rester réutilisable (API, email...) et
+     * testable unitairement sans dépendre du moteur de rendu.
+     *
+     * Contenu volontairement simple : respect, anti-spam, procédure de signalement.
+     * Texte brut (pas de HTML) — le template se charge de l'échappement + nl2br.
+     */
+    private const DEFAULT_CHARTER = <<<'TEXT'
+Bienvenue sur le forum de la communauté Bazaart.
+
+Ce forum est un espace d'échange entre artistes, structures et membres de l'écosystème Bazaart. Merci de respecter les règles suivantes :
+
+- Restez respectueux et bienveillant envers les autres membres.
+- Évitez le spam et l'autopromotion abusive (privilégiez les échanges authentiques).
+- Ne publiez aucun contenu illégal, injurieux ou discriminatoire.
+- Un contenu vous semble inapproprié ? Signalez-le à l'équipe de modération via le bouton "Signaler" présent sur chaque sujet.
+
+L'équipe Bazaart se réserve le droit de modérer, verrouiller ou supprimer tout contenu ne respectant pas cette charte.
+
+Merci de contribuer à faire de cet espace un lieu chaleureux et constructif !
+TEXT;
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly ForumThreadRepository $threadRepository,
@@ -55,9 +81,39 @@ class ForumService
         private readonly ForumImageService $forumImageService,
         // Requêtes sur les réactions emoji (comptages, réactions de l'utilisateur)
         private readonly ForumReactionRepository $reactionRepository,
+        // Lecture du setting 'forum_charter' (BDD, table app_settings) — cf. getCharterText()
+        private readonly SettingService $settingService,
         // Adresse de l'équipe (ADMIN_EMAIL) pour les emails de signalement
         private readonly string $adminEmail,
     ) {}
+
+    // ─── Charte du forum ──────────────────────────────────────────────────────
+
+    /**
+     * Retourne le texte de la charte du forum à afficher aux membres.
+     *
+     * Priorité :
+     *   1. Valeur saisie par l'admin en BDD (setting 'forum_charter', éditable
+     *      depuis /admin/settings)
+     *   2. Texte par défaut raisonnable (self::DEFAULT_CHARTER) si absent ou vide
+     *
+     * Retourne du TEXTE BRUT : le controller/template ne doivent jamais afficher
+     * cette valeur avec le filtre Twig |raw. Toujours échapper puis nl2br.
+     */
+    public function getCharterText(): string
+    {
+        $customCharter = $this->settingService->get('forum_charter');
+
+        if ($customCharter !== null && trim($customCharter) !== '') {
+            // Normalisation des fins de ligne : un <textarea> peut renvoyer des
+            // \r\n (Windows) ou des \r isolés. On ramène tout à \n pour que le
+            // nl2br du template (remplacement de "\n" par "<br>") fonctionne
+            // proprement, sans \r résiduel avant les <br>.
+            return str_replace(["\r\n", "\r"], "\n", $customCharter);
+        }
+
+        return self::DEFAULT_CHARTER;
+    }
 
     // ─── Threads ──────────────────────────────────────────────────────────────
 

@@ -237,6 +237,22 @@
     .stg-test-result--ok    { border-color: var(--accent); color: #2a6e00; background: rgba(255, 203, 16,.15); }
     .stg-test-result--error { border-color: var(--danger); color: var(--danger); background: rgba(220,53,69,.06); }
 
+    /* ── Étiquette de section (ex: "Forum") ─────────────────────────────────
+       Sépare visuellement les settings d'un module donné du reste de la liste
+       (qui est triée par ordre alphabétique de clé, pas groupée par module).
+    ─────────────────────────────────────────────────────────────────────── */
+    .stg-section-label {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        padding: 12px 24px 6px;
+        background: var(--bg-alt);
+        border-bottom: 1px solid var(--line-soft);
+    }
+
     /* ── État vide ───────────────────────────────────────────────────────── */
     .stg-empty {
         padding: 48px 24px;
@@ -283,6 +299,19 @@
 
     <div class="stg-list">
         {% for setting in settings %}
+
+            {% if setting.settingKey == 'forum_charter' %}
+                {#
+                   ── Section "Forum" ────────────────────────────────────────
+                   La liste est triée par ordre alphabétique de clé (pas par
+                   module). forum_charter est pour l'instant le seul paramètre
+                   du module Forum : on l'annonce visuellement pour éviter de
+                   le confondre avec les réglages techniques (scraping/LLM)
+                   qui l'entourent dans le tri alphabétique.
+                #}
+                <div class="stg-section-label">● Forum</div>
+            {% endif %}
+
             <div class="stg-item">
 
                 {# ── Colonne gauche : infos ────────────────────────────── #}
@@ -342,6 +371,21 @@
                                         Anthropic Claude Haiku (fallback)
                                     </option>
                                 </select>
+
+                            {% elseif setting.settingKey == 'forum_charter' %}
+                                {#
+                                   CAS SPÉCIAL : forum_charter → textarea plutôt qu'un input texte.
+                                   Le contenu peut faire plusieurs paragraphes (charte affichée sur
+                                   /forum/charte) : un champ une ligne serait inutilisable.
+                                   Texte brut uniquement (pas de HTML) — voir forum/charter.html.twig
+                                   pour l'échappement + nl2br à l'affichage public.
+                                #}
+                                <textarea name="setting_value"
+                                          id="field-{{ setting.settingKey|e }}"
+                                          class="stg-input"
+                                          rows="8"
+                                          style="resize: vertical; font-family: var(--body); line-height: 1.5;"
+                                          placeholder="Texte affiché aux membres sur /forum/charte. Laisser vide pour utiliser le texte par défaut.">{{ setting.settingValue|default('')|e }}</textarea>
 
                             {% elseif setting.secret %}
                                 {#

@@ -218,6 +218,21 @@ class SeedSettingsCommand extends Command
                     . 'ScrapingAnt : https://api.scrapingant.com/v2/general?api_key={key}&url={url} '
                     . 'Modifier uniquement si vous changez de provider.',
             ],
+
+            // ── CHARTE DU FORUM ────────────────────────────────────────────────────────
+            // Texte affiché aux membres sur /forum/charte (route ForumController::charter()).
+            // Stocké en texte brut (PAS de HTML) : le template échappe puis applique nl2br.
+            // Décision Gaëlle : Option A (stockage app_settings), pas d'entité dédiée
+            // ni de migration, l'admin est déjà "modérateur" via la hiérarchie de rôles.
+            [
+                'key'         => 'forum_charter',
+                'value'       => null, // Vide par défaut : ForumService::getCharterText() sert un texte par défaut
+                'is_secret'   => false,
+                'label'       => 'Charte du forum',
+                'description' => 'Texte affiché aux membres sur /forum/charte (page publique de la charte). '
+                    . 'Texte brut uniquement, pas de HTML (échappé puis nl2br à l\'affichage). '
+                    . 'Si laissé vide, un texte par défaut raisonnable est affiché.',
+            ],
         ];
 
         $inserted = 0; // Paramètres créés pour la première fois
