@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
-use App\Entity\ScrapingSource;
 use App\Enum\ScrapingSourceType;
 use App\Enum\SuggestedSourceStatus;
 use App\Repository\ScrapingSourceRepository;
 use App\Repository\SuggestedSourceRepository;
+use App\Service\SuggestedSourcePromotionService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -44,6 +44,9 @@ class AdminSuggestedSourceController extends AbstractController
         private readonly SuggestedSourceRepository $suggestedSourceRepository,
         // Repository des sources existantes — pour vérifier les doublons lors de la validation
         private readonly ScrapingSourceRepository $scrapingSourceRepository,
+        // Service partagé de promotion suggestion → ScrapingSource (ADR-0034 — factorisé pour
+        // être réutilisé aussi par SuggestedSourceAutoValidationService, cf. app:discover-sources)
+        private readonly SuggestedSourcePromotionService $promotionService,
         // EntityManager — pour persister les modifications
         private readonly EntityManagerInterface $em,
     ) {
@@ -52,10 +55,12 @@ class AdminSuggestedSourceController extends AbstractController
     /**
      * Liste toutes les suggestions, groupées par statut.
      *
-     * Affiche 3 sections dans le template :
+     * Affiche 4 sections dans le template :
      *   1. "À valider" (en premier — action requise de l'admin)
-     *   2. "Validées" (historique des suggestions acceptées)
-     *   3. "Rejetées" (historique des suggestions refusées)
+     *   2. "Auto-validées (RSS)" (ADR-0034 — historique des promotions automatiques,
+     *      aucune action admin n'a eu lieu, affichées pour audit/traçabilité)
+     *   3. "Validées" (historique des suggestions acceptées manuellement)
+     *   4. "Rejetées" (historique des suggestions refusées)
      *
      * La variable pendingCount permet d'afficher un badge dans la sidebar
      * sans re-calculer la longueur du tableau côté template.
@@ -64,19 +69,21 @@ class AdminSuggestedSourceController extends AbstractController
     public function index(): Response
     {
         // Chargement groupé par statut — tri dateDecouverte DESC dans le repository
-        $pending   = $this->suggestedSourceRepository->findAllByStatut(SuggestedSourceStatus::AValider);
-        $validated = $this->suggestedSourceRepository->findAllByStatut(SuggestedSourceStatus::Validee);
-        $rejected  = $this->suggestedSourceRepository->findAllByStatut(SuggestedSourceStatus::Rejetee);
+        $pending       = $this->suggestedSourceRepository->findAllByStatut(SuggestedSourceStatus::AValider);
+        $autoValidated = $this->suggestedSourceRepository->findAllByStatut(SuggestedSourceStatus::AutoValidee);
+        $validated     = $this->suggestedSourceRepository->findAllByStatut(SuggestedSourceStatus::Validee);
+        $rejected      = $this->suggestedSourceRepository->findAllByStatut(SuggestedSourceStatus::Rejetee);
 
         return $this->render('admin/suggested_sources.html.twig', [
-            'pending'      => $pending,
-            'validated'    => $validated,
-            'rejected'     => $rejected,
+            'pending'       => $pending,
+            'autoValidated' => $autoValidated,
+            'validated'     => $validated,
+            'rejected'      => $rejected,
             // Badge numérique pour l'en-tête de page (évite de compter dans Twig)
-            'pendingCount' => count($pending),
+            'pendingCount'  => count($pending),
             // Types disponibles pour le formulaire de validation (dropdown)
             // On n'inclut pas HtmlCss car les sources suggérées n'ont pas de classe PHP dédiée
-            'types'        => [ScrapingSourceType::RSS, ScrapingSourceType::HtmlLlm],
+            'types'         => [ScrapingSourceType::RSS, ScrapingSourceType::HtmlLlm],
         ]);
     }
 
@@ -170,24 +177,12 @@ class AdminSuggestedSourceController extends AbstractController
         $type = ScrapingSourceType::from($typeStr);
 
         // ── Création de la ScrapingSource ────────────────────────────────────
-        // On copie les métadonnées de la suggestion vers la nouvelle source.
+        // Logique de mapping factorisée dans SuggestedSourcePromotionService (ADR-0034)
+        // pour être partagée avec SuggestedSourceAutoValidationService (auto-validation RSS).
         // L'admin pourra ajuster les détails depuis /admin/scraping-sources.
-        $source = new ScrapingSource();
-        $source->setNom($suggestion->getNomOrganisme());
-        $source->setUrl($url);
-        $source->setType($type);
-        // scraperSlug = null → GenericScraper prendra le relais (pas de classe PHP dédiée)
-        // pour les sources découvertes automatiquement.
-        $source->setScraperSlug(null);
-        $source->setDisciplinePrincipale($suggestion->getDisciplinePressentie());
-        $source->setPaysZone($suggestion->getPaysZone());
-        // Activée par défaut — l'admin peut désactiver depuis /admin/scraping-sources si besoin
-        $source->setActif(true);
-        // Les sources découvertes via agrégateurs ne sont pas elles-mêmes des agrégateurs
-        // (sauf cas particulier, que l'admin peut corriger manuellement)
-        $source->setEstAgregateur(false);
-
-        $this->em->persist($source);
+        // feedUrl = null ici : ce formulaire ne propose pas de champ dédié pour l'URL du
+        // flux RSS (contrairement à /admin/scraping-sources/{id}/edit) — comportement inchangé.
+        $this->promotionService->createScrapingSourceFromSuggestion($suggestion, $type);
 
         // ── Mise à jour du statut de la suggestion ───────────────────────────
         $suggestion->setStatut(SuggestedSourceStatus::Validee);

@@ -237,6 +237,19 @@ class SuggestedSource
         return $this->statut === SuggestedSourceStatus::Rejetee;
     }
 
+    /**
+     * Indique si la suggestion a été auto-validée (ADR-0034).
+     *
+     * Différence avec isValidee() : une suggestion AutoValidee a été promue en
+     * ScrapingSource SANS intervention admin, parce que SuggestedSourceAutoValidationService
+     * a confirmé un flux RSS/Atom réellement fonctionnel via FeedDetectorService.
+     * isValidee() reste réservée au chemin de validation manuelle historique.
+     */
+    public function isAutoValidee(): bool
+    {
+        return $this->statut === SuggestedSourceStatus::AutoValidee;
+    }
+
     // ── Getters / Setters ────────────────────────────────────────────────────
 
     public function getId(): ?int

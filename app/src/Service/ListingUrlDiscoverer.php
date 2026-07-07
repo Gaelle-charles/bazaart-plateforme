@@ -192,6 +192,14 @@ class ListingUrlDiscoverer
         // (correctif ADR-0017 : le LLM reçoit une liste de liens, pas du texte nettoyé ;
         //  on utilise extractInternalLinks() et normalizeUrl())
         private readonly LinkExtractorService $linkExtractorService,
+        // SsrfGuard — garde-fou SSRF PARTAGÉ (correctif critique ADR-0034).
+        // isSafeHost() délègue maintenant entièrement à ce service : la logique n'est
+        // plus dupliquée, et les autres services (FeedDetectorService,
+        // SuggestedSourceAutoValidationService) peuvent l'utiliser sans dépendre de
+        // ListingUrlDiscoverer. Les appelants historiques (LogoFetcherService,
+        // GenericScraper, OpportunityEnrichmentService) continuent de fonctionner sans
+        // changement : ils appellent ListingUrlDiscoverer::isSafeHost(), qui délègue ici.
+        private readonly SsrfGuard $ssrfGuard,
         // ScraperApiClient — repli API de scraping quand le fetch direct échoue.
         // Null acceptable (autowiring optionnel) pour ne pas casser si non configuré.
         // Le repli n'est déclenché que si scraper_api_enabled=true ET clé configurée en BDD.
@@ -1402,95 +1410,23 @@ PROMPT;
      * La garde sur l'URL EFFECTIVE après redirection (dans scoreUrl/doFetch) est
      * le second filet qui intercepte les redirections DNS-rebinding.
      *
-     * Méthode publique pour faciliter les tests unitaires.
+     * Méthode publique pour faciliter les tests unitaires, et pour rester compatible
+     * avec les appelants existants (LogoFetcherService, GenericScraper,
+     * OpportunityEnrichmentService) qui injectent ListingUrlDiscoverer uniquement
+     * pour cette méthode.
+     *
+     * CORRECTIF SSRF CRITIQUE (relecture ADR-0034) : la logique complète a été
+     * extraite dans le service partagé App\Service\SsrfGuard, pour être réutilisable
+     * par FeedDetectorService et SuggestedSourceAutoValidationService SANS dépendre
+     * de ListingUrlDiscoverer (et sans dupliquer ~90 lignes de logique). Ce service
+     * ne fait plus que déléguer — comportement strictement identique à avant.
      *
      * @param string $url URL à vérifier
      * @return bool true = sûre à requêter, false = à bloquer
      */
     public function isSafeHost(string $url): bool
     {
-        // ── Étape 1 : parser l'URL ────────────────────────────────────────────
-        $parsed = parse_url($url);
-
-        if (!is_array($parsed)) {
-            // URL totalement malformée — refus par précaution
-            return false;
-        }
-
-        // ── Étape 2 : whitelist de schémas — seuls http et https sont autorisés ──
-        // Bloque file://, ftp://, data://, dict://, gopher://, etc.
-        // (Même pattern que FeedDetectorService::detect())
-        $scheme = strtolower((string) ($parsed['scheme'] ?? ''));
-        if (!in_array($scheme, ['http', 'https'], strict: true)) {
-            return false;
-        }
-
-        // ── Étape 3 : hôte obligatoire ────────────────────────────────────────
-        $host = strtolower((string) ($parsed['host'] ?? ''));
-        if ($host === '') {
-            return false;
-        }
-
-        // ── Étape 4 : bloquer "localhost" (toutes formes) ─────────────────────
-        // "localhost", "LOCALHOST", "localhost." (trailing dot DNS)
-        if ($host === 'localhost' || $host === 'localhost.') {
-            return false;
-        }
-
-        // ── Étape 5 : bloquer les adresses IP privées / réservées ─────────────
-        // On n'utilise ip2long() que si le host ressemble à une IP v4 (pas un domaine).
-        // Pour IPv6, on vérifie "::1" et les préfixes de loopback standard.
-
-        // ── IPv6 loopback : ::1 ───────────────────────────────────────────────
-        // parse_url() renvoie l'IPv6 sans les crochets (ex: "::1" depuis "[::1]")
-        if ($host === '::1' || $host === '[::1]') {
-            return false;
-        }
-
-        // ── IPv4 : détecter et analyser les adresses numériques ───────────────
-        // ip2long() retourne false si ce n'est pas une IPv4 valide.
-        // On peut donc l'utiliser comme test "est-ce une IPv4 ?" en même temps.
-        $ip = ip2long($host);
-
-        if ($ip !== false) {
-            // C'est une adresse IPv4 — on vérifie les plages réservées :
-
-            // 0.0.0.0 (INADDR_ANY — tous les cas d'usage sont dangereux)
-            if ($ip === 0) {
-                return false;
-            }
-
-            // 127.0.0.0/8 — loopback (127.0.0.1 à 127.255.255.255)
-            // ip2long('127.0.0.0') = 2130706432, ip2long('127.255.255.255') = 2147483647
-            if ($ip >= ip2long('127.0.0.0') && $ip <= ip2long('127.255.255.255')) {
-                return false;
-            }
-
-            // 169.254.0.0/16 — link-local (métadonnées cloud AWS, DO, GCP, Azure)
-            // C'est LE vecteur SSRF le plus critique sur les droplets DigitalOcean.
-            if ($ip >= ip2long('169.254.0.0') && $ip <= ip2long('169.254.255.255')) {
-                return false;
-            }
-
-            // 10.0.0.0/8 — RFC1918 classe A (10.0.0.0 à 10.255.255.255)
-            if ($ip >= ip2long('10.0.0.0') && $ip <= ip2long('10.255.255.255')) {
-                return false;
-            }
-
-            // 172.16.0.0/12 — RFC1918 classe B (172.16.0.0 à 172.31.255.255)
-            // Docker utilise par défaut des sous-réseaux dans cette plage (172.17.0.x)
-            if ($ip >= ip2long('172.16.0.0') && $ip <= ip2long('172.31.255.255')) {
-                return false;
-            }
-
-            // 192.168.0.0/16 — RFC1918 classe C (192.168.0.0 à 192.168.255.255)
-            if ($ip >= ip2long('192.168.0.0') && $ip <= ip2long('192.168.255.255')) {
-                return false;
-            }
-        }
-
-        // ── Tout est OK ───────────────────────────────────────────────────────
-        return true;
+        return $this->ssrfGuard->isSafeHost($url);
     }
 
     /**

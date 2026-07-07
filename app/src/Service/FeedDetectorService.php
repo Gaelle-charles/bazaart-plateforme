@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
@@ -33,6 +34,22 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  *  - Timeout strict de 8 secondes par tentative (évite de bloquer l'interface admin)
  *  - Maximum 6 variantes d'URL RSS testées (prévient les timeouts en cascade)
  *  - PHPStan niveau 6 : pas de mixed non typé
+ *
+ * ── CORRECTIF SSRF CRITIQUE (relecture ADR-0034) ──────────────────────────────
+ * Ce service est appelé automatiquement (sans revue humaine) par
+ * SuggestedSourceAutoValidationService pour chaque URL découverte par le LLM.
+ * Avant ce correctif, aucune garde SSRF n'était appliquée ici : une URL LLM
+ * pointant vers localhost, une IP privée (RFC1918) ou les métadonnées cloud
+ * (169.254.169.254) était fetchée sans vérification.
+ * On applique désormais SsrfGuard::isSafeHost() :
+ *   - AVANT chaque requête HTTP (URL principale ET les 6 variantes RSS testées)
+ *   - APRÈS la requête, sur l'URL EFFECTIVE (post-redirection, via
+ *     $response->getInfo('url')) — un hôte public pourrait rediriger vers une
+ *     IP interne (pattern identique à LogoFetcherService::fetchPage() et
+ *     ListingUrlDiscoverer::doFetch()).
+ * Ce garde protège à la fois le chemin d'auto-validation (ADR-0034) ET l'usage
+ * admin manuel (formulaire /admin/scraping-sources), qui appellent tous deux
+ * detect().
  *
  * ── FORMAT DE RETOUR ──────────────────────────────────────────────────────────
  * La méthode detect() retourne toujours un tableau associatif :
@@ -92,6 +109,12 @@ class FeedDetectorService
     public function __construct(
         // Client HTTP Symfony — injecté par autowiring (symfony/http-client requis)
         private readonly HttpClientInterface $httpClient,
+        // SsrfGuard — garde-fou SSRF partagé (correctif critique ADR-0034).
+        // Vérifie que l'hôte cible n'est ni localhost, ni une IP privée/réservée,
+        // avant toute requête HTTP déclenchée par ce service.
+        private readonly SsrfGuard $ssrfGuard,
+        // Logger PSR-3 — trace les blocages SSRF pour audit (sans lever d'exception).
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -252,6 +275,15 @@ class FeedDetectorService
      * Toute exception réseau → retourne is_rss = false, responded = false.
      * On ne remonte jamais d'exception : cette méthode doit rester silencieuse.
      *
+     * ── GARDE SSRF (correctif critique ADR-0034) ──────────────────────────────
+     * Vérifiée à deux moments :
+     *   1. AVANT la requête : sur l'URL fournie (SsrfGuard::isSafeHost()).
+     *   2. APRÈS la requête : sur l'URL EFFECTIVE après redirections
+     *      ($response->getInfo('url')) — un hôte public pourrait rediriger vers
+     *      une IP interne (169.254.169.254, 127.0.0.1, RFC1918...).
+     * Dans les deux cas, le blocage retourne le résultat par défaut (pas de flux
+     * détecté) — jamais d'exception, comportement cohérent avec le reste du service.
+     *
      * @param string $url URL à tester
      *
      * @return array{is_rss: bool, responded: bool}
@@ -260,6 +292,16 @@ class FeedDetectorService
     {
         // Résultat par défaut : pas de flux RSS, pas de réponse
         $defaultResult = ['is_rss' => false, 'responded' => false];
+
+        // ── Garde SSRF : vérifier l'hôte AVANT toute requête ─────────────────
+        // Bloque localhost, IPs privées (RFC1918), link-local (métadonnées cloud)
+        // et tout schéma non-http(s). Voir SsrfGuard::isSafeHost() pour le détail.
+        if (!$this->ssrfGuard->isSafeHost($url)) {
+            $this->logger->warning('[FeedDetector] SSRF bloqué : hôte non sûr.', [
+                'url' => $url,
+            ]);
+            return $defaultResult;
+        }
 
         try {
             // ── Requête HTTP ─────────────────────────────────────────────────
@@ -287,6 +329,21 @@ class FeedDetectorService
             $statusCode = $response->getStatusCode();
             if ($statusCode !== 200) {
                 // Toute réponse non-200 (301, 404, 500...) n'est pas un flux valide
+                return $defaultResult;
+            }
+
+            // ── Contrôle anti-SSRF sur l'URL EFFECTIVE (après redirections) ───
+            // Symfony HttpClient suit les redirections en transparence. Un hôte
+            // public pourrait rediriger vers 169.254.169.254 (métadonnées cloud)
+            // ou une IP RFC1918 — on vérifie donc l'URL RÉELLEMENT atteinte, pas
+            // seulement l'URL de départ. Pattern identique à
+            // LogoFetcherService::fetchPage() et ListingUrlDiscoverer::doFetch().
+            $effectiveUrl = $response->getInfo('url');
+            if (is_string($effectiveUrl) && $effectiveUrl !== '' && !$this->ssrfGuard->isSafeHost($effectiveUrl)) {
+                $this->logger->warning('[FeedDetector] SSRF bloqué : redirection vers hôte non sûr.', [
+                    'url_initiale'  => $url,
+                    'url_effective' => $effectiveUrl,
+                ]);
                 return $defaultResult;
             }
 

@@ -7,16 +7,21 @@
  # Design : border-radius: 0 partout, bordures 1px solid --ink, police mono pour les labels
  #
  # Variables disponibles :
- #   pending      : SuggestedSource[] — suggestions en attente de validation (statut AValider)
- #   validated    : SuggestedSource[] — suggestions déjà validées (historique)
- #   rejected     : SuggestedSource[] — suggestions déjà rejetées (historique)
- #   pendingCount : int               — nombre de suggestions en attente (pour le badge)
- #   types        : ScrapingSourceType[] — types disponibles pour la validation (RSS, HTML_LLM)
+ #   pending       : SuggestedSource[] — suggestions en attente de validation (statut AValider)
+ #   autoValidated : SuggestedSource[] — auto-validées automatiquement (ADR-0034, statut AutoValidee)
+ #   validated     : SuggestedSource[] — suggestions validées manuellement par un admin (historique)
+ #   rejected      : SuggestedSource[] — suggestions déjà rejetées (historique)
+ #   pendingCount  : int               — nombre de suggestions en attente (pour le badge)
+ #   types         : ScrapingSourceType[] — types disponibles pour la validation (RSS, HTML_LLM)
  #
  # Workflow admin :
  #   1. Consulter la section "À valider" (affichée en premier)
  #   2. Pour chaque suggestion : sélectionner le type dans le dropdown, puis Valider ou Rejeter
- #   3. Les sections "Validées" et "Rejetées" servent d'historique (lecture seule)
+ #   3. La section "Auto-validées (RSS)" (ADR-0034) est un historique en LECTURE SEULE :
+ #      ces sources ont été promues automatiquement par app:discover-sources dès qu'un flux
+ #      RSS/Atom réellement fonctionnel a été confirmé par FeedDetectorService — aucune
+ #      action admin n'a eu lieu. Affichée pour audit/traçabilité uniquement.
+ #   4. Les sections "Validées" et "Rejetées" servent d'historique (lecture seule)
  #}
 
 {% block title %}Sources suggérées — Admin BazaArt{% endblock %}
@@ -293,6 +298,24 @@
         color: var(--danger, #dc3545);
         border-color: var(--danger, #dc3545);
     }
+    /* ADR-0034 — badge distinct pour les sources auto-validées (promotion automatique) */
+    .sg-status--auto-validee {
+        background: rgba(13,13,13,.06);
+        color: var(--ink);
+        border-color: var(--ink);
+    }
+
+    /* Variante de titre de section pour l'auto-validation (ADR-0034) — teinte neutre,
+       différente de --pending (action requise) : ici, aucune action n'est nécessaire. */
+    .sg-section__title--auto {
+        background: var(--bg-alt);
+        color: var(--ink);
+        border-color: var(--ink);
+    }
+    .sg-section__title--auto .sg-badge {
+        background: var(--ink);
+        color: var(--bg);
+    }
 
     /* ── État vide ───────────────────────────────────────────────────────────── */
     .sg-empty {
@@ -340,7 +363,7 @@
         </div>
         <div class="sg-header__meta">
             {# Badge total et en attente #}
-            {% set totalCount = pending|length + validated|length + rejected|length %}
+            {% set totalCount = pending|length + autoValidated|length + validated|length + rejected|length %}
             {{ pendingCount }} en attente / {{ totalCount }} total<br>
             <span style="font-size: 10px; display: block; margin-top: 4px;">
                 Générées par <code>app:discover-sources</code>
@@ -350,7 +373,7 @@
 </div>
 
 {# ── Message global si aucune suggestion ─────────────────────────────────── #}
-{% if pending is empty and validated is empty and rejected is empty %}
+{% if pending is empty and autoValidated is empty and validated is empty and rejected is empty %}
 
     <div class="sg-empty" style="border: 1px solid var(--ink); padding: 48px 24px; text-align: center;">
         Aucune suggestion disponible.<br>
@@ -516,7 +539,70 @@
     </div>
 
     {# ══════════════════════════════════════════════════════════════════════════
-     # SECTION 2 : VALIDÉES (historique — lecture seule)
+     # SECTION 2 : AUTO-VALIDÉES RSS (ADR-0034 — historique, lecture seule)
+     # Ces sources ont été promues automatiquement par app:discover-sources dès
+     # qu'un flux RSS/Atom réellement fonctionnel a été confirmé par
+     # FeedDetectorService — AUCUNE action admin n'a eu lieu. Section affichée
+     # uniquement pour audit/traçabilité (ADR-0034 exige cette visibilité).
+     # ══════════════════════════════════════════════════════════════════════════ #}
+    <div class="sg-section">
+
+        <div class="sg-section__title sg-section__title--auto">
+            Auto-validées (RSS · ADR-0034)
+            <span class="sg-badge">{{ autoValidated|length }}</span>
+        </div>
+
+        {% if autoValidated is empty %}
+            <div class="sg-empty">
+                Aucune source auto-validée pour l'instant. Une suggestion RSS dont le flux est
+                confirmé fonctionnel par FeedDetectorService est promue automatiquement en
+                ScrapingSource active, sans validation admin.
+            </div>
+        {% else %}
+            <div class="sg-table-wrap">
+                <table class="sg-table">
+                    <thead>
+                        <tr>
+                            <th>Organisme / URL</th>
+                            <th>Zone</th>
+                            <th>Discipline</th>
+                            <th>Source agrégateur</th>
+                            <th>Date</th>
+                            <th>Statut</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for suggestion in autoValidated %}
+                            <tr>
+                                <td>
+                                    <span class="sg-nom">{{ suggestion.nomOrganisme|e }}</span>
+                                    {% if suggestion.url %}
+                                        <a href="{{ suggestion.url|e }}" target="_blank" rel="noopener"
+                                           class="sg-url">{{ suggestion.url|slice(0, 60)|e }}</a>
+                                    {% endif %}
+                                </td>
+                                <td style="color: var(--ink-mute);">{{ suggestion.paysZone|default('—')|e }}</td>
+                                <td style="color: var(--ink-mute);">{{ suggestion.disciplinePressentie|default('—')|e }}</td>
+                                <td><span class="sg-origine">{{ suggestion.sourceOrigine|slice(0, 50)|e }}</span></td>
+                                <td style="white-space: nowrap;">
+                                    <span style="font-family: var(--mono); font-size: 10px; color: var(--ink-mute);">
+                                        {{ suggestion.dateDecouverte|date('d/m/Y') }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="sg-status sg-status--auto-validee">Auto-validée</span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+
+    </div>
+
+    {# ══════════════════════════════════════════════════════════════════════════
+     # SECTION 3 : VALIDÉES MANUELLEMENT (historique — lecture seule)
      # ══════════════════════════════════════════════════════════════════════════ #}
     <div class="sg-section">
 
@@ -571,7 +657,7 @@
     </div>
 
     {# ══════════════════════════════════════════════════════════════════════════
-     # SECTION 3 : REJETÉES (historique — lecture seule)
+     # SECTION 4 : REJETÉES (historique — lecture seule)
      # ══════════════════════════════════════════════════════════════════════════ #}
     <div class="sg-section">
 
@@ -641,6 +727,9 @@
     <span style="color: rgba(13,13,13,.4);">
         Les sources suggérées rejetées ne seront plus re-suggérées (déduplication par URL).
         Les sources validées sont automatiquement activées dans /admin/scraping-sources.
+        Depuis ADR-0034, les suggestions RSS dont le flux est confirmé fonctionnel sont
+        auto-validées sans intervention admin (section « Auto-validées » ci-dessus).
+        Réglage <code>rss_auto_validation_enabled</code> disponible sur /admin/settings.
     </span>
 </div>
 

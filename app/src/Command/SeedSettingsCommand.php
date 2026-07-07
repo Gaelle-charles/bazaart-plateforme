@@ -147,6 +147,22 @@ class SeedSettingsCommand extends Command
                     . 'Valeur recommandée : 30 (évite de surcharger la file de validation admin). '
                     . 'La commande s\'arrête proprement dès que ce plafond est atteint.',
             ],
+            [
+                // ADR-0034 : auto-validation des suggestions RSS dont le flux est confirmé
+                // fonctionnel par FeedDetectorService. Kill-switch indépendant de
+                // discovery_enabled — permet de suspendre uniquement l'auto-promotion
+                // sans couper la découverte de nouvelles suggestions.
+                'key'         => 'rss_auto_validation_enabled',
+                'value'       => 'true',
+                'is_secret'   => false,
+                'label'       => 'Auto-validation des sources RSS (ADR-0034)',
+                'description' => 'Si "true", app:discover-sources promeut automatiquement en ScrapingSource '
+                    . 'active toute suggestion dont l\'URL est un flux RSS/Atom confirmé fonctionnel par '
+                    . 'FeedDetectorService (pas juste un HTTP 200). Les suggestions HTML/LLM restent '
+                    . 'TOUJOURS en validation manuelle sur /admin/suggested-sources, quelle que soit cette '
+                    . 'valeur. Mettre à "false" pour désactiver temporairement l\'auto-promotion RSS '
+                    . '(ex : investiguer un problème qualité) sans couper la découverte elle-même.',
+            ],
 
             // ── REPLI API DE SCRAPING ─────────────────────────────────────────────────
             // Ces 3 réglages contrôlent le repli sur une API de scraping tierce quand

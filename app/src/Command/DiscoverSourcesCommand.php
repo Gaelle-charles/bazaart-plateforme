@@ -11,6 +11,8 @@ use App\Repository\SuggestedSourceRepository;
 use App\Service\LinkExtractorService;
 use App\Service\LlmExtractorService;
 use App\Service\SettingService;
+use App\Service\SuggestedSourceAutoValidationService;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -47,9 +49,19 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  *         - URL déjà dans scraping_sources → skip (doublon)
  *         - URL déjà dans suggested_sources → skip (déjà suggéré)
  *         - Sinon → créer SuggestedSource (statut AValider)
- *      d. Si plafond atteint → log + arrêt
- *   5. Flush en fin de traitement (une seule transaction)
- *   6. Rapport de synthèse
+ *           puis tenter l'AUTO-VALIDATION RSS (ADR-0034, cf. e ci-dessous)
+ *      e. AUTO-VALIDATION RSS (ADR-0034) — juste après la création de chaque
+ *         SuggestedSource, SuggestedSourceAutoValidationService::tryAutoValidate()
+ *         est appelé (sauf --dry-run ou setting rss_auto_validation_enabled=false) :
+ *           - Si FeedDetectorService confirme un flux RSS/Atom réellement lisible
+ *             sur l'URL → la suggestion est immédiatement promue en ScrapingSource
+ *             active (statut AutoValidee), SANS validation admin.
+ *           - Sinon (HTML, ou flux non confirmé) → la suggestion reste AValider,
+ *             comportement de validation manuelle INCHANGÉ.
+ *      f. Si plafond atteint → log + arrêt
+ *   5. Flush en fin de traitement (une seule transaction, suggestions ET
+ *      éventuelles ScrapingSource auto-validées)
+ *   6. Rapport de synthèse (inclut le compteur d'auto-validations RSS)
  *
  * Options :
  *   --dry-run       : Simule le traitement sans créer de SuggestedSource en BDD
@@ -102,6 +114,9 @@ class DiscoverSourcesCommand extends Command
         private readonly LoggerInterface $logger,
         // Service d'extraction de liens — pré-filtre le HTML avant d'appeler le LLM
         private readonly LinkExtractorService $linkExtractor,
+        // ADR-0034 — tente l'auto-validation RSS de chaque nouvelle suggestion
+        // (garde-fou : FeedDetectorService confirme un flux réellement fonctionnel)
+        private readonly SuggestedSourceAutoValidationService $autoValidationService,
     ) {
         parent::__construct();
     }
@@ -158,6 +173,27 @@ class DiscoverSourcesCommand extends Command
 
         $io->text(sprintf('Plafond : %d nouvelle(s) suggestion(s) par run.', $maxSuggestions));
 
+        // ── Étape 2bis : Auto-validation RSS activée ? (ADR-0034) ─────────────
+        // Kill-switch admin indépendant de discovery_enabled : permet de suspendre
+        // uniquement l'auto-promotion RSS (ex : pour investiguer un problème qualité)
+        // sans couper la découverte de nouvelles suggestions elle-même.
+        // Comportement en --dry-run : l'auto-validation n'est JAMAIS tentée (dry-run =
+        // aucun effet de bord, y compris la création d'une ScrapingSource).
+        $rssAutoValidationEnabled = $this->settingService->get('rss_auto_validation_enabled', 'true');
+        $autoValidationActive     = !$dryRun
+            && ($rssAutoValidationEnabled === 'true' || $rssAutoValidationEnabled === '1');
+
+        if ($dryRun) {
+            $io->text('Auto-validation RSS (ADR-0034) : désactivée en mode --dry-run.');
+        } elseif (!$autoValidationActive) {
+            $io->text(
+                'Auto-validation RSS (ADR-0034) : désactivée (setting rss_auto_validation_enabled = "'
+                . $rssAutoValidationEnabled . '"). Toutes les suggestions resteront en validation manuelle.'
+            );
+        } else {
+            $io->text('Auto-validation RSS (ADR-0034) : activée — les flux RSS confirmés seront promus automatiquement.');
+        }
+
         // ── Étape 3 : Charger les agrégateurs actifs ─────────────────────────
         $aggregators = $this->scrapingSourceRepository->findActiveAggregators();
 
@@ -210,6 +246,8 @@ class DiscoverSourcesCommand extends Command
         $skippedDuplicate  = 0; // Ignorés : déjà dans scraping_sources ou suggested_sources
         $errorsCount       = 0; // Agrégateurs en erreur (timeout, HTML vide, etc.)
         $ceilingReached    = false; // Indique si on a atteint le plafond
+        $autoValidatedRss  = 0; // ADR-0034 — suggestions RSS auto-promues en ScrapingSource
+        $autoValidatedDup  = 0; // ADR-0034 — RSS confirmé mais ScrapingSource déjà existante
 
         // ── Étape 4 : Traitement de chaque agrégateur ─────────────────────────
         foreach ($aggregators as $aggregator) {
@@ -335,14 +373,60 @@ class DiscoverSourcesCommand extends Command
                 ));
 
                 $newSuggestions++;
+
+                // ── ADR-0034 : tentative d'auto-validation RSS ────────────────
+                // Uniquement si activée (setting + pas de --dry-run — voir Étape 2bis).
+                // tryAutoValidate() modifie $suggestion (typePressenti + éventuellement
+                // statut) et persist() une ScrapingSource si le flux RSS est confirmé —
+                // mais ne flush JAMAIS : le flush reste centralisé à l'Étape 5.
+                if ($autoValidationActive) {
+                    $autoResult = $this->autoValidationService->tryAutoValidate($suggestion);
+
+                    if ($autoResult === SuggestedSourceAutoValidationService::RESULT_AUTO_VALIDATED) {
+                        $io->text(sprintf(
+                            '    → AUTO-VALIDÉE (RSS confirmé) : %s promue en source active.',
+                            $candidate['nom']
+                        ));
+                        $autoValidatedRss++;
+                    } elseif ($autoResult === SuggestedSourceAutoValidationService::RESULT_DUPLICATE) {
+                        $io->text(sprintf(
+                            '    → RSS confirmé mais source déjà existante pour %s (aucune recréation).',
+                            $candidate['nom']
+                        ));
+                        $autoValidatedDup++;
+                    }
+                    // RESULT_MANUAL / RESULT_NO_URL : reste en validation manuelle, rien à logguer ici
+                    // (typePressenti a tout de même été renseigné par tryAutoValidate()).
+                }
             }
 
         }
 
         // ── Étape 5 : Flush (si pas en dry-run) ──────────────────────────────
         // Un seul flush en fin de traitement — une seule transaction pour toutes les suggestions.
+        //
+        // DURCISSEMENT (correctif SSRF, lot ADR-0034) : ce flush unique persiste TOUT le
+        // batch (suggestions + éventuelles ScrapingSource auto-validées) en une seule
+        // transaction. Une collision rare (ex : deux runs concurrents découvrent la même
+        // URL, ou une contrainte unique existante en BDD que ce run ignorait) ferait
+        // échouer toute la transaction et perdre l'intégralité du batch, alors qu'un seul
+        // enregistrement est en cause. On isole donc ce cas avec un try/catch ciblé sur
+        // UniqueConstraintViolationException (Doctrine) : on logue l'incident et on
+        // continue — la commande se termine proprement (SUCCESS) plutôt que de planter,
+        // et le prochain run pourra retenter les enregistrements non persistés.
         if (!$dryRun && $newSuggestions > 0) {
-            $this->em->flush();
+            try {
+                $this->em->flush();
+            } catch (UniqueConstraintViolationException $e) {
+                $io->warning(
+                    'Collision de contrainte unique lors du flush final — le batch n\'a pas '
+                    . 'pu être persisté intégralement. Voir les logs pour le détail.'
+                );
+                $this->logger->error(
+                    '[DiscoverSources] UniqueConstraintViolationException lors du flush final.',
+                    ['erreur' => $e->getMessage()]
+                );
+            }
         }
 
         // ── Étape 6 : Rapport de synthèse ─────────────────────────────────────
@@ -353,6 +437,8 @@ class DiscoverSourcesCommand extends Command
             ['Agrégateurs analysés'    => count($aggregators)],
             ['Candidats LLM trouvés'   => $totalCandidates],
             ['Nouvelles suggestions'   => $dryRun ? $newSuggestions . ' (simulation)' : $newSuggestions],
+            ['  dont auto-validées RSS (ADR-0034)' => $autoValidatedRss],
+            ['  dont RSS déjà existantes (doublon)' => $autoValidatedDup],
             ['Doublons ignorés'        => $skippedDuplicate],
             ['Sans URL (ignorés)'      => $skippedNoUrl],
             ['Erreurs HTTP/réseau'     => $errorsCount],
@@ -360,9 +446,13 @@ class DiscoverSourcesCommand extends Command
         );
 
         if ($newSuggestions > 0 && !$dryRun) {
+            $pendingForAdmin = $newSuggestions - $autoValidatedRss - $autoValidatedDup;
             $io->success(sprintf(
-                '%d nouvelle(s) suggestion(s) créée(s). Rendez-vous sur /admin/suggested-sources pour valider.',
-                $newSuggestions
+                '%d nouvelle(s) suggestion(s) créée(s), dont %d auto-validée(s) RSS (ADR-0034). '
+                . '%d en attente de validation manuelle sur /admin/suggested-sources.',
+                $newSuggestions,
+                $autoValidatedRss,
+                max(0, $pendingForAdmin)
             ));
         } elseif ($newSuggestions > 0 && $dryRun) {
             $io->note(sprintf(
