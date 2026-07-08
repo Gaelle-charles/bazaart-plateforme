@@ -551,9 +551,16 @@ class AdminController extends AbstractController
         // Convertit la date limite texte en objet DateTime si possible.
         // DeadlineParserService::parse() gère les 3 formats (ISO, FR court, FR long)
         // ET rejette les années hors bornes de plausibilité (ex: deadlines "2020").
-        $deadline = $scraped->getDeadline() !== null
+        $parsedDeadline = $scraped->getDeadline() !== null
             ? $this->deadlineParser->parse($scraped->getDeadline())
             : null;
+        // Resource::deadline est un champ Doctrine 'date' (DateTime MUTABLE). Or
+        // DeadlineParserService::parse() renvoie un DateTimeImmutable → il faut le
+        // convertir, sinon Doctrine lève "Could not convert DateTimeImmutable to
+        // DateType" au flush (500 sur "Vérifier"). createFromInterface() préserve la date.
+        $deadline = $parsedDeadline instanceof \DateTimeImmutable
+            ? \DateTime::createFromInterface($parsedDeadline)
+            : $parsedDeadline;
 
         // Crée la Resource publiée dans le tableau Opportunités
         //
@@ -1037,7 +1044,10 @@ class AdminController extends AbstractController
                 );
                 return $this->redirectToRoute('app_admin_resource_edit', ['id' => $id]);
             }
-            $deadlineDate = $parsed;
+            // Resource::deadline est un champ Doctrine 'date' (DateTime MUTABLE) ; le
+            // parser renvoie un DateTimeImmutable → conversion obligatoire avant setDeadline
+            // (sinon InvalidType au flush). $parsed est garanti non-null ici (voir check ci-dessus).
+            $deadlineDate = \DateTime::createFromInterface($parsed);
         }
 
         // ── Mise à jour de l'entité ──────────────────────────────────────────
@@ -1351,9 +1361,14 @@ class AdminController extends AbstractController
         // On tente quand même le parsing — si présent, on l'utilise.
         // DeadlineParserService centralise les 3 formats + la borne de plausibilité
         // (même logique que verifyScrapedOpportunity()).
-        $deadline = ($scraped->getDeadline() !== null && $scraped->getDeadline() !== '')
+        $parsedDeadline = ($scraped->getDeadline() !== null && $scraped->getDeadline() !== '')
             ? $this->deadlineParser->parse($scraped->getDeadline())
             : null;
+        // Resource::deadline = champ Doctrine 'date' (DateTime MUTABLE) ; le parser renvoie
+        // un DateTimeImmutable → conversion obligatoire, sinon InvalidType au flush.
+        $deadline = $parsedDeadline instanceof \DateTimeImmutable
+            ? \DateTime::createFromInterface($parsedDeadline)
+            : $parsedDeadline;
 
         // ── Création de la Resource publiée de type Documentation ───────────────
         // Même logique de propagation que verifyScrapedOpportunity() :

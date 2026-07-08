@@ -225,7 +225,14 @@ HELP
                 );
 
                 if (!$isDryRun) {
-                    $resource->setDeadline($newDeadline);
+                    // Resource::deadline est un champ Doctrine 'date' (DateTime MUTABLE) ;
+                    // parse() renvoie un DateTimeImmutable → conversion obligatoire avant
+                    // setDeadline, sinon InvalidType au flush.
+                    $resource->setDeadline(
+                        $newDeadline instanceof \DateTimeImmutable
+                            ? \DateTime::createFromInterface($newDeadline)
+                            : $newDeadline
+                    );
                 }
                 $deadlineCorrected++;
             }
