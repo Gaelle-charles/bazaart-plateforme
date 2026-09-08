@@ -1,7 +1,7 @@
 # Scraping — Documentation complète Bazaart
 
 > **Document vivant** — À mettre à jour à chaque modification du système de scraping.
-> Dernière mise à jour : **26 mai 2026**
+> Dernière mise à jour : **7 septembre 2026**
 
 ---
 
@@ -391,21 +391,35 @@ Chaque opportunité reçoit un score de **0 à 5 étoiles** (★★★☆☆) ca
 
 En plus du scraping d'opportunités, un second mécanisme permet de **trouver de nouvelles sources** à ajouter au système.
 
-### Principe
+### Principe — deux gisements (ADR-0036)
 
-Certaines sources sont des **agrégateurs** : elles ne publient pas leurs propres opportunités mais listent celles d'autres organismes. Exemples : On The Move, Resartis, EACEA.
+Depuis ADR-0036, `app:discover-sources` analyse **deux gisements** distincts, contrôlables via l'option `--pool` :
 
-La commande `app:discover-sources` analyse le HTML de ces agrégateurs et demande au LLM d'en extraire des organismes potentiellement intéressants (avec leur URL, type, discipline, zone).
+1. **Gisement "agrégateurs"** (historique) : certaines sources sont des **agrégateurs** — elles ne publient pas leurs propres opportunités mais listent celles d'autres organismes. Exemples : On The Move, Resartis, EACEA. La commande télécharge leur page (HTML **ou flux RSS/Atom**, cf. ci-dessous) et en extrait des candidats-liens.
+2. **Gisement "opportunités déjà collectées"** (nouveau, ADR-0036) : les `ScrapedResource` des 12 derniers mois portent souvent, dans `applicationUrl` (ou à défaut `url`), le site de l'**organisme émetteur** de l'opportunité — un signal jamais exploité jusqu'ici. Ce gisement construit des candidats `{titre, applicationUrl ?? url}` directement depuis ces enregistrements, sans aucun fetch réseau supplémentaire.
 
-### Flux
+Dans les deux cas, les candidats filtrés en PHP sont transmis au LLM qui en extrait des organismes potentiellement intéressants (avec leur URL, type, discipline, zone).
+
+### Support RSS/Atom (ADR-0036)
+
+Certains agrégateurs (ex : Resartis) exposent leur page-liste sous forme de **flux RSS/Atom** plutôt que de HTML avec des `<a href>`. `LinkExtractorService` détecte automatiquement ce cas (déclaration XML + balise racine `<rss>`/`<feed>`) et extrait les liens **depuis le texte** des champs `<description>` / `<content:encoded>` (RSS) ou `<summary>` / `<content>` (Atom) — ce texte est généralement échappé en entités HTML ou en CDATA. Le parsing utilise `SimpleXML` avec `libxml_use_internal_errors(true)` : un flux malformé ne fait jamais planter la commande (retourne un tableau vide).
+
+> ⚠️ **Vérifié le 7 septembre 2026** : le flux `https://www.resartis.org/feed/` ne contient en pratique **aucun lien externe** dans ses descriptions (texte brut tronqué, sans HTML). Le support RSS ne rapporte donc pas de nouveaux candidats pour Resartis aujourd'hui — mais reste une capacité générique utile pour d'autres flux qui, eux, embarquent du HTML avec des liens dans leurs descriptions/extraits.
+
+### Rotation des candidats
+
+Avant d'appliquer le plafond de 50 candidats par lot (`LinkExtractorService::MAX_CANDIDATES_PER_AGGREGATOR`), la liste filtrée est **mélangée** (`shuffle()`). Sans cette rotation, un agrégateur avec plus de 50 candidats exposait toujours les **mêmes** 50 premiers (ordre du DOM/flux) au LLM à chaque run — les candidats situés après le rang 50 n'étaient jamais découverts. La rotation n'a aucun effet quand il y a moins de candidats que le plafond.
+
+### Flux (gisement agrégateurs)
 
 ```
-Agrégateur (HTML) → LLM → Liste d'organismes détectés
+Agrégateur (HTML ou RSS/Atom) → filtrage PHP → LLM → Liste d'organismes détectés
                                     │
                      Déduplication (pas déjà dans scraping_sources
                      ni dans suggested_sources)
                                     │
-                          SuggestedSource créée (status = À valider)
+                          SuggestedSource créée (status = À valider,
+                          origine = AGREGATEUR)
                                     │
                      Admin consulte /admin/suggested-sources
                                     │
@@ -416,16 +430,40 @@ Agrégateur (HTML) → LLM → Liste d'organismes détectés
    suggestion.status = Validée
 ```
 
+### Flux (gisement opportunités, ADR-0036)
+
+```
+ScrapedResource (12 derniers mois) → candidats {titre, applicationUrl ?? url}
+                                    │
+                     Filtrage PHP commun (LinkExtractorService::filterCandidates)
+                                    │
+                     LLM (par lots de 50 max) → Liste d'organismes détectés
+                                    │
+                          SuggestedSource créée (origine = OPPORTUNITE,
+                          sourceOrigine = URL de la ScrapedResource d'origine)
+```
+
 ### Isolation absolue
 
-`app:discover-sources` ne touche **jamais** à `scraped_resources`. Elle ne lance **jamais** le scraping. Elle peuple uniquement `suggested_sources`.
+`app:discover-sources` ne touche **jamais** à `scraped_resources` (le gisement "opportunités" est lu en **SELECT seul**). Elle ne lance **jamais** le scraping. Elle peuple uniquement `suggested_sources`.
+
+### Visibilité des échecs (ADR-0036)
+
+- Un agrégateur qui répond en erreur HTTP, ou dont le contenu est vide, ou qui ne produit **aucun candidat après filtrage**, génère un `logger->warning` (visible en supervision, pas seulement en debug).
+- En fin de run, un `logger->info` récapitule : agrégateurs analysés (OK/KO), candidats par gisement, suggestions créées/auto-validées/doublons.
+- **Code de sortie** : la commande retourne `FAILURE` uniquement si **tous** les agrégateurs analysés ont échoué **ET** que le gisement opportunités n'a produit aucun candidat filtré (ou n'a pas été lancé via `--pool`). "Rien trouvé" n'est pas un échec ; un run techniquement infructueux (tout en erreur réseau) en est un — utile pour la supervision du cron.
 
 ### Commande
 
 ```bash
 docker compose exec app php bin/console app:discover-sources
 docker compose exec app php bin/console app:discover-sources --dry-run
-docker compose exec app php bin/console app:discover-sources --source="On The Move"
+docker compose exec app php bin/console app:discover-sources --source="on-the-move"
+
+# ADR-0036 : cibler un seul gisement
+docker compose exec app php bin/console app:discover-sources --pool=aggregators
+docker compose exec app php bin/console app:discover-sources --pool=opportunities
+docker compose exec app php bin/console app:discover-sources --pool=all   # défaut
 ```
 
 ---
@@ -496,7 +534,9 @@ docker compose exec app php bin/console app:seed-scraping-sources --force
 # Découverte de nouvelles sources
 docker compose exec app php bin/console app:discover-sources
 docker compose exec app php bin/console app:discover-sources --dry-run
-docker compose exec app php bin/console app:discover-sources --source="On The Move"
+docker compose exec app php bin/console app:discover-sources --source="on-the-move"
+docker compose exec app php bin/console app:discover-sources --pool=aggregators
+# → ADR-0036 : aggregators | opportunities | all (défaut : all)
 ```
 
 ---
@@ -603,6 +643,20 @@ Le bouton "Lancer le scraping" dans l'admin lance la commande **dans le processu
 ## 13. Changelog
 
 > Toutes les modifications significatives du système de scraping sont documentées ici.
+
+### Septembre 2026
+
+#### 7 septembre 2026 — Découverte de sources : deux gisements + support RSS (ADR-0036)
+
+- **Diagnostic** : les 3 agrégateurs seedés (`on-the-move.org/calls`, `eacea.ec.europa.eu/grants_en`, `resartis.org/feed/`) étaient soit en HTTP 404, soit un flux RSS que `LinkExtractorService` ne savait pas parser — `app:discover-sources` ne proposait donc plus jamais rien.
+- **`LinkExtractorService`** : nouveau support RSS/Atom (`looksLikeFeed()`, `extractLinksFromFeed()`, `extractHrefsFromFeedText()`) — extrait les liens depuis `<description>`/`<content:encoded>` (RSS) ou `<summary>`/`<content>` (Atom), y compris quand le HTML y est échappé en entités. Pipeline commun factorisé dans `filterCandidates()` (public), réutilisable sans HTML/flux source.
+- **Rotation** : `shuffle()` de la liste filtrée juste avant le plafond de 50 candidats — évite de toujours soumettre les mêmes candidats au LLM à chaque run.
+- **`DiscoverSourcesCommand`** : nouveau gisement "opportunités déjà collectées" (`discoverFromOpportunities()`) — construit des candidats depuis `applicationUrl`/`url` des `ScrapedResource` des 12 derniers mois (`ScrapedResourceRepository::findRecentForSourceDiscovery()`), traités par lots de 50. Nouvelle option `--pool=aggregators|opportunities|all` (défaut `all`).
+- **`SuggestedSource`** : le champ `origine` peut désormais valoir `OPPORTUNITE` (en plus de `AGREGATEUR`) ; `sourceOrigine` trace l'URL de la `ScrapedResource` d'origine pour ce gisement.
+- **Migration `Version20260907230632`** : corrige les URL mortes de 2 agrégateurs — `on-the-move.org/calls` → `on-the-move.org/news/deadlines`, `eacea.ec.europa.eu/grants_en` → `culture.ec.europa.eu/fr/funding` (mêmes URL déjà utilisées par les scrapers dédiés). `SeedScrapingSourcesCommand` mis à jour pour les nouvelles installations.
+- **Visibilité** : les échecs par agrégateur (HTTP ≠ 200, contenu vide, 0 candidat après filtrage) passent en `logger->warning` (au lieu de silencieux/debug) ; un `logger->info` résume chaque run. La commande retourne `Command::FAILURE` si tous les agrégateurs ont échoué ET que le gisement opportunités est vide.
+- **Vérifié** : le flux `resartis.org/feed/` ne contient en pratique aucun lien externe dans ses descriptions (texte brut sans HTML) — le support RSS ne rapporte donc pas de nouveaux candidats pour cette source précise aujourd'hui, mais reste une capacité générique utile. Voir ADR-0036 pour le détail et les options non retenues.
+- Voir `docs/decisions/0036-decouverte-sources-deux-gisements.md`.
 
 ### Mai 2026
 

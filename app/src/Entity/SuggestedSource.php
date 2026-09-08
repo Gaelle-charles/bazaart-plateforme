@@ -124,8 +124,12 @@ class SuggestedSource
     /**
      * Origine de la suggestion.
      *
-     * En V1, toujours 'AGREGATEUR' (source découverte depuis l'analyse d'un agrégateur).
-     * Ce champ est prévu pour d'éventuels autres modes de découverte en V2
+     * Valeurs possibles depuis ADR-0036 :
+     *   - 'AGREGATEUR' (défaut historique) : découverte depuis l'analyse d'une page
+     *     agrégateur (HTML ou flux RSS/Atom) — DiscoverSourcesCommand::discoverFromAggregators()
+     *   - 'OPPORTUNITE' : découverte depuis le gisement des ScrapedResource déjà
+     *     collectées (applicationUrl/url) — DiscoverSourcesCommand::discoverFromOpportunities()
+     * Ce champ reste prévu pour d'éventuels autres modes de découverte en V2
      * (ex: 'MANUEL' si l'admin soumet une URL directement, 'API' depuis une source externe).
      */
     #[ORM\Column(type: 'string', length: 50)]

@@ -567,6 +567,47 @@ class ScrapedResourceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Retourne title/url/applicationUrl des ScrapedResource des 12 derniers mois,
+     * tous statuts confondus (pending, verified, rejected, archived).
+     *
+     * ADR-0036 — GISEMENT "OPPORTUNITÉS DÉJÀ COLLECTÉES" pour app:discover-sources :
+     *   Les ScrapedResource collectées par app:scrape-opportunities portent souvent
+     *   dans applicationUrl (ou à défaut url) le site de l'ORGANISME ÉMETTEUR de
+     *   l'opportunité — un gisement de candidats-sources jamais exploité jusqu'ici
+     *   par la découverte automatique (qui ne regardait que les pages agrégateurs).
+     *
+     * POURQUOI TOUS LES STATUTS (pas seulement verified) :
+     *   Même une ScrapedResource rejetée ou archivée reste un signal valide qu'un
+     *   organisme existe et publie des opportunités — le rejet porte sur la
+     *   pertinence de CETTE opportunité précise (hors sujet, doublon, expirée...),
+     *   pas sur la légitimité de l'organisme lui-même comme source potentielle.
+     *
+     * POURQUOI 12 MOIS (pas "toutes") :
+     *   Au-delà d'un an, le site source a pu disparaître ou changer de politique de
+     *   publication — on privilégie la fraîcheur du signal plutôt que le volume.
+     *
+     * PERFORMANCE : SELECT partiel (title/url/applicationUrl uniquement) plutôt que
+     * des entités complètes — évite l'hydratation Doctrine complète pour un simple
+     * usage en lecture seule transformé en candidats {text, url} par l'appelant.
+     *
+     * @return array<int, array{title: string, url: string|null, applicationUrl: string|null}>
+     */
+    public function findRecentForSourceDiscovery(): array
+    {
+        $since = new \DateTimeImmutable('-12 months');
+
+        /** @var array<int, array{title: string, url: string|null, applicationUrl: string|null}> $result */
+        $result = $this->createQueryBuilder('s')
+            ->select('s.title AS title', 's.url AS url', 's.applicationUrl AS applicationUrl')
+            ->where('s.scrapedAt >= :since')
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getArrayResult();
+
+        return $result;
+    }
+
+    /**
      * Retourne la date du scraping le plus récent, ou null si la table est vide.
      *
      * Utilisé dans le dashboard admin pour afficher "Dernier scraping : XX/XX/XXXX".

@@ -188,7 +188,11 @@ class SeedScrapingSourcesCommand extends Command
             ],
             [
                 'nom'            => 'On The Move - Mobilité culturelle internationale',
-                'url'            => 'https://on-the-move.org/calls',
+                // ADR-0036 : "/calls" est en HTTP 404 depuis mai 2026 — corrigé vers
+                // l'URL vivante déjà utilisée par OnTheMoveScraper (voir docs/scraping.md §4).
+                // Migration Version20260907230632 corrige cette URL sur les BDD existantes ;
+                // cette valeur ici ne concerne que les NOUVELLES installations (seed initial).
+                'url'            => 'https://on-the-move.org/news/deadlines',
                 'type'           => ScrapingSourceType::HtmlLlm,
                 'slug'           => 'on-the-move',
                 'discipline'     => 'Toutes disciplines',
@@ -196,8 +200,8 @@ class SeedScrapingSourcesCommand extends Command
                 'actif'          => true,
                 // AGRÉGATEUR : On The Move est un réseau international qui recense des centaines
                 // d'organismes partenaires mondiaux (fondations, réseaux culturels, institutions).
-                // Sa page /calls liste des appels venant de sources tierces → très riche en organismes
-                // potentiellement intéressants à ajouter au système de scraping Bazaart.
+                // Sa page /news/deadlines liste des appels venant de sources tierces → très riche
+                // en organismes potentiellement intéressants à ajouter au système de scraping Bazaart.
                 'est_agregateur' => true,
             ],
             [
@@ -216,14 +220,18 @@ class SeedScrapingSourcesCommand extends Command
             ],
             [
                 'nom'            => 'EACEA - Creative Europe (subventions UE)',
-                'url'            => 'https://eacea.ec.europa.eu/grants_en',
+                // ADR-0036 : "/grants_en" est en HTTP 404 depuis mai 2026 — corrigé vers
+                // l'URL vivante déjà utilisée par CultureMovesEuropeScraper (docs/scraping.md §4).
+                // Migration Version20260907230632 corrige cette URL sur les BDD existantes ;
+                // cette valeur ici ne concerne que les NOUVELLES installations (seed initial).
+                'url'            => 'https://culture.ec.europa.eu/fr/funding',
                 'type'           => ScrapingSourceType::HtmlLlm,
                 'slug'           => 'culture-moves-eu',
                 'discipline'     => 'Toutes disciplines',
                 'zone'           => 'Europe',
                 'actif'          => true,
                 // AGRÉGATEUR : L'EACEA est l'agence exécutive de la Commission Européenne.
-                // Sa page de subventions liste des dizaines de programmes UE avec leurs
+                // Cette page de subventions liste des dizaines de programmes UE avec leurs
                 // partenaires institutionnels (Erasmus+, Europe Créative, etc.).
                 // Ces partenaires sont souvent des organismes culturels avec leurs propres opps.
                 'est_agregateur' => true,
@@ -263,6 +271,123 @@ class SeedScrapingSourcesCommand extends Command
                 'zone'           => 'Afrique (Afrique du Sud)',
                 'actif'          => true,
                 'est_agregateur' => false, // Source directe : publie ses propres fellowships/appels
+            ],
+
+            // ── Nouvelles sources ajoutées septembre 2026 (ADR-0036, retour Gaëlle :
+            //    « toujours les mêmes sources ») ─────────────────────────────────────
+            //
+            // Méthode de sélection : une quarantaine de sites candidats (fondations,
+            // réseaux, institutions orientées diaspora afro-caribéenne / outre-mer /
+            // francophonie) ont été sondés le 07/09/2026 : code HTTP de la page, présence
+            // d'un flux RSS/Atom exploitable (balise <link rel="alternate"> ou chemins
+            // usuels /feed, /rss.xml…) et lecture des 5 derniers titres du flux.
+            // Seules les sources dont le flux (ou la page) contient RÉELLEMENT des
+            // appels / résidences / bourses ont été retenues. Les flux « actualités
+            // institutionnelles » généralistes (OIF, ADAMI, Région Guadeloupe, Fondation
+            // Clément…) ont été écartés : ils passeraient le filtre par mots-clés de
+            // FeedReaderService (« aide », « prix », « soutien »…) et pollueraient la
+            // file de validation admin sans apporter de vraies opportunités.
+            //
+            // Rappel : le seed est idempotent (dédoublonnage par URL exacte, cf. execute()).
+            // Sur le serveur, `app:seed-scraping-sources` créera uniquement ces nouvelles
+            // lignes sans toucher aux sources existantes.
+            [
+                'nom'            => 'Culture Funding Watch - Opportunités',
+                // Flux dédié aux opportunités (PAS le flux général du site, qui ne
+                // contient que newsletters et études). Titres typiques observés :
+                // « Résidence : … (France) 1 300 EUR », « Appel à candidatures : … »,
+                // « Prix : … (4 000 €) » — en français, avec montant et pays.
+                'url'            => 'https://culturefundingwatch.com/opportunities/feed/',
+                'type'           => ScrapingSourceType::RSS,
+                'slug'           => null,
+                'discipline'     => 'Toutes disciplines',
+                // Plateforme de veille sur les financements culturels Afrique / MENA /
+                // international — cœur de cible Bazaart. Vérifié HTTP 200, RSS 2.0,
+                // 10 items au 07/09/2026.
+                'zone'           => 'Afrique / International',
+                'actif'          => true,
+                // Agrégateur : chaque item renvoie vers l'organisme qui publie l'appel,
+                // donc app:discover-sources (gisement A + gisement B) peut en extraire
+                // de nouveaux organismes candidats.
+                'est_agregateur' => true,
+            ],
+            [
+                'nom'            => 'Ateliers Médicis',
+                'url'            => 'https://www.ateliersmedicis.fr/rss.xml',
+                'type'           => ScrapingSourceType::RSS,
+                'slug'           => null,
+                'discipline'     => 'Toutes disciplines',
+                // Établissement public (Clichy-Montfermeil) : résidences « Création en
+                // cours », « Bourse Médicis », « Transat »… Appels à candidatures
+                // récurrents, très ouverts aux artistes émergents et des quartiers.
+                // Vérifié HTTP 200, flux RSS valide, 10 items au 07/09/2026 (dont deux
+                // « Appel à candidatures »).
+                'zone'           => 'France',
+                'actif'          => true,
+                'est_agregateur' => false, // Source directe : publie ses propres résidences/bourses
+            ],
+            [
+                'nom'            => 'Fresh Milk Barbados',
+                'url'            => 'https://freshmilkbarbados.com/feed/',
+                'type'           => ScrapingSourceType::RSS,
+                'slug'           => null,
+                'discipline'     => 'Toutes disciplines',
+                // Plateforme artistique caribéenne (Barbade) : bourses TENDER, fellowship
+                // Tilting Axis, résidences et open calls régionaux. Rare source structurée
+                // pour la Caraïbe anglophone — pertinente pour les artistes antillais.
+                // Vérifié HTTP 200, RSS valide, 5 items au 07/09/2026 (dont « Open Call:
+                // Tilting Axis Fellowship 2027 »).
+                'zone'           => 'Caraïbes',
+                'actif'          => true,
+                // Agrégateur : relaie aussi les appels d'autres structures caribéennes.
+                'est_agregateur' => true,
+            ],
+            [
+                'nom'            => 'Cité internationale des arts',
+                'url'            => 'https://www.citedesartsparis.net/feed',
+                'type'           => ScrapingSourceType::RSS,
+                'slug'           => null,
+                'discipline'     => 'Toutes disciplines',
+                // Résidences à Paris (Marais / Montmartre), nombreux programmes en
+                // partenariat (Institut français, fondations). Le flux mêle actualités
+                // et appels : le filtre par mots-clés + la validation admin font le tri.
+                // Vérifié HTTP 200, RSS valide, 10 items au 07/09/2026.
+                'zone'           => 'France',
+                'actif'          => true,
+                'est_agregateur' => false,
+            ],
+            [
+                'nom'            => 'Institut français - Programmes',
+                // Le site n'a pas de flux dédié aux appels (le RSS général est éditorial).
+                // On cible la page-liste des programmes (aides à projet, résidences,
+                // mobilité) : « Création Africa », « PIDA », « Résidences IF × Cité
+                // internationale », « Résidences du réseau diplomatique »… Extraction
+                // par LLM (GenericScraper → scrapeHtmlLlm).
+                'url'            => 'https://www.institutfrancais.com/fr/programmes',
+                'type'           => ScrapingSourceType::HtmlLlm,
+                'slug'           => null,
+                'discipline'     => 'Toutes disciplines',
+                // Opérateur de l'action culturelle extérieure de la France : programmes
+                // Afrique / Caraïbes / mobilité internationale — très pertinent diaspora.
+                // Vérifié HTTP 200 au 07/09/2026.
+                'zone'           => 'France / International',
+                'actif'          => true,
+                'est_agregateur' => false,
+            ],
+            [
+                'nom'            => 'Villa Albertine - Résidences',
+                // Page « apply » des résidences aux États-Unis (arts, littérature,
+                // musique…) pour créateurs francophones. Extraction par LLM.
+                'url'            => 'https://villa-albertine.org/va/residencies/apply',
+                'type'           => ScrapingSourceType::HtmlLlm,
+                'slug'           => null,
+                'discipline'     => 'Toutes disciplines',
+                // Axe transatlantique (France ↔ Amériques), cohérent avec la diaspora
+                // afro-atlantique. Vérifié HTTP 200 au 07/09/2026 (flux RSS vide, d'où
+                // le choix HTML + LLM).
+                'zone'           => 'États-Unis / International',
+                'actif'          => true,
+                'est_agregateur' => false,
             ],
         ];
 

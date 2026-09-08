@@ -16,16 +16,33 @@ use Symfony\Component\DomCrawler\Crawler;
  *   Ce service extrait les liens proprement via DomCrawler et les filtre en PHP,
  *   de sorte que le LLM reçoit une liste compacte de ~50 candidats maximum.
  *
- * PIPELINE DE FILTRAGE (dans l'ordre) :
- *   1. extractLinks()           — tous les <a href> de la page (via DomCrawler)
+ * PIPELINE DE FILTRAGE (dans l'ordre, cf. extractAndFilter() / filterCandidates()) :
+ *   1. extractLinks() ou extractLinksFromFeed() — tous les <a href> de la page HTML,
+ *      OU (ADR-0036) les liens extraits d'un flux RSS/Atom si le contenu en est un
  *   2. filterNoiseDomains()     — supprime les réseaux sociaux, Google, CDN, etc.
- *   3. filterInternalLinks()    — supprime les liens vers le même domaine que l'agrégateur
+ *   3. filterInternalLinks()    — supprime les liens vers le même domaine que la source
  *   4. deduplicateByDomain()    — un seul lien par domaine (le plus long en texte ancre)
  *   5. filterKnownDomains()     — supprime les domaines déjà connus en BDD
- *   6. Plafond MAX_CANDIDATES_PER_AGGREGATOR
+ *   6. shuffle() puis plafond MAX_CANDIDATES_PER_AGGREGATOR (rotation, cf. ADR-0036)
  *
  * Résultat : le LLM reçoit une liste "Candidat N : "Texte ancre" → https://..."
  * au lieu de 30 000 chars de HTML brut → économie de ~95% des tokens.
+ *
+ * SUPPORT RSS/ATOM (ADR-0036) :
+ *   Certains agrégateurs (ex: Resartis) exposent une page-liste sous forme de flux
+ *   RSS/Atom plutôt que de HTML avec des <a href>. Le contenu utile (liens vers les
+ *   organismes tiers) se trouve alors DANS le texte des <description>/<content:encoded>
+ *   (RSS) ou <summary>/<content> (Atom), généralement échappé en entités HTML ou en
+ *   CDATA — jamais sous forme de <a href> directement lisible par DomCrawler sur le
+ *   flux brut. extractAndFilter() détecte ce cas (looksLikeFeed()) et bascule sur
+ *   extractLinksFromFeed() avant de continuer le MÊME pipeline de filtrage.
+ *
+ * RÉUTILISATION MULTI-GISEMENTS (ADR-0036) :
+ *   filterCandidates() factorise les étapes 2 à 6 du pipeline pour qu'un appelant
+ *   disposant déjà d'une liste de candidats {text, url} — par exemple les
+ *   ScrapedResource déjà collectées (gisement "opportunités", cf.
+ *   DiscoverSourcesCommand::discoverFromOpportunities()) — bénéficie du même
+ *   filtrage que les liens extraits d'une page agrégateur, sans dupliquer la logique.
  *
  * Ce service est SANS ÉTAT (pas de propriétés mutables) — il peut être injecté
  * comme service partagé sans risque de collision entre deux appels.
@@ -215,48 +232,107 @@ class LinkExtractorService
      */
     public function extractAndFilter(string $html, string $aggregatorUrl, array $knownDomains): array
     {
-        // ── Étape 1 : construire le Crawler DomCrawler ────────────────────────
-        // DomCrawler parse le HTML avec l'extension PHP DOM (ext-dom, toujours présente).
-        // On ne fait PAS de requête réseau ici — le HTML est déjà téléchargé par la commande.
-        $crawler = new Crawler($html);
+        // ── Étape 1 : extraire les liens bruts ────────────────────────────────
+        // ADR-0036 : certains agrégateurs (ex: Resartis) exposent leur page-liste
+        // sous forme de flux RSS/Atom plutôt que de HTML avec des <a href>. Dans ce
+        // cas, DomCrawler sur le flux brut ne trouverait aucun <a> exploitable — les
+        // liens utiles sont DANS le texte des <description>/<content:encoded>.
+        // On détecte ce cas et on bascule sur un extracteur dédié.
+        if ($this->looksLikeFeed($html)) {
+            $this->logger->debug('[LinkExtractor] Contenu détecté comme flux RSS/Atom.', [
+                'url' => $aggregatorUrl,
+            ]);
+            $afterExtract = $this->extractLinksFromFeed($html, $aggregatorUrl);
+        } else {
+            // DomCrawler parse le HTML avec l'extension PHP DOM (ext-dom, toujours présente).
+            // On ne fait PAS de requête réseau ici — le HTML est déjà téléchargé par la commande.
+            $crawler = new Crawler($html);
+            $afterExtract = $this->extractLinks($crawler, $aggregatorUrl);
+        }
 
-        // ── Étape 2 : extraire tous les liens <a href> ───────────────────────
-        // On passe l'URL de l'agrégateur pour résoudre les liens relatifs en absolus.
-        $afterExtract = $this->extractLinks($crawler, $aggregatorUrl);
+        // ── Étape 2 à 6 : pipeline de filtrage commun (ADR-0036) ─────────────
+        // Factorisé dans filterCandidates() pour être réutilisable par le gisement
+        // "opportunités déjà collectées" (DiscoverSourcesCommand::discoverFromOpportunities()),
+        // qui dispose déjà d'une liste de candidats {text, url} sans passer par le HTML.
+        $aggregatorHost = parse_url($aggregatorUrl, PHP_URL_HOST);
+        $baseHost = is_string($aggregatorHost) ? $aggregatorHost : '';
 
-        // ── Étape 3 : supprimer les domaines de bruit ────────────────────────
-        $afterNoise = $this->filterNoiseDomains($afterExtract);
+        return $this->filterCandidates($afterExtract, $baseHost, $knownDomains, $aggregatorUrl);
+    }
 
-        // ── Étape 4 : supprimer les liens internes ───────────────────────────
-        $afterInternal = $this->filterInternalLinks($afterNoise, $aggregatorUrl);
+    /**
+     * Applique le pipeline de filtrage commun (bruit, interne, dédup, connus, rotation,
+     * plafond) à une liste de candidats déjà extraite.
+     *
+     * RÉUTILISATION (ADR-0036) : cette méthode est le cœur partagé entre :
+     *   - extractAndFilter() : candidats extraits d'une page agrégateur (HTML ou flux)
+     *   - DiscoverSourcesCommand::discoverFromOpportunities() : candidats construits
+     *     directement depuis les ScrapedResource déjà collectées (title/applicationUrl)
+     *
+     * @param array<int, array{text: string, url: string}> $candidates   Candidats bruts
+     * @param string                                        $baseHost    Host de la page/source
+     *        d'origine (pour filtrer les liens internes). Chaîne vide = pas de filtrage
+     *        interne pertinent (cas du gisement "opportunités", qui n'a pas un unique host
+     *        de référence : chaque ScrapedResource vient d'un site source différent).
+     * @param string[]                                       $knownDomains Domaines déjà
+     *        connus en BDD (minuscules, sans www.)
+     * @param string|null                                    $logContext  Libellé/URL pour
+     *        les logs de debug (facultatif, purement informatif)
+     * @return array<int, array{text: string, url: string}> Candidats filtrés, réindexés,
+     *         plafonnés à MAX_CANDIDATES_PER_AGGREGATOR
+     */
+    public function filterCandidates(
+        array $candidates,
+        string $baseHost,
+        array $knownDomains,
+        ?string $logContext = null,
+    ): array {
+        // ── Étape 2 : supprimer les domaines de bruit ────────────────────────
+        $afterNoise = $this->filterNoiseDomains($candidates);
 
-        // ── Étape 5 : dédupliquer par domaine ────────────────────────────────
+        // ── Étape 3 : supprimer les liens internes ───────────────────────────
+        // Si $baseHost est vide (ex: gisement "opportunités", pas de host unique de
+        // référence), cette étape est un no-op : on ne peut pas juger "interne" sans
+        // domaine de référence — filterInternalLinks() gère ce cas en conservant tout.
+        $afterInternal = $this->filterInternalLinks($afterNoise, $baseHost);
+
+        // ── Étape 4 : dédupliquer par domaine ────────────────────────────────
         $afterDedup = $this->deduplicateByDomain($afterInternal);
 
-        // ── Étape 6 : supprimer les domaines déjà connus en BDD ─────────────
+        // ── Étape 5 : supprimer les domaines déjà connus en BDD ─────────────
         $afterKnown = $this->filterKnownDomains($afterDedup, $knownDomains);
 
+        // ── Étape 6a : rotation aléatoire avant plafond (ADR-0036, point C) ──
+        // POURQUOI : sans rotation, array_slice() gardait toujours les N premiers
+        // candidats dans l'ordre du DOM/flux. Un agrégateur avec plus de candidats
+        // que le plafond soumettait donc EXACTEMENT les mêmes candidats au LLM à
+        // chaque run — les candidats situés après le rang N n'étaient jamais
+        // découverts. shuffle() mélange l'ordre juste avant le plafond : chaque run
+        // expose un sous-ensemble potentiellement différent au LLM. Aucun effet
+        // quand count($afterKnown) <= plafond (rien n'est perdu, juste réordonné).
+        shuffle($afterKnown);
+
         // ── Log debug : comptes après chaque étape (visible avec -vvv) ───────
-        // Format : "extractLinks: 170 → noise: X → internal: Y → dedup: Z → known: W → cap: V"
+        // Format : "extract: 170 → noise: X → internal: Y → dedup: Z → known: W → cap: V"
         // Si une étape filtre TOUT, c'est ici qu'on le voit.
         $capFinal = min(count($afterKnown), self::MAX_CANDIDATES_PER_AGGREGATOR);
         $this->logger->debug(sprintf(
-            '[LinkExtractor] extractLinks: %d → noise: %d → internal: %d → dedup: %d → known: %d → cap: %d',
-            count($afterExtract),
+            '[LinkExtractor] extract: %d → noise: %d → internal: %d → dedup: %d → known: %d → cap: %d',
+            count($candidates),
             count($afterNoise),
             count($afterInternal),
             count($afterDedup),
             count($afterKnown),
             $capFinal
-        ), ['url' => $aggregatorUrl]);
+        ), ['contexte' => $logContext]);
 
-        // ── Étape 7 : appliquer le plafond ───────────────────────────────────
+        // ── Étape 6b : appliquer le plafond ───────────────────────────────────
         // On log l'info AVANT de tronquer pour que les statistiques soient exactes.
         if (count($afterKnown) > self::MAX_CANDIDATES_PER_AGGREGATOR) {
             $this->logger->info('[LinkExtractor] Plafond appliqué.', [
-                'avant'  => count($afterKnown),
-                'retenu' => self::MAX_CANDIDATES_PER_AGGREGATOR,
-                'url'    => $aggregatorUrl,
+                'avant'    => count($afterKnown),
+                'retenu'   => self::MAX_CANDIDATES_PER_AGGREGATOR,
+                'contexte' => $logContext,
             ]);
             return array_slice($afterKnown, 0, self::MAX_CANDIDATES_PER_AGGREGATOR);
         }
@@ -442,6 +518,234 @@ class LinkExtractorService
         return $scheme . '://' . $host . $port . rtrim($basePath, '/') . '/' . ltrim($href, '/');
     }
 
+    // =========================================================================
+    // SUPPORT RSS/ATOM (ADR-0036)
+    // =========================================================================
+
+    /**
+     * Détecte si un contenu téléchargé est un flux RSS/Atom plutôt qu'une page HTML.
+     *
+     * Heuristique volontairement simple et robuste (pas de vrai parsing ici) :
+     *   - Le contenu commence (après espaces de début) par une déclaration XML
+     *     ("<?xml ...") ET contient "<rss" ou "<feed" dans son en-tête
+     *   - OU le contenu commence directement par "<rss" / "<feed" (certains flux
+     *     omettent la déclaration XML, ce qui est toléré par la plupart des lecteurs)
+     *
+     * On ne regarde que les ~1000 premiers caractères — suffisant pour repérer la
+     * balise racine, et on évite de scanner tout le flux (peut faire plusieurs
+     * dizaines de Ko) juste pour cette détection.
+     *
+     * @param string $content Contenu brut téléchargé (HTML ou XML)
+     * @return bool true si le contenu ressemble à un flux RSS 2.0 ou Atom
+     */
+    private function looksLikeFeed(string $content): bool
+    {
+        $trimmed = ltrim($content);
+        $head = substr($trimmed, 0, 1000);
+
+        if (str_starts_with($trimmed, '<?xml')) {
+            return str_contains($head, '<rss') || str_contains($head, '<feed');
+        }
+
+        // Flux sans déclaration XML — on vérifie directement la balise racine
+        return (bool) preg_match('/^<rss[\s>]/i', $trimmed)
+            || (bool) preg_match('/^<feed[\s>]/i', $trimmed);
+    }
+
+    /**
+     * Extrait les candidats-liens d'un flux RSS 2.0 ou Atom.
+     *
+     * POURQUOI CETTE MÉTHODE EXISTE (ADR-0036) :
+     *   Sur un agrégateur exposé en RSS (ex: resartis.org/feed/), les liens <a href>
+     *   qu'on cherche NE SONT PAS dans la structure XML du flux lui-même (pas de
+     *   balise <a> au niveau flux) mais DANS LE TEXTE des champs <description> /
+     *   <content:encoded> (RSS) ou <summary> / <content> (Atom) — ce texte contient
+     *   du HTML, généralement échappé en entités (&lt;a href=...&gt;) ou en CDATA.
+     *   extractLinks() (DomCrawler sur le flux brut) ne trouverait donc RIEN.
+     *
+     * FORMATS SUPPORTÉS :
+     *   - RSS 2.0  : items dans $feed->channel->item, lien direct dans <link>
+     *   - Atom     : entrées dans $feed->entry, lien dans l'attribut href de <link>
+     *
+     * ROBUSTESSE : utilise SimpleXML avec libxml_use_internal_errors(true) — un flux
+     * malformé ne lève JAMAIS d'exception qui remonterait à l'appelant (cohérent avec
+     * la politique "un agrégateur en échec ne bloque jamais la commande").
+     *
+     * @param string $content Contenu XML brut du flux
+     * @param string $baseUrl URL du flux (pour les logs uniquement)
+     * @return array<int, array{text: string, url: string}> Candidats extraits (non filtrés)
+     */
+    private function extractLinksFromFeed(string $content, string $baseUrl): array
+    {
+        $links = [];
+
+        // On protège tout le parsing XML : un flux malformé ne doit jamais faire
+        // planter la commande de découverte — au pire, on retourne un tableau vide.
+        $previousSetting = libxml_use_internal_errors(true);
+
+        try {
+            $xml = simplexml_load_string($content);
+
+            if ($xml === false) {
+                $this->logger->warning('[LinkExtractor] Flux RSS/Atom illisible (parsing SimpleXML échoué).', [
+                    'url' => $baseUrl,
+                ]);
+                return [];
+            }
+
+            if (isset($xml->channel->item)) {
+                // ── RSS 2.0 ────────────────────────────────────────────────────
+                foreach ($xml->channel->item as $item) {
+                    $title = trim((string) ($item->title ?? ''));
+
+                    // Le <link> d'un item RSS est un lien direct vers l'article —
+                    // souvent sur le site de l'agrégateur lui-même (pas l'organisme
+                    // tiers), mais on le garde : filterInternalLinks() l'éliminera
+                    // s'il pointe vers le même domaine que l'agrégateur.
+                    $itemLink = trim((string) ($item->link ?? ''));
+                    if ($itemLink !== '') {
+                        $links[] = ['text' => $title, 'url' => $itemLink];
+                    }
+
+                    // ── Liens tiers dans la description ─────────────────────────
+                    // C'est ICI que se trouvent les vrais candidats (sites des
+                    // organismes cités dans le texte de l'annonce).
+                    $description = (string) ($item->description ?? '');
+                    array_push($links, ...$this->extractHrefsFromFeedText($description, $title));
+
+                    // content:encoded (namespace "content") — souvent plus riche
+                    // que <description> (contenu HTML complet de l'article).
+                    $contentNs = $item->children('http://purl.org/rss/1.0/modules/content/');
+                    $encoded = isset($contentNs->encoded) ? (string) $contentNs->encoded : '';
+                    if ($encoded !== '') {
+                        array_push($links, ...$this->extractHrefsFromFeedText($encoded, $title));
+                    }
+                }
+            } elseif (isset($xml->entry)) {
+                // ── Atom ───────────────────────────────────────────────────────
+                foreach ($xml->entry as $entry) {
+                    $title = trim((string) ($entry->title ?? ''));
+
+                    // En Atom, le lien est dans l'attribut href de <link> (peut y en
+                    // avoir plusieurs avec des rel="alternate"/"self" différents) —
+                    // on prend le premier disponible, suffisant pour notre usage.
+                    if (isset($entry->link)) {
+                        foreach ($entry->link as $linkNode) {
+                            $href = trim((string) ($linkNode['href'] ?? ''));
+                            if ($href !== '') {
+                                $links[] = ['text' => $title, 'url' => $href];
+                                break;
+                            }
+                        }
+                    }
+
+                    $summary = (string) ($entry->summary ?? '');
+                    array_push($links, ...$this->extractHrefsFromFeedText($summary, $title));
+
+                    $atomContent = (string) ($entry->content ?? '');
+                    array_push($links, ...$this->extractHrefsFromFeedText($atomContent, $title));
+                }
+            } else {
+                // Ni RSS ni Atom reconnu malgré looksLikeFeed() — cas limite (flux
+                // exotique ou racine inattendue). On log pour investigation future.
+                $this->logger->warning('[LinkExtractor] Flux détecté mais structure ni RSS ni Atom reconnue.', [
+                    'url' => $baseUrl,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            // Filet de sécurité ultime — ne devrait pas arriver grâce à
+            // libxml_use_internal_errors, mais on ne prend aucun risque : un flux
+            // agrégateur en échec ne doit JAMAIS interrompre app:discover-sources.
+            $this->logger->error('[LinkExtractor] Erreur inattendue au parsing du flux RSS/Atom.', [
+                'url'    => $baseUrl,
+                'erreur' => $e->getMessage(),
+            ]);
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previousSetting);
+        }
+
+        return $links;
+    }
+
+    /**
+     * Extrait les liens <a href> contenus dans un fragment de texte issu d'un flux
+     * (description RSS, content:encoded, summary/content Atom).
+     *
+     * POURQUOI html_entity_decode() D'ABORD :
+     *   Le HTML dans ces champs est presque toujours échappé en entités
+     *   ("&lt;a href=&quot;https://...&quot;&gt;") par les générateurs de flux,
+     *   ou parfois en CDATA (HTML brut, non échappé). Dans les deux cas, une fois
+     *   SimpleXML/DOMDocument a extrait le texte du nœud, on obtient soit du HTML
+     *   échappé (à décoder) soit du HTML déjà brut (le decode est alors sans effet,
+     *   ce qui ne pose aucun problème — l'opération est idempotente).
+     *
+     * On enveloppe le résultat décodé dans un <div> avant de le passer à DomCrawler
+     * pour garantir un document valide même si le fragment est un bout de HTML
+     * sans racine unique — DomCrawler (moteur DOM en mode HTML, pas XML strict)
+     * tolère de toute façon les fragments malformés sans lever d'exception.
+     *
+     * Seuls les liens absolus (http/https) sont retenus : un lien relatif dans une
+     * description de flux n'a pas de base fiable pour être résolu (le flux ne
+     * fournit pas systématiquement une balise <base>), et en pratique les liens
+     * vers des organismes tiers dans une description sont toujours absolus.
+     *
+     * @param string $text        Fragment de texte pouvant contenir du HTML échappé
+     * @param string $fallbackText Texte ancre de repli si le <a> n'a pas de texte propre
+     *        (ex: le titre de l'item RSS)
+     * @return array<int, array{text: string, url: string}>
+     */
+    private function extractHrefsFromFeedText(string $text, string $fallbackText): array
+    {
+        if (trim($text) === '') {
+            return [];
+        }
+
+        $decoded = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        if (!str_contains($decoded, '<a ') && !str_contains($decoded, '<a>')) {
+            // Pas de balise <a> détectable après décodage — inutile de construire
+            // un Crawler pour rien.
+            return [];
+        }
+
+        $links = [];
+
+        try {
+            $crawler = new Crawler('<div>' . $decoded . '</div>');
+            $crawler->filter('a[href]')->each(function (Crawler $node) use (&$links, $fallbackText): void {
+                $href = trim($node->attr('href') ?? '');
+
+                if ($href === ''
+                    || str_starts_with($href, '#')
+                    || str_starts_with($href, 'mailto:')
+                    || str_starts_with($href, 'tel:')
+                    || str_starts_with($href, 'javascript:')
+                ) {
+                    return;
+                }
+
+                // On ne garde que les liens absolus (voir docblock ci-dessus)
+                if (!str_starts_with($href, 'http://') && !str_starts_with($href, 'https://')) {
+                    return;
+                }
+
+                $text = preg_replace('/\s+/', ' ', trim($node->text())) ?? '';
+                $links[] = [
+                    'text' => $text !== '' ? $text : $fallbackText,
+                    'url'  => $href,
+                ];
+            });
+        } catch (\Throwable $e) {
+            // Un fragment HTML corrompu ne doit jamais interrompre le traitement du flux
+            $this->logger->debug('[LinkExtractor] extractHrefsFromFeedText : parsing du fragment échoué.', [
+                'erreur' => $e->getMessage(),
+            ]);
+        }
+
+        return $links;
+    }
+
     /**
      * Supprime les liens dont le host contient un fragment de NOISE_DOMAINS.
      *
@@ -506,7 +810,7 @@ class LinkExtractorService
     }
 
     /**
-     * Supprime les liens internes (même domaine que la page agrégateur).
+     * Supprime les liens internes (même domaine que la source de référence).
      *
      * Exemple : si l'agrégateur est "on-the-move.org", on supprime tous les
      * liens vers "on-the-move.org/*" — ce sont des pages du site lui-même,
@@ -515,20 +819,21 @@ class LinkExtractorService
      * Comparaison basée sur le host uniquement (pas le path) pour couvrir tous
      * les sous-chemins du même site (/, /about, /ressources, etc.).
      *
-     * Si le host de l'agrégateur n'est pas parseable (rare), on ne filtre rien
-     * par sécurité — vaut mieux conserver trop que trop peu.
+     * Si $aggregatorHost est vide — soit parce que l'URL source n'était pas
+     * parseable, soit parce que l'appelant n'a pas de host de référence unique
+     * (ADR-0036 : gisement "opportunités", chaque candidat vient d'un site
+     * source différent) — on ne filtre rien par sécurité : vaut mieux
+     * conserver trop que trop peu.
      *
      * @param array<int, array{text: string, url: string}> $links
-     * @param string $aggregatorUrl URL de l'agrégateur (pour extraire son host)
+     * @param string $aggregatorHost Host de référence (déjà extrait par l'appelant),
+     *        ou chaîne vide pour désactiver ce filtre
      * @return array<int, array{text: string, url: string}>
      */
-    private function filterInternalLinks(array $links, string $aggregatorUrl): array
+    private function filterInternalLinks(array $links, string $aggregatorHost): array
     {
-        // Extraire le host de l'agrégateur pour la comparaison
-        $aggregatorHost = parse_url($aggregatorUrl, PHP_URL_HOST);
-
-        if (!is_string($aggregatorHost)) {
-            // Host de l'agrégateur non parseable — impossible de filtrer les liens internes
+        if ($aggregatorHost === '') {
+            // Pas de host de référence — impossible/non pertinent de filtrer les liens internes
             // On retourne tout le tableau sans modification (comportement sûr)
             return $links;
         }
