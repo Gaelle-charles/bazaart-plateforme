@@ -58,3 +58,14 @@ l'onboarding obligatoire** (ADR-0015) tout en réutilisant une partie de ses que
 - **Lot A** : modèle (legalStatus + champs profil) + onboarding reformulé Phase 1/Phase 2.
 - **Lot B** : `MatchingService` (scoring) + endpoint « mes matchs » (nombre + liste classée).
 - **Lot C** : UI swipe (section 1 home) + action « intéressé »/« passer » + alerte avec consentement.
+
+## Révision (2026-09-07) — voir ADR-0035
+
+Retours artistes post-lancement : le scoring « disciplines communes » (point 5 des « Points
+résolus ») avait deux angles morts — les ressources généralistes (sans discipline mappée)
+tombaient à 0 pt au lieu d'être considérées comme ouvertes à tous, et aucune exclusion n'était
+appliquée quand les disciplines de la ressource et de l'artiste étaient clairement incompatibles.
+Le critère « territoire » ne couvrait pas non plus les artistes d'outre-mer ni les variations
+d'accents. **ADR-0035** détaille le diagnostic complet et la révision du modèle de scoring
+(score forfaitaire « généraliste », coefficient de recouvrement, exclusion dure par conflit de
+discipline, bonus territoire DROM-COM). Les poids globaux (40/30/20/10) restent inchangés.

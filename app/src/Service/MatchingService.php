@@ -24,16 +24,42 @@ use App\Repository\ResourceRepository;
  * Le score est la somme de 4 composantes indépendantes (max = 100 points) :
  *
  *  1. DISCIPLINES COMMUNES       max 40 pts  (critère fort)
- *     Ratio de disciplines communes / disciplines de la ressource.
- *     Exemple : ressource a 3 disciplines, l'artiste en partage 2 → 2/3 × 40 = ~27 pts.
- *     Pourquoi le ratio plutôt qu'un comptage brut ?
- *       Une ressource "Musique + Danse + Arts visuels" qui n'a 0 discipline commune
- *       avec un artiste spécialisé Danse aurait un score injustement élevé avec
- *       un comptage brut si l'artiste avait beaucoup de disciplines.
- *       Le ratio "disciplines communes / disciplines de la ressource" mesure plutôt
- *       à quel point l'artiste COUVRE la ressource, ce qui est plus pertinent.
- *     Pas de disciplines sur la ressource → 0 pts (pas de pénalité, pas de bonus).
- *     Pas de disciplines sur l'artiste → 0 pts.
+ *
+ *     ⚠️ RÉVISÉ (ADR-0035, 2026-09) suite aux retours d'artistes : les ressources
+ *     proposées ne correspondaient pas à leur profil (ex. un musicien voyait des
+ *     résidences "Arts visuels" en tête de liste). Diagnostic : l'ancien ratio
+ *     "communes / disciplines de la ressource" traitait à tort les ressources
+ *     généralistes ("Toutes disciplines", "Mobilité internationale"...) comme
+ *     des ressources à 0 discipline (donc 0 pt, alors qu'elles devraient plutôt
+ *     matcher tout le monde), ET ne bloquait jamais une ressource dont les
+ *     disciplines sont clairement incompatibles avec celles de l'artiste.
+ *
+ *     Nouvelles règles :
+ *       - Artiste sans discipline renseignée → 0 pts (inchangé : impossible de juger).
+ *       - Ressource sans discipline (généraliste, cf. DisciplineMapperService qui
+ *         ne mappe volontairement pas ces libellés vers une Discipline) → score
+ *         forfaitaire SCORE_DISCIPLINES_GENERALIST (= 20, la moitié du max) :
+ *         ouverte à tous les artistes, mais moins ciblée qu'un match explicite.
+ *       - Ressource ET artiste ont chacun au moins une discipline, mais AUCUNE en
+ *         commun → EXCLUSION DURE (voir plus bas, hasDisciplineConflict()) :
+ *         le score total de la ressource tombe à 0, tous critères confondus.
+ *         C'est la cause n°1 des retours artistes ("ça ne correspond pas à mon
+ *         profil") : une ressource "Arts visuels" ne doit JAMAIS remonter en
+ *         tête de liste d'un musicien, même si le territoire ou le lookingFor
+ *         matchent par ailleurs.
+ *       - Sinon, on calcule un coefficient de RECOUVREMENT (Szymkiewicz–Simpson) :
+ *           coverage = disciplines_communes / min(nb_disciplines_ressource, nb_disciplines_artiste)
+ *         Pourquoi ce dénominateur plutôt que "disciplines de la ressource" (ancien
+ *         calcul) ? L'ancien ratio pénalisait injustement les ressources multi-
+ *         disciplines : une ressource ouverte à 8 disciplines dont "Musique" ne
+ *         donnait que 5 pts à un musicien (1/8 × 40), alors qu'elle lui est
+ *         PLEINEMENT ouverte. Le coefficient de recouvrement mesure plutôt à quel
+ *         point le plus petit des deux ensembles est couvert par l'autre :
+ *           - Ressource {Musique, Danse} / Artiste {Musique}        → 1/min(2,1)=1   → 40 pts
+ *           - Ressource {8 disciplines dont Musique} / Artiste {Musique} → 1/min(8,1)=1 → 40 pts
+ *           - Ressource {Musique, Arts visuels} / Artiste {Musique, Danse, Théâtre}
+ *             → 1/min(2,3)=0.5 → 20 pts
+ *         Score = round(coverage × 40).
  *
  *  2. CE QUE CHERCHE L'ARTISTE   max 30 pts  (critère fort)
  *     Mapping ArtistLookingFor → catégories de ResourceType.
@@ -47,7 +73,24 @@ use App\Repository\ResourceRepository;
  *       - Même pays → +10 pts
  *       - Même ville (en plus du pays) → +10 pts supplémentaires (soit 20 au total)
  *     Un artiste sans localisation → 0 pts sur ce critère.
- *     Comparaison insensible à la casse, avec trim des espaces.
+ *     Comparaison insensible à la casse et aux accents, avec trim des espaces
+ *     (normalizeText(), même principe que DisciplineMapperService::normalizeText).
+ *
+ *     ⚠️ RÉVISÉ (ADR-0035) : deux angles morts corrigés suite aux retours artistes.
+ *       - ACCENTS : "Réunion" (ressource) ne matchait pas "La Reunion" (artiste,
+ *         accent absent d'une saisie clavier) → on compare désormais des chaînes
+ *         normalisées (minuscules, sans diacritiques).
+ *       - OUTRE-MER : un artiste en Guadeloupe/Martinique/Guyane/Réunion/Mayotte/
+ *         Saint-Martin/Saint-Barthélemy/Nouvelle-Calédonie/Polynésie ne matchait
+ *         JAMAIS une ressource dont le pays est "France", car son texte de
+ *         localisation ne contient pas le mot "france". Or ces territoires SONT
+ *         la France. On ajoute donc un repli explicite : si le pays normalisé de
+ *         la ressource est "france" et que la localisation de l'artiste contient
+ *         un des territoires listés dans FRANCE_OVERSEAS_TERRITORIES, le bonus
+ *         pays (+10 pts) est accordé. La réciproque (ressource au libellé "Guadeloupe"
+ *         matchant un artiste en "France") n'est pas nécessaire : les ressources
+ *         scrapées utilisent presque toujours "France" comme pays, jamais le nom
+ *         du DROM spécifique.
  *
  *  4. NIVEAU D'EXPÉRIENCE        max 10 pts  (critère faible)
  *     Si la ressource précise un niveau requis ET l'artiste a renseigné son niveau :
@@ -60,6 +103,26 @@ use App\Repository\ResourceRepository;
  *     Il est conservé dans l'architecture pour l'évolution future (V2).
  *
  * SCORE MAX POSSIBLE : 40 + 30 + 20 + 10 = 100 pts
+ *
+ * ─── EXCLUSION DURE PAR CONFLIT DE DISCIPLINES (ADR-0035) ───────────────────
+ *
+ * Avant même de calculer les 4 composantes, scoreResource() vérifie s'il y a un
+ * CONFLIT DE DISCIPLINES : la ressource ET l'artiste ont chacun des disciplines
+ * renseignées, mais ne partagent RIEN. Dans ce cas, le score total est forcé à 0
+ * et le breakdown entier (les 4 clés) est mis à 0 — on ne calcule même pas le
+ * lookingFor, le territoire ou l'expérience.
+ *
+ * Pourquoi une exclusion aussi radicale, plutôt que de laisser les autres critères
+ * s'exprimer ? Parce que c'est exactement ce que les artistes remontaient : une
+ * ressource "Arts visuels" à Paris matchant un musicien parisien cumulait 30 pts
+ * (lookingFor) + 20 pts (territoire) = 50 pts, et apparaissait en tête de liste
+ * alors qu'elle ne le concerne pas du tout. La discipline est un critère
+ * ÉLIMINATOIRE dès qu'elle est renseignée des deux côtés et incompatible — ce
+ * n'est plus juste "un critère parmi d'autres" dans ce cas précis.
+ *
+ * Ce comportement ne s'applique PAS si l'un des deux (ressource ou artiste) n'a
+ * pas de discipline renseignée : une ressource généraliste ou un artiste qui n'a
+ * pas encore rempli ce champ ne sont jamais exclus par ce mécanisme.
  *
  * ─── FILTRAGE DUR (avant le scoring) ────────────────────────────────────────
  *
@@ -101,6 +164,45 @@ final class MatchingService
 
     /** Poids max pour la concordance de niveau d'expérience */
     private const int SCORE_EXPERIENCE = 10;
+
+    /**
+     * Score forfaitaire attribué à une ressource "généraliste" (sans discipline
+     * mappée) vis-à-vis d'un artiste qui, lui, a bien renseigné ses disciplines.
+     *
+     * ADR-0035 : la moitié du poids max des disciplines (40 / 2 = 20). Une
+     * ressource généraliste ("Toutes disciplines", "Mobilité internationale"...)
+     * est ouverte à tous les artistes, mais c'est un signal moins fort/ciblé
+     * qu'une discipline explicitement en commun (qui, elle, vaut jusqu'à 40 pts).
+     */
+    private const int SCORE_DISCIPLINES_GENERALIST = 20;
+
+    /**
+     * Territoires français d'outre-mer (DROM-COM) reconnus pour le bonus
+     * "territoire" quand la ressource a pour pays "France" (ADR-0035).
+     *
+     * CONTEXTE : les ressources scrapées indiquent presque toujours "France"
+     * comme pays, jamais le nom du DROM-COM spécifique. Sans ce repli, un
+     * artiste basé en Guadeloupe/Martinique/Guyane/Réunion/Mayotte... ne
+     * matchait JAMAIS le bonus pays d'une ressource nationale, alors que la
+     * cible principale de Bazaart est justement la diaspora afro-atlantique
+     * (très présente dans ces territoires).
+     *
+     * Valeurs déjà normalisées (minuscules, sans accents, tirets conservés)
+     * pour être comparées directement au résultat de normalizeText().
+     *
+     * @var string[]
+     */
+    private const array FRANCE_OVERSEAS_TERRITORIES = [
+        'guadeloupe',
+        'martinique',
+        'guyane',
+        'reunion',
+        'mayotte',
+        'saint-martin',
+        'saint-barthelemy',
+        'nouvelle-caledonie',
+        'polynesie',
+    ];
 
     // ─── Mapping ArtistLookingFor → mots-clés dans le nom du ResourceType ────
     //
@@ -260,6 +362,24 @@ final class MatchingService
      */
     public function scoreResource(Resource $resource, ArtistProfile $artistProfile): MatchResult
     {
+        // ── Exclusion dure (ADR-0035) ────────────────────────────────────────
+        // Si la ressource et l'artiste ont chacun des disciplines renseignées
+        // mais ne partagent RIEN, on ne calcule PAS les autres composantes :
+        // le score et le breakdown entier tombent à 0. Voir le grand commentaire
+        // de classe ("EXCLUSION DURE PAR CONFLIT DE DISCIPLINES") pour le pourquoi.
+        if ($this->hasDisciplineConflict($resource, $artistProfile)) {
+            return new MatchResult(
+                resource: $resource,
+                score: 0,
+                breakdown: [
+                    'disciplines' => 0,
+                    'looking_for' => 0,
+                    'territory'   => 0,
+                    'experience'  => 0,
+                ],
+            );
+        }
+
         // Calcule chaque composante indépendamment
         $scoreDisciplines = $this->scoreDisciplines($resource, $artistProfile);
         $scoreLookingFor  = $this->scoreLookingFor($resource, $artistProfile);
@@ -291,15 +411,30 @@ final class MatchingService
     /**
      * Score la concordance entre les disciplines de la ressource et celles de l'artiste.
      *
-     * Formule : ratio × SCORE_DISCIPLINES (arrondi au point entier le plus proche).
-     *   ratio = nb_disciplines_communes / nb_disciplines_ressource
+     * RÉVISÉ ADR-0035 (voir le grand commentaire de classe pour le contexte complet).
+     *
+     * Règles, dans l'ordre :
+     *   1. Artiste sans discipline renseignée → 0 pts (on ne peut rien évaluer).
+     *   2. Ressource sans discipline (généraliste) → SCORE_DISCIPLINES_GENERALIST (20 pts).
+     *      Rappel : DisciplineMapperService ne mappe volontairement PAS des libellés
+     *      comme "Toutes disciplines" vers une Discipline — ces ressources arrivent
+     *      donc ici avec une collection de disciplines vide alors qu'elles sont en
+     *      réalité ouvertes à tout le monde.
+     *   3. Sinon, coefficient de recouvrement de Szymkiewicz–Simpson :
+     *        coverage = disciplines_communes / min(nb_disciplines_ressource, nb_disciplines_artiste)
+     *      Score = round(coverage × 40).
+     *      NOTE : le cas "0 discipline commune alors que les deux collections sont
+     *      non vides" est un CONFLIT DE DISCIPLINES, déjà intercepté en amont par
+     *      scoreResource() via hasDisciplineConflict() (le score total tombe à 0
+     *      avant même d'arriver ici). Cette méthode reste néanmoins cohérente
+     *      seule (coverage = 0 → 0 pt) si jamais elle est appelée directement.
      *
      * Exemples :
-     *   - Ressource : {Musique, Danse}   Artiste : {Musique, Danse}  → 2/2 × 40 = 40 pts (max)
-     *   - Ressource : {Musique, Danse}   Artiste : {Musique}         → 1/2 × 40 = 20 pts
-     *   - Ressource : {Musique, Danse}   Artiste : {Théâtre}         → 0/2 × 40 =  0 pts
-     *   - Ressource sans discipline       Artiste : {Musique}         → 0/0 → 0 pts
-     *   - Ressource : {Musique}           Artiste sans discipline      → 0/1 → 0 pts
+     *   - Ressource : {Musique, Danse}      Artiste : {Musique}              → 1/min(2,1)=1   → 40 pts
+     *   - Ressource : {8 disciplines dont Musique} Artiste : {Musique}       → 1/min(8,1)=1   → 40 pts
+     *   - Ressource : {Musique, Arts visuels} Artiste : {Musique, Danse, Théâtre} → 1/min(2,3)=0.5 → 20 pts
+     *   - Ressource sans discipline           Artiste : {Musique}           → généraliste     → 20 pts
+     *   - Ressource : {Musique}               Artiste sans discipline        → 0 pts
      *
      * @return int Score entre 0 et SCORE_DISCIPLINES (= 40)
      */
@@ -308,21 +443,76 @@ final class MatchingService
         $resourceDisciplines = $resource->getDisciplines();
         $artistDisciplines   = $artistProfile->getDisciplines();
 
-        // Cas trivial : si la ressource n'a aucune discipline, pas de scoring possible
-        if ($resourceDisciplines->isEmpty()) {
-            return 0;
-        }
-
-        // Cas trivial : si l'artiste n'a aucune discipline renseignée, score = 0
+        // Cas trivial : si l'artiste n'a aucune discipline renseignée, impossible
+        // de juger une correspondance → 0 pts (inchangé par rapport à l'ancien comportement).
         if ($artistDisciplines->isEmpty()) {
             return 0;
         }
 
+        // Ressource généraliste (aucune discipline mappée) : score forfaitaire.
+        // Voir ADR-0035 — c'est le coeur du correctif "ressources généralistes = 0 pt".
+        if ($resourceDisciplines->isEmpty()) {
+            return self::SCORE_DISCIPLINES_GENERALIST;
+        }
+
+        $commonCount = $this->countCommonDisciplines($resource, $artistProfile);
+
+        // Coefficient de recouvrement (Szymkiewicz–Simpson) : on divise par le plus
+        // PETIT des deux ensembles plutôt que par celui de la ressource (ancien calcul).
+        // Cela évite de pénaliser une ressource multi-disciplines qui, pour un
+        // artiste donné, lui est en réalité pleinement ouverte (cf. exemples ci-dessus).
+        $smallestSetSize = min($resourceDisciplines->count(), $artistDisciplines->count());
+
+        // Garde-fou défensif (ne devrait jamais arriver ici : les deux collections
+        // sont non vides à ce stade) mais évite toute division par zéro si jamais
+        // count() renvoyait 0 dans un contexte inattendu.
+        if ($smallestSetSize === 0) {
+            return 0;
+        }
+
+        $coverage = $commonCount / $smallestSetSize;
+
+        return (int) round($coverage * self::SCORE_DISCIPLINES);
+    }
+
+    /**
+     * Détecte un CONFLIT DE DISCIPLINES entre une ressource et un artiste (ADR-0035).
+     *
+     * Il y a conflit quand les DEUX ont des disciplines renseignées, mais ne
+     * partagent RIEN. C'est le signal le plus fort qu'une ressource ne concerne
+     * PAS l'artiste (ex : ressource "Arts visuels" pour un musicien), quel que
+     * soit le reste du score (lookingFor, territoire...).
+     *
+     * Volontairement PAS de conflit si l'un des deux est vide :
+     *   - Ressource généraliste (sans discipline) → jamais exclue, cf. scoreDisciplines().
+     *   - Artiste sans discipline renseignée → profil incomplet, pas de jugement possible.
+     *
+     * @return bool true si la ressource doit être exclue (score total forcé à 0)
+     */
+    private function hasDisciplineConflict(Resource $resource, ArtistProfile $artistProfile): bool
+    {
+        $resourceDisciplines = $resource->getDisciplines();
+        $artistDisciplines   = $artistProfile->getDisciplines();
+
+        if ($resourceDisciplines->isEmpty() || $artistDisciplines->isEmpty()) {
+            return false;
+        }
+
+        return $this->countCommonDisciplines($resource, $artistProfile) === 0;
+    }
+
+    /**
+     * Compte le nombre de disciplines partagées entre une ressource et un artiste.
+     *
+     * Factorisé car utilisé à la fois par scoreDisciplines() (calcul du coefficient
+     * de recouvrement) et hasDisciplineConflict() (détection d'exclusion dure).
+     */
+    private function countCommonDisciplines(Resource $resource, ArtistProfile $artistProfile): int
+    {
         // Extrait les IDs des disciplines de l'artiste dans un ensemble pour une
         // recherche en O(1) (plutôt qu'un double boucle O(N×M)).
-        // array_keys() retourne les indices, mais on veut les IDs des entités Discipline.
         $artistDisciplineIds = [];
-        foreach ($artistDisciplines as $discipline) {
+        foreach ($artistProfile->getDisciplines() as $discipline) {
             // getId() peut être null si l'entité n'est pas encore persistée (cas de test),
             // mais en production les disciplines existent toujours en BDD.
             $id = $discipline->getId();
@@ -333,19 +523,14 @@ final class MatchingService
 
         // Compte les disciplines communes
         $commonCount = 0;
-        foreach ($resourceDisciplines as $discipline) {
+        foreach ($resource->getDisciplines() as $discipline) {
             $id = $discipline->getId();
             if ($id !== null && isset($artistDisciplineIds[$id])) {
                 $commonCount++;
             }
         }
 
-        // Calcule le ratio et applique le poids
-        // intdiv() arrondi vers le bas — pour les fractions on utilise round() pour
-        // une meilleure répartition des points (ex: 1/3 × 40 = 13 plutôt que 13.33)
-        $ratio = $commonCount / $resourceDisciplines->count();
-
-        return (int) round($ratio * self::SCORE_DISCIPLINES);
+        return $commonCount;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -437,10 +622,8 @@ final class MatchingService
      *
      * LIMITE CONNUE :
      *   Si l'artiste écrit "Paris" sans le pays, on ne peut pas inférer "France".
-     *   Si la ressource a city="paris" (minuscules) et l'artiste a location="PARIS" → match.
-     *   Si l'artiste a location="75001 Paris" → "paris" sera trouvé → match.
-     *   Les faux négatifs (artiste à Paris mais location = "Île-de-France") sont acceptables
-     *   pour la V1 — une normalisation plus fine serait une amélioration V2.
+     *   Les faux négatifs (artiste à Paris mais location = "Île-de-France") restent
+     *   acceptables pour la V1 — une normalisation plus fine serait une amélioration V2.
      *
      * @return int Score entre 0 et SCORE_TERRITORY (= 20)
      */
@@ -463,30 +646,99 @@ final class MatchingService
             return 0;
         }
 
-        // Normalisation : minuscules + trim pour la comparaison
-        $artistLocationNorm = mb_strtolower(trim($artistLocation));
+        // Normalisation ADR-0035 : minuscules + trim + suppression des accents.
+        // Corrige le cas "Réunion" (ressource) vs "La Reunion" (artiste, sans accent).
+        $artistLocationNorm = $this->normalizeText($artistLocation);
 
         $score = 0;
 
         // ── Bonus pays (+10 pts) ─────────────────────────────────────────────
         if (!empty($resourceCountry)) {
-            $countryNorm = mb_strtolower(trim($resourceCountry));
+            $countryNorm = $this->normalizeText($resourceCountry);
+
             // str_contains vérifie si le pays de la ressource apparaît dans la localisation
             // de l'artiste. Ex: "France" dans "Paris, France" → true.
             if (str_contains($artistLocationNorm, $countryNorm)) {
+                $score += self::SCORE_TERRITORY / 2; // = 10 pts
+            } elseif ($countryNorm === 'france' && $this->artistLocationMatchesOverseasTerritory($artistLocationNorm)) {
+                // ADR-0035 : repli DROM-COM. La ressource est en "France" mais l'artiste
+                // a écrit un territoire d'outre-mer (ex: "Pointe-à-Pitre, Guadeloupe") sans
+                // le mot "France" — cela reste géographiquement la France. Voir le grand
+                // commentaire de classe et FRANCE_OVERSEAS_TERRITORIES pour le détail.
                 $score += self::SCORE_TERRITORY / 2; // = 10 pts
             }
         }
 
         // ── Bonus ville (+10 pts supplémentaires) ────────────────────────────
         if (!empty($resourceCity)) {
-            $cityNorm = mb_strtolower(trim($resourceCity));
+            $cityNorm = $this->normalizeText($resourceCity);
             if (str_contains($artistLocationNorm, $cityNorm)) {
                 $score += self::SCORE_TERRITORY / 2; // = 10 pts de plus
             }
         }
 
-        return $score;
+        return (int) $score;
+    }
+
+    /**
+     * Vérifie si la localisation (déjà normalisée) de l'artiste mentionne un
+     * territoire français d'outre-mer (DROM-COM) — ADR-0035.
+     *
+     * @param string $normalizedLocation Localisation de l'artiste, déjà passée par normalizeText()
+     */
+    private function artistLocationMatchesOverseasTerritory(string $normalizedLocation): bool
+    {
+        foreach (self::FRANCE_OVERSEAS_TERRITORIES as $territory) {
+            if (str_contains($normalizedLocation, $territory)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Normalise un texte pour une comparaison insensible à la casse ET aux accents.
+     *
+     * Même principe que DisciplineMapperService::normalizeText() (non réutilisable
+     * ici car privée à ce service) : minuscules, décomposition Unicode NFD puis
+     * suppression des diacritiques (accents, trémas...). Les tirets sont conservés
+     * volontairement (utile pour "saint-martin", "nouvelle-caledonie"...).
+     *
+     * Repli en cascade si l'extension intl (\Normalizer) est indisponible :
+     *   1. \Normalizer::normalize() (résultat le plus fiable, cohérent avec le
+     *      reste du projet).
+     *   2. iconv() en mode translittération ASCII (approximatif mais suffisant
+     *      pour la comparaison de villes/pays/territoires).
+     *   3. Simple mise en minuscules, sans suppression d'accents (dernier repli,
+     *      ne casse rien mais peut rater un match si les accents diffèrent).
+     */
+    private function normalizeText(string $text): string
+    {
+        $lower = mb_strtolower(trim($text), 'UTF-8');
+
+        if (class_exists(\Normalizer::class)) {
+            $decomposed = \Normalizer::normalize($lower, \Normalizer::FORM_D);
+
+            if ($decomposed !== false) {
+                // \p{Mn} = diacritiques Unicode (Mark, non-spacing) : accents, trémas...
+                $withoutDiacritics = preg_replace('/\p{Mn}/u', '', $decomposed) ?? $decomposed;
+
+                return preg_replace('/\s+/', ' ', trim($withoutDiacritics)) ?? trim($withoutDiacritics);
+            }
+        }
+
+        // Repli : extension intl absente → translittération approximative via iconv.
+        // "//TRANSLIT//IGNORE" convertit au mieux les caractères accentués vers leur
+        // équivalent ASCII et ignore silencieusement ce qui ne peut pas être converti.
+        $transliterated = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $lower);
+
+        if ($transliterated !== false) {
+            return preg_replace('/\s+/', ' ', trim($transliterated)) ?? trim($transliterated);
+        }
+
+        // Dernier repli : ni intl, ni iconv disponibles → minuscules sans normalisation.
+        return preg_replace('/\s+/', ' ', $lower) ?? $lower;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

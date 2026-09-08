@@ -113,10 +113,15 @@ class MatchingServiceTest extends TestCase
     }
 
     /**
-     * Cas : disciplines communes = 50% → score disciplines = 20 pts.
-     * La ressource a 2 disciplines, l'artiste en partage 1.
+     * ADR-0035 : ressource {Musique, Danse} / artiste {Musique} seul.
+     *
+     * Ancien calcul (ratio / disciplines de la ressource) : 1/2 × 40 = 20 pts.
+     * Nouveau calcul (coefficient de recouvrement, dénominateur = plus petit
+     * ensemble) : 1/min(2,1) = 1 → 40 pts. La ressource est en réalité pleinement
+     * ouverte à un artiste "Musique" — elle ne doit pas être pénalisée parce
+     * qu'elle liste aussi "Danse".
      */
-    public function testScoreResource_MoitieDisciplinesCommunes_ScoreDisciplinesPartiel(): void
+    public function testScoreResource_ArtisteCouvertParRessourceMultiDisciplines_ScoreDisciplinesMaximal(): void
     {
         $musique = $this->makeDiscipline(1, 'Musique');
         $danse   = $this->makeDiscipline(2, 'Danse');
@@ -125,7 +130,7 @@ class MatchingServiceTest extends TestCase
         // Ressource : Musique + Danse
         $resource = $this->makeResource($type, [$musique, $danse]);
 
-        // Artiste : seulement Musique (partage 1/2 avec la ressource)
+        // Artiste : seulement Musique (couvre 1/min(2,1)=1 de la ressource)
         $user    = $this->makeUser([], null);
         $profile = $this->makeArtistProfile($user, [$musique], null);
 
@@ -136,16 +141,47 @@ class MatchingServiceTest extends TestCase
         $results = $this->service->getMatchesForUser($user);
         $result  = $results[0];
 
-        // 1/2 × 40 = 20 pts
-        $this->assertSame(20, $result->breakdown['disciplines'],
-            "1 discipline commune sur 2 → score disciplines = 20 pts"
+        $this->assertSame(40, $result->breakdown['disciplines'],
+            "Artiste couvrant entièrement le plus petit ensemble → score disciplines = 40 pts (max)"
         );
     }
 
     /**
-     * Cas : aucune discipline commune → score disciplines = 0 pts.
+     * ADR-0035 : recouvrement partiel — ressource {Musique, Arts visuels} /
+     * artiste {Musique, Danse, Théâtre} → coverage = 1/min(2,3) = 0.5 → 20 pts.
      */
-    public function testScoreResource_AucuneDisciplineCommune_ScoreDisciplinesNul(): void
+    public function testScoreResource_RecouvrementPartielDisciplines_ScoreDisciplinesPartiel(): void
+    {
+        $musique     = $this->makeDiscipline(1, 'Musique');
+        $artsVisuels = $this->makeDiscipline(2, 'Arts visuels');
+        $danse       = $this->makeDiscipline(3, 'Danse');
+        $theatre     = $this->makeDiscipline(4, 'Théâtre');
+
+        $type     = $this->makeResourceType('Appel à projets');
+        $resource = $this->makeResource($type, [$musique, $artsVisuels]);
+
+        $user    = $this->makeUser([], null);
+        $profile = $this->makeArtistProfile($user, [$musique, $danse, $theatre], null);
+
+        $this->repositoryStub
+            ->method('findPublishedForMatching')
+            ->willReturn([$resource]);
+
+        $results = $this->service->getMatchesForUser($user);
+
+        $this->assertSame(20, $results[0]->breakdown['disciplines'],
+            "Recouvrement partiel (1/min(2,3)=0.5) → score disciplines = 20 pts"
+        );
+    }
+
+    /**
+     * ADR-0035 : CONFLIT DE DISCIPLINES — ressource et artiste ont chacun des
+     * disciplines renseignées mais ne partagent RIEN → exclusion dure : le score
+     * TOTAL tombe à 0 et le breakdown ENTIER (les 4 clés) est à 0, pas seulement
+     * "disciplines". C'est le correctif direct des retours artistes
+     * ("ça ne correspond pas à mon profil").
+     */
+    public function testScoreResource_ConflitDeDisciplines_ScoreTotalNulEtBreakdownEntierementNul(): void
     {
         $musique = $this->makeDiscipline(1, 'Musique');
         $theatre = $this->makeDiscipline(3, 'Théâtre');
@@ -161,20 +197,69 @@ class MatchingServiceTest extends TestCase
             ->willReturn([$resource]);
 
         $results = $this->service->getMatchesForUser($user);
+        $result  = $results[0];
 
-        $this->assertSame(0, $results[0]->breakdown['disciplines'],
-            "Aucune discipline commune → score disciplines = 0"
+        $this->assertSame(0, $result->score,
+            "Conflit de disciplines → score total = 0"
+        );
+        $this->assertSame(
+            ['disciplines' => 0, 'looking_for' => 0, 'territory' => 0, 'experience' => 0],
+            $result->breakdown,
+            "Conflit de disciplines → breakdown entièrement à 0 (invariant score == sum(breakdown))"
         );
     }
 
     /**
-     * Cas : ressource sans discipline → score disciplines = 0 pts (cas limite).
+     * ADR-0035 : le conflit de disciplines l'emporte MÊME quand le lookingFor et
+     * le territoire matcheraient parfaitement par ailleurs. C'est exactement le
+     * scénario remonté par les artistes : une ressource "Arts visuels" à Paris
+     * ne doit JAMAIS remonter en tête pour un musicien parisien, même si elle
+     * cumulerait 30 (lookingFor) + 20 (territoire) pts avec l'ancien calcul.
      */
-    public function testScoreResource_RessourceSansDiscipline_ScoreDisciplinesNul(): void
+    public function testScoreResource_ConflitDeDisciplines_IgnoreLookingForEtTerritoireMemeSiCompatibles(): void
+    {
+        $musique     = $this->makeDiscipline(1, 'Musique');
+        $artsVisuels = $this->makeDiscipline(2, 'Arts visuels');
+
+        // Type "Formation" → matche le lookingFor "formations" de l'artiste
+        $type     = $this->makeResourceType('Formation');
+        $resource = $this->makeResource($type, [$artsVisuels], city: 'Paris', country: 'France');
+
+        // Artiste musicien, à Paris, cherchant des formations → tout matcherait
+        // SAUF la discipline (Musique vs Arts visuels = aucun recouvrement).
+        $user    = $this->makeUser(['formations'], null);
+        $profile = $this->makeArtistProfile($user, [$musique], 'Paris, France');
+
+        $this->repositoryStub
+            ->method('findPublishedForMatching')
+            ->willReturn([$resource]);
+
+        $results = $this->service->getMatchesForUser($user);
+        $result  = $results[0];
+
+        $this->assertSame(0, $result->score,
+            "Le conflit de disciplines exclut la ressource même si lookingFor et territoire matchent"
+        );
+        $this->assertSame(0, $result->breakdown['looking_for'],
+            "looking_for n'est même pas calculé en cas de conflit de disciplines"
+        );
+        $this->assertSame(0, $result->breakdown['territory'],
+            "territory n'est même pas calculé en cas de conflit de disciplines"
+        );
+    }
+
+    /**
+     * ADR-0035 : ressource GÉNÉRALISTE (aucune discipline mappée, ex. "Toutes
+     * disciplines", "Mobilité internationale") face à un artiste qui a bien
+     * renseigné ses disciplines → score forfaitaire = 20 pts (la moitié du max),
+     * et non plus 0. C'est le correctif direct du problème n°1 identifié :
+     * ces ressources représentent la majorité du catalogue scrapé.
+     */
+    public function testScoreResource_RessourceGeneraliste_ScoreDisciplinesForfaitaire(): void
     {
         $musique  = $this->makeDiscipline(1, 'Musique');
         $type     = $this->makeResourceType('Formation');
-        $resource = $this->makeResource($type, []); // aucune discipline sur la ressource
+        $resource = $this->makeResource($type, []); // aucune discipline sur la ressource = généraliste
 
         $user    = $this->makeUser([], null);
         $profile = $this->makeArtistProfile($user, [$musique], null);
@@ -185,8 +270,8 @@ class MatchingServiceTest extends TestCase
 
         $results = $this->service->getMatchesForUser($user);
 
-        $this->assertSame(0, $results[0]->breakdown['disciplines'],
-            "Ressource sans discipline → score disciplines = 0 (pas de pénalité)"
+        $this->assertSame(20, $results[0]->breakdown['disciplines'],
+            "Ressource généraliste (sans discipline) + artiste avec discipline → score forfaitaire = 20 pts"
         );
     }
 
@@ -453,6 +538,57 @@ class MatchingServiceTest extends TestCase
 
         $this->assertSame(0, $results[0]->breakdown['territory'],
             "Pays différents → score territoire = 0"
+        );
+    }
+
+    /**
+     * ADR-0035 : artiste en Guadeloupe (DROM-COM), ressource au pays "France".
+     *
+     * Avant le correctif, "france" n'apparaît nulle part dans la localisation de
+     * l'artiste ("Pointe-à-Pitre, Guadeloupe") → 0 pt de bonus pays, alors que la
+     * Guadeloupe EST la France. Le repli FRANCE_OVERSEAS_TERRITORIES corrige cela.
+     */
+    public function testScoreResource_ArtisteOutreMer_RessourceFrance_BonusPaysAccorde(): void
+    {
+        $type     = $this->makeResourceType('Formation');
+        // Pas de ville sur la ressource pour isoler le bonus pays (+10 uniquement)
+        $resource = $this->makeResource($type, [], city: null, country: 'France');
+
+        $user    = $this->makeUser([], null);
+        $profile = $this->makeArtistProfile($user, [], 'Pointe-à-Pitre, Guadeloupe');
+
+        $this->repositoryStub
+            ->method('findPublishedForMatching')
+            ->willReturn([$resource]);
+
+        $results = $this->service->getMatchesForUser($user);
+
+        $this->assertSame(10, $results[0]->breakdown['territory'],
+            "Artiste en Guadeloupe + ressource pays 'France' → bonus pays (+10 pts) accordé"
+        );
+    }
+
+    /**
+     * ADR-0035 : comparaison insensible aux accents. La ressource indique
+     * country="Réunion" (accentué), l'artiste a saisi "La Reunion" (sans accent,
+     * saisie clavier courante). Sans normalisation, str_contains échouerait.
+     */
+    public function testScoreResource_AccentsDifferents_TerritoireMatcheQuandMeme(): void
+    {
+        $type     = $this->makeResourceType('Résidence artistique');
+        $resource = $this->makeResource($type, [], city: null, country: 'Réunion');
+
+        $user    = $this->makeUser([], null);
+        $profile = $this->makeArtistProfile($user, [], 'La Reunion'); // pas d'accent, saisie artiste
+
+        $this->repositoryStub
+            ->method('findPublishedForMatching')
+            ->willReturn([$resource]);
+
+        $results = $this->service->getMatchesForUser($user);
+
+        $this->assertSame(10, $results[0]->breakdown['territory'],
+            "Comparaison insensible aux accents ('Réunion' vs 'La Reunion') → bonus pays accordé"
         );
     }
 
