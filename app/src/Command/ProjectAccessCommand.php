@@ -23,7 +23,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   php bin/console app:projets:acces
  *
  *   # Donner l'accès aux 3 membres de l'équipe (crée les comptes manquants)
- *   php bin/console app:projets:acces --creer Mllebelamour@gmail.com zahibowendie@gmail.com g.charlesbel@gmail.com
+ *   php bin/console app:projets:acces --creer Mllebelamour@gmail.com zahibowendie@gmail.com hello@gaellecode.fr
  *
  *   # Retirer l'accès
  *   php bin/console app:projets:acces --retirer quelquun@exemple.com
