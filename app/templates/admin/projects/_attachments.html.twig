@@ -1,0 +1,71 @@
+{#
+ # _attachments.html.twig : pièces jointes d'un projet OU d'une tâche + boutons pour en ajouter.
+ #
+ # Variables :
+ #   attachments  liste de ProjectAttachment
+ #   target       'project' | 'task'
+ #   target_id    ID du projet ou de la tâche
+ #   drive_folder dossier Drive de départ pour le sélecteur (facultatif)
+ #}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+{% set connected = pm_drive_connected() %}
+{% if attachments|length > 0 %}
+    <ul class="pm-files">
+        {% for a in attachments %}
+            <li class="pm-file">
+                {{ pm.file_icon(a.kind) }}
+                <div class="pm-file__main">
+                    <a class="pm-file__name" href="{{ a.url }}" target="_blank" rel="noopener noreferrer">{{ a.name }}</a>
+                    <span class="pm-file__meta">{{ a.kind.label() }} · ajouté par {{ a.addedBy|pm_name }} {{ a.createdAt|pm_ago }}</span>
+                </div>
+                <form method="post" action="{{ path('app_admin_pm_attachment_remove', {id: a.id}) }}" onsubmit="return confirm('Retirer cette pièce jointe ? Le fichier reste dans le Drive.')">
+                    <input type="hidden" name="_token" value="{{ csrf_token('pm_attachment_' ~ a.id) }}">
+                    <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+                    <button class="pm-icon-btn pm-icon-btn--danger" type="submit" aria-label="Retirer {{ a.name }}">{{ pm.icon('x') }}</button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p class="pm-muted" style="margin: 0; font-size: 13px">Aucun fichier joint pour l'instant.</p>
+{% endif %}
+
+<div class="pm-attach-actions">
+    {% if connected %}
+        <button type="button" class="pm-btn pm-btn--sm pm-btn--accent"
+                data-pm-drive-open
+                data-target="{{ target }}"
+                data-target-id="{{ target_id }}"
+                data-start-folder="{{ drive_folder ?? '' }}">
+            {{ pm.icon('drive') }} Joindre depuis le Drive
+        </button>
+    {% else %}
+        <a class="pm-btn pm-btn--sm" href="{{ path('app_admin_pm_drive') }}">{{ pm.icon('drive') }} Connecter le Drive</a>
+    {% endif %}
+    <details style="width: 100%">
+        <summary class="pm-link pm-mono" style="cursor: pointer; margin-top: 8px">Téléverser un fichier ou ajouter un lien</summary>
+        {% if connected %}
+            <form method="post" action="{{ path('app_admin_pm_attachment_upload') }}" enctype="multipart/form-data" class="pm-inline-form">
+                <input type="hidden" name="_token" value="{{ csrf_token('pm_attachment') }}">
+                <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+                <input type="hidden" name="target" value="{{ target }}">
+                <input type="hidden" name="targetId" value="{{ target_id }}">
+                <label class="pm-sr" for="pm-upload-{{ target }}-{{ target_id }}">Fichier à téléverser dans le Drive</label>
+                <input class="pm-input" type="file" id="pm-upload-{{ target }}-{{ target_id }}" name="file" required>
+                <button class="pm-btn pm-btn--sm" type="submit">{{ pm.icon('upload') }} Vers le Drive</button>
+            </form>
+            <p class="pm-field__help">10 Mo maximum. Le fichier est rangé dans le dossier Drive du projet (ou « Mon Drive »).</p>
+        {% endif %}
+        <form method="post" action="{{ path('app_admin_pm_attachment_link') }}" class="pm-inline-form" style="flex-wrap: wrap">
+            <input type="hidden" name="_token" value="{{ csrf_token('pm_attachment') }}">
+            <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+            <input type="hidden" name="target" value="{{ target }}">
+            <input type="hidden" name="targetId" value="{{ target_id }}">
+            <label class="pm-sr" for="pm-link-url-{{ target }}-{{ target_id }}">Adresse du lien</label>
+            <input class="pm-input" type="url" id="pm-link-url-{{ target }}-{{ target_id }}" name="url" required placeholder="https://…" style="min-width: 180px">
+            <label class="pm-sr" for="pm-link-name-{{ target }}-{{ target_id }}">Nom du lien</label>
+            <input class="pm-input" id="pm-link-name-{{ target }}-{{ target_id }}" name="name" maxlength="255" placeholder="Nom (facultatif)" style="min-width: 140px">
+            <button class="pm-btn pm-btn--sm" type="submit">{{ pm.icon('link') }} Ajouter le lien</button>
+        </form>
+    </details>
+</div>

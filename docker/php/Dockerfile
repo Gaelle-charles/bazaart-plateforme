@@ -18,6 +18,12 @@ RUN apk add --no-cache \
 RUN echo "openssl.cafile=/etc/ssl/certs/ca-certificates.crt" > /usr/local/etc/php/conf.d/ssl-certs.ini \
     && echo "curl.cainfo=/etc/ssl/certs/ca-certificates.crt" >> /usr/local/etc/php/conf.d/ssl-certs.ini
 
+# Taille maximale des fichiers envoyés au serveur (défaut PHP : 2 Mo).
+# Alignée sur client_max_body_size 10M de Nginx. Utile notamment pour le téléversement
+# de fichiers vers le Google Drive de l'équipe depuis l'Espace projets (ADR-0037).
+RUN echo "upload_max_filesize=10M" > /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "post_max_size=12M" >> /usr/local/etc/php/conf.d/uploads.ini
+
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html

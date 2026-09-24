@@ -1,0 +1,222 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # _layout.html.twig : gabarit commun à toutes les pages de l'Espace projets (ADR-0037).
+ #
+ # Il ajoute au layout admin :
+ #   - la feuille de style public/css/projects.css et le script public/js/projects.js ;
+ #   - les onglets internes (indispensables sur mobile : la sidebar admin y est masquée) ;
+ #   - les fenêtres modales partagées : visite guidée, sélecteur Google Drive,
+ #     ajout rapide de tâche ;
+ #   - le jeton CSRF des appels JavaScript (balise <meta name="pm-csrf">).
+ #
+ # Les pages enfants remplissent le bloc « pm_content » (et « page_title »).
+ # Variable facultative : pm_tab (onglet actif) : overview | tasks | projects | notes | drive | team
+ #}
+
+{% import 'admin/projects/_macros.html.twig' as pm %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/projects.css') }}">
+{% endblock %}
+
+{% block content %}
+{# Jeton CSRF lu par projects.js et envoyé dans l'en-tête X-CSRF-Token des requêtes fetch() #}
+<meta name="pm-csrf" content="{{ csrf_token('pm_ajax') }}">
+
+<div class="pm" id="pm-root"
+     data-drive-connected="{{ pm_drive_connected() ? '1' : '0' }}"
+     data-url-drive-page="{{ path('app_admin_pm_drive') }}"
+     data-url-drive-list="{{ path('app_admin_pm_drive_api_list') }}"
+     data-url-drive-search="{{ path('app_admin_pm_drive_api_search') }}"
+     data-url-drive-recent="{{ path('app_admin_pm_drive_api_recent') }}"
+     data-url-attach="{{ path('app_admin_pm_attachment_drive') }}"
+     data-url-tour="{{ path('app_admin_pm_onboarding_tour') }}"
+     data-show-tour="{{ pm_show_tour() ? '1' : '0' }}">
+
+    {# ── Onglets du module ─────────────────────────────────────────────── #}
+    {% set _tab = pm_tab ?? '' %}
+    {% set _late = pm_badge_my_overdue() %}
+    <nav class="pm-tabs" aria-label="Espace projets">
+        <a href="{{ path('app_admin_pm_overview') }}" {{ _tab == 'overview' ? 'aria-current="page"' }}>Vue d'ensemble</a>
+        <a href="{{ path('app_admin_pm_tasks') }}" {{ _tab == 'tasks' ? 'aria-current="page"' }}>
+            Tâches{% if _late > 0 %}<span class="pm-tabs__badge" title="Tes tâches en retard">{{ _late }}</span>{% endif %}
+        </a>
+        <a href="{{ path('app_admin_pm_projects') }}" {{ _tab == 'projects' ? 'aria-current="page"' }}>Projets</a>
+        <a href="{{ path('app_admin_pm_notes') }}" {{ _tab == 'notes' ? 'aria-current="page"' }}>Notes d'équipe</a>
+        <a href="{{ path('app_admin_pm_drive') }}" {{ _tab == 'drive' ? 'aria-current="page"' }}>Drive</a>
+        <a href="{{ path('app_admin_pm_team') }}" {{ _tab == 'team' ? 'aria-current="page"' }}>Équipe &amp; réglages</a>
+    </nav>
+
+    {% block pm_content %}{% endblock %}
+
+    {# ════════════════════════════════════════════════════════════════════
+       FENÊTRES MODALES PARTAGÉES
+       <dialog> est un élément HTML natif : il gère le focus, la touche Échap
+       et le fond assombri (::backdrop) sans bibliothèque externe.
+       ════════════════════════════════════════════════════════════════════ #}
+
+    {# ── Ajout rapide de tâche (bouton « + Tâche » et raccourci clavier N) ── #}
+    <dialog class="pm-dialog" id="pm-quick-task" aria-labelledby="pm-quick-task-title">
+        <form method="post" action="{{ path('app_admin_pm_task_new') }}">
+            <div class="pm-dialog__head">
+                <h2 id="pm-quick-task-title">Nouvelle tâche</h2>
+                <button type="button" class="pm-icon-btn" data-pm-close aria-label="Fermer">{{ pm.icon('x') }}</button>
+            </div>
+            <div class="pm-dialog__body">
+                <input type="hidden" name="_token" value="{{ csrf_token('pm_task_new') }}">
+                <input type="hidden" name="quick" value="1">
+                <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-qt-title">Titre</label>
+                    <input class="pm-input" id="pm-qt-title" name="title" required maxlength="255" placeholder="Ex. Envoyer le dossier de presse">
+                </div>
+                <div class="pm-row pm-row--2" style="margin-top: 12px">
+                    <div class="pm-field">
+                        <label class="pm-field__label" for="pm-qt-project">Projet</label>
+                        <select class="pm-select" id="pm-qt-project" name="projectId">
+                            <option value="">Sans projet</option>
+                            {% for p in pm_selectable_projects() %}
+                                <option value="{{ p.id }}" {{ (pm_default_project ?? null) == p.id ? 'selected' }}>{{ p.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="pm-field">
+                        <label class="pm-field__label" for="pm-qt-due">Échéance</label>
+                        <input class="pm-input" type="date" id="pm-qt-due" name="dueDate">
+                    </div>
+                </div>
+                <div class="pm-row pm-row--2" style="margin-top: 12px">
+                    <div class="pm-field">
+                        <label class="pm-field__label" for="pm-qt-priority">Priorité</label>
+                        <select class="pm-select" id="pm-qt-priority" name="priority">
+                            <option value="urgent">Urgente</option>
+                            <option value="high">Haute</option>
+                            <option value="medium" selected>Normale</option>
+                            <option value="low">Basse</option>
+                        </select>
+                    </div>
+                    <div class="pm-field">
+                        <label class="pm-field__label" for="pm-qt-status">Statut</label>
+                        <select class="pm-select" id="pm-qt-status" name="status">
+                            {% for s in pm_task_statuses() %}<option value="{{ s.value }}">{{ s.label() }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="pm-field" style="margin-top: 12px">
+                    <span class="pm-field__label">Assigner à</span>
+                    <div class="pm-checks">
+                        {% for m in pm_members() %}
+                            <label class="pm-check"><input type="checkbox" name="assignees[]" value="{{ m.id }}" {{ m.id == app.user.id ? 'checked' }}> {{ pm.avatar(m, 'xs') }} {{ m|pm_name }}</label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="pm-dialog__foot">
+                <a class="pm-link pm-mono" href="{{ path('app_admin_pm_task_new') }}">Formulaire complet</a>
+                <button type="submit" class="pm-btn pm-btn--primary">{{ pm.icon('plus') }} Créer la tâche</button>
+            </div>
+        </form>
+    </dialog>
+
+    {# ── Sélecteur Google Drive (rempli par projects.js) ───────────────── #}
+    <dialog class="pm-dialog pm-dialog--wide" id="pm-drive-picker" aria-labelledby="pm-drive-picker-title">
+        <div class="pm-dialog__head">
+            <h2 id="pm-drive-picker-title">Google Drive de l'équipe</h2>
+            <button type="button" class="pm-icon-btn" data-pm-close aria-label="Fermer">{{ pm.icon('x') }}</button>
+        </div>
+        <div class="pm-dialog__body">
+            <div class="pm-picker__tabs" role="tablist">
+                <button type="button" role="tab" aria-selected="true" data-pm-picker-tab="browse">Parcourir</button>
+                <button type="button" role="tab" aria-selected="false" data-pm-picker-tab="recent">Récents</button>
+                <button type="button" role="tab" aria-selected="false" data-pm-picker-tab="search">Rechercher</button>
+            </div>
+            <form class="pm-picker__bar" data-pm-picker-search hidden>
+                <label class="pm-sr" for="pm-picker-q">Rechercher dans le Drive</label>
+                <input class="pm-input" id="pm-picker-q" type="search" placeholder="Nom du fichier ou du dossier" maxlength="100">
+                <button class="pm-btn" type="submit">{{ pm.icon('search') }} Chercher</button>
+            </form>
+            <div class="pm-picker__crumbs" data-pm-picker-crumbs></div>
+            <ul class="pm-picker__list" data-pm-picker-list aria-live="polite"></ul>
+            <button type="button" class="pm-btn pm-btn--sm" data-pm-picker-more hidden style="margin-top: 8px">Afficher plus</button>
+        </div>
+        <div class="pm-dialog__foot">
+            <span class="pm-mono pm-muted" data-pm-picker-hint>Coche un ou plusieurs éléments. Clique sur un dossier pour l'ouvrir.</span>
+            <div style="display:flex; gap: 8px; flex-wrap: wrap">
+                <button type="button" class="pm-btn pm-btn--accent" data-pm-picker-folder hidden>Choisir ce dossier</button>
+                <button type="button" class="pm-btn pm-btn--primary" data-pm-picker-confirm disabled>Joindre la sélection</button>
+            </div>
+        </div>
+    </dialog>
+
+    {# ── Visite guidée (onboarding) ────────────────────────────────────── #}
+    <dialog class="pm-dialog" id="pm-tour" aria-labelledby="pm-tour-title">
+        <div class="pm-dialog__head">
+            <h2 id="pm-tour-title">Visite guidée · Espace projets</h2>
+            <button type="button" class="pm-icon-btn" data-pm-tour-skip aria-label="Fermer la visite">{{ pm.icon('x') }}</button>
+        </div>
+        <div class="pm-dialog__body">
+            <section class="pm-tour__step is-active">
+                <div class="pm-tour__art">{{ pm.icon('compass') }}</div>
+                <h3>Bienvenue dans l'Espace projets</h3>
+                <p>Un seul endroit pour suivre <strong>tous les projets de Bazaart</strong> à trois : qui fait quoi, pour quand, et où en est chaque projet.</p>
+                <p>La vue d'ensemble te montre chaque matin <strong>tes tâches par urgence</strong>, les projets en cours, les notes épinglées et ce que l'équipe a fait récemment.</p>
+            </section>
+            <section class="pm-tour__step">
+                <div class="pm-tour__art">{{ pm.icon('folder') }}</div>
+                <h3>1. Les projets</h3>
+                <p>Un projet a une couleur, une personne responsable, des dates et un statut (à venir, en cours, en pause, terminé, archivé).</p>
+                <ul>
+                    <li>Pars d'un <strong>modèle</strong> (événement, formation, candidature, campagne) : les tâches sont créées pour toi, calées sur l'échéance.</li>
+                    <li>La <strong>chronologie</strong> montre tous les projets sur 6 mois.</li>
+                </ul>
+            </section>
+            <section class="pm-tour__step">
+                <div class="pm-tour__art">{{ pm.icon('kanban') }}</div>
+                <h3>2. Les tâches et leurs vues</h3>
+                <p>Une tâche peut être assignée à une ou plusieurs personnes, avec priorité, échéance, étiquettes, checklist et commentaires.</p>
+                <ul>
+                    <li><strong>Kanban</strong> : glisse les cartes de « À faire » à « Terminé ».</li>
+                    <li><strong>Calendrier</strong> : glisse une tâche sur un autre jour pour la replanifier.</li>
+                    <li><strong>Par personne</strong> : la charge de chacune ; glisse pour réassigner.</li>
+                    <li><strong>Par priorité</strong> et <strong>Liste</strong> (triable, exportable en tableur).</li>
+                </ul>
+            </section>
+            <section class="pm-tour__step">
+                <div class="pm-tour__art">{{ pm.icon('filter') }}</div>
+                <h3>3. Les filtres</h3>
+                <p>Projet, personne, priorité, statut, étiquette, échéance, recherche : les filtres sont <strong>communs à toutes les vues</strong>.</p>
+                <p>Les raccourcis <strong>Mes tâches</strong>, <strong>En retard</strong>, <strong>Urgentes</strong> et <strong>Cette semaine</strong> sont à un clic. Astuce : appuie sur <strong>N</strong> pour créer une tâche.</p>
+            </section>
+            <section class="pm-tour__step">
+                <div class="pm-tour__art">{{ pm.icon('note') }}</div>
+                <h3>4. Le mur de notes</h3>
+                <p>Un espace visible par toute l'équipe pour les idées, comptes rendus et infos importantes. Chaque note est <strong>signée</strong> : on sait toujours qui l'a écrite et quand.</p>
+                <p>Épingle les notes importantes : elles remontent en tête du mur et sur la vue d'ensemble.</p>
+            </section>
+            <section class="pm-tour__step">
+                <div class="pm-tour__art">{{ pm.icon('drive') }}</div>
+                <h3>5. Le Google Drive de l'équipe</h3>
+                <p>Le Drive <strong>reinesdestempsmodernes@gmail.com</strong> est accessible depuis l'outil : parcours-le, cherche un document et <strong>joins des fichiers ou dossiers</strong> à une tâche ou un projet.</p>
+                <p>Tu peux aussi téléverser un fichier de ton ordinateur : il est rangé dans le dossier Drive du projet.</p>
+            </section>
+        </div>
+        <div class="pm-dialog__foot">
+            <div class="pm-tour__dots" aria-hidden="true" data-pm-tour-dots></div>
+            <div style="display:flex; gap: 8px">
+                <button type="button" class="pm-btn pm-btn--ghost" data-pm-tour-skip>Passer</button>
+                <button type="button" class="pm-btn" data-pm-tour-prev hidden>Précédent</button>
+                <button type="button" class="pm-btn pm-btn--primary" data-pm-tour-next>Suivant</button>
+            </div>
+        </div>
+    </dialog>
+
+    <div class="pm-toast" role="status" aria-live="polite" id="pm-toast"></div>
+</div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/projects.js') }}" defer></script>
+{% endblock %}

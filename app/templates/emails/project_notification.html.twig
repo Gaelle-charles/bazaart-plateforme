@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+{#
+    Email « Espace projets » : assignation ou nouveau commentaire (ProjectNotifier).
+
+    Variables : heading, intro, task (ProjectTask), quote (string|null),
+                recipientName, taskUrl, spaceUrl, settingsUrl
+    Règles email : tables pour la mise en page, CSS inline, URLs absolues.
+#}
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ heading }}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F2EFE6; font-family: Arial, Helvetica, sans-serif; font-size: 16px; color: #0D0D0D;">
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F2EFE6; padding: 24px 0;">
+    <tr>
+        <td align="center">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; background-color: #ffffff; border: 1px solid #0D0D0D;">
+                <tr>
+                    <td style="background-color: #0D0D0D; padding: 20px 28px;">
+                        <span style="font-family: Georgia, serif; font-size: 22px; font-weight: bold; color: #FFCB10; letter-spacing: 2px;">BAZAART</span>
+                        <span style="font-family: monospace; font-size: 10px; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; color: #FF6B2C; padding: 3px 8px; border: 1px solid #FF6B2C; margin-left: 10px;">ESPACE PROJETS</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 28px;">
+                        <p style="margin: 0 0 6px; font-family: monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #5b584f;">Bonjour {{ recipientName }}</p>
+                        <h1 style="margin: 0 0 14px; font-size: 22px; line-height: 1.2; text-transform: uppercase;">{{ heading }}</h1>
+                        <p style="margin: 0 0 16px; line-height: 1.5;">{{ intro }}</p>
+                        {% if quote %}
+                            <p style="margin: 0 0 18px; padding: 12px 14px; background-color: #F2EFE6; border-left: 4px solid #FFCB10; line-height: 1.5; white-space: pre-line;">{{ quote }}</p>
+                        {% endif %}
+                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #0D0D0D; margin-bottom: 20px;">
+                            <tr>
+                                <td style="padding: 14px 16px; border-left: 6px solid {{ task.project ? task.project.color : '#0D0D0D' }};">
+                                    <strong style="font-size: 16px;">{{ task.title }}</strong><br>
+                                    <span style="font-family: monospace; font-size: 12px; color: #5b584f;">
+                                        {{ task.project ? task.project.name : 'Sans projet' }} · {{ task.status.label() }} · priorité {{ task.priority.label()|lower }}{% if task.dueDate %} · échéance {{ task.dueDate|date('d/m/Y') }}{% endif %}
+                                    </span>
+                                </td>
+                            </tr>
+                        </table>
+                        <a href="{{ taskUrl }}" style="display: inline-block; background-color: #0D0D0D; color: #FFCB10; text-decoration: none; font-weight: bold; padding: 12px 20px; border: 1px solid #0D0D0D;">Ouvrir la tâche</a>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 16px 28px; border-top: 1px solid #0D0D0D; font-size: 12px; color: #5b584f; line-height: 1.5;">
+                        Tu reçois cet email car tu fais partie de l'Espace projets Bazaart.
+                        <a href="{{ settingsUrl }}" style="color: #0D0D0D;">Gérer mes notifications</a> · <a href="{{ spaceUrl }}" style="color: #0D0D0D;">Espace projets</a>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

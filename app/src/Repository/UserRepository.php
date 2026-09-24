@@ -51,4 +51,39 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         // Recherche directe sur le hash — findOneBy utilise l'index automatiquement
         return $this->findOneBy(['resetTokenHash' => $tokenHash]);
     }
+
+    /**
+     * Utilisateurs possédant EXPLICITEMENT un rôle dans users.roles
+     * (ex. ROLE_PROJECT pour les membres de l'Espace projets — ADR-0037).
+     *
+     * POURQUOI du SQL natif ?
+     *   La colonne roles est de type JSON : le DQL de Doctrine ne sait pas
+     *   interroger l'intérieur d'un JSON. On utilise l'opérateur PostgreSQL `@>`
+     *   (« contient ») sur un cast jsonb, puis on recharge les entités par ID.
+     *
+     * ATTENTION : la hiérarchie des rôles (security.yaml) n'est PAS appliquée ici,
+     * seul le contenu brut de la colonne compte. C'est voulu : ROLE_PROJECT n'est
+     * hérité par aucun autre rôle.
+     *
+     * Les comptes anonymisés (RGPD) sont exclus.
+     *
+     * @return list<User> triés par prénom puis email
+     */
+    public function findByRole(string $role): array
+    {
+        $ids = $this->getEntityManager()->getConnection()->fetchFirstColumn(
+            'SELECT id FROM users WHERE CAST(roles AS jsonb) @> CAST(:role AS jsonb) AND anonymized_at IS NULL',
+            ['role' => json_encode([$role], JSON_THROW_ON_ERROR)],
+        );
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $users = $this->findBy(['id' => $ids]);
+        usort($users, static fn (User $a, User $b): int => [mb_strtolower($a->getFirstName() ?? ''), $a->getEmail()]
+            <=> [mb_strtolower($b->getFirstName() ?? ''), $b->getEmail()]);
+
+        return $users;
+    }
 }

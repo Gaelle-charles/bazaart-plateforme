@@ -137,6 +137,14 @@ security:
         # car access_control ne peut pas lire les champs BDD.
         - { path: ^/structure/dashboard, roles: ROLE_STRUCTURE }
         - { path: ^/structure/register, roles: ROLE_USER }
+        # ── Espace projets (ADR-0037) — AVANT la règle ^/admin ──────────────
+        # La première règle qui matche gagne : /admin/projets doit donc être
+        # déclarée avant ^/admin, sinon elle exigerait ROLE_ADMIN.
+        # ROLE_PROJECT est attribué nominativement aux membres de l'équipe
+        # (migration Version20260924124344 + commande app:projets:acces).
+        # Il n'est hérité par AUCUN autre rôle (pas même ROLE_ADMIN) : seules
+        # les personnes explicitement ajoutées voient les projets et les notes.
+        - { path: ^/admin/projets, roles: ROLE_PROJECT }
         # Administration : ROLE_ADMIN seulement
         - { path: ^/admin, roles: ROLE_ADMIN }
         # ── Blog — PUBLIC pour l'indexation SEO ──────────────────────────────

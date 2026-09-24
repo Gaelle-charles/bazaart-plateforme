@@ -1,0 +1,49 @@
+{#
+ # _task_card.html.twig : carte d'une tâche (Kanban, Par personne, Par priorité, fiche projet).
+ #
+ # Variables :
+ #   task        App\Entity\ProjectTask
+ #   stats       compteurs {subtasksDone, subtasksTotal, comments, attachments} (facultatif)
+ #   show_status afficher le badge de statut (vues où les colonnes ne sont PAS les statuts)
+ #
+ # data-pm-drag : la carte est déplaçable (projects.js) ; data-move-url = route JSON.
+ # draggable="false" sur les liens : le navigateur ne doit pas « glisser le lien »
+ # au lieu de la carte.
+ #}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+{% set stats = stats ?? {subtasksDone: 0, subtasksTotal: 0, comments: 0, attachments: 0} %}
+{% set today = pm_today() %}
+<article class="pm-task{{ task.isOverdue(today) ? ' pm-task--overdue' }}{{ task.isDone() ? ' pm-task--done' }}"
+         data-pm-drag
+         data-task-id="{{ task.id }}"
+         data-move-url="{{ path('app_admin_pm_task_move', {id: task.id}) }}"
+         style="--p: {{ task.project ? task.project.color : '#0E0D0B' }}">
+    <div class="pm-task__top">
+        {{ pm.project_chip(task.project) }}
+        <span class="pm-badge pm-prio--{{ task.priority.cssModifier() }}">{{ task.priority.label() }}</span>
+    </div>
+    <a class="pm-task__title" href="{{ path('app_admin_pm_task_show', {id: task.id}) }}" draggable="false">{{ task.title }}</a>
+    {% if task.labels|length > 0 %}
+        <div class="pm-task__labels">
+            {% for label in task.labels %}<span class="pm-label" style="--c: {{ label.color }}">{{ label.name }}</span>{% endfor %}
+        </div>
+    {% endif %}
+    <div class="pm-task__meta">
+        <span class="pm-task__facts">
+            {% if show_status ?? false %}
+                <span class="pm-badge pm-status--{{ task.status.cssModifier() }}">{{ task.status.label() }}</span>
+            {% endif %}
+            {{ pm.due(task) }}
+            {% if stats.subtasksTotal > 0 %}
+                <span title="Sous-tâches terminées">{{ pm.icon('subtasks') }} {{ stats.subtasksDone }}/{{ stats.subtasksTotal }}</span>
+            {% endif %}
+            {% if stats.comments > 0 %}
+                <span title="Commentaires">{{ pm.icon('comment') }} {{ stats.comments }}</span>
+            {% endif %}
+            {% if stats.attachments > 0 %}
+                <span title="Pièces jointes">{{ pm.icon('clip') }} {{ stats.attachments }}</span>
+            {% endif %}
+        </span>
+        {{ pm.avatars(task.assignees) }}
+    </div>
+</article>

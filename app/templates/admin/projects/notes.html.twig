@@ -1,0 +1,158 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # notes.html.twig : mur de notes signées de l'équipe (AdminProjectNoteController::index).
+ #
+ # Chaque note affiche TOUJOURS son autrice (avatar + nom) et sa date :
+ # « on doit savoir qui a écrit ». Seule l'autrice voit les boutons Modifier / Supprimer
+ # (is_granted('PROJECT_NOTE_EDIT', note)) ; tout le monde peut épingler.
+ #
+ # Variables : notes, filters {author, project, q, pinned}, members, projects, colors
+ #}
+
+{% set pm_tab = 'notes' %}
+{% block title %}Notes d'équipe · Espace projets · BazaArt{% endblock %}
+{% block page_title %}Notes d'équipe{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+
+<div class="pm-head">
+    <div>
+        <div class="pm-eyebrow">Espace projets</div>
+        <h1 class="pm-title">Le mur <small>Idées, comptes rendus, infos importantes. Chaque note est signée.</small></h1>
+    </div>
+</div>
+
+{# ── Écrire une note ──────────────────────────────────────────────────── #}
+<details class="pm-composer" id="nouvelle-note" open>
+    <summary>{{ pm.icon('plus') }} Écrire une note</summary>
+    <form method="post" action="{{ path('app_admin_pm_note_new') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('pm_note_new') }}">
+        <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+        <div class="pm-row pm-row--2">
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-n-title">Titre (facultatif)</label>
+                <input class="pm-input" id="pm-n-title" name="title" maxlength="150">
+            </div>
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-n-project">Projet lié (facultatif)</label>
+                <select class="pm-select" id="pm-n-project" name="projectId">
+                    <option value="">Aucun</option>
+                    {% for p in projects %}<option value="{{ p.id }}" {{ filters.project == p.id ? 'selected' }}>{{ p.name }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="pm-field">
+            <label class="pm-field__label" for="pm-n-content">Note</label>
+            <textarea class="pm-textarea" id="pm-n-content" name="content" required maxlength="10000" rows="4" placeholder="Les liens (https://…) deviennent cliquables."></textarea>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 10px">
+            <div style="display:flex; flex-wrap: wrap; gap: 12px; align-items: center">
+                <div class="pm-swatches" role="radiogroup" aria-label="Couleur de la note">
+                    {% for c in colors %}
+                        <label class="pm-swatch pm-note--{{ c.value }}" title="{{ c.label() }}">
+                            <input type="radio" name="color" value="{{ c.value }}" {{ loop.first ? 'checked' }} aria-label="{{ c.label() }}">
+                            <span style="--c: var(--n)"></span>
+                        </label>
+                    {% endfor %}
+                </div>
+                <label class="pm-check"><input type="checkbox" name="pinned" value="1"> {{ pm.icon('pin') }} Épingler</label>
+            </div>
+            <button class="pm-btn pm-btn--primary" type="submit">Publier (signée {{ app.user|pm_name }})</button>
+        </div>
+    </form>
+</details>
+
+{# ── Filtres du mur ──────────────────────────────────────────────────── #}
+<form method="get" action="{{ path('app_admin_pm_notes') }}" class="pm-filters">
+    <div class="pm-filters__grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr))">
+        <div class="pm-field">
+            <label class="pm-field__label" for="pm-nf-q">Recherche</label>
+            <input class="pm-input" type="search" id="pm-nf-q" name="q" value="{{ filters.q }}">
+        </div>
+        <div class="pm-field">
+            <label class="pm-field__label" for="pm-nf-author">Écrite par</label>
+            <select class="pm-select" id="pm-nf-author" name="author">
+                <option value="">Tout le monde</option>
+                {% for m in members %}<option value="{{ m.id }}" {{ filters.author == m.id ? 'selected' }}>{{ m|pm_name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="pm-field">
+            <label class="pm-field__label" for="pm-nf-project">Projet</label>
+            <select class="pm-select" id="pm-nf-project" name="project">
+                <option value="">Tous</option>
+                {% for p in projects %}<option value="{{ p.id }}" {{ filters.project == p.id ? 'selected' }}>{{ p.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="pm-field" style="justify-content: flex-end">
+            <label class="pm-check"><input type="checkbox" name="pinned" value="1" {{ filters.pinned ? 'checked' }}> Épinglées seulement</label>
+        </div>
+        <div class="pm-field" style="justify-content: flex-end">
+            <button class="pm-btn" type="submit">{{ pm.icon('search') }} Filtrer</button>
+        </div>
+    </div>
+</form>
+
+{# ── Le mur ──────────────────────────────────────────────────────────── #}
+{% if notes|length > 0 %}
+    <div class="pm-wall">
+        {% for note in notes %}
+            {% set canEdit = is_granted('PROJECT_NOTE_EDIT', note) %}
+            {% set noteToken = csrf_token('pm_note_' ~ note.id) %}
+            <article class="pm-note pm-note--{{ note.color.value }}" id="note-{{ note.id }}">
+                <div class="pm-note__head">
+                    {% if note.title %}<h2 class="pm-note__title">{{ note.title }}</h2>{% else %}<span></span>{% endif %}
+                    {% if note.pinned %}<span class="pm-note__pin">Épinglée</span>{% endif %}
+                </div>
+                <div class="pm-note__body">{{ note.content|pm_autolink|nl2br }}</div>
+                {% if note.project %}
+                    <div style="padding: 0 14px 10px">{{ pm.project_chip(note.project) }}</div>
+                {% endif %}
+                <div class="pm-note__foot">
+                    <div class="pm-note__sig">
+                        {{ pm.avatar(note.author) }}
+                        <div>
+                            <strong>{{ note.author|pm_name }}</strong>
+                            <small>{{ note.createdAt|pm_datetime }}{% if note.updatedAt %} · modifiée {{ note.updatedAt|pm_ago }}{% endif %}</small>
+                        </div>
+                    </div>
+                    <div class="pm-note__actions">
+                        <form method="post" action="{{ path('app_admin_pm_note_pin', {id: note.id}) }}">
+                            <input type="hidden" name="_token" value="{{ noteToken }}">
+                            <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+                            <button class="pm-icon-btn" type="submit" title="{{ note.pinned ? 'Désépingler' : 'Épingler' }}" aria-label="{{ note.pinned ? 'Désépingler' : 'Épingler' }} la note">{{ pm.icon('pin') }}</button>
+                        </form>
+                        {% if canEdit %}
+                            <button class="pm-icon-btn" type="button" data-pm-toggle="note-edit-{{ note.id }}" title="Modifier" aria-label="Modifier ma note" aria-expanded="false">{{ pm.icon('edit') }}</button>
+                            <form method="post" action="{{ path('app_admin_pm_note_delete', {id: note.id}) }}" onsubmit="return confirm('Supprimer ta note ?')">
+                                <input type="hidden" name="_token" value="{{ noteToken }}">
+                                <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+                                <button class="pm-icon-btn pm-icon-btn--danger" type="submit" title="Supprimer" aria-label="Supprimer ma note">{{ pm.icon('trash') }}</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if canEdit %}
+                    <form method="post" action="{{ path('app_admin_pm_note_edit', {id: note.id}) }}" class="pm-note__edit" id="note-edit-{{ note.id }}" hidden>
+                        <input type="hidden" name="_token" value="{{ noteToken }}">
+                        <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+                        <input type="hidden" name="color" value="{{ note.color.value }}">
+                        <input type="hidden" name="projectId" value="{{ note.project ? note.project.id }}">
+                        <label class="pm-sr" for="pm-ne-title-{{ note.id }}">Titre</label>
+                        <input class="pm-input" id="pm-ne-title-{{ note.id }}" name="title" value="{{ note.title }}" maxlength="150" placeholder="Titre">
+                        <label class="pm-sr" for="pm-ne-content-{{ note.id }}">Contenu</label>
+                        <textarea class="pm-textarea" id="pm-ne-content-{{ note.id }}" name="content" required maxlength="10000" style="margin-top: 6px">{{ note.content }}</textarea>
+                        <button class="pm-btn pm-btn--sm pm-btn--primary" type="submit" style="margin-top: 6px">Enregistrer</button>
+                    </form>
+                {% endif %}
+            </article>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="pm-empty">
+        <strong>Le mur est vide</strong>
+        <p>{{ filters.q or filters.author or filters.project or filters.pinned ? 'Aucune note ne correspond à ces filtres.' : 'Écris la première note de l\'équipe : un compte rendu de réunion, une idée, un contact utile…' }}</p>
+    </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,30 @@
+{#
+ # _project_card.html.twig : carte d'un projet (page Projets, vue d'ensemble).
+ # Variables : project, stats ({total, done, overdue, percent} ou null)
+ #}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+{% set stats = stats ?? {total: 0, done: 0, overdue: 0, percent: 0} %}
+{% set today = pm_today() %}
+<article class="pm-project" style="--c: {{ project.color }}">
+    <div style="display:flex; justify-content: space-between; gap: 8px; align-items: flex-start">
+        <h3 class="pm-project__name"><a href="{{ path('app_admin_pm_project_show', {id: project.id}) }}">{{ project.name }}</a></h3>
+        <span class="pm-badge pm-pstatus--{{ project.status.cssModifier() }}">{{ project.status.label() }}</span>
+    </div>
+    {% if project.description %}<p class="pm-project__desc">{{ project.description }}</p>{% endif %}
+    <div class="pm-project__progress" title="{{ stats.done }} tâche(s) terminée(s) sur {{ stats.total }}">
+        <div class="pm-progress pm-progress--accent"><div class="pm-progress__bar" style="width: {{ stats.percent }}%"></div></div>
+        <span>{{ stats.percent }}%</span>
+    </div>
+    <div class="pm-project__meta">
+        <span>
+            {{ stats.done }}/{{ stats.total }} tâches
+            {% if stats.overdue > 0 %}· <span style="color: var(--danger); font-weight: 700">{{ stats.overdue }} en retard</span>{% endif %}
+        </span>
+        <span style="display:inline-flex; align-items:center; gap: 6px">
+            {% if project.dueDate %}
+                <span class="{{ project.isOverdue(today) ? 'pm-due--overdue' }}" title="Échéance du projet">{{ pm.icon('flag') }} {{ project.dueDate|pm_short }}</span>
+            {% endif %}
+            {% if project.owner %}{{ pm.avatar(project.owner, 'xs') }}{% endif %}
+        </span>
+    </div>
+</article>
