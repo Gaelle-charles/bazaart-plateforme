@@ -53,10 +53,4 @@ final class ProjectImportRow
 
     /** @var list<array{title: string, done: bool}> */
     public array $subtasks = [];
-
-    /** Nom du projet à afficher dans l'aperçu (existant ou à créer). */
-    public function projectLabel(): ?string
-    {
-        return $this->project?->getName() ?? $this->newProjectName;
-    }
 }
