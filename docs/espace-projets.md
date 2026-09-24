@@ -100,13 +100,16 @@ Nginx : le conteneur est reconstruit automatiquement par `deploy.sh`.
 
 | Onglet | Ce qu'on y trouve |
 |---|---|
-| **Vue d'ensemble** | Mes tâches par urgence (en retard, aujourd'hui, semaine…), projets en cours, notes épinglées, charge de l'équipe, activité récente, checklist « Bien démarrer » |
+| **Vue d'ensemble** | Mes tâches par urgence (5 par groupe, lien vers la suite), projets en cours (liste compacte), notes épinglées, activité récente, étapes restantes de « Bien démarrer » |
 | **Tâches** | 5 vues : **Kanban**, **Liste** (triable, export tableur), **Calendrier**, **Par personne**, **Par priorité** |
 | **Projets** | Cartes avec avancement, filtre par statut, **Chronologie** sur 6 mois |
 | **Notes d'équipe** | Le mur : notes signées, colorées, épinglables, liées ou non à un projet |
 | **Drive** | Parcourir / rechercher dans le Drive de l'équipe |
-| **Équipe & réglages** | Membres et charge, mon prénom et mon nom, ma couleur, mes emails, étiquettes, connexion Drive |
+| **Équipe & réglages** | Membres et charge, mon prénom et mon nom, mes emails, étiquettes, connexion Drive |
 
+- **Interface sobre** : couleurs neutres ; le rouge signale seulement ce qui est en
+  retard ou urgent, la couleur d'un projet n'apparaît que dans sa pastille, et seules
+  les priorités « Haute » et « Urgente » sont affichées sur les cartes.
 - **Filtres** communs à toutes les vues (projet, personne, priorité, statut, étiquette,
   échéance, recherche) + raccourcis *Mes tâches*, *En retard*, *Urgentes*,
   *Cette semaine*, *Non assignées*. Ils sont dans l'URL : une vue filtrée peut se
