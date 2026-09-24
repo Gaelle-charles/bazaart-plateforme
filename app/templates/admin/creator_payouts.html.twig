@@ -249,8 +249,16 @@
                 {% endif %}
             </span>
             {% if profile.rejectionReason %}
+                {#
+                    Motif coupé à 80 caractères avec les filtres Twig NATIFS (length, slice).
+                    Ne pas utiliser |truncate : ce filtre venait de l'ancien paquet
+                    « Twig Extensions », absent du projet. Comme Twig compile le template
+                    entier, il faisait planter toute la page (erreur 500).
+                    Pas de |e : l'échappement automatique de Twig s'en charge déjà.
+                #}
+                {% set reason = profile.rejectionReason %}
                 <span class="cpd-meta" style="font-style:italic;">
-                    &mdash; Motif : {{ profile.rejectionReason|e|truncate(80, true, '...') }}
+                    &middot; Motif : {{ reason|length > 80 ? reason|slice(0, 79) ~ '…' : reason }}
                 </span>
             {% endif %}
             {# Lien document même sur les dossiers traités (l'admin peut re-consulter) #}
