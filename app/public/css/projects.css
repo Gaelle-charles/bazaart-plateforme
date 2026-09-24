@@ -183,6 +183,8 @@
     .pm-layout--halves { grid-template-columns: 1fr 1fr; }
 }
 .pm-stack > * + * { margin-top: var(--pm-gap); }
+/* Dans une grille, l'espacement vient du gap : pas de marge en plus entre cartes voisines. */
+.pm-layout > .pm-card + .pm-card { margin-top: 0; }
 
 /* ═══ INDICATEURS (KPI) ═══════════════════════════════════════════════════ */
 

@@ -364,7 +364,7 @@ class AdminProjectController extends AbstractController
         ]);
     }
 
-    /** POST /admin/projets/equipe/preferences — couleur d'avatar et emails. */
+    /** POST /admin/projets/equipe/preferences — prénom et nom, couleur d'avatar, emails. */
     #[Route('/equipe/preferences', name: 'team_prefs', methods: ['POST'])]
     public function savePreferences(Request $request): Response
     {
@@ -374,7 +374,19 @@ class AdminProjectController extends AbstractController
             return $this->redirectToRoute('app_admin_pm_team');
         }
 
-        $profile = $this->memberService->getProfile($this->currentUser());
+        $user  = $this->currentUser();
+        $error = $this->memberService->rename(
+            $user,
+            (string) $request->request->get('firstName', ''),
+            (string) $request->request->get('lastName', ''),
+        );
+        if ($error !== null) {
+            $this->addFlash('error', $error);
+
+            return $this->redirect($this->generateUrl('app_admin_pm_team') . '#pm-me');
+        }
+
+        $profile = $this->memberService->getProfile($user);
         $profile->setEmailNotifications($request->request->getBoolean('emailNotifications'));
         $color = (string) $request->request->get('color', '');
         if (in_array($color, ProjectService::COLORS, true) || in_array($color, ProjectMemberService::MEMBER_COLORS, true)) {

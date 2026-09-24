@@ -28,6 +28,7 @@
         </h1>
     </div>
     <div class="pm-head__actions">
+        <a class="pm-btn pm-btn--ghost" href="{{ path('app_admin_pm_import') }}" title="Reprendre des tâches suivies dans Google Sheets ou Excel">{{ pm.icon('upload') }} Importer</a>
         <a class="pm-btn pm-btn--ghost" href="{{ path('app_admin_pm_tasks_export', baseQuery) }}" title="Télécharger les tâches filtrées (Excel, LibreOffice…)">{{ pm.icon('download') }} Export tableur</a>
         <button type="button" class="pm-btn pm-btn--primary" data-pm-quick-task>{{ pm.icon('plus') }} Nouvelle tâche</button>
     </div>
@@ -112,8 +113,9 @@
     {% else %}
         <div class="pm-empty">
             <strong>Aucune tâche</strong>
-            <p>{{ filter.isActive() ? 'Aucune tâche ne correspond à ces filtres.' : 'Crée la première tâche de l\'équipe.' }}</p>
+            <p>{{ filter.isActive() ? 'Aucune tâche ne correspond à ces filtres.' : 'Crée la première tâche de l\'équipe, ou reprends celles de ton tableur.' }}</p>
             <button type="button" class="pm-btn pm-btn--primary" data-pm-quick-task>{{ pm.icon('plus') }} Nouvelle tâche</button>
+            {% if not filter.isActive() %}<a class="pm-btn" href="{{ path('app_admin_pm_import') }}">{{ pm.icon('upload') }} Importer un tableur</a>{% endif %}
         </div>
     {% endif %}
 

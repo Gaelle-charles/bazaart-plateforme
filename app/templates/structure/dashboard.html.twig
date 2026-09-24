@@ -113,6 +113,18 @@
             Mes publications
         </a>
 
+        {# Espace projets (ADR-0037) : outil interne de l'équipe, seulement pour ROLE_PROJECT. #}
+        {% if is_granted('ROLE_PROJECT') %}
+            <a href="{{ path('app_admin_pm_overview') }}" class="sd-link">
+                {# Icône tableau Kanban (3 colonnes) #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="16"/>
+                    <path d="M9 4v16M15 4v16"/>
+                </svg>
+                Espace projets
+            </a>
+        {% endif %}
+
     </nav>
 
     {# ── Section : Structure ── #}

@@ -760,7 +760,8 @@
  #
  # Côté droit :
  #   - Utilisateur NON connecté : Connexion + Rejoindre
- #   - Utilisateur connecté     : avatar ▾ avec dropdown (Mon espace + Déconnexion)
+ #   - Utilisateur connecté     : avatar ▾ avec dropdown (Mon espace, Espace projets
+ #                                pour l'équipe ROLE_PROJECT, Déconnexion)
  #
  # ══════════════════════════════════════════════════════════════════════════ #}
 {# currentRoute : nom Symfony de la route active (ex: "app_resource_index").
@@ -868,6 +869,12 @@
                         <a href="{{ path('app_dashboard') }}" class="nav-user-item" role="menuitem">
                             Mon espace
                         </a>
+                        {# Espace projets (ADR-0037) : outil interne, seulement pour l'équipe (ROLE_PROJECT). #}
+                        {% if is_granted('ROLE_PROJECT') %}
+                            <a href="{{ path('app_admin_pm_overview') }}" class="nav-user-item" role="menuitem">
+                                Espace projets
+                            </a>
+                        {% endif %}
                         <a href="{{ path('app_logout') }}" class="nav-user-item danger" role="menuitem">
                             Se déconnecter
                         </a>
@@ -929,6 +936,9 @@
 
     {% if app.user %}
         <a href="{{ path('app_dashboard') }}" class="nav-mobile-item">Mon espace</a>
+        {% if is_granted('ROLE_PROJECT') %}
+            <a href="{{ path('app_admin_pm_overview') }}" class="nav-mobile-item">Espace projets</a>
+        {% endif %}
         <a href="{{ path('app_logout') }}" class="nav-mobile-item danger">Se déconnecter</a>
     {% else %}
         <a href="{{ path('app_login') }}" class="nav-mobile-item">Se connecter</a>

@@ -79,9 +79,7 @@ class ProjectAttachmentService
         $url  = trim($url);
         $name = trim($name);
 
-        // Seuls http(s) sont acceptés : un lien « javascript:… » dans un href
-        // serait une faille XSS.
-        if (filter_var($url, FILTER_VALIDATE_URL) === false || preg_match('#^https?://#i', $url) !== 1 || mb_strlen($url) > 1024) {
+        if (!self::isSafeLinkUrl($url)) {
             return 'Le lien doit être une adresse web valide commençant par http:// ou https://.';
         }
         if ($name === '') {
@@ -91,6 +89,17 @@ class ProjectAttachmentService
         $this->persist($parent, $actor, ProjectAttachmentSource::Link, mb_substr($name, 0, 255), $url, null, null);
 
         return null;
+    }
+
+    /**
+     * Seuls http(s) sont acceptés : un lien « javascript:… » dans un href serait
+     * une faille XSS. Utilisé aussi par l'import de tâches (colonne « Lien »).
+     */
+    public static function isSafeLinkUrl(string $url): bool
+    {
+        return filter_var($url, FILTER_VALIDATE_URL) !== false
+            && preg_match('#^https?://#i', $url) === 1
+            && mb_strlen($url) <= 1024;
     }
 
     public function remove(ProjectAttachment $attachment): void
