@@ -88,7 +88,7 @@ class ProjectSpaceTest extends AbstractE2ETestCase
         $this->loginAs($this->wendie);
         $crawler = $this->client->request('GET', '/admin/projets');
         self::assertSame('1', $crawler->filter('#pm-root')->attr('data-show-tour'));
-        self::assertCount(6, $crawler->filter('.pm-step'), 'La checklist « Bien démarrer » compte 6 étapes.');
+        self::assertCount(7, $crawler->filter('.pm-step'), 'La checklist « Bien démarrer » compte 7 étapes.');
 
         $this->postJson('/admin/projets/onboarding/visite', [], $this->ajaxToken());
         $this->assertResponseIsSuccessful();

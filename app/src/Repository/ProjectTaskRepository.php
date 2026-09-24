@@ -302,6 +302,26 @@ class ProjectTaskRepository extends ServiceEntityRepository
         return $max === null ? 0 : ((int) $max) + 1;
     }
 
+    /**
+     * Titre et projet de toutes les tâches, sans hydrater les entités.
+     * Sert à l'import pour repérer les doublons (même titre dans le même projet).
+     *
+     * @return list<array{projectId: int|null, title: string}>
+     */
+    public function findAllTitles(): array
+    {
+        /** @var list<array{projectId: int|string|null, title: string}> $rows */
+        $rows = $this->createQueryBuilder('t')
+            ->select('IDENTITY(t.project) AS projectId', 't.title AS title')
+            ->getQuery()
+            ->getArrayResult();
+
+        return array_map(static fn (array $row): array => [
+            'projectId' => $row['projectId'] !== null ? (int) $row['projectId'] : null,
+            'title'     => $row['title'],
+        ], $rows);
+    }
+
     /** Tâches créées par $user ET assignées à au moins une personne (onboarding). */
     public function countCreatedAndAssignedBy(User $user): int
     {

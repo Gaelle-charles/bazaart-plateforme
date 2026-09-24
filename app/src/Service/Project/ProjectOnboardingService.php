@@ -22,7 +22,7 @@ use Doctrine\ORM\EntityManagerInterface;
  *   1. La VISITE GUIDÉE : 6 écrans présentés à la première visite (fenêtre modale).
  *      On mémorise seulement qu'elle a été vue ou passée (tourCompletedAt).
  *
- *   2. La CHECKLIST « Bien démarrer » sur la vue d'ensemble : 6 étapes concrètes,
+ *   2. La CHECKLIST « Bien démarrer » sur la vue d'ensemble : 7 étapes concrètes,
  *      COCHÉES AUTOMATIQUEMENT à partir de ce que la personne a réellement fait
  *      (on interroge les données, rien à cocher à la main). Elle disparaît quand
  *      tout est fait, ou si la personne la masque.
@@ -61,6 +61,16 @@ class ProjectOnboardingService
                 'params' => [],
                 'cta'    => 'Lancer la visite',
                 'tour'   => true,
+            ],
+            [
+                'key'    => 'name',
+                'label'  => 'Indiquer mon prénom',
+                'help'   => 'C\'est lui qui signe tes notes, commentaires et tâches (sinon l\'équipe voit le début de ton email).',
+                'done'   => trim((string) $user->getFirstName()) !== '',
+                'route'  => 'app_admin_pm_team',
+                'params' => ['_fragment' => 'pm-me'],
+                'cta'    => 'Mon prénom',
+                'tour'   => false,
             ],
             [
                 'key'    => 'project',

@@ -99,6 +99,35 @@ class ProjectMemberService
     }
 
     /**
+     * Change le prénom et le nom affichés (« Mes préférences »).
+     *
+     * Ce sont ceux du compte (users.first_name / last_name) : les mêmes que sur le
+     * reste de la plateforme et dans les emails. Les comptes créés par la commande
+     * n'en ont pas, d'où l'affichage « Hello » (partie avant @ de l'email).
+     * Rien n'est enregistré ici : le flush est fait par l'appelant avec les préférences.
+     *
+     * @return string|null message d'erreur, ou null si c'est valide
+     */
+    public function rename(User $user, string $firstName, string $lastName): ?string
+    {
+        // Espaces multiples et caractères de contrôle (retours à la ligne…) retirés.
+        $clean = static fn (string $value): string => trim((string) preg_replace('/[\p{Cc}\s]+/u', ' ', $value));
+        $firstName = $clean($firstName);
+        $lastName  = $clean($lastName);
+
+        if ($firstName === '') {
+            return 'Indique au moins ton prénom.';
+        }
+        if (mb_strlen($firstName) > 100 || mb_strlen($lastName) > 100) {
+            return 'Le prénom et le nom sont limités à 100 caractères.';
+        }
+
+        $user->setFirstName($firstName)->setLastName($lastName !== '' ? $lastName : null);
+
+        return null;
+    }
+
+    /**
      * Couleurs d'avatar de toutes les membres, indexées par ID utilisateur.
      * Utilisé par l'extension Twig pour colorer les pastilles sans requête par avatar.
      *

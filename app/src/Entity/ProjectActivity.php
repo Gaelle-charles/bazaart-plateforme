@@ -37,6 +37,7 @@ class ProjectActivity
     public const string COMMENT_ADDED     = 'comment_added';
     public const string ATTACHMENT_ADDED  = 'attachment_added';
     public const string NOTE_ADDED        = 'note_added';
+    public const string TASKS_IMPORTED    = 'tasks_imported';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

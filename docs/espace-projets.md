@@ -39,7 +39,9 @@ docker compose --env-file .env.local -f docker-compose.prod.yml exec -T platform
 > fait avec la commande (`--creer hello@gaellecode.fr`, puis `--retirer g.charlesbel@gmail.com`).
 
 Un compte créé par la commande reçoit un email « choisir mon mot de passe » (lien valable
-1 heure, relançable ensuite via « Mot de passe oublié »). Pour les adresses Gmail,
+1 heure, relançable ensuite via « Mot de passe oublié »). Il n'a pas de prénom : l'outil
+affiche alors le début de l'email (« Hello ») jusqu'à ce que la personne indique son
+prénom dans **Équipe & réglages > Mes préférences** (étape de la checklist « Bien démarrer »). Pour les adresses Gmail,
 **« Se connecter avec Google » fonctionne aussi directement** ; pour hello@gaellecode.fr,
 seulement si cette adresse est rattachée à un compte Google. Après connexion, une membre qui n'est pas admin arrive directement sur
 l'Espace projets.
@@ -103,7 +105,7 @@ Nginx : le conteneur est reconstruit automatiquement par `deploy.sh`.
 | **Projets** | Cartes avec avancement, filtre par statut, **Chronologie** sur 6 mois |
 | **Notes d'équipe** | Le mur : notes signées, colorées, épinglables, liées ou non à un projet |
 | **Drive** | Parcourir / rechercher dans le Drive de l'équipe |
-| **Équipe & réglages** | Membres et charge, ma couleur, mes emails, étiquettes, connexion Drive |
+| **Équipe & réglages** | Membres et charge, mon prénom et mon nom, ma couleur, mes emails, étiquettes, connexion Drive |
 
 - **Filtres** communs à toutes les vues (projet, personne, priorité, statut, étiquette,
   échéance, recherche) + raccourcis *Mes tâches*, *En retard*, *Urgentes*,
@@ -113,6 +115,15 @@ Nginx : le conteneur est reconstruit automatiquement par `deploy.sh`.
   priorité, Calendrier (replanifier ; le bac « Sans échéance » permet de dater une
   tâche). Sur téléphone : **appui long** sur la carte, puis glisser.
 - **Raccourci N** : nouvelle tâche depuis n'importe quelle page du module.
+- **Revenir à l'Espace projets** depuis le reste du site : menu du compte (avatar en
+  haut à droite) ou menu mobile > **Espace projets**, et lien dans la barre latérale de
+  « Mon espace ». Visible seulement pour l'équipe.
+- **Importer des tâches** depuis un tableur (*Tâches > Importer*) : dans Google Sheets,
+  *Fichier > Télécharger > CSV* (onglet des tâches), puis envoyer le fichier. Un aperçu
+  montre ce qui sera créé (projets retrouvés par leur nom ou créés, personnes retrouvées
+  par prénom ou email, dates, sous-tâches, liens) avant de confirmer. Réimporter le même
+  fichier ne crée pas de doublon ; aucun email n'est envoyé. Un modèle à remplir est
+  téléchargeable sur la page.
 - **Modèles de projet** : Événement, Formation (Studio), Candidature / appel à projets,
   Campagne de communication. Les tâches sont planifiées à rebours depuis l'échéance du
   projet et confiées à la personne responsable, qui les répartit ensuite.
@@ -124,7 +135,8 @@ Nginx : le conteneur est reconstruit automatiquement par `deploy.sh`.
   dans le Drive. Un projet peut avoir son **dossier Drive** (créé automatiquement à la
   création du projet si la case est cochée).
 - **Onboarding** : visite guidée à la première visite (relançable depuis la vue
-  d'ensemble ou Équipe & réglages) + checklist de 6 étapes qui se cochent seules.
+  d'ensemble ou Équipe & réglages) + checklist de 7 étapes qui se cochent seules
+  (dont « Indiquer mon prénom »).
 - **Emails** : quand on m'assigne une tâche, quand on commente une tâche qui me concerne,
   récap quotidien. Désactivables dans *Équipe & réglages*.
 
@@ -133,20 +145,23 @@ Nginx : le conteneur est reconstruit automatiquement par `deploy.sh`.
 ## 3. Côté technique (repères pour le code)
 
 ```
-src/Controller/Project/        AdminProject*Controller (fins) + ProjectControllerTrait
+src/Controller/Project/        AdminProject*Controller (fins, dont l'import) + ProjectControllerTrait
 src/Service/Project/           logique métier (ProjectService, ProjectTaskService,
                                ProjectNoteService, ProjectAttachmentService,
                                GoogleDriveService, TokenCipher, ProjectClock,
                                ProjectCalendarBuilder, ProjectOnboardingService,
-                               ProjectNotifier, ProjectTemplateCatalog…)
-src/DTO/Project/               ProjectTaskFilter, ProjectData, ProjectTaskData, ProjectNoteData
+                               ProjectNotifier, ProjectTemplateCatalog,
+                               ProjectTaskImporter…)
+src/DTO/Project/               ProjectTaskFilter, ProjectData, ProjectTaskData, ProjectNoteData,
+                               ProjectImportReport, ProjectImportRow
 src/Entity/Project*.php        entités (tables projects / project_*)
 src/Security/Voter/ProjectVoter.php
 src/Twig/ProjectTwigExtension.php   filtres pm_* (dates FR, avatars, autolink)
 templates/admin/projects/      pages + partiels (_layout, _board, _task_card…)
 public/css/projects.css, public/js/projects.js   (préfixe .pm-, JS sans dépendance)
 src/Command/ProjectAccessCommand.php, ProjectDigestCommand.php
-tests/E2E/ProjectSpaceTest.php, tests/Unit/Service/Project/
+tests/E2E/ProjectSpaceTest.php, tests/E2E/ProjectImportAndProfileTest.php,
+tests/Unit/Service/Project/
 ```
 
 Sécurité : `access_control` + `ProjectVoter`, CSRF sur tous les formulaires et en-tête
@@ -158,5 +173,5 @@ formules, flux OAuth protégé par `state`, compte Google vérifié, jeton chiff
 Tests :
 
 ```bash
-php bin/phpunit tests/E2E/ProjectSpaceTest.php tests/Unit/Service/Project
+php bin/phpunit tests/E2E/ProjectSpaceTest.php tests/E2E/ProjectImportAndProfileTest.php tests/Unit/Service/Project
 ```
