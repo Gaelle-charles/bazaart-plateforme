@@ -16,11 +16,11 @@
 <article class="pm-task{{ task.isOverdue(today) ? ' pm-task--overdue' }}{{ task.isDone() ? ' pm-task--done' }}"
          data-pm-drag
          data-task-id="{{ task.id }}"
-         data-move-url="{{ path('app_admin_pm_task_move', {id: task.id}) }}"
-         style="--p: {{ task.project ? task.project.color : '#0E0D0B' }}">
+         data-move-url="{{ path('app_admin_pm_task_move', {id: task.id}) }}">
     <div class="pm-task__top">
         {{ pm.project_chip(task.project) }}
-        <span class="pm-badge pm-prio--{{ task.priority.cssModifier() }}">{{ task.priority.label() }}</span>
+        {# Seules les priorités qui demandent d'agir sont affichées (Haute, Urgente) #}
+        {% if task.priority.weight() >= 3 %}<span class="pm-badge pm-prio--{{ task.priority.cssModifier() }}">{{ task.priority.label() }}</span>{% endif %}
     </div>
     <a class="pm-task__title" href="{{ path('app_admin_pm_task_show', {id: task.id}) }}" draggable="false">{{ task.title }}</a>
     {% if task.labels|length > 0 %}

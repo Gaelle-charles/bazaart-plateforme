@@ -75,7 +75,8 @@ class AdminProjectController extends AbstractController
 
     /**
      * GET /admin/projets — tableau de bord personnel : mes tâches par urgence,
-     * projets en cours, notes épinglées, charge de l'équipe, activité, onboarding.
+     * projets en cours, notes épinglées, activité récente, onboarding.
+     * (La charge de l'équipe est dans « Équipe et réglages » : vue d'ensemble allégée.)
      */
     #[Route('', name: 'overview', methods: ['GET'])]
     public function overview(): Response
@@ -104,9 +105,7 @@ class AdminProjectController extends AbstractController
             'projects'      => array_slice($projects, 0, 8),
             'projectStats'  => $this->projectService->getStats($today),
             'pinnedNotes'   => $this->noteRepository->findForWall(pinnedOnly: true, limit: 6),
-            'activities'    => $this->activityRepository->findRecent(15),
-            'members'       => $this->memberService->getMembers(),
-            'workload'      => $this->taskRepository->countWorkloadByAssignee($today, $today->modify('-7 days')),
+            'activities'    => $this->activityRepository->findRecent(6),
             'steps'         => $steps,
             'showChecklist' => $this->onboardingService->shouldShowChecklist($user, $steps),
             'stepsDone'     => count(array_filter($steps, static fn (array $s): bool => $s['done'])),

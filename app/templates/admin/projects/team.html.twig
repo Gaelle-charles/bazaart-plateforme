@@ -14,7 +14,6 @@
 
 <div class="pm-head">
     <div>
-        <div class="pm-eyebrow">Espace projets</div>
         <h1 class="pm-title">Équipe et réglages</h1>
     </div>
     <div class="pm-head__actions">
@@ -66,14 +65,7 @@
                         <input class="pm-input" id="pm-pref-last" name="lastName" value="{{ app.user.lastName }}" maxlength="100" autocomplete="family-name">
                     </div>
                 </div>
-                <div class="pm-field">
-                    <span class="pm-field__label" id="pm-pref-color">Ma couleur</span>
-                    <div class="pm-swatches" role="radiogroup" aria-labelledby="pm-pref-color">
-                        {% for c in colors %}
-                            <label class="pm-swatch"><input type="radio" name="color" value="{{ c }}" {{ profile.color == c ? 'checked' }} aria-label="Couleur {{ loop.index }}"><span style="--c: {{ c }}"></span></label>
-                        {% endfor %}
-                    </div>
-                </div>
+                {# Plus de « Ma couleur » : les avatars sont neutres (espace allégé, 24/09/2026) #}
                 <label class="pm-check" style="margin-top: 14px">
                     <input type="checkbox" name="emailNotifications" value="1" {{ profile.wantsEmailNotifications() ? 'checked' }}>
                     Recevoir un email quand on m'assigne une tâche, quand on commente mes tâches, et le récap quotidien

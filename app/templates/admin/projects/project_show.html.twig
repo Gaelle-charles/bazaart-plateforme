@@ -26,17 +26,17 @@
         <div style="min-width: 0; flex: 1">
             <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px">
                 <span class="pm-badge pm-pstatus--{{ project.status.cssModifier() }}">{{ project.status.label() }}</span>
-                <span class="pm-badge pm-prio--{{ project.priority.cssModifier() }}">Priorité {{ project.priority.label()|lower }}</span>
+                {% if project.priority.weight() >= 3 %}<span class="pm-badge pm-prio--{{ project.priority.cssModifier() }}">Priorité {{ project.priority.label()|lower }}</span>{% endif %}
                 {% if project.isOverdue(today) %}<span class="pm-badge pm-prio--urgent">Échéance dépassée</span>{% endif %}
             </div>
-            <h1 class="pm-title">{{ project.name }}</h1>
+            <h1 class="pm-title" style="display: flex; align-items: center; gap: 10px"><span class="pm-dot" style="background: {{ project.color }}; width: 14px; height: 14px"></span>{{ project.name }}</h1>
             <div class="pm-hero__facts">
                 <div class="pm-fact"><span class="pm-fact__label">Responsable</span><span class="pm-fact__value">{% if project.owner %}{{ pm.avatar(project.owner, 'xs') }} {{ project.owner|pm_name }}{% else %}<span class="pm-muted">Personne</span>{% endif %}</span></div>
                 <div class="pm-fact"><span class="pm-fact__label">Début</span><span class="pm-fact__value">{{ project.startDate ? project.startDate|pm_short : '·' }}</span></div>
                 <div class="pm-fact"><span class="pm-fact__label">Échéance</span><span class="pm-fact__value">{{ project.dueDate ? project.dueDate|pm_short : '·' }}</span></div>
                 <div class="pm-fact" style="min-width: 180px">
                     <span class="pm-fact__label">Avancement · {{ stats.done }}/{{ stats.total }} tâches{% if stats.overdue > 0 %} · {{ stats.overdue }} en retard{% endif %}</span>
-                    <span class="pm-fact__value" style="width: 100%"><span class="pm-progress pm-progress--accent" style="flex: 1"><span class="pm-progress__bar" style="width: {{ stats.percent }}%"></span></span> {{ stats.percent }}%</span>
+                    <span class="pm-fact__value" style="width: 100%"><span class="pm-progress" style="flex: 1"><span class="pm-progress__bar" style="width: {{ stats.percent }}%"></span></span> {{ stats.percent }}%</span>
                 </div>
             </div>
         </div>

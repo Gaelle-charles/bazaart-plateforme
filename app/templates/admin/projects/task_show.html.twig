@@ -63,7 +63,7 @@
             </div>
             <div class="pm-card__body">
                 {% if task.subtasks|length > 0 %}
-                    <div class="pm-progress pm-progress--accent" style="margin-bottom: 8px"><div class="pm-progress__bar" data-pm-subtask-progress style="width: {{ (task.countDoneSubtasks() * 100 / task.subtasks|length)|round }}%"></div></div>
+                    <div class="pm-progress" style="margin-bottom: 8px"><div class="pm-progress__bar" data-pm-subtask-progress style="width: {{ (task.countDoneSubtasks() * 100 / task.subtasks|length)|round }}%"></div></div>
                     <ul class="pm-subtasks">
                         {% for sub in task.subtasks %}
                             <li class="pm-subtask{{ sub.done ? ' pm-subtask--done' }}">
