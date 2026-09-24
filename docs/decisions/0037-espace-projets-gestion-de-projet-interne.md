@@ -95,3 +95,11 @@ Retours de l'équipe après les premiers essais :
   vérifié par empreinte SHA-256), en-têtes reconnus sans accents ni casse, doublons
   ignorés (même titre dans le même projet), aucune notification, une seule ligne
   d'activité (`tasks_imported`), liens http(s) seulement, 1 Mo et 500 tâches maximum.
+- **Interface allégée** (« trop de couleurs, trop d'infos ») : statuts, colonnes et
+  avatars neutres (le réglage « Ma couleur » disparaît), rouge réservé au retard et à
+  l'urgence, couleur de projet limitée à sa pastille, priorités « Normale / Basse »
+  masquées sur les cartes. Vue d'ensemble : 5 tâches par groupe, projets en lignes,
+  étapes faites repliées, plus de charge de l'équipe (vue « Par personne » et « Équipe »).
+  Onglets internes masqués sur ordinateur (doublon de la barre latérale).
+  Débordement horizontal corrigé sur mobile (libellés masqués positionnés hors du
+  Kanban, grilles `minmax(0, 1fr)`).

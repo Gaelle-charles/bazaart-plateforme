@@ -4,9 +4,12 @@
  # overview.html.twig : vue d'ensemble de l'Espace projets (AdminProjectController::overview).
  #
  # Pensée comme « la page du matin » : ce que JE dois faire (par urgence),
- # les projets qui avancent, les notes épinglées, la charge de l'équipe et
- # l'activité récente. La checklist « Bien démarrer » s'affiche tant que
- # l'onboarding n'est pas terminé.
+ # les projets qui avancent, les notes épinglées et l'activité récente.
+ # La checklist « Bien démarrer » s'affiche tant que l'onboarding n'est pas terminé.
+ #
+ # SOBRIÉTÉ (retour de l'équipe) : 5 tâches maximum par groupe (lien vers la
+ # suite), projets en lignes compactes, étapes faites repliées, pas de charge
+ # de l'équipe ici (elle est dans « Équipe et réglages » et la vue Par personne).
  #}
 
 {% set pm_tab = 'overview' %}
@@ -27,7 +30,7 @@
         <button type="button" class="pm-btn pm-btn--accent" data-pm-quick-task>{{ pm.icon('plus') }} Tâche</button>
         <a class="pm-btn" href="{{ path('app_admin_pm_project_new') }}">{{ pm.icon('folder') }} Projet</a>
         <a class="pm-btn" href="{{ path('app_admin_pm_notes') }}#nouvelle-note">{{ pm.icon('note') }} Note</a>
-        <button type="button" class="pm-btn pm-btn--ghost" style="color: var(--bg)" data-pm-tour-open>{{ pm.icon('help') }} Visite guidée</button>
+        <button type="button" class="pm-btn pm-btn--ghost" data-pm-tour-open>{{ pm.icon('help') }} Visite guidée</button>
     </div>
 </section>
 
@@ -37,7 +40,7 @@
         <div class="pm-checklist__head">
             <div>
                 <h2 id="pm-onb-title">Bien démarrer</h2>
-                <p>{{ stepsDone }} étape{{ stepsDone > 1 ? 's' }} sur {{ steps|length }} : chaque étape se coche toute seule quand tu l'as faite.</p>
+                <p class="pm-muted">{{ stepsDone }} sur {{ steps|length }} : chaque étape se coche toute seule.</p>
             </div>
             <form method="post" action="{{ path('app_admin_pm_onboarding_checklist') }}">
                 <input type="hidden" name="_token" value="{{ csrf_token('pm_checklist') }}">
@@ -45,24 +48,36 @@
                 <button class="pm-btn pm-btn--sm" type="submit">Masquer</button>
             </form>
         </div>
+        {# Étapes restantes visibles ; étapes faites repliées en dessous #}
         <ol>
-            {% for step in steps %}
-                <li class="pm-step{{ step.done ? ' pm-step--done' }}">
-                    <span class="pm-step__box">{{ step.done ? pm.icon('check') : loop.index }}</span>
+            {% for step in steps|filter(s => not s.done) %}
+                <li class="pm-step">
+                    <span class="pm-step__box">{{ pm.icon('plus') }}</span>
                     <div>
                         <span class="pm-step__label">{{ step.label }}</span>
                         <p class="pm-step__help">{{ step.help }}</p>
-                        {% if not step.done %}
-                            {% if step.tour %}
-                                <button type="button" class="pm-btn pm-btn--sm" data-pm-tour-open>{{ step.cta }}</button>
-                            {% else %}
-                                <a class="pm-btn pm-btn--sm" href="{{ path(step.route, step.params) }}">{{ step.cta }}</a>
-                            {% endif %}
+                        {% if step.tour %}
+                            <button type="button" class="pm-btn pm-btn--sm" data-pm-tour-open>{{ step.cta }}</button>
+                        {% else %}
+                            <a class="pm-btn pm-btn--sm" href="{{ path(step.route, step.params) }}">{{ step.cta }}</a>
                         {% endif %}
                     </div>
                 </li>
             {% endfor %}
         </ol>
+        {% if stepsDone > 0 %}
+            <details class="pm-checklist__done">
+                <summary>Déjà fait ({{ stepsDone }})</summary>
+                <ol>
+                    {% for step in steps|filter(s => s.done) %}
+                        <li class="pm-step pm-step--done">
+                            <span class="pm-step__box">{{ pm.icon('check') }}</span>
+                            <div><span class="pm-step__label">{{ step.label }}</span></div>
+                        </li>
+                    {% endfor %}
+                </ol>
+            </details>
+        {% endif %}
     </section>
 {% endif %}
 
@@ -97,11 +112,13 @@
             </div>
             <div class="pm-card__body pm-mytasks">
                 {% set groupLabels = {overdue: 'En retard', today: 'Aujourd\'hui', week: 'Cette semaine', later: 'Plus tard', nodate: 'Sans échéance'} %}
+                {# Lien « voir la suite » de chaque groupe : la liste filtrée correspondante #}
+                {% set groupDue = {overdue: 'overdue', today: 'today', week: 'week', later: null, nodate: 'none'} %}
                 {% for key, label in groupLabels %}
                     {% set list = groups[key] %}
                     {% if list|length > 0 %}
                         <h3 class="{{ key == 'overdue' ? 'is-alert' }}">{{ label }} · {{ list|length }}</h3>
-                        {% for task in list|slice(0, key in ['later', 'nodate'] ? 5 : 12) %}
+                        {% for task in list|slice(0, 5) %}
                             <div class="pm-line">
                                 <form method="post" action="{{ path('app_admin_pm_task_toggle', {id: task.id}) }}" class="pm-tick">
                                     <input type="hidden" name="_token" value="{{ csrf_token('pm_task_toggle_' ~ task.id) }}">
@@ -110,10 +127,13 @@
                                 </form>
                                 <span class="pm-dot" style="background: {{ task.project ? task.project.color : 'transparent' }}"></span>
                                 <a class="pm-line__title" href="{{ path('app_admin_pm_task_show', {id: task.id}) }}">{{ task.title }}</a>
-                                <span class="pm-badge pm-prio--{{ task.priority.cssModifier() }}">{{ task.priority.label() }}</span>
+                                {% if task.priority.weight() >= 3 %}<span class="pm-badge pm-prio--{{ task.priority.cssModifier() }}">{{ task.priority.label() }}</span>{% endif %}
                                 <span class="pm-task__facts">{{ pm.due(task) }}</span>
                             </div>
                         {% endfor %}
+                        {% if list|length > 5 %}
+                            <a class="pm-link pm-mono" style="display: inline-block; margin-top: 6px" href="{{ path('app_admin_pm_tasks', {view: 'list', assignee: 'me', done: 'hide'}|merge(groupDue[key] ? {due: groupDue[key]} : {})) }}">+ {{ list|length - 5 }} autre{{ list|length - 5 > 1 ? 's' }}</a>
+                        {% endif %}
                     {% endif %}
                 {% endfor %}
                 {% if kpis.open == 0 %}
@@ -134,11 +154,16 @@
             </div>
             <div class="pm-card__body">
                 {% if projects|length > 0 %}
-                    <div class="pm-projects">
+                    <ul class="pm-plist">
                         {% for project in projects %}
-                            {% include 'admin/projects/_project_card.html.twig' with {project: project, stats: projectStats[project.id] ?? null} only %}
+                            {% set st = projectStats[project.id] ?? {total: 0, done: 0, overdue: 0, percent: 0} %}
+                            <li>
+                                {{ pm.project_chip(project) }}
+                                <span class="pm-progress" title="{{ st.done }} tâche(s) terminée(s) sur {{ st.total }}"><span class="pm-progress__bar" style="width: {{ st.percent }}%"></span></span>
+                                <span class="pm-plist__meta">{{ st.done }}/{{ st.total }}{% if st.overdue > 0 %} · <span style="color: var(--danger)">{{ st.overdue }} en retard</span>{% endif %}</span>
+                            </li>
                         {% endfor %}
-                    </div>
+                    </ul>
                 {% else %}
                     <div class="pm-empty">
                         <strong>Aucun projet ouvert</strong>
@@ -170,31 +195,6 @@
                     </article>
                 {% else %}
                     <p class="pm-muted" style="margin: 0; font-size: 13px">Aucune note épinglée. Épingle les infos importantes depuis le mur.</p>
-                {% endfor %}
-            </div>
-        </section>
-
-        {# ── Charge de l'équipe ───────────────────────────────────────── #}
-        <section class="pm-card">
-            <div class="pm-card__head">
-                <h2 class="pm-card__title">Charge de l'équipe</h2>
-                <a class="pm-link pm-mono" href="{{ path('app_admin_pm_tasks', {view: 'person'}) }}">Par personne</a>
-            </div>
-            <div class="pm-card__body">
-                {% set maxOpen = 1 %}
-                {% for m in members %}{% set maxOpen = max(maxOpen, (workload[m.id].open ?? 0)) %}{% endfor %}
-                {% for m in members %}
-                    {% set w = workload[m.id] ?? {open: 0, overdue: 0, urgent: 0, doneRecently: 0} %}
-                    <div class="pm-load">
-                        {{ pm.avatar(m) }}
-                        <div>
-                            <a class="pm-link" style="text-decoration: none; font-weight: 600; font-size: 13px" href="{{ path('app_admin_pm_tasks', {view: 'kanban', assignee: m.id}) }}">{{ m|pm_name }}</a>
-                            <div class="pm-load__bar" style="--c: {{ m|pm_color }}" title="{{ w.open }} tâche(s) ouverte(s)"><span style="width: {{ (w.open * 100 / maxOpen)|round }}%"></span></div>
-                        </div>
-                        <span class="pm-mono" title="Ouvertes · en retard · terminées sur 7 jours">
-                            {{ w.open }}{% if w.overdue > 0 %} · <span style="color: var(--danger)">{{ w.overdue }} en retard</span>{% endif %}
-                        </span>
-                    </div>
                 {% endfor %}
             </div>
         </section>

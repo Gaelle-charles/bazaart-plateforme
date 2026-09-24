@@ -309,6 +309,31 @@ class ProjectSpaceTest extends AbstractE2ETestCase
         self::assertSame(2, $repo->find($a->getId())?->getPosition(), 'A prend la place de C');
     }
 
+    public function testOverviewStaysLightWithManyTasks(): void
+    {
+        // 7 tâches en retard, de priorité normale sauf la plus ancienne (urgente, affichée en premier).
+        for ($i = 1; $i <= 7; ++$i) {
+            $task = $this->createTask('Relance ' . $i, null, [$this->wendie], new \DateTimeImmutable('-' . $i . ' days'));
+            if ($i === 7) {
+                $task->setPriority(\App\Enum\ProjectTaskPriority::Urgent);
+                $this->em->flush();
+            }
+        }
+
+        $this->loginAs($this->wendie);
+        $crawler = $this->client->request('GET', '/admin/projets');
+        $this->assertResponseIsSuccessful();
+
+        // 5 tâches au plus par groupe, puis un lien vers la liste filtrée.
+        self::assertCount(5, $crawler->filter('.pm-mytasks .pm-line'));
+        $more = $crawler->filter('.pm-mytasks a')->reduce(static fn (\Symfony\Component\DomCrawler\Crawler $a): bool => trim($a->text()) === '+ 2 autres');
+        self::assertCount(1, $more);
+        self::assertStringContainsString('due=overdue', (string) $more->attr('href'));
+        // Seules les priorités qui demandent d'agir sont affichées.
+        self::assertCount(1, $crawler->filter('.pm-mytasks .pm-badge'));
+        self::assertCount(0, $crawler->filter('.pm-load'), 'La charge de l\'équipe n\'est plus sur la vue d\'ensemble.');
+    }
+
     public function testTaskPageChecklistAndSignedComments(): void
     {
         $task = $this->createTask('Préparer la soirée', null, [$this->wendie], null);
