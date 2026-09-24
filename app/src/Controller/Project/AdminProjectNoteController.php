@@ -115,6 +115,8 @@ class AdminProjectNoteController extends AbstractController
     {
         if ($this->isCsrfTokenValid('pm_note_' . $note->getId(), (string) $request->request->get('_token'))) {
             $this->noteService->togglePin($note);
+        } else {
+            $this->flashInvalidToken();
         }
 
         return $this->redirectBack($request, 'app_admin_pm_notes');

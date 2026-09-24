@@ -120,6 +120,8 @@ class AdminProjectDriveController extends AbstractController
         if ($this->isCsrfTokenValid('pm_drive_disconnect', (string) $request->request->get('_token'))) {
             $this->driveService->disconnect();
             $this->addFlash('success', 'Drive déconnecté. Les pièces jointes restent visibles, mais on ne peut plus parcourir le Drive.');
+        } else {
+            $this->flashInvalidToken();
         }
 
         return $this->redirectToRoute('app_admin_pm_drive');
@@ -252,6 +254,8 @@ class AdminProjectDriveController extends AbstractController
         if ($this->isCsrfTokenValid('pm_attachment_' . $attachment->getId(), (string) $request->request->get('_token'))) {
             $this->attachmentService->remove($attachment);
             $this->addFlash('success', 'Pièce jointe retirée (le fichier reste dans le Drive).');
+        } else {
+            $this->flashInvalidToken();
         }
 
         return $this->redirectBack($request, 'app_admin_pm_tasks');
