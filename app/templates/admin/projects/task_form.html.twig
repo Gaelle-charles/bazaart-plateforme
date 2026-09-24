@@ -1,0 +1,92 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # task_form.html.twig : formulaire complet de création d'une tâche
+ # (AdminProjectTaskController::newTask). L'ajout RAPIDE passe par la fenêtre
+ # modale du layout ou le champ en bas des colonnes Kanban.
+ #
+ # Variables : data (ProjectTaskData, éventuellement pré-rempli), members, projects,
+ #             labels, statuses, priorities
+ #}
+
+{% set pm_tab = 'tasks' %}
+{% block title %}Nouvelle tâche · BazaArt{% endblock %}
+{% block page_title %}Nouvelle tâche{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+<div class="pm-head">
+    <div>
+        <div class="pm-eyebrow">Tâches</div>
+        <h1 class="pm-title">Nouvelle tâche</h1>
+    </div>
+</div>
+
+<form method="post" action="{{ path('app_admin_pm_task_new') }}" class="pm-card" style="max-width: 860px">
+    <input type="hidden" name="_token" value="{{ csrf_token('pm_task_new') }}">
+    <div class="pm-card__body">
+        <div class="pm-field">
+            <label class="pm-field__label" for="pm-n-title">Titre</label>
+            <input class="pm-input pm-input--title" id="pm-n-title" name="title" value="{{ data.title }}" required maxlength="255" autofocus>
+        </div>
+        <div class="pm-field">
+            <label class="pm-field__label" for="pm-n-desc">Description</label>
+            <textarea class="pm-textarea" id="pm-n-desc" name="description" rows="5">{{ data.description }}</textarea>
+        </div>
+        <div class="pm-row pm-row--3" style="margin-top: 12px">
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-n-project">Projet</label>
+                <select class="pm-select" id="pm-n-project" name="projectId">
+                    <option value="">Sans projet</option>
+                    {% for p in projects %}<option value="{{ p.id }}" {{ data.projectId == p.id ? 'selected' }}>{{ p.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-n-status">Statut</label>
+                <select class="pm-select" id="pm-n-status" name="status">
+                    {% for s in statuses %}<option value="{{ s.value }}" {{ data.status == s ? 'selected' }}>{{ s.label() }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-n-priority">Priorité</label>
+                <select class="pm-select" id="pm-n-priority" name="priority">
+                    {% for p in priorities %}<option value="{{ p.value }}" {{ data.priority == p ? 'selected' }}>{{ p.label() }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="pm-row pm-row--2" style="margin-top: 12px">
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-n-start">Début</label>
+                <input class="pm-input" type="date" id="pm-n-start" name="startDate" value="{{ data.startDate ? data.startDate|date('Y-m-d') }}">
+            </div>
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-n-due">Échéance</label>
+                <input class="pm-input" type="date" id="pm-n-due" name="dueDate" value="{{ data.dueDate ? data.dueDate|date('Y-m-d') }}">
+            </div>
+        </div>
+        <div class="pm-field" style="margin-top: 12px">
+            <span class="pm-field__label">Assigner à</span>
+            <div class="pm-checks">
+                {% for m in members %}
+                    <label class="pm-check"><input type="checkbox" name="assignees[]" value="{{ m.id }}" {{ m.id in data.assigneeIds ? 'checked' }}> {{ pm.avatar(m, 'xs') }} {{ m|pm_name }}</label>
+                {% endfor %}
+            </div>
+            <p class="pm-field__help">Les personnes assignées reçoivent un email (si elles ne l'ont pas désactivé).</p>
+        </div>
+        <div class="pm-field">
+            <span class="pm-field__label">Étiquettes</span>
+            <div class="pm-checks">
+                {% for l in labels %}
+                    <label class="pm-check"><input type="checkbox" name="labels[]" value="{{ l.id }}" {{ l.id in data.labelIds ? 'checked' }}> <span class="pm-dot" style="background: {{ l.color }}"></span> {{ l.name }}</label>
+                {% endfor %}
+            </div>
+            <label class="pm-sr" for="pm-n-newlabels">Nouvelles étiquettes</label>
+            <input class="pm-input" id="pm-n-newlabels" name="newLabels" placeholder="Nouvelles étiquettes, séparées par des virgules" style="margin-top: 6px">
+        </div>
+    </div>
+    <div class="pm-card__foot" style="display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap">
+        <a class="pm-btn pm-btn--ghost" href="{{ path('app_admin_pm_tasks') }}">Annuler</a>
+        <button class="pm-btn pm-btn--primary" type="submit">{{ pm.icon('plus') }} Créer la tâche</button>
+    </div>
+</form>
+{% endblock %}

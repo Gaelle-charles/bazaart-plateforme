@@ -1,0 +1,211 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # overview.html.twig : vue d'ensemble de l'Espace projets (AdminProjectController::overview).
+ #
+ # Pensée comme « la page du matin » : ce que JE dois faire (par urgence),
+ # les projets qui avancent, les notes épinglées, la charge de l'équipe et
+ # l'activité récente. La checklist « Bien démarrer » s'affiche tant que
+ # l'onboarding n'est pas terminé.
+ #}
+
+{% set pm_tab = 'overview' %}
+{% block title %}Espace projets · BazaArt{% endblock %}
+{% block page_title %}Espace projets{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+{% set today = pm_today() %}
+
+{# ── Bandeau de bienvenue ─────────────────────────────────────────────── #}
+<section class="pm-hello">
+    <div>
+        <h2>Bonjour <em>{{ app.user|pm_name|split(' ')|first }}</em></h2>
+        <p>{{ today|pm_long }}</p>
+    </div>
+    <div class="pm-head__actions">
+        <button type="button" class="pm-btn pm-btn--accent" data-pm-quick-task>{{ pm.icon('plus') }} Tâche</button>
+        <a class="pm-btn" href="{{ path('app_admin_pm_project_new') }}">{{ pm.icon('folder') }} Projet</a>
+        <a class="pm-btn" href="{{ path('app_admin_pm_notes') }}#nouvelle-note">{{ pm.icon('note') }} Note</a>
+        <button type="button" class="pm-btn pm-btn--ghost" style="color: var(--bg)" data-pm-tour-open>{{ pm.icon('help') }} Visite guidée</button>
+    </div>
+</section>
+
+{# ── Checklist d'onboarding « Bien démarrer » ─────────────────────────── #}
+{% if showChecklist %}
+    <section class="pm-checklist" aria-labelledby="pm-onb-title">
+        <div class="pm-checklist__head">
+            <div>
+                <h2 id="pm-onb-title">Bien démarrer</h2>
+                <p>{{ stepsDone }} étape{{ stepsDone > 1 ? 's' }} sur {{ steps|length }} : chaque étape se coche toute seule quand tu l'as faite.</p>
+            </div>
+            <form method="post" action="{{ path('app_admin_pm_onboarding_checklist') }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('pm_checklist') }}">
+                <input type="hidden" name="action" value="dismiss">
+                <button class="pm-btn pm-btn--sm" type="submit">Masquer</button>
+            </form>
+        </div>
+        <ol>
+            {% for step in steps %}
+                <li class="pm-step{{ step.done ? ' pm-step--done' }}">
+                    <span class="pm-step__box">{{ step.done ? pm.icon('check') : loop.index }}</span>
+                    <div>
+                        <span class="pm-step__label">{{ step.label }}</span>
+                        <p class="pm-step__help">{{ step.help }}</p>
+                        {% if not step.done %}
+                            {% if step.tour %}
+                                <button type="button" class="pm-btn pm-btn--sm" data-pm-tour-open>{{ step.cta }}</button>
+                            {% else %}
+                                <a class="pm-btn pm-btn--sm" href="{{ path(step.route, step.params) }}">{{ step.cta }}</a>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </li>
+            {% endfor %}
+        </ol>
+    </section>
+{% endif %}
+
+{# ── Indicateurs (cliquables : ouvrent la vue filtrée correspondante) ──── #}
+<div class="pm-kpis">
+    <a class="pm-kpi" href="{{ path('app_admin_pm_tasks', {view: 'list', assignee: 'me', done: 'hide'}) }}">
+        <span class="pm-kpi__label">Mes tâches ouvertes</span>
+        <span class="pm-kpi__value">{{ kpis.open }}</span>
+    </a>
+    <a class="pm-kpi{{ kpis.overdue > 0 ? ' pm-kpi--alert' }}" href="{{ path('app_admin_pm_tasks', {view: 'list', assignee: 'me', due: 'overdue'}) }}">
+        <span class="pm-kpi__label">En retard</span>
+        <span class="pm-kpi__value">{{ kpis.overdue }}</span>
+    </a>
+    <a class="pm-kpi" href="{{ path('app_admin_pm_tasks', {view: 'calendar', assignee: 'me'}) }}">
+        <span class="pm-kpi__label">À faire sous 7 jours</span>
+        <span class="pm-kpi__value">{{ kpis.week }}</span>
+    </a>
+    <a class="pm-kpi" href="{{ path('app_admin_pm_projects') }}">
+        <span class="pm-kpi__label">Projets ouverts</span>
+        <span class="pm-kpi__value">{{ kpis.projects }}</span>
+    </a>
+</div>
+
+<div class="pm-layout pm-layout--sidebar">
+    <div class="pm-stack">
+
+        {# ── Mes tâches, groupées par urgence ─────────────────────────── #}
+        <section class="pm-card">
+            <div class="pm-card__head">
+                <h2 class="pm-card__title">Mes tâches</h2>
+                <a class="pm-link pm-mono" href="{{ path('app_admin_pm_tasks', {view: 'kanban', assignee: 'me'}) }}">Voir en Kanban</a>
+            </div>
+            <div class="pm-card__body pm-mytasks">
+                {% set groupLabels = {overdue: 'En retard', today: 'Aujourd\'hui', week: 'Cette semaine', later: 'Plus tard', nodate: 'Sans échéance'} %}
+                {% for key, label in groupLabels %}
+                    {% set list = groups[key] %}
+                    {% if list|length > 0 %}
+                        <h3 class="{{ key == 'overdue' ? 'is-alert' }}">{{ label }} · {{ list|length }}</h3>
+                        {% for task in list|slice(0, key in ['later', 'nodate'] ? 5 : 12) %}
+                            <div class="pm-line">
+                                <form method="post" action="{{ path('app_admin_pm_task_toggle', {id: task.id}) }}" class="pm-tick">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('pm_task_toggle_' ~ task.id) }}">
+                                    <input type="hidden" name="_back" value="{{ path('app_admin_pm_overview') }}">
+                                    <button type="submit" title="Marquer comme terminée" aria-label="Marquer « {{ task.title }} » comme terminée">{{ pm.icon('check') }}</button>
+                                </form>
+                                <span class="pm-dot" style="background: {{ task.project ? task.project.color : 'transparent' }}"></span>
+                                <a class="pm-line__title" href="{{ path('app_admin_pm_task_show', {id: task.id}) }}">{{ task.title }}</a>
+                                <span class="pm-badge pm-prio--{{ task.priority.cssModifier() }}">{{ task.priority.label() }}</span>
+                                <span class="pm-task__facts">{{ pm.due(task) }}</span>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endfor %}
+                {% if kpis.open == 0 %}
+                    <div class="pm-empty">
+                        <strong>Rien sur ta liste</strong>
+                        <p>Aucune tâche ouverte ne t'est assignée. Profites-en, ou prends une tâche non assignée.</p>
+                        <a class="pm-btn pm-btn--sm" href="{{ path('app_admin_pm_tasks', {view: 'kanban', assignee: 'none'}) }}">Voir les tâches non assignées</a>
+                    </div>
+                {% endif %}
+            </div>
+        </section>
+
+        {# ── Projets en cours ─────────────────────────────────────────── #}
+        <section class="pm-card">
+            <div class="pm-card__head">
+                <h2 class="pm-card__title">Projets en cours</h2>
+                <a class="pm-link pm-mono" href="{{ path('app_admin_pm_projects', {view: 'timeline'}) }}">Chronologie</a>
+            </div>
+            <div class="pm-card__body">
+                {% if projects|length > 0 %}
+                    <div class="pm-projects">
+                        {% for project in projects %}
+                            {% include 'admin/projects/_project_card.html.twig' with {project: project, stats: projectStats[project.id] ?? null} only %}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="pm-empty">
+                        <strong>Aucun projet ouvert</strong>
+                        <p>Crée le premier projet de l'équipe, éventuellement à partir d'un modèle.</p>
+                        <a class="pm-btn pm-btn--primary" href="{{ path('app_admin_pm_project_new') }}">{{ pm.icon('plus') }} Nouveau projet</a>
+                    </div>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+
+    <aside class="pm-stack">
+        {# ── Notes épinglées ──────────────────────────────────────────── #}
+        <section class="pm-card">
+            <div class="pm-card__head">
+                <h2 class="pm-card__title">Notes épinglées</h2>
+                <a class="pm-link pm-mono" href="{{ path('app_admin_pm_notes') }}">Le mur</a>
+            </div>
+            <div class="pm-card__body">
+                {% for note in pinnedNotes %}
+                    <article class="pm-note pm-note--{{ note.color.value }}" style="box-shadow: none; margin-bottom: 10px">
+                        <div class="pm-note__body">
+                            {% if note.title %}<strong>{{ note.title }}</strong><br>{% endif %}
+                            {{ note.content|length > 220 ? note.content|slice(0, 219) ~ '…' : note.content }}
+                        </div>
+                        <div class="pm-note__foot">
+                            <span class="pm-note__sig">{{ pm.avatar(note.author, 'xs') }} <small>{{ note.author|pm_name }} · {{ note.createdAt|pm_ago }}</small></span>
+                        </div>
+                    </article>
+                {% else %}
+                    <p class="pm-muted" style="margin: 0; font-size: 13px">Aucune note épinglée. Épingle les infos importantes depuis le mur.</p>
+                {% endfor %}
+            </div>
+        </section>
+
+        {# ── Charge de l'équipe ───────────────────────────────────────── #}
+        <section class="pm-card">
+            <div class="pm-card__head">
+                <h2 class="pm-card__title">Charge de l'équipe</h2>
+                <a class="pm-link pm-mono" href="{{ path('app_admin_pm_tasks', {view: 'person'}) }}">Par personne</a>
+            </div>
+            <div class="pm-card__body">
+                {% set maxOpen = 1 %}
+                {% for m in members %}{% set maxOpen = max(maxOpen, (workload[m.id].open ?? 0)) %}{% endfor %}
+                {% for m in members %}
+                    {% set w = workload[m.id] ?? {open: 0, overdue: 0, urgent: 0, doneRecently: 0} %}
+                    <div class="pm-load">
+                        {{ pm.avatar(m) }}
+                        <div>
+                            <a class="pm-link" style="text-decoration: none; font-weight: 600; font-size: 13px" href="{{ path('app_admin_pm_tasks', {view: 'kanban', assignee: m.id}) }}">{{ m|pm_name }}</a>
+                            <div class="pm-load__bar" style="--c: {{ m|pm_color }}" title="{{ w.open }} tâche(s) ouverte(s)"><span style="width: {{ (w.open * 100 / maxOpen)|round }}%"></span></div>
+                        </div>
+                        <span class="pm-mono" title="Ouvertes · en retard · terminées sur 7 jours">
+                            {{ w.open }}{% if w.overdue > 0 %} · <span style="color: var(--danger)">{{ w.overdue }} en retard</span>{% endif %}
+                        </span>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        {# ── Activité récente ─────────────────────────────────────────── #}
+        <section class="pm-card">
+            <div class="pm-card__head"><h2 class="pm-card__title">Activité récente</h2></div>
+            <div class="pm-card__body">
+                {% include 'admin/projects/_activity.html.twig' with {activities: activities} only %}
+            </div>
+        </section>
+    </aside>
+</div>
+{% endblock %}

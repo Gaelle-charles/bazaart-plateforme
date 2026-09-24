@@ -1,0 +1,127 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # team.html.twig : Équipe & réglages (AdminProjectController::team).
+ # Variables : members, workload, profile, labels, colors, drive, driveConfigured, driveAccount
+ #}
+
+{% set pm_tab = 'team' %}
+{% block title %}Équipe et réglages · Espace projets · BazaArt{% endblock %}
+{% block page_title %}Équipe et réglages{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+
+<div class="pm-head">
+    <div>
+        <div class="pm-eyebrow">Espace projets</div>
+        <h1 class="pm-title">Équipe et réglages</h1>
+    </div>
+    <div class="pm-head__actions">
+        <button type="button" class="pm-btn" data-pm-tour-open>{{ pm.icon('help') }} Revoir la visite guidée</button>
+    </div>
+</div>
+
+<div class="pm-layout pm-layout--halves">
+    {# ── Membres ──────────────────────────────────────────────────────── #}
+    <section class="pm-card">
+        <div class="pm-card__head"><h2 class="pm-card__title">Membres · {{ members|length }}</h2></div>
+        <div class="pm-card__body">
+            {% for m in members %}
+                {% set w = workload[m.id] ?? {open: 0, overdue: 0, urgent: 0, doneRecently: 0} %}
+                <div class="pm-load" style="grid-template-columns: auto 1fr auto">
+                    {{ pm.avatar(m, 'lg') }}
+                    <div style="min-width: 0">
+                        <strong>{{ m|pm_name }}</strong>{% if m.id == app.user.id %} <span class="pm-badge">Toi</span>{% endif %}
+                        <div class="pm-mono pm-muted" style="overflow: hidden; text-overflow: ellipsis">{{ m.email }}</div>
+                        <div class="pm-mono" style="margin-top: 4px">{{ w.open }} ouverte{{ w.open > 1 ? 's' }}{% if w.overdue > 0 %} · <span style="color: var(--danger)">{{ w.overdue }} en retard</span>{% endif %}{% if w.urgent > 0 %} · {{ w.urgent }} urgente{{ w.urgent > 1 ? 's' }}{% endif %} · {{ w.doneRecently }} terminée{{ w.doneRecently > 1 ? 's' }} en 7 j</div>
+                    </div>
+                    <a class="pm-btn pm-btn--sm" href="{{ path('app_admin_pm_tasks', {view: 'kanban', assignee: m.id}) }}">Ses tâches</a>
+                </div>
+            {% endfor %}
+            <div class="pm-note-info" style="margin-top: 14px">
+                <strong>Ajouter ou retirer une personne</strong> : l'accès se gère depuis le serveur (les notes internes de l'équipe sont visibles ici).<br>
+                <code>php bin/console app:projets:acces --creer prenom@exemple.com</code><br>
+                <code>php bin/console app:projets:acces --retirer prenom@exemple.com</code>
+            </div>
+        </div>
+    </section>
+
+    <div class="pm-stack">
+        {# ── Mes préférences ──────────────────────────────────────────── #}
+        <section class="pm-card">
+            <div class="pm-card__head"><h2 class="pm-card__title">Mes préférences</h2></div>
+            <form method="post" action="{{ path('app_admin_pm_team_prefs') }}" class="pm-card__body">
+                <input type="hidden" name="_token" value="{{ csrf_token('pm_prefs') }}">
+                <div class="pm-field">
+                    <span class="pm-field__label" id="pm-pref-color">Ma couleur</span>
+                    <div class="pm-swatches" role="radiogroup" aria-labelledby="pm-pref-color">
+                        {% for c in colors %}
+                            <label class="pm-swatch"><input type="radio" name="color" value="{{ c }}" {{ profile.color == c ? 'checked' }} aria-label="Couleur {{ loop.index }}"><span style="--c: {{ c }}"></span></label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <label class="pm-check" style="margin-top: 14px">
+                    <input type="checkbox" name="emailNotifications" value="1" {{ profile.wantsEmailNotifications() ? 'checked' }}>
+                    Recevoir un email quand on m'assigne une tâche, quand on commente mes tâches, et le récap quotidien
+                </label>
+                <div style="margin-top: 14px"><button class="pm-btn pm-btn--primary" type="submit">Enregistrer</button></div>
+            </form>
+            {% if profile.checklistDismissed %}
+                <form method="post" action="{{ path('app_admin_pm_onboarding_checklist') }}" class="pm-card__foot">
+                    <input type="hidden" name="_token" value="{{ csrf_token('pm_checklist') }}">
+                    <input type="hidden" name="action" value="restore">
+                    <input type="hidden" name="_back" value="{{ path('app_admin_pm_overview') }}">
+                    <button class="pm-btn pm-btn--sm" type="submit">Réafficher la checklist « Bien démarrer »</button>
+                </form>
+            {% endif %}
+        </section>
+
+        {# ── Google Drive ─────────────────────────────────────────────── #}
+        <section class="pm-card">
+            <div class="pm-card__head"><h2 class="pm-card__title">Google Drive</h2></div>
+            <div class="pm-card__body">
+                {% if drive %}
+                    <p style="margin: 0 0 10px">Connecté à <strong>{{ drive.accountEmail }}</strong> par {{ drive.connectedBy|pm_name }} le {{ drive.connectedAt|pm_datetime }}.</p>
+                {% else %}
+                    <p style="margin: 0 0 10px">Le Drive <strong>{{ driveAccount }}</strong> n'est pas encore connecté.</p>
+                {% endif %}
+                <a class="pm-btn pm-btn--sm" href="{{ path('app_admin_pm_drive') }}">{{ pm.icon('drive') }} Gérer la connexion</a>
+            </div>
+        </section>
+
+        {# ── Étiquettes ───────────────────────────────────────────────── #}
+        <section class="pm-card">
+            <div class="pm-card__head"><h2 class="pm-card__title">Étiquettes</h2></div>
+            <div class="pm-card__body">
+                <div class="pm-checks" style="margin-bottom: 12px">
+                    {% for l in labels %}
+                        <span class="pm-label" style="--c: {{ l.color }}">
+                            {{ l.name }}
+                            <form method="post" action="{{ path('app_admin_pm_team_label_delete', {id: l.id}) }}" onsubmit="return confirm('Supprimer l\'étiquette « {{ l.name|e('js') }} » ? Elle sera retirée de toutes les tâches.')" style="display: inline">
+                                <input type="hidden" name="_token" value="{{ csrf_token('pm_label_delete_' ~ l.id) }}">
+                                <button type="submit" aria-label="Supprimer l'étiquette {{ l.name }}" style="border: 0; background: none; cursor: pointer; padding: 0 0 0 4px; font: inherit">×</button>
+                            </form>
+                        </span>
+                    {% else %}
+                        <span class="pm-muted">Aucune étiquette.</span>
+                    {% endfor %}
+                </div>
+                <form method="post" action="{{ path('app_admin_pm_team_label_new') }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('pm_labels') }}">
+                    <div class="pm-inline-form" style="margin-top: 0">
+                        <label class="pm-sr" for="pm-label-name">Nom de l'étiquette</label>
+                        <input class="pm-input" id="pm-label-name" name="name" required maxlength="40" placeholder="Nouvelle étiquette">
+                        <button class="pm-btn" type="submit">{{ pm.icon('plus') }} Ajouter</button>
+                    </div>
+                    <div class="pm-swatches" style="margin-top: 8px" role="radiogroup" aria-label="Couleur de l'étiquette">
+                        {% for c in colors %}
+                            <label class="pm-swatch"><input type="radio" name="color" value="{{ c }}" {{ loop.first ? 'checked' }} aria-label="Couleur {{ loop.index }}"><span style="--c: {{ c }}"></span></label>
+                        {% endfor %}
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

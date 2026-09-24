@@ -95,8 +95,20 @@ abstract class AbstractE2ETestCase extends WebTestCase
 
         // Tronque les tables dans l'ordre inverse des dépendances.
         // ⚠️ Mettre à jour cette liste si de nouvelles tables sont créées.
-        //    Dernière mise à jour : Lot D (match_consultations, subscriptions).
+        //    Dernière mise à jour : Espace projets ADR-0037 (tables project_*).
         $conn->executeStatement('TRUNCATE TABLE
+            project_activities,
+            project_attachments,
+            project_task_comments,
+            project_subtasks,
+            project_task_labels,
+            project_task_assignees,
+            project_tasks,
+            project_notes,
+            project_labels,
+            project_member_profiles,
+            project_drive_connections,
+            projects,
             match_consultations,
             subscriptions,
             lesson_progresses,

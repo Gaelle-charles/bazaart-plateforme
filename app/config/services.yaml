@@ -23,6 +23,13 @@ parameters:
     # Valeur par défaut : 5 (configurable via ADMIN_PENDING_THRESHOLD dans .env.local).
     # Baisser à 1 en dev/staging pour tester l'envoi sans avoir 5 opportunités en attente.
     env(ADMIN_PENDING_THRESHOLD): '5'
+    # Espace projets (ADR-0037) : adresse du Google Drive de l'équipe. Seul ce compte
+    # peut être connecté (GoogleDriveService vérifie l'adresse renvoyée par Google).
+    # Surchargeable via PROJECT_DRIVE_ACCOUNT dans .env.local si le Drive change un jour.
+    env(PROJECT_DRIVE_ACCOUNT): 'reinesdestempsmodernes@gmail.com'
+    # Fuseau horaire de l'équipe pour l'Espace projets (« aujourd'hui », heures affichées).
+    # Le conteneur tourne en UTC ; l'association est basée en Guadeloupe.
+    env(PROJECT_TIMEZONE): 'America/Guadeloupe'
 
 services:
     # default configuration for services in *this* file
@@ -128,3 +135,23 @@ services:
     App\Service\CreatorDocumentStorage:
         arguments:
             $secureUploadsDir: '%kernel.project_dir%/var/secure_uploads'
+
+    # ── Espace projets (ADR-0037) ─────────────────────────────────────────────
+    # TokenCipher chiffre le jeton OAuth du Drive avec une clé dérivée de APP_SECRET.
+    App\Service\Project\TokenCipher:
+        arguments:
+            $appSecret: '%kernel.secret%'
+
+    App\Service\Project\ProjectClock:
+        arguments:
+            $timezone: '%env(PROJECT_TIMEZONE)%'
+
+    # GoogleDriveService réutilise l'application OAuth Google déjà configurée pour
+    # « Se connecter avec Google » (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).
+    # Il faut simplement y ajouter l'URI de redirection du Drive et activer l'API
+    # Google Drive dans la console Google Cloud (cf. docs/espace-projets.md).
+    App\Service\Project\GoogleDriveService:
+        arguments:
+            $googleClientId:     '%env(GOOGLE_CLIENT_ID)%'
+            $googleClientSecret: '%env(GOOGLE_CLIENT_SECRET)%'
+            $expectedAccount:    '%env(PROJECT_DRIVE_ACCOUNT)%'

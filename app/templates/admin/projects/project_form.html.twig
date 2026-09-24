@@ -1,0 +1,109 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # project_form.html.twig : création / modification d'un projet.
+ # Variables : project (null en création), data (ProjectData), colors, statuses,
+ #             priorities, members, templates, driveConnected
+ #}
+
+{% set pm_tab = 'projects' %}
+{% block title %}{{ project ? 'Modifier ' ~ project.name : 'Nouveau projet' }} · BazaArt{% endblock %}
+{% block page_title %}{{ project ? 'Modifier le projet' : 'Nouveau projet' }}{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+<div class="pm-head">
+    <div>
+        <div class="pm-eyebrow">Projets</div>
+        <h1 class="pm-title">{{ project ? project.name : 'Nouveau projet' }}</h1>
+    </div>
+</div>
+
+<form method="post" action="{{ project ? path('app_admin_pm_project_edit', {id: project.id}) : path('app_admin_pm_project_new') }}" class="pm-card" style="max-width: 900px">
+    <input type="hidden" name="_token" value="{{ csrf_token('pm_project_form') }}">
+    <div class="pm-card__body">
+        <div class="pm-field">
+            <label class="pm-field__label" for="pm-p-name">Nom du projet</label>
+            <input class="pm-input pm-input--title" id="pm-p-name" name="name" value="{{ data.name }}" required minlength="2" maxlength="150" placeholder="Ex. Festival Bazaart 2027" autofocus>
+        </div>
+        <div class="pm-field">
+            <label class="pm-field__label" for="pm-p-desc">Description</label>
+            <textarea class="pm-textarea" id="pm-p-desc" name="description" rows="4" placeholder="Objectifs, partenaires, budget, liens utiles…">{{ data.description }}</textarea>
+        </div>
+
+        <div class="pm-field">
+            <span class="pm-field__label" id="pm-p-color-label">Couleur</span>
+            <div class="pm-swatches" role="radiogroup" aria-labelledby="pm-p-color-label">
+                {% for c in colors %}
+                    <label class="pm-swatch" title="{{ c }}">
+                        <input type="radio" name="color" value="{{ c }}" {{ data.color == c ? 'checked' }} aria-label="Couleur {{ loop.index }}">
+                        <span style="--c: {{ c }}"></span>
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="pm-row pm-row--3" style="margin-top: 12px">
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-p-status">Statut</label>
+                <select class="pm-select" id="pm-p-status" name="status">
+                    {% for s in statuses %}<option value="{{ s.value }}" {{ data.status == s ? 'selected' }}>{{ s.label() }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-p-priority">Priorité</label>
+                <select class="pm-select" id="pm-p-priority" name="priority">
+                    {% for p in priorities %}<option value="{{ p.value }}" {{ data.priority == p ? 'selected' }}>{{ p.label() }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-p-owner">Responsable</label>
+                <select class="pm-select" id="pm-p-owner" name="ownerId">
+                    <option value="">Personne</option>
+                    {% for m in members %}<option value="{{ m.id }}" {{ data.ownerId == m.id ? 'selected' }}>{{ m|pm_name }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="pm-row pm-row--2" style="margin-top: 12px">
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-p-start">Date de début</label>
+                <input class="pm-input" type="date" id="pm-p-start" name="startDate" value="{{ data.startDate ? data.startDate|date('Y-m-d') }}">
+            </div>
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-p-due">Échéance</label>
+                <input class="pm-input" type="date" id="pm-p-due" name="dueDate" value="{{ data.dueDate ? data.dueDate|date('Y-m-d') }}">
+                <span class="pm-field__help">Avec un modèle, les tâches sont planifiées à rebours depuis cette date et confiées à la personne responsable.</span>
+            </div>
+        </div>
+
+        {% if not project %}
+            {# ── Modèles (création uniquement) ── #}
+            <fieldset class="pm-field" style="border: 0; padding: 0; margin: 16px 0 0">
+                <legend class="pm-field__label" style="margin-bottom: 6px">Partir d'un modèle</legend>
+                <div class="pm-projects" style="gap: 8px">
+                    <label class="pm-check" style="align-items: flex-start">
+                        <input type="radio" name="template" value="" {{ data.templateKey is null ? 'checked' }}>
+                        <span><strong>Projet vierge</strong><br><small class="pm-muted">Aucune tâche créée automatiquement.</small></span>
+                    </label>
+                    {% for key, t in templates %}
+                        <label class="pm-check" style="align-items: flex-start">
+                            <input type="radio" name="template" value="{{ key }}" {{ data.templateKey == key ? 'checked' }}>
+                            <span><strong>{{ t.label }}</strong> <span class="pm-mono">({{ t.count }} tâches)</span><br><small class="pm-muted">{{ t.description }}</small></span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </fieldset>
+            {% if driveConnected %}
+                <label class="pm-check" style="margin-top: 14px">
+                    <input type="checkbox" name="createDriveFolder" value="1" {{ data.createDriveFolder ? 'checked' }}>
+                    {{ pm.icon('drive') }} Créer un dossier pour ce projet dans le Google Drive de l'équipe
+                </label>
+            {% endif %}
+        {% endif %}
+    </div>
+    <div class="pm-card__foot" style="display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap">
+        <a class="pm-btn pm-btn--ghost" href="{{ project ? path('app_admin_pm_project_show', {id: project.id}) : path('app_admin_pm_projects') }}">Annuler</a>
+        <button class="pm-btn pm-btn--primary" type="submit">{{ pm.icon('check') }} {{ project ? 'Enregistrer' : 'Créer le projet' }}</button>
+    </div>
+</form>
+{% endblock %}

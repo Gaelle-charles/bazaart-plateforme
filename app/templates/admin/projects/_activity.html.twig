@@ -1,0 +1,25 @@
+{#
+ # _activity.html.twig : fil d'activité (qui a fait quoi, quand).
+ # Variable : activities (liste de ProjectActivity)
+ #}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+{% if activities|length > 0 %}
+    <ul class="pm-feed">
+        {% for act in activities %}
+            <li>
+                {{ pm.avatar(act.actor, 'xs') }}
+                <div>
+                    <strong>{{ act.actor|pm_name }}</strong>
+                    {% if act.task %}
+                        <a href="{{ path('app_admin_pm_task_show', {id: act.task.id}) }}">{{ act.message }}</a>
+                    {% else %}
+                        {{ act.message }}
+                    {% endif %}
+                    <span class="pm-feed__when" title="{{ act.createdAt|pm_datetime }}">{{ act.createdAt|pm_ago }}</span>
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p class="pm-muted" style="margin: 0; font-size: 13px">Rien pour l'instant.</p>
+{% endif %}

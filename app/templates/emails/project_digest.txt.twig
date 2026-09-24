@@ -1,0 +1,15 @@
+Bonjour {{ recipientName }},
+
+Tes tâches du moment ({{ today|date('d/m/Y') }}) :
+{% for key, title in {overdue: 'EN RETARD', today: 'AUJOURD\'HUI', soon: 'DANS LES 3 PROCHAINS JOURS'} %}
+{% if groups[key]|length > 0 %}
+
+{{ title }}
+{% for task in groups[key] %}
+- {{ task.title }} ({{ task.project ? task.project.name : 'Sans projet' }}{% if task.dueDate %}, {{ task.dueDate|date('d/m') }}{% endif %}) : {{ url('app_admin_pm_task_show', {id: task.id}) }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+Espace projets : {{ spaceUrl }}
+Gérer mes notifications : {{ settingsUrl }}

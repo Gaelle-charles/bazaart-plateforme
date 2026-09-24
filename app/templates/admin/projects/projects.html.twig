@@ -1,0 +1,102 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # projects.html.twig : liste des projets en cartes, ou chronologie (?view=timeline).
+ # Variables : projects, projectStats, statusParam, view, timeline (si view = timeline)
+ #}
+
+{% set pm_tab = 'projects' %}
+{% block title %}Projets · Espace projets · BazaArt{% endblock %}
+{% block page_title %}Projets{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+{% set today = pm_today() %}
+
+<div class="pm-head">
+    <div>
+        <div class="pm-eyebrow">Espace projets</div>
+        <h1 class="pm-title">Projets <small>{{ projects|length }} projet{{ projects|length > 1 ? 's' }}{{ statusParam == 'all' ? ', archivés compris' }}</small></h1>
+    </div>
+    <div class="pm-head__actions">
+        <a class="pm-btn pm-btn--primary" href="{{ path('app_admin_pm_project_new') }}">{{ pm.icon('plus') }} Nouveau projet</a>
+    </div>
+</div>
+
+<div class="pm-toolbar">
+    <nav class="pm-views" aria-label="Affichage des projets">
+        <a href="{{ path('app_admin_pm_projects', {status: statusParam}|filter(v => v)) }}" {{ view == 'grid' ? 'aria-current="page"' }}>{{ pm.icon('grid') }} Cartes</a>
+        <a href="{{ path('app_admin_pm_projects', {status: statusParam, view: 'timeline'}|filter(v => v)) }}" {{ view == 'timeline' ? 'aria-current="page"' }}>{{ pm.icon('timeline') }} Chronologie</a>
+    </nav>
+    <div class="pm-quick" aria-label="Filtrer par statut">
+        <a href="{{ path('app_admin_pm_projects', {view: view == 'timeline' ? 'timeline' : null}|filter(v => v)) }}" aria-pressed="{{ statusParam == '' ? 'true' : 'false' }}">Ouverts</a>
+        {% for s in pm_project_statuses() %}
+            <a href="{{ path('app_admin_pm_projects', {status: s.value, view: view == 'timeline' ? 'timeline' : null}|filter(v => v)) }}" aria-pressed="{{ statusParam == s.value ? 'true' : 'false' }}">{{ s.label() }}</a>
+        {% endfor %}
+        <a href="{{ path('app_admin_pm_projects', {status: 'all', view: view == 'timeline' ? 'timeline' : null}|filter(v => v)) }}" aria-pressed="{{ statusParam == 'all' ? 'true' : 'false' }}">Tous</a>
+    </div>
+</div>
+
+{% if projects|length == 0 %}
+    <div class="pm-empty">
+        <strong>Aucun projet ici</strong>
+        <p>Crée un projet vierge ou pars d'un modèle : événement, formation, candidature, campagne.</p>
+        <a class="pm-btn pm-btn--primary" href="{{ path('app_admin_pm_project_new') }}">{{ pm.icon('plus') }} Nouveau projet</a>
+    </div>
+
+{% elseif view == 'grid' %}
+    <div class="pm-projects">
+        {% for project in projects %}
+            {% include 'admin/projects/_project_card.html.twig' with {project: project, stats: projectStats[project.id] ?? null} only %}
+        {% endfor %}
+    </div>
+
+{% else %}
+    {# ── Chronologie : barres positionnées en % par ProjectService::buildTimeline() ── #}
+    <div class="pm-toolbar">
+        <div class="pm-cal-nav">
+            <h2 class="pm-cal-nav__title">{{ timeline.start|pm_short }} au {{ timeline.end|pm_short }}</h2>
+            <a class="pm-btn pm-btn--sm" aria-label="Période précédente" href="{{ path('app_admin_pm_projects', {status: statusParam, view: 'timeline', from: timeline.start|date_modify('-3 months')|date('Y-m')}|filter(v => v)) }}">{{ pm.icon('left') }}</a>
+            <a class="pm-btn pm-btn--sm" href="{{ path('app_admin_pm_projects', {status: statusParam, view: 'timeline'}|filter(v => v)) }}">Aujourd'hui</a>
+            <a class="pm-btn pm-btn--sm" aria-label="Période suivante" href="{{ path('app_admin_pm_projects', {status: statusParam, view: 'timeline', from: timeline.start|date_modify('+3 months')|date('Y-m')}|filter(v => v)) }}">{{ pm.icon('right') }}</a>
+        </div>
+    </div>
+    <div class="pm-tl">
+        <div class="pm-tl__inner">
+            <div class="pm-tl__row" style="min-height: 0">
+                <div class="pm-tl__name" style="background: var(--ink); color: var(--bg); font: 700 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase">Projet</div>
+                <div class="pm-tl__track pm-tl__months">
+                    {% for m in timeline.months %}<span class="pm-tl__month" style="left: {{ m.left }}%; width: {{ m.width }}%">{{ m.label }}</span>{% endfor %}
+                </div>
+            </div>
+            {% for row in timeline.rows %}
+                {% set p = row.project %}
+                <div class="pm-tl__row">
+                    <div class="pm-tl__name">
+                        <span class="pm-dot" style="background: {{ p.color }}"></span>
+                        <a href="{{ path('app_admin_pm_project_show', {id: p.id}) }}" title="{{ p.name }}">{{ p.name }}</a>
+                    </div>
+                    <div class="pm-tl__track">
+                        <div class="pm-tl__grid">{% for m in timeline.months %}<span style="left: {{ m.left }}%"></span>{% endfor %}</div>
+                        {% if timeline.todayLeft is not null %}<span class="pm-tl__today" style="left: {{ timeline.todayLeft }}%" title="Aujourd'hui"></span>{% endif %}
+                        <a class="pm-tl__bar{{ row.clippedStart ? ' pm-tl__bar--clip-start' }}{{ row.clippedEnd ? ' pm-tl__bar--clip-end' }}{{ p.isOverdue(today) ? ' pm-tl__bar--overdue' }}"
+                           href="{{ path('app_admin_pm_project_show', {id: p.id}) }}"
+                           style="left: {{ row.left }}%; width: {{ row.width }}%; --c: {{ p.color }}"
+                           title="{{ p.name }} : {{ p.startDate ? p.startDate|pm_short ~ ' au ' }}{{ p.dueDate ? p.dueDate|pm_short : '' }} · {{ (projectStats[p.id].percent ?? 0) }} % fait">
+                            {{ (projectStats[p.id].percent ?? 0) }}%
+                        </a>
+                    </div>
+                </div>
+            {% else %}
+                <div class="pm-tl__row"><div class="pm-tl__name pm-muted">Aucun projet daté sur cette période.</div><div></div></div>
+            {% endfor %}
+        </div>
+    </div>
+    {% if timeline.undated|length > 0 or timeline.outside|length > 0 %}
+        <p class="pm-mono pm-muted" style="margin-top: 10px">
+            {% if timeline.undated|length > 0 %}Sans dates : {% for p in timeline.undated %}<a class="pm-link" href="{{ path('app_admin_pm_project_show', {id: p.id}) }}">{{ p.name }}</a>{{ not loop.last ? ', ' }}{% endfor %}.{% endif %}
+            {% if timeline.outside|length > 0 %} Hors période : {% for p in timeline.outside %}<a class="pm-link" href="{{ path('app_admin_pm_project_show', {id: p.id}) }}">{{ p.name }}</a>{{ not loop.last ? ', ' }}{% endfor %}.{% endif %}
+        </p>
+    {% endif %}
+{% endif %}
+{% endblock %}

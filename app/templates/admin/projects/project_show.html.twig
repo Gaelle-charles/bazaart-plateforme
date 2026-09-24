@@ -1,0 +1,191 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # project_show.html.twig : fiche d'un projet (AdminProjectController::showProject).
+ #
+ # Variables : project, view (kanban|list), tasks, columns, cardStats, stats,
+ #             attachments, notes, activities, labels, filter
+ #}
+
+{% set pm_tab = 'projects' %}
+{% block title %}{{ project.name }} · Projets · BazaArt{% endblock %}
+{% block page_title %}Projet{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+{% set today = pm_today() %}
+
+<nav class="pm-breadcrumb" aria-label="Fil d'Ariane">
+    <a href="{{ path('app_admin_pm_projects') }}">Projets</a> › <span>{{ project.name }}</span>
+</nav>
+
+{# ── Bandeau du projet ────────────────────────────────────────────────── #}
+<section class="pm-hero" style="--c: {{ project.color }}">
+    <div class="pm-hero__band"></div>
+    <div class="pm-hero__body">
+        <div style="min-width: 0; flex: 1">
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px">
+                <span class="pm-badge pm-pstatus--{{ project.status.cssModifier() }}">{{ project.status.label() }}</span>
+                <span class="pm-badge pm-prio--{{ project.priority.cssModifier() }}">Priorité {{ project.priority.label()|lower }}</span>
+                {% if project.isOverdue(today) %}<span class="pm-badge pm-prio--urgent">Échéance dépassée</span>{% endif %}
+            </div>
+            <h1 class="pm-title">{{ project.name }}</h1>
+            <div class="pm-hero__facts">
+                <div class="pm-fact"><span class="pm-fact__label">Responsable</span><span class="pm-fact__value">{% if project.owner %}{{ pm.avatar(project.owner, 'xs') }} {{ project.owner|pm_name }}{% else %}<span class="pm-muted">Personne</span>{% endif %}</span></div>
+                <div class="pm-fact"><span class="pm-fact__label">Début</span><span class="pm-fact__value">{{ project.startDate ? project.startDate|pm_short : '·' }}</span></div>
+                <div class="pm-fact"><span class="pm-fact__label">Échéance</span><span class="pm-fact__value">{{ project.dueDate ? project.dueDate|pm_short : '·' }}</span></div>
+                <div class="pm-fact" style="min-width: 180px">
+                    <span class="pm-fact__label">Avancement · {{ stats.done }}/{{ stats.total }} tâches{% if stats.overdue > 0 %} · {{ stats.overdue }} en retard{% endif %}</span>
+                    <span class="pm-fact__value" style="width: 100%"><span class="pm-progress pm-progress--accent" style="flex: 1"><span class="pm-progress__bar" style="width: {{ stats.percent }}%"></span></span> {{ stats.percent }}%</span>
+                </div>
+            </div>
+        </div>
+        <div class="pm-head__actions">
+            <button type="button" class="pm-btn pm-btn--primary" data-pm-quick-task data-project="{{ project.id }}">{{ pm.icon('plus') }} Tâche</button>
+            <a class="pm-btn" href="{{ path('app_admin_pm_project_edit', {id: project.id}) }}">{{ pm.icon('edit') }} Modifier</a>
+            <form method="post" action="{{ path('app_admin_pm_project_status', {id: project.id}) }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('pm_project_status_' ~ project.id) }}">
+                {% if project.archived %}
+                    <input type="hidden" name="status" value="active">
+                    <button class="pm-btn" type="submit">{{ pm.icon('archive') }} Désarchiver</button>
+                {% elseif project.status.value == 'completed' %}
+                    <input type="hidden" name="status" value="archived">
+                    <button class="pm-btn" type="submit">{{ pm.icon('archive') }} Archiver</button>
+                {% else %}
+                    <input type="hidden" name="status" value="completed">
+                    <button class="pm-btn" type="submit">{{ pm.icon('check') }} Marquer terminé</button>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+</section>
+
+<div class="pm-layout pm-layout--sidebar">
+    <div class="pm-stack" style="min-width: 0">
+        {# ── Tâches du projet ─────────────────────────────────────────── #}
+        <div class="pm-toolbar" style="margin-bottom: 0">
+            <nav class="pm-views" aria-label="Vue des tâches du projet">
+                <a href="{{ path('app_admin_pm_project_show', {id: project.id}) }}" {{ view == 'kanban' ? 'aria-current="page"' }}>{{ pm.icon('kanban') }} Kanban</a>
+                <a href="{{ path('app_admin_pm_project_show', {id: project.id, view: 'list'}) }}" {{ view == 'list' ? 'aria-current="page"' }}>{{ pm.icon('list') }} Liste</a>
+                <a href="{{ path('app_admin_pm_tasks', {view: 'calendar', project: project.id}) }}">{{ pm.icon('calendar') }} Calendrier</a>
+                <a href="{{ path('app_admin_pm_tasks', {view: 'person', project: project.id}) }}">{{ pm.icon('person') }} Par personne</a>
+            </nav>
+        </div>
+
+        {% if view == 'kanban' %}
+            {% include 'admin/projects/_board.html.twig' with {columns: columns, cardStats: cardStats, show_status: false, quick_project: project.id} only %}
+        {% else %}
+            {% if tasks|length > 0 %}
+                <div class="pm-card pm-card__body--flush">
+                    {% for task in tasks %}
+                        <div class="pm-line" style="padding: 8px 12px">
+                            <form method="post" action="{{ path('app_admin_pm_task_toggle', {id: task.id}) }}" class="pm-tick{{ task.isDone() ? ' pm-tick--done' }}">
+                                <input type="hidden" name="_token" value="{{ csrf_token('pm_task_toggle_' ~ task.id) }}">
+                                <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+                                <button type="submit" aria-label="{{ task.isDone() ? 'Rouvrir' : 'Terminer' }} « {{ task.title }} »">{{ pm.icon('check') }}</button>
+                            </form>
+                            <a class="pm-line__title" href="{{ path('app_admin_pm_task_show', {id: task.id}) }}" style="{{ task.isDone() ? 'text-decoration: line-through; color: var(--ink-mute)' }}">{{ task.title }}</a>
+                            <span class="pm-badge pm-status--{{ task.status.cssModifier() }}">{{ task.status.label() }}</span>
+                            <span class="pm-task__facts">{{ pm.due(task) }}</span>
+                            {{ pm.avatars(task.assignees) }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="pm-empty"><strong>Pas encore de tâche</strong><p>Ajoute la première tâche de ce projet.</p></div>
+            {% endif %}
+        {% endif %}
+
+        {% if project.description %}
+            <section class="pm-card">
+                <div class="pm-card__head"><h2 class="pm-card__title">Description</h2></div>
+                <div class="pm-card__body pm-comment__body">{{ project.description|pm_autolink|nl2br }}</div>
+            </section>
+        {% endif %}
+    </div>
+
+    <aside class="pm-stack">
+        {# ── Dossier Drive du projet ──────────────────────────────────── #}
+        <section class="pm-card">
+            <div class="pm-card__head"><h2 class="pm-card__title">Dossier Drive</h2></div>
+            <div class="pm-card__body">
+                {% if project.driveFolderId %}
+                    <div class="pm-file" style="padding-top: 0">
+                        <span class="pm-file__icon pm-kind--folder">{{ pm.icon('folder') }}</span>
+                        <div class="pm-file__main">
+                            <a class="pm-file__name" href="https://drive.google.com/drive/folders/{{ project.driveFolderId|url_encode }}" target="_blank" rel="noopener noreferrer">{{ project.driveFolderName ?? 'Dossier du projet' }}</a>
+                            <span class="pm-file__meta">Destination des fichiers téléversés</span>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="pm-muted" style="margin: 0 0 10px; font-size: 13px">Aucun dossier rattaché. Les fichiers téléversés iront dans « Mon Drive ».</p>
+                {% endif %}
+                {% if pm_drive_connected() %}
+                    <div class="pm-attach-actions">
+                        <button type="button" class="pm-btn pm-btn--sm" data-pm-drive-open data-mode="folder"
+                                data-folder-url="{{ path('app_admin_pm_project_drive_folder', {id: project.id}) }}"
+                                data-start-folder="{{ project.driveFolderId }}">{{ pm.icon('folder') }} {{ project.driveFolderId ? 'Changer' : 'Choisir un dossier' }}</button>
+                        {% if not project.driveFolderId %}
+                            <form method="post" action="{{ path('app_admin_pm_project_drive_create', {id: project.id}) }}">
+                                <input type="hidden" name="_token" value="{{ csrf_token('pm_project_drive_' ~ project.id) }}">
+                                <button class="pm-btn pm-btn--sm" type="submit">{{ pm.icon('plus') }} Créer le dossier</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <a class="pm-btn pm-btn--sm" href="{{ path('app_admin_pm_drive') }}">{{ pm.icon('drive') }} Connecter le Drive</a>
+                {% endif %}
+            </div>
+        </section>
+
+        {# ── Fichiers joints au projet ────────────────────────────────── #}
+        <section class="pm-card">
+            <div class="pm-card__head"><h2 class="pm-card__title">Fichiers et liens</h2></div>
+            <div class="pm-card__body">
+                {% include 'admin/projects/_attachments.html.twig' with {attachments: attachments, target: 'project', target_id: project.id, drive_folder: project.driveFolderId} %}
+            </div>
+        </section>
+
+        {# ── Notes rattachées au projet ───────────────────────────────── #}
+        <section class="pm-card">
+            <div class="pm-card__head">
+                <h2 class="pm-card__title">Notes du projet</h2>
+                <a class="pm-link pm-mono" href="{{ path('app_admin_pm_notes', {project: project.id}) }}">Tout voir</a>
+            </div>
+            <div class="pm-card__body">
+                {% for note in notes %}
+                    <article class="pm-note pm-note--{{ note.color.value }}" style="box-shadow: none; margin-bottom: 10px">
+                        <div class="pm-note__body">{% if note.title %}<strong>{{ note.title }}</strong><br>{% endif %}{{ note.content|pm_autolink|nl2br }}</div>
+                        <div class="pm-note__foot"><span class="pm-note__sig">{{ pm.avatar(note.author, 'xs') }} <small>{{ note.author|pm_name }} · {{ note.createdAt|pm_datetime }}</small></span></div>
+                    </article>
+                {% endfor %}
+                <details class="pm-composer" style="margin: 0; padding: 10px" {{ notes|length == 0 ? 'open' }}>
+                    <summary>{{ pm.icon('plus') }} Écrire une note</summary>
+                    <form method="post" action="{{ path('app_admin_pm_note_new') }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('pm_note_new') }}">
+                        <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+                        <input type="hidden" name="projectId" value="{{ project.id }}">
+                        <label class="pm-sr" for="pm-pnote">Contenu de la note</label>
+                        <textarea class="pm-textarea" id="pm-pnote" name="content" required maxlength="10000" rows="3" placeholder="Compte rendu, idée, info importante…"></textarea>
+                        <button class="pm-btn pm-btn--sm pm-btn--primary" type="submit" style="margin-top: 8px">Publier (signée {{ app.user|pm_name }})</button>
+                    </form>
+                </details>
+            </div>
+        </section>
+
+        {# ── Activité du projet ───────────────────────────────────────── #}
+        <section class="pm-card">
+            <div class="pm-card__head"><h2 class="pm-card__title">Activité</h2></div>
+            <div class="pm-card__body">{% include 'admin/projects/_activity.html.twig' with {activities: activities} only %}</div>
+        </section>
+
+        {% if is_granted('PROJECT_DELETE', project) %}
+            <form method="post" action="{{ path('app_admin_pm_project_delete', {id: project.id}) }}"
+                  onsubmit="return confirm('Supprimer DÉFINITIVEMENT ce projet et toutes ses tâches ? Les notes et les fichiers du Drive sont conservés. Pour simplement le ranger, préfère « Archiver ».')">
+                <input type="hidden" name="_token" value="{{ csrf_token('pm_project_delete_' ~ project.id) }}">
+                <button class="pm-btn pm-btn--danger pm-btn--block" type="submit">{{ pm.icon('trash') }} Supprimer le projet</button>
+            </form>
+        {% endif %}
+    </aside>
+</div>
+{% endblock %}

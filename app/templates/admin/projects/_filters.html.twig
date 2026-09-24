@@ -1,0 +1,94 @@
+{#
+ # _filters.html.twig : barre de filtres commune à toutes les vues des tâches.
+ #
+ # Formulaire GET : les filtres vivent dans l'URL, donc une vue filtrée peut être
+ # mise en favori ou partagée à une collègue telle quelle.
+ #
+ # Variables : filter (ProjectTaskFilter), view, members, projects, labels,
+ #             statuses, priorities, dueOptions
+ #}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+{% set q = filter.toQuery() %}
+<div class="pm-filters">
+    {# Raccourcis : un clic = un filtre prêt à l'emploi (re-clic = on l'enlève) #}
+    <div class="pm-quick" aria-label="Raccourcis de filtres">
+        {% set isMine = filter.assignee == 'me' %}
+        <a href="{{ path('app_admin_pm_tasks', (isMine ? q|filter((v, k) => k != 'assignee') : q|merge({assignee: 'me'}))|merge({view: view})) }}" aria-pressed="{{ isMine ? 'true' : 'false' }}">Mes tâches</a>
+        {% set isLate = filter.due == 'overdue' %}
+        <a href="{{ path('app_admin_pm_tasks', (isLate ? q|filter((v, k) => k != 'due') : q|merge({due: 'overdue'}))|merge({view: view})) }}" aria-pressed="{{ isLate ? 'true' : 'false' }}">En retard</a>
+        {% set isUrgent = filter.priority and filter.priority.value == 'urgent' %}
+        <a href="{{ path('app_admin_pm_tasks', (isUrgent ? q|filter((v, k) => k != 'priority') : q|merge({priority: 'urgent'}))|merge({view: view})) }}" aria-pressed="{{ isUrgent ? 'true' : 'false' }}">Urgentes</a>
+        {% set isWeek = filter.due == 'week' %}
+        <a href="{{ path('app_admin_pm_tasks', (isWeek ? q|filter((v, k) => k != 'due') : q|merge({due: 'week'}))|merge({view: view})) }}" aria-pressed="{{ isWeek ? 'true' : 'false' }}">Cette semaine</a>
+        {% set isUnassigned = filter.assignee == 'none' %}
+        <a href="{{ path('app_admin_pm_tasks', (isUnassigned ? q|filter((v, k) => k != 'assignee') : q|merge({assignee: 'none'}))|merge({view: view})) }}" aria-pressed="{{ isUnassigned ? 'true' : 'false' }}">Non assignées</a>
+    </div>
+
+    <details {{ filter.isActive() ? 'open' }} style="margin-top: 10px">
+        <summary>{{ pm.icon('filter') }} Filtres{% if filter.countActive() > 0 %} ({{ filter.countActive() }} actif{{ filter.countActive() > 1 ? 's' }}){% endif %}</summary>
+        <form method="get" action="{{ path('app_admin_pm_tasks') }}">
+            <input type="hidden" name="view" value="{{ view }}">
+            {% if view == 'calendar' and app.request.query.get('month') %}<input type="hidden" name="month" value="{{ app.request.query.get('month') }}">{% endif %}
+            <div class="pm-filters__grid">
+                <div class="pm-field pm-filters__search">
+                    <label class="pm-field__label" for="pm-f-q">Recherche</label>
+                    <input class="pm-input" type="search" id="pm-f-q" name="q" value="{{ filter.search }}" placeholder="Titre ou description">
+                </div>
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-f-project">Projet</label>
+                    <select class="pm-select" id="pm-f-project" name="project">
+                        <option value="">Tous</option>
+                        <option value="none" {{ filter.withoutProject ? 'selected' }}>Sans projet</option>
+                        {% for p in projects %}<option value="{{ p.id }}" {{ filter.projectId == p.id ? 'selected' }}>{{ p.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-f-assignee">Personne</label>
+                    <select class="pm-select" id="pm-f-assignee" name="assignee">
+                        <option value="">Tout le monde</option>
+                        <option value="me" {{ filter.assignee == 'me' ? 'selected' }}>Moi</option>
+                        <option value="none" {{ filter.assignee == 'none' ? 'selected' }}>Non assignées</option>
+                        {% for m in members %}<option value="{{ m.id }}" {{ filter.assignee == m.id ~ '' ? 'selected' }}>{{ m|pm_name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-f-priority">Priorité</label>
+                    <select class="pm-select" id="pm-f-priority" name="priority">
+                        <option value="">Toutes</option>
+                        {% for p in priorities %}<option value="{{ p.value }}" {{ filter.priority == p ? 'selected' }}>{{ p.label() }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-f-status">Statut</label>
+                    <select class="pm-select" id="pm-f-status" name="status">
+                        <option value="">Tous</option>
+                        {% for s in statuses %}<option value="{{ s.value }}" {{ filter.status == s ? 'selected' }}>{{ s.label() }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-f-label">Étiquette</label>
+                    <select class="pm-select" id="pm-f-label" name="label">
+                        <option value="">Toutes</option>
+                        {% for l in labels %}<option value="{{ l.id }}" {{ filter.labelId == l.id ? 'selected' }}>{{ l.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-f-due">Échéance</label>
+                    <select class="pm-select" id="pm-f-due" name="due">
+                        <option value="">Toutes</option>
+                        {% for key, label in dueOptions %}<option value="{{ key }}" {{ filter.due == key ? 'selected' }}>{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="pm-field" style="justify-content: flex-end">
+                    <button class="pm-btn pm-btn--primary" type="submit">{{ pm.icon('search') }} Filtrer</button>
+                </div>
+            </div>
+            <div class="pm-filters__foot">
+                <label class="pm-check"><input type="checkbox" name="done" value="hide" {{ filter.hideDone ? 'checked' }}> Masquer les tâches terminées</label>
+                {% if filter.isActive() %}
+                    <a class="pm-link pm-mono" href="{{ path('app_admin_pm_tasks', {view: view}) }}">Réinitialiser les filtres</a>
+                {% endif %}
+            </div>
+        </form>
+    </details>
+</div>
