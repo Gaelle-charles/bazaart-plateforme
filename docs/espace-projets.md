@@ -4,7 +4,7 @@ Outil de suivi des projets et des tâches de l'équipe Bazaart, intégré au das
 de **app.bazaart.fr** sous **`/admin/projets`**. Décision d'architecture : ADR-0037.
 
 Accès réservé aux membres de l'équipe projets (rôle `ROLE_PROJECT`) :
-Mllebelamour@gmail.com, zahibowendie@gmail.com, g.charlesbel@gmail.com.
+Mllebelamour@gmail.com, zahibowendie@gmail.com, hello@gaellecode.fr.
 
 ---
 
@@ -15,7 +15,8 @@ Mllebelamour@gmail.com, zahibowendie@gmail.com, g.charlesbel@gmail.com.
 Le déploiement (`deploy.sh`) applique la migration `Version20260924124344`, qui :
 
 - crée les tables du module ;
-- donne l'accès (`ROLE_PROJECT`) aux 3 adresses ci-dessus **si leur compte existe déjà** ;
+- donne l'accès (`ROLE_PROJECT`) aux comptes **déjà existants** des 3 adresses de départ
+  (Mllebelamour@gmail.com, zahibowendie@gmail.com et g.charlesbel@gmail.com) ;
 - crée quelques étiquettes de départ (Communication, Budget, Partenaires…).
 
 Pour vérifier qui a accès, ou créer les comptes manquants (sur le serveur) :
@@ -27,15 +28,20 @@ docker compose --env-file .env.local -f docker-compose.prod.yml exec -T platform
 
 # Crée les comptes absents et donne l'accès
 docker compose --env-file .env.local -f docker-compose.prod.yml exec -T platform_app \
-  php bin/console app:projets:acces --creer Mllebelamour@gmail.com zahibowendie@gmail.com g.charlesbel@gmail.com
+  php bin/console app:projets:acces --creer Mllebelamour@gmail.com zahibowendie@gmail.com hello@gaellecode.fr
 
 # Retirer l'accès à quelqu'un
 ... php bin/console app:projets:acces --retirer adresse@exemple.com
 ```
 
+> **Changement du 24/09/2026** : l'accès de g.charlesbel@gmail.com est remplacé par
+> **hello@gaellecode.fr**. La migration, déjà appliquée, n'est pas modifiée : l'échange se
+> fait avec la commande (`--creer hello@gaellecode.fr`, puis `--retirer g.charlesbel@gmail.com`).
+
 Un compte créé par la commande reçoit un email « choisir mon mot de passe » (lien valable
-1 heure). Les adresses étant des Gmail, **« Se connecter avec Google » fonctionne aussi
-directement**. Après connexion, une membre qui n'est pas admin arrive directement sur
+1 heure, relançable ensuite via « Mot de passe oublié »). Pour les adresses Gmail,
+**« Se connecter avec Google » fonctionne aussi directement** ; pour hello@gaellecode.fr,
+seulement si cette adresse est rattachée à un compte Google. Après connexion, une membre qui n'est pas admin arrive directement sur
 l'Espace projets.
 
 > `ROLE_ADMIN` ne donne PAS accès à l'Espace projets : c'est voulu (les notes internes
