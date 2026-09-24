@@ -48,11 +48,24 @@
     </section>
 
     <div class="pm-stack">
-        {# ── Mes préférences ──────────────────────────────────────────── #}
-        <section class="pm-card">
+        {# ── Mes préférences (ancre #pm-me : étape « Indiquer mon prénom ») ── #}
+        <section class="pm-card" id="pm-me">
             <div class="pm-card__head"><h2 class="pm-card__title">Mes préférences</h2></div>
             <form method="post" action="{{ path('app_admin_pm_team_prefs') }}" class="pm-card__body">
                 <input type="hidden" name="_token" value="{{ csrf_token('pm_prefs') }}">
+                {% if app.user.firstName is empty %}
+                    <p class="pm-note-info" style="margin: 0 0 12px">Tu apparais pour l'instant comme <strong>{{ app.user|pm_name }}</strong> : indique ton prénom pour que l'équipe te reconnaisse.</p>
+                {% endif %}
+                <div class="pm-row">
+                    <div class="pm-field">
+                        <label class="pm-field__label" for="pm-pref-first">Mon prénom</label>
+                        <input class="pm-input" id="pm-pref-first" name="firstName" value="{{ app.user.firstName }}" required maxlength="100" autocomplete="given-name">
+                    </div>
+                    <div class="pm-field">
+                        <label class="pm-field__label" for="pm-pref-last">Mon nom <span class="pm-muted">(facultatif)</span></label>
+                        <input class="pm-input" id="pm-pref-last" name="lastName" value="{{ app.user.lastName }}" maxlength="100" autocomplete="family-name">
+                    </div>
+                </div>
                 <div class="pm-field">
                     <span class="pm-field__label" id="pm-pref-color">Ma couleur</span>
                     <div class="pm-swatches" role="radiogroup" aria-labelledby="pm-pref-color">

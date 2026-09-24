@@ -79,3 +79,19 @@ Module « Espace projets » sous `/admin/projets` (routes `app_admin_pm_*`) :
 - Cron à ajouter pour le récap quotidien (cf. `docs/scraping-cron.md`).
 - `CLAUDE.md` n'est pas modifié : à mettre à jour si Gaëlle valide cet ADR (rôle
   `ROLE_PROJECT` à ajouter à la section 7).
+
+## Ajustements après mise en service (24/09/2026)
+
+Retours de l'équipe après les premiers essais :
+
+- **Prénom et nom** modifiables dans « Équipe & réglages » : ce sont ceux du compte
+  (`users.first_name` / `last_name`), donc aussi utilisés ailleurs sur la plateforme et
+  dans les emails. Nouvelle étape de checklist « Indiquer mon prénom » (7 étapes).
+- **Retour vers l'Espace projets** depuis le site : lien dans le menu du compte, le menu
+  mobile et les barres latérales « Mon espace », affiché seulement pour `ROLE_PROJECT`.
+- **Import CSV** des tâches suivies jusque-là dans Google Sheets (`ProjectTaskImporter`) :
+  CSV plutôt que .xlsx pour ne pas ajouter de dépendance (Google Sheets et Excel exportent
+  tous deux en CSV). Aperçu obligatoire avant enregistrement (fichier gardé en session,
+  vérifié par empreinte SHA-256), en-têtes reconnus sans accents ni casse, doublons
+  ignorés (même titre dans le même projet), aucune notification, une seule ligne
+  d'activité (`tasks_imported`), liens http(s) seulement, 1 Mo et 500 tâches maximum.

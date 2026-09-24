@@ -1,0 +1,154 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # import.html.twig : importer des tâches depuis un tableur (AdminProjectImportController).
+ # Variables : report (ProjectImportReport|null : null = formulaire vierge), hash (empreinte
+ # du fichier gardé en session, null si rien d'importable), fileName, fields (colonnes reconnues).
+ #}
+
+{% set pm_tab = 'tasks' %}
+{% block title %}Importer des tâches · Espace projets · BazaArt{% endblock %}
+{% block page_title %}Importer des tâches{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+
+<div class="pm-head">
+    <div>
+        <div class="pm-eyebrow">Espace projets · Tâches</div>
+        <h1 class="pm-title">Importer des tâches <small>depuis Google Sheets ou Excel</small></h1>
+    </div>
+    <div class="pm-head__actions">
+        <a class="pm-btn pm-btn--ghost" href="{{ path('app_admin_pm_import_template') }}">{{ pm.icon('download') }} Modèle à remplir</a>
+    </div>
+</div>
+
+{% if report is null or not report.isImportable() %}
+    {# ── Étape 1 : envoi du fichier ───────────────────────────────────── #}
+    <div class="pm-layout pm-layout--halves">
+        <section class="pm-card">
+            <div class="pm-card__head"><h2 class="pm-card__title">1. Envoyer le fichier CSV</h2></div>
+            <form method="post" action="{{ path('app_admin_pm_import_check') }}" enctype="multipart/form-data" class="pm-card__body">
+                <input type="hidden" name="_token" value="{{ csrf_token('pm_import') }}">
+                {% if report is not null %}
+                    <p class="pm-note-info pm-note-info--warn" style="margin: 0 0 12px" role="alert">
+                        {% if report.error %}{{ report.error }}{% else %}Rien à importer : les {{ report.duplicates }} tâche{{ report.duplicates > 1 ? 's' }} du fichier {{ report.duplicates > 1 ? 'sont' : 'est' }} déjà dans l'Espace projets.{% endif %}
+                    </p>
+                {% endif %}
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-import-file">Fichier CSV (1 Mo maximum)</label>
+                    <input class="pm-input" type="file" id="pm-import-file" name="file" accept=".csv,.tsv,.txt,text/csv,text/plain" required>
+                </div>
+                <div style="margin-top: 14px">
+                    <button class="pm-btn pm-btn--primary" type="submit">{{ pm.icon('upload') }} Vérifier le fichier</button>
+                </div>
+                <p class="pm-muted" style="margin: 10px 0 0; font-size: 13px">Rien n'est enregistré à cette étape : tu verras d'abord ce qui sera créé.</p>
+            </form>
+        </section>
+
+        <section class="pm-card">
+            <div class="pm-card__head"><h2 class="pm-card__title">Comment faire</h2></div>
+            <div class="pm-card__body" style="font-size: 14px; line-height: 1.55">
+                <ol style="margin: 0 0 12px; padding-left: 20px">
+                    <li>Ouvre ton tableau dans <strong>Google Sheets</strong> (ou Excel) et va sur l'onglet des tâches.</li>
+                    <li><strong>Fichier &gt; Télécharger &gt; Valeurs séparées par des virgules (.csv)</strong>.<br>Excel : <em>Fichier &gt; Enregistrer sous &gt; CSV UTF-8</em>.</li>
+                    <li>Envoie ce fichier ici, vérifie l'aperçu, puis confirme.</li>
+                </ol>
+                <p style="margin: 0 0 6px"><strong>Colonnes reconnues</strong> (la 1re ligne doit contenir leurs titres ; l'ordre et les autres colonnes n'ont pas d'importance) :</p>
+                <p class="pm-mono" style="margin: 0 0 10px">{{ fields|join(' · ') }}</p>
+                <ul style="margin: 0; padding-left: 20px" class="pm-muted">
+                    <li>Seule la colonne <strong>Tâche</strong> est obligatoire.</li>
+                    <li>Un <strong>projet</strong> absent est créé ; une tâche déjà présente (même titre, même projet) est ignorée : réimporter ne crée pas de doublon.</li>
+                    <li><strong>Assignée à</strong> : prénom, email ou « moi » (plusieurs : séparées par des virgules).</li>
+                    <li><strong>Date prévue</strong> sert d'échéance s'il n'y en a pas. Dates au format 21/09/2026.</li>
+                    <li><strong>Sous-tâches</strong> : une par ligne dans la cellule, « [x] » devant celles déjà faites.</li>
+                    <li>Aucun email n'est envoyé pour les tâches importées.</li>
+                </ul>
+            </div>
+        </section>
+    </div>
+{% else %}
+    {# ── Étape 2 : aperçu, puis confirmation ──────────────────────────── #}
+    {% set count = report.rows|length %}
+    <section class="pm-card">
+        <div class="pm-card__head">
+            <h2 class="pm-card__title">2. Vérifier : {{ count }} tâche{{ count > 1 ? 's' }} à importer</h2>
+        </div>
+        <div class="pm-card__body">
+            <p style="margin: 0 0 10px">
+                Fichier <strong>{{ fileName }}</strong> :
+                {{ count }} tâche{{ count > 1 ? 's' }}
+                {%- if report.newProjects is not empty %}, {{ report.newProjects|length }} projet{{ report.newProjects|length > 1 ? 's' }} à créer ({{ report.newProjects|join(', ') }}){% endif %}
+                {%- if report.duplicates > 0 %}, {{ report.duplicates }} déjà présente{{ report.duplicates > 1 ? 's' }} (ignorée{{ report.duplicates > 1 ? 's' }}){% endif %}.
+            </p>
+            <p class="pm-muted" style="margin: 0 0 12px; font-size: 13px">
+                Colonnes reconnues :
+                {% for header, field in report.columns %}{{ header == field ? field : '« ' ~ header ~ ' » (' ~ field ~ ')' }}{{ not loop.last ? ', ' }}{% endfor %}.
+                {% if report.ignoredColumns is not empty %}Ignorées : {{ report.ignoredColumns|join(', ') }}.{% endif %}
+            </p>
+
+            {% if report.warnings is not empty %}
+                <div class="pm-note-info pm-note-info--warn" style="margin-bottom: 12px">
+                    <strong>À savoir avant d'importer ({{ report.warnings|length }})</strong>
+                    <ul style="margin: 6px 0 0; padding-left: 20px">
+                        {% for w in report.warnings|slice(0, 30) %}<li>{{ w }}</li>{% endfor %}
+                        {% if report.warnings|length > 30 %}<li>… et {{ report.warnings|length - 30 }} autre{{ report.warnings|length - 30 > 1 ? 's' }}.</li>{% endif %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if count > 0 %}
+                <div class="pm-table-wrap">
+                    <table class="pm-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Ligne</th>
+                                <th scope="col">Tâche</th>
+                                <th scope="col">Projet</th>
+                                <th scope="col">Statut</th>
+                                <th scope="col">Priorité</th>
+                                <th scope="col">Assignées</th>
+                                <th scope="col">Échéance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in report.rows|slice(0, 200) %}
+                                <tr>
+                                    <td class="pm-mono pm-muted">{{ row.line }}</td>
+                                    <td>
+                                        <span class="pm-table__title">{{ row.title }}</span>
+                                        <div class="pm-task__facts" style="margin-top: 4px">
+                                            {% for label in row.labels %}<span class="pm-chip">{{ label }}</span>{% endfor %}
+                                            {% if row.subtasks is not empty %}<span>{{ pm.icon('subtasks') }} {{ row.subtasks|length }} sous-tâche{{ row.subtasks|length > 1 ? 's' }}</span>{% endif %}
+                                            {% if row.links is not empty %}<span>{{ pm.icon('clip') }} {{ row.links|length }} lien{{ row.links|length > 1 ? 's' }}</span>{% endif %}
+                                            {% if row.description %}<span>{{ pm.icon('note') }} notes</span>{% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if row.project %}{{ pm.project_chip(row.project) }}
+                                        {% elseif row.newProjectName %}<span class="pm-chip">{{ row.newProjectName }}</span> <span class="pm-badge">nouveau</span>
+                                        {% else %}<span class="pm-muted">Sans projet</span>{% endif %}
+                                    </td>
+                                    <td><span class="pm-badge pm-status--{{ row.status.cssModifier() }}">{{ row.status.label() }}</span></td>
+                                    <td><span class="pm-badge pm-prio--{{ row.priority.cssModifier() }}">{{ row.priority.label() }}</span></td>
+                                    <td>{% if row.assignees is not empty %}{{ pm.avatars(row.assignees) }} <span class="pm-muted">{{ row.assignees|map(u => u|pm_name)|join(', ') }}</span>{% else %}<span class="pm-muted">Personne</span>{% endif %}</td>
+                                    <td class="pm-mono">{{ row.dueDate ? row.dueDate|pm_short : '' }}{% if row.startDate %} <span class="pm-muted">(prévue {{ row.startDate|pm_short }})</span>{% endif %}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if count > 200 %}<p class="pm-muted">… et {{ count - 200 }} autres tâches.</p>{% endif %}
+            {% endif %}
+        </div>
+        <div class="pm-card__foot" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+            <form method="post" action="{{ path('app_admin_pm_import_run') }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('pm_import_run') }}">
+                <input type="hidden" name="hash" value="{{ hash }}">
+                <button class="pm-btn pm-btn--primary" type="submit">{{ pm.icon('check') }} {% if count > 0 %}Importer {{ count }} tâche{{ count > 1 ? 's' }}{% else %}Créer {{ report.newProjects|length }} projet{{ report.newProjects|length > 1 ? 's' }}{% endif %}</button>
+            </form>
+            <a class="pm-btn" href="{{ path('app_admin_pm_import') }}">Annuler, choisir un autre fichier</a>
+        </div>
+    </section>
+{% endif %}
+{% endblock %}
