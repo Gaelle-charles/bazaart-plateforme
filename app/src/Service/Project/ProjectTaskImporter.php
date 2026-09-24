@@ -228,6 +228,11 @@ class ProjectTaskImporter
             $planned = $this->parseDate($cell('plannedDate'), $line, 'date prévue', $report);
             $row->dueDate   = $due ?? $planned;
             $row->startDate = ($due !== null && $planned !== null && $planned <= $due) ? $planned : null;
+            // Même règle que le formulaire de tâche (le début ne peut pas suivre l'échéance) :
+            // on garde l'échéance et on le signale, plutôt que de perdre la date en silence.
+            if ($due !== null && $planned !== null && $planned > $due) {
+                $report->warnings[] = sprintf('Ligne %d : date prévue (%s) après l\'échéance (%s), seule l\'échéance est gardée.', $line, $planned->format('d/m/Y'), $due->format('d/m/Y'));
+            }
 
             // ── Personnes ────────────────────────────────────────────────────
             foreach (self::splitList($cell('assignees'), '/\s*(?:[,;\/+&\n]|\set\s)\s*/iu') as $name) {

@@ -225,6 +225,19 @@ class ProjectImportAndProfileTest extends AbstractE2ETestCase
         self::assertSame(0, $this->em->getRepository(Project::class)->count([]));
     }
 
+    public function testPlannedDateAfterDueDateIsReportedAndDueDateKept(): void
+    {
+        $this->loginAs($this->wendie);
+        $crawler = $this->uploadCsv($this->csv([['Tâche', 'Échéance', 'Date prévue'], ['Relancer la mairie', '01/10/2026', '15/10/2026']]));
+        self::assertStringContainsString('Ligne 2 : date prévue (15/10/2026) après l\'échéance (01/10/2026)', $crawler->filter('#pm-root')->text());
+
+        $this->client->submit($crawler->filter('form[action="/admin/projets/importer/confirmer"]')->form());
+        $this->em->clear();
+        $task = $this->em->getRepository(ProjectTask::class)->findOneBy(['title' => 'Relancer la mairie']);
+        self::assertSame('2026-10-01', $task?->getDueDate()?->format('Y-m-d'));
+        self::assertNull($task?->getStartDate(), 'Une date de début après l\'échéance n\'est jamais enregistrée.');
+    }
+
     public function testImportConfirmationExpiresWithAnotherFileHash(): void
     {
         $this->loginAs($this->wendie);
