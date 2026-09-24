@@ -1,0 +1,20 @@
+Bonjour {{ recipientName }},
+
+{{ heading|upper }}
+
+{{ intro }}
+{% if quote %}
+
+"{{ quote }}"
+{% endif %}
+
+Tâche : {{ task.title }}
+Projet : {{ task.project ? task.project.name : 'Sans projet' }}
+Statut : {{ task.status.label() }} · priorité {{ task.priority.label()|lower }}{% if task.dueDate %} · échéance {{ task.dueDate|date('d/m/Y') }}{% endif %}
+
+
+Ouvrir la tâche : {{ taskUrl }}
+
+--
+Espace projets Bazaart : {{ spaceUrl }}
+Gérer mes notifications : {{ settingsUrl }}

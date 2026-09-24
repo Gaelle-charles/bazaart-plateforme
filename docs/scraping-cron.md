@@ -89,6 +89,11 @@ Ajouter les lignes suivantes :
 # car les sites changent rarement de structure — un log à consulter à froid par
 # l'admin, pas une action automatique (cf. workflow manuel dans DetectFeedsCommand).
 30 6 1 * * /usr/bin/docker exec bazaart_platform_app php bin/console app:detect-feeds --env=prod >> /var/log/bazaart-detect-feeds.log 2>&1
+
+# ── Espace projets : récap quotidien des tâches par email (ADR-0037) ─────────────
+# 11h UTC = 7h en Guadeloupe, du lundi au vendredi. Chaque membre ne reçoit un email
+# que si elle a des tâches en retard / du jour / des 3 prochains jours.
+0 11 * * 1-5 /usr/bin/docker exec bazaart_platform_app php bin/console app:projets:rappels --env=prod >> /var/log/bazaart-projets.log 2>&1
 ```
 
 ### Explication de l'expression cron RSS (`0 */6 * * *`)

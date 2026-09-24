@@ -1,0 +1,213 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # task_show.html.twig : fiche d'une tâche (AdminProjectTaskController::show).
+ #
+ # Un seul formulaire principal (#pm-task-form) pour tous les champs ; les champs
+ # de la colonne de droite y sont rattachés grâce à l'attribut HTML5 form="pm-task-form"
+ # (ils peuvent ainsi être placés ailleurs dans la page sans formulaires imbriqués,
+ # interdits en HTML). Sous-tâches, commentaires et pièces jointes ont leurs propres
+ # petits formulaires.
+ #
+ # Variables : task, comments, activities, members, projects, labels, statuses,
+ #             priorities, driveConnected
+ #}
+
+{% set pm_tab = 'tasks' %}
+{% block title %}{{ task.title }} · Tâches · BazaArt{% endblock %}
+{% block page_title %}Tâche{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+{% set today = pm_today() %}
+{% set taskToken = csrf_token('pm_task_' ~ task.id) %}
+{# Comparaisons par ID (et non entre objets) : plus sûr et plus rapide en Twig #}
+{% set taskLabelIds = task.labels|map(l => l.id) %}
+
+<nav class="pm-breadcrumb" aria-label="Fil d'Ariane">
+    <a href="{{ path('app_admin_pm_tasks') }}">Tâches</a> ›
+    {% if task.project %}<a href="{{ path('app_admin_pm_project_show', {id: task.project.id}) }}">{{ task.project.name }}</a> ›{% endif %}
+    <span>#{{ task.id }}</span>
+</nav>
+
+{% if task.isOverdue(today) %}
+    <div class="pm-note-info pm-note-info--warn" style="margin-bottom: 12px">Cette tâche est <strong>en retard</strong> : son échéance était le {{ task.dueDate|pm_long }}.</div>
+{% endif %}
+
+<div class="pm-layout pm-layout--sidebar">
+    <div class="pm-stack">
+        {# ── Titre + description ──────────────────────────────────────── #}
+        <form method="post" action="{{ path('app_admin_pm_task_update', {id: task.id}) }}" id="pm-task-form" class="pm-card">
+            <input type="hidden" name="_token" value="{{ taskToken }}">
+            <div class="pm-card__body">
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-t-title">Titre</label>
+                    <input class="pm-input pm-input--title" id="pm-t-title" name="title" value="{{ task.title }}" required maxlength="255">
+                </div>
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-t-desc">Description</label>
+                    <textarea class="pm-textarea" id="pm-t-desc" name="description" rows="7" placeholder="Contexte, liens utiles, points de vigilance…">{{ task.description }}</textarea>
+                </div>
+            </div>
+            <div class="pm-card__foot" style="display:flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center">
+                <span class="pm-mono pm-muted">Créée par {{ task.createdBy|pm_name }} le {{ task.createdAt|pm_datetime }}{% if task.completedAt %} · terminée le {{ task.completedAt|pm_datetime }}{% endif %}</span>
+                <button class="pm-btn pm-btn--primary" type="submit">{{ pm.icon('check') }} Enregistrer</button>
+            </div>
+        </form>
+
+        {# ── Sous-tâches (checklist) ──────────────────────────────────── #}
+        <section class="pm-card" id="sous-taches">
+            <div class="pm-card__head">
+                <h2 class="pm-card__title">Checklist</h2>
+                {% if task.subtasks|length > 0 %}<span class="pm-mono" data-pm-subtask-count>{{ task.countDoneSubtasks() }}/{{ task.subtasks|length }}</span>{% endif %}
+            </div>
+            <div class="pm-card__body">
+                {% if task.subtasks|length > 0 %}
+                    <div class="pm-progress pm-progress--accent" style="margin-bottom: 8px"><div class="pm-progress__bar" data-pm-subtask-progress style="width: {{ (task.countDoneSubtasks() * 100 / task.subtasks|length)|round }}%"></div></div>
+                    <ul class="pm-subtasks">
+                        {% for sub in task.subtasks %}
+                            <li class="pm-subtask{{ sub.done ? ' pm-subtask--done' }}">
+                                {# Sans JS : le formulaire se soumet. Avec JS : fetch sans rechargement. #}
+                                <form method="post" action="{{ path('app_admin_pm_task_subtask_toggle', {id: sub.id}) }}" style="flex: 1" data-pm-subtask>
+                                    <input type="hidden" name="_token" value="{{ taskToken }}">
+                                    <label>
+                                        <input type="checkbox" {{ sub.done ? 'checked' }} onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
+                                        <span>{{ sub.title }}</span>
+                                    </label>
+                                </form>
+                                <form method="post" action="{{ path('app_admin_pm_task_subtask_delete', {id: sub.id}) }}">
+                                    <input type="hidden" name="_token" value="{{ taskToken }}">
+                                    <button class="pm-icon-btn pm-icon-btn--danger" type="submit" aria-label="Supprimer « {{ sub.title }} »">{{ pm.icon('x') }}</button>
+                                </form>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+                <form method="post" action="{{ path('app_admin_pm_task_subtask_new', {id: task.id}) }}" class="pm-inline-form">
+                    <input type="hidden" name="_token" value="{{ taskToken }}">
+                    <label class="pm-sr" for="pm-sub-new">Nouvel élément de checklist</label>
+                    <input class="pm-input" id="pm-sub-new" name="title" required maxlength="255" placeholder="Ajouter un élément (ex. Confirmer le DJ)">
+                    <button class="pm-btn" type="submit">{{ pm.icon('plus') }} Ajouter</button>
+                </form>
+            </div>
+        </section>
+
+        {# ── Pièces jointes ───────────────────────────────────────────── #}
+        <section class="pm-card" id="fichiers">
+            <div class="pm-card__head"><h2 class="pm-card__title">Fichiers et liens</h2></div>
+            <div class="pm-card__body">
+                {% include 'admin/projects/_attachments.html.twig' with {attachments: task.attachments, target: 'task', target_id: task.id, drive_folder: task.project ? task.project.driveFolderId : null} %}
+            </div>
+        </section>
+
+        {# ── Commentaires signés ──────────────────────────────────────── #}
+        <section class="pm-card" id="commentaires">
+            <div class="pm-card__head"><h2 class="pm-card__title">Commentaires · {{ comments|length }}</h2></div>
+            <div class="pm-card__body">
+                <ul class="pm-thread">
+                    {% for comment in comments %}
+                        <li class="pm-comment">
+                            {{ pm.avatar(comment.author) }}
+                            <div>
+                                <div class="pm-comment__head">
+                                    <span class="pm-comment__author">{{ comment.author|pm_name }}</span>
+                                    <span class="pm-comment__date" title="{{ comment.createdAt|pm_datetime }}">{{ comment.createdAt|pm_datetime }}</span>
+                                    {% if is_granted('PROJECT_COMMENT_DELETE', comment) %}
+                                        <form method="post" action="{{ path('app_admin_pm_task_comment_delete', {id: comment.id}) }}" onsubmit="return confirm('Supprimer ton commentaire ?')" style="margin-left: auto">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('pm_comment_delete_' ~ comment.id) }}">
+                                            <button class="pm-icon-btn pm-icon-btn--danger" type="submit" aria-label="Supprimer mon commentaire">{{ pm.icon('trash') }}</button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                                <div class="pm-comment__body">{{ comment.content|pm_autolink|nl2br }}</div>
+                            </div>
+                        </li>
+                    {% else %}
+                        <li class="pm-muted" style="font-size: 13px">Pas encore de commentaire. Pose une question, partage une info : les personnes assignées sont prévenues par email.</li>
+                    {% endfor %}
+                </ul>
+                <form method="post" action="{{ path('app_admin_pm_task_comment_new', {id: task.id}) }}" style="margin-top: 12px">
+                    <input type="hidden" name="_token" value="{{ taskToken }}">
+                    <div class="pm-field">
+                        <label class="pm-field__label" for="pm-comment">Ton commentaire (signé {{ app.user|pm_name }})</label>
+                        <textarea class="pm-textarea" id="pm-comment" name="content" rows="3" required maxlength="5000" style="min-height: 80px"></textarea>
+                    </div>
+                    <div style="display:flex; justify-content: flex-end; margin-top: 8px">
+                        <button class="pm-btn pm-btn--primary" type="submit">{{ pm.icon('comment') }} Commenter</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+
+    {# ── Colonne de droite : propriétés de la tâche ───────────────────────── #}
+    <aside class="pm-stack">
+        <section class="pm-card">
+            <div class="pm-card__head"><h2 class="pm-card__title">Propriétés</h2></div>
+            <div class="pm-card__body">
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-t-status">Statut</label>
+                    <select class="pm-select" id="pm-t-status" name="status" form="pm-task-form">
+                        {% for s in statuses %}<option value="{{ s.value }}" {{ task.status == s ? 'selected' }}>{{ s.label() }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-t-priority">Priorité</label>
+                    <select class="pm-select" id="pm-t-priority" name="priority" form="pm-task-form">
+                        {% for p in priorities %}<option value="{{ p.value }}" {{ task.priority == p ? 'selected' }}>{{ p.label() }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="pm-field">
+                    <label class="pm-field__label" for="pm-t-project">Projet</label>
+                    <select class="pm-select" id="pm-t-project" name="projectId" form="pm-task-form">
+                        <option value="">Sans projet</option>
+                        {% for p in projects %}<option value="{{ p.id }}" {{ task.project and task.project.id == p.id ? 'selected' }}>{{ p.name }}</option>{% endfor %}
+                        {% if task.project and task.project.archived %}<option value="{{ task.project.id }}" selected>{{ task.project.name }} (archivé)</option>{% endif %}
+                    </select>
+                </div>
+                <div class="pm-field">
+                    <span class="pm-field__label">Assignée à</span>
+                    <div class="pm-checks">
+                        {% for m in members %}
+                            <label class="pm-check"><input type="checkbox" name="assignees[]" value="{{ m.id }}" form="pm-task-form" {{ task.isAssignedTo(m) ? 'checked' }}> {{ pm.avatar(m, 'xs') }} {{ m|pm_name }}</label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="pm-row pm-row--2" style="margin-top: 12px">
+                    <div class="pm-field">
+                        <label class="pm-field__label" for="pm-t-start">Début</label>
+                        <input class="pm-input" type="date" id="pm-t-start" name="startDate" form="pm-task-form" value="{{ task.startDate ? task.startDate|date('Y-m-d') }}">
+                    </div>
+                    <div class="pm-field" style="margin-top: 0">
+                        <label class="pm-field__label" for="pm-t-due">Échéance</label>
+                        <input class="pm-input" type="date" id="pm-t-due" name="dueDate" form="pm-task-form" value="{{ task.dueDate ? task.dueDate|date('Y-m-d') }}">
+                    </div>
+                </div>
+                <div class="pm-field">
+                    <span class="pm-field__label">Étiquettes</span>
+                    <div class="pm-checks">
+                        {% for l in labels %}
+                            <label class="pm-check"><input type="checkbox" name="labels[]" value="{{ l.id }}" form="pm-task-form" {{ l.id in taskLabelIds ? 'checked' }}> <span class="pm-dot" style="background: {{ l.color }}"></span> {{ l.name }}</label>
+                        {% endfor %}
+                    </div>
+                    <label class="pm-sr" for="pm-t-newlabels">Nouvelles étiquettes</label>
+                    <input class="pm-input" id="pm-t-newlabels" name="newLabels" form="pm-task-form" placeholder="Nouvelles étiquettes, séparées par des virgules" style="margin-top: 6px">
+                </div>
+                <button class="pm-btn pm-btn--primary pm-btn--block" type="submit" form="pm-task-form" style="margin-top: 14px">{{ pm.icon('check') }} Enregistrer</button>
+            </div>
+        </section>
+
+        <section class="pm-card">
+            <div class="pm-card__head"><h2 class="pm-card__title">Historique</h2></div>
+            <div class="pm-card__body">
+                {% include 'admin/projects/_activity.html.twig' with {activities: activities} only %}
+            </div>
+        </section>
+
+        <form method="post" action="{{ path('app_admin_pm_task_delete', {id: task.id}) }}" onsubmit="return confirm('Supprimer définitivement cette tâche, sa checklist et ses commentaires ?')">
+            <input type="hidden" name="_token" value="{{ csrf_token('pm_task_delete_' ~ task.id) }}">
+            <button class="pm-btn pm-btn--danger pm-btn--block" type="submit">{{ pm.icon('trash') }} Supprimer la tâche</button>
+        </form>
+    </aside>
+</div>
+{% endblock %}

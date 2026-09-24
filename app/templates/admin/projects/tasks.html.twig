@@ -1,0 +1,189 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # tasks.html.twig : page « Tâches » et ses 5 vues (AdminProjectTaskController::tasks).
+ #
+ # Variables communes : view, views, filter, baseQuery, members, projects, labels,
+ #                      statuses, priorities, dueOptions, doneHiddenByDefault
+ # Selon la vue :
+ #   kanban / person / priority → columns, cardStats, total
+ #   list                       → tasks, sort, dir, cardStats, total
+ #   calendar                   → calendar, undated
+ #}
+
+{% set pm_tab = 'tasks' %}
+{% block title %}Tâches · Espace projets · BazaArt{% endblock %}
+{% block page_title %}Tâches{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+{% set today = pm_today() %}
+{% set viewIcons = {kanban: 'kanban', list: 'list', calendar: 'calendar', person: 'person', priority: 'flag'} %}
+
+<div class="pm-head">
+    <div>
+        <div class="pm-eyebrow">Espace projets</div>
+        <h1 class="pm-title">Tâches
+            <small>{% if view != 'calendar' %}{{ total }} tâche{{ total > 1 ? 's' }}{% if filter.isActive() %} correspondant aux filtres{% endif %}{% else %}Glisse une tâche sur un autre jour pour la replanifier.{% endif %}</small>
+        </h1>
+    </div>
+    <div class="pm-head__actions">
+        <a class="pm-btn pm-btn--ghost" href="{{ path('app_admin_pm_tasks_export', baseQuery) }}" title="Télécharger les tâches filtrées (Excel, LibreOffice…)">{{ pm.icon('download') }} Export tableur</a>
+        <button type="button" class="pm-btn pm-btn--primary" data-pm-quick-task>{{ pm.icon('plus') }} Nouvelle tâche</button>
+    </div>
+</div>
+
+{# ── Sélecteur de vue : les filtres sont conservés d'une vue à l'autre ─── #}
+<div class="pm-toolbar">
+    <nav class="pm-views" aria-label="Vues des tâches">
+        {% for key, label in views %}
+            <a href="{{ path('app_admin_pm_tasks', baseQuery|merge({view: key})) }}" {{ view == key ? 'aria-current="page"' }}>{{ pm.icon(viewIcons[key]) }} {{ label }}</a>
+        {% endfor %}
+    </nav>
+    {% if doneHiddenByDefault %}
+        <span class="pm-mono pm-muted">Tâches terminées masquées · <a class="pm-link" href="{{ path('app_admin_pm_tasks', baseQuery|merge({view: view, done: 'show'})) }}">les afficher</a></span>
+    {% endif %}
+</div>
+
+{% include 'admin/projects/_filters.html.twig' %}
+
+{# ═══════════════════════════════ KANBAN / PERSONNE / PRIORITÉ ═══════════ #}
+{% if view in ['kanban', 'person', 'priority'] %}
+    {% if view == 'person' and members|length == 0 %}
+        <div class="pm-empty"><strong>Aucune membre</strong><p>Personne n'a encore accès à l'Espace projets.</p></div>
+    {% else %}
+        {% include 'admin/projects/_board.html.twig' with {columns: columns, cardStats: cardStats, show_status: view != 'kanban', quick_project: filter.projectId} only %}
+        <p class="pm-mono pm-muted" style="margin-top: 4px">
+            {% if view == 'kanban' %}Astuce : glisse une carte pour changer son statut ou son ordre. Sur téléphone, appuie longuement sur la carte avant de la glisser.
+            {% elseif view == 'person' %}Glisse une carte d'une personne à l'autre pour la réassigner. Une tâche partagée apparaît chez chacune.
+            {% else %}Glisse une carte dans une autre colonne pour changer sa priorité.{% endif %}
+        </p>
+    {% endif %}
+
+{# ═══════════════════════════════ LISTE ══════════════════════════════════ #}
+{% elseif view == 'list' %}
+    {% set columnsDef = {title: 'Tâche', project: 'Projet', status: 'Statut', priority: 'Priorité', due: 'Échéance', updated: 'Modifiée'} %}
+    {% if tasks|length > 0 %}
+        <div class="pm-table-wrap">
+            <table class="pm-table">
+                <thead>
+                    <tr>
+                        <th scope="col"><span class="pm-sr">Terminée</span></th>
+                        {% for key, label in columnsDef %}
+                            {% set nextDir = (sort == key and dir == 'asc') ? 'desc' : 'asc' %}
+                            <th scope="col" {{ sort == key ? ('aria-sort="' ~ (dir == 'asc' ? 'ascending' : 'descending') ~ '"')|raw }}>
+                                <a href="{{ path('app_admin_pm_tasks', baseQuery|merge({view: 'list', sort: key, dir: nextDir})) }}">{{ label }}{% if sort == key %} {{ dir == 'asc' ? '↑' : '↓' }}{% endif %}</a>
+                            </th>
+                            {% if key == 'priority' %}<th scope="col">Assignées</th>{% endif %}
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in tasks %}
+                        {% set s = cardStats[task.id] ?? {subtasksDone: 0, subtasksTotal: 0, comments: 0, attachments: 0} %}
+                        <tr class="{{ task.isDone() ? 'is-done' }} {{ task.isOverdue(today) ? 'is-overdue' }}">
+                            <td>
+                                <form method="post" action="{{ path('app_admin_pm_task_toggle', {id: task.id}) }}" class="pm-tick{{ task.isDone() ? ' pm-tick--done' }}">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('pm_task_toggle_' ~ task.id) }}">
+                                    <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+                                    <button type="submit" aria-label="{{ task.isDone() ? 'Rouvrir' : 'Terminer' }} « {{ task.title }} »">{{ pm.icon('check') }}</button>
+                                </form>
+                            </td>
+                            <td>
+                                <a class="pm-table__title" href="{{ path('app_admin_pm_task_show', {id: task.id}) }}">{{ task.title }}</a>
+                                <div class="pm-task__facts" style="margin-top: 4px">
+                                    {% for label in task.labels %}<span class="pm-label" style="--c: {{ label.color }}">{{ label.name }}</span>{% endfor %}
+                                    {% if s.subtasksTotal > 0 %}<span>{{ pm.icon('subtasks') }} {{ s.subtasksDone }}/{{ s.subtasksTotal }}</span>{% endif %}
+                                    {% if s.comments > 0 %}<span>{{ pm.icon('comment') }} {{ s.comments }}</span>{% endif %}
+                                    {% if s.attachments > 0 %}<span>{{ pm.icon('clip') }} {{ s.attachments }}</span>{% endif %}
+                                </div>
+                            </td>
+                            <td>{{ pm.project_chip(task.project) }}</td>
+                            <td><span class="pm-badge pm-status--{{ task.status.cssModifier() }}">{{ task.status.label() }}</span></td>
+                            <td><span class="pm-badge pm-prio--{{ task.priority.cssModifier() }}">{{ task.priority.label() }}</span></td>
+                            <td>{{ pm.avatars(task.assignees) }}</td>
+                            <td class="pm-task__facts">{{ pm.due(task) }}</td>
+                            <td class="pm-mono pm-muted" title="{{ task.updatedAt|pm_datetime }}">{{ task.updatedAt|pm_ago }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="pm-empty">
+            <strong>Aucune tâche</strong>
+            <p>{{ filter.isActive() ? 'Aucune tâche ne correspond à ces filtres.' : 'Crée la première tâche de l\'équipe.' }}</p>
+            <button type="button" class="pm-btn pm-btn--primary" data-pm-quick-task>{{ pm.icon('plus') }} Nouvelle tâche</button>
+        </div>
+    {% endif %}
+
+{# ═══════════════════════════════ CALENDRIER ═════════════════════════════ #}
+{% elseif view == 'calendar' %}
+    <div class="pm-toolbar">
+        <div class="pm-cal-nav">
+            <h2 class="pm-cal-nav__title">{{ calendar.title }}</h2>
+            <a class="pm-btn pm-btn--sm" href="{{ path('app_admin_pm_tasks', baseQuery|merge({view: 'calendar', month: calendar.prev})) }}" aria-label="Mois précédent">{{ pm.icon('left') }}</a>
+            <a class="pm-btn pm-btn--sm" href="{{ path('app_admin_pm_tasks', baseQuery|merge({view: 'calendar'})) }}">Aujourd'hui</a>
+            <a class="pm-btn pm-btn--sm" href="{{ path('app_admin_pm_tasks', baseQuery|merge({view: 'calendar', month: calendar.next})) }}" aria-label="Mois suivant">{{ pm.icon('right') }}</a>
+        </div>
+    </div>
+    <div class="pm-cal-wrap">
+        <div class="pm-cal" role="grid" aria-label="Calendrier des échéances, {{ calendar.title }}">
+            <div class="pm-cal__weekdays" role="row">
+                {% for d in ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] %}<div role="columnheader">{{ d }}</div>{% endfor %}
+            </div>
+            {% for week in calendar.weeks %}
+                <div class="pm-cal__week" role="row">
+                    {% for day in week %}
+                        {% set isEmpty = day.tasks|length == 0 and day.projects|length == 0 %}
+                        <div class="pm-cal__day{{ not day.inMonth ? ' pm-cal__day--out' }}{{ day.isWeekend ? ' pm-cal__day--weekend' }}{{ day.isToday ? ' pm-cal__day--today' }}{{ isEmpty ? ' pm-cal__day--empty' }}"
+                             role="gridcell" data-pm-drop data-field="dueDate" data-value="{{ day.key }}">
+                            <div class="pm-cal__num" data-weekday="{{ day.date|pm_long|split(' ')|first }}">
+                                <span>{{ day.date|date('j') }}{% if day.date|date('j') == '1' or loop.first %} {{ day.date|pm_short|split(' ')[1] ?? '' }}{% endif %}</span>
+                                <a class="pm-cal__add" href="{{ path('app_admin_pm_task_new', {dueDate: day.key, project: filter.projectId}) }}" aria-label="Ajouter une tâche le {{ day.date|pm_long }}">+</a>
+                            </div>
+                            {% for project in day.projects %}
+                                <a class="pm-cal__deadline" href="{{ path('app_admin_pm_project_show', {id: project.id}) }}" title="Échéance du projet {{ project.name }}">{{ pm.icon('flag') }} {{ project.name }}</a>
+                            {% endfor %}
+                            <div class="pm-cal__list" data-pm-drop-list>
+                                {%- for task in day.tasks|slice(0, 4) -%}
+                                    <a class="pm-cal__item{{ task.isDone() ? ' pm-cal__item--done' }}{{ task.isOverdue(today) ? ' pm-cal__item--overdue' }}"
+                                       href="{{ path('app_admin_pm_task_show', {id: task.id}) }}" draggable="false"
+                                       data-pm-drag data-task-id="{{ task.id }}" data-move-url="{{ path('app_admin_pm_task_move', {id: task.id}) }}"
+                                       style="--p: {{ task.project ? task.project.color : '#0E0D0B' }}"
+                                       title="{{ task.title }} · {{ task.status.label() }} · {{ task.priority.label() }}{{ task.assignees|length ? ' · ' ~ task.assignees|map(u => u|pm_name)|join(', ') }}">
+                                        {% if task.priority.value == 'urgent' %}<strong aria-hidden="true">!</strong>{% endif %}<span>{{ task.title }}</span>
+                                    </a>
+                                {%- endfor -%}
+                            </div>
+                            {% if day.tasks|length > 4 %}
+                                <details class="pm-cal__more">
+                                    <summary>+ {{ day.tasks|length - 4 }} autre{{ day.tasks|length - 4 > 1 ? 's' }}</summary>
+                                    <div class="pm-cal__list">
+                                        {% for task in day.tasks|slice(4) %}
+                                            <a class="pm-cal__item{{ task.isDone() ? ' pm-cal__item--done' }}" href="{{ path('app_admin_pm_task_show', {id: task.id}) }}" style="--p: {{ task.project ? task.project.color : '#0E0D0B' }}"><span>{{ task.title }}</span></a>
+                                        {% endfor %}
+                                    </div>
+                                </details>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+
+        {# Bac « Sans échéance » : glisser une tâche d'ici vers un jour pour la planifier #}
+        <aside class="pm-col pm-undated" data-pm-drop data-field="dueDate" data-value="none" aria-label="Tâches sans échéance">
+            <header class="pm-col__head" title="Glisse une tâche sur un jour pour lui donner une échéance">
+                <h2 class="pm-col__title">Sans échéance</h2>
+                <span class="pm-col__count" data-pm-count>{{ undated|length }}</span>
+            </header>
+            <div class="pm-col__list" data-pm-drop-list>
+                {%- for task in undated -%}
+                    {% include 'admin/projects/_task_card.html.twig' with {task: task, stats: null, show_status: true} only %}
+                {%- endfor -%}
+            </div>
+        </aside>
+    </div>
+{% endif %}
+{% endblock %}

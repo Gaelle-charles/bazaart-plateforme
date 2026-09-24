@@ -398,6 +398,90 @@
             <span class="sd-role-pill sd-role-pill--admin">Admin</span>
         </div>
 
+        {#
+            ── Section : Espace projets (ADR-0037) ──
+            Visible uniquement pour les membres ROLE_PROJECT (3 personnes de l'équipe).
+            Placée en premier : c'est l'outil de travail quotidien de l'équipe.
+            Toutes les routes du module commencent par "app_admin_pm_" :
+            le lien actif est détecté avec "starts with".
+        #}
+        {% if is_granted('ROLE_PROJECT') %}
+            {% set _route = app.request.attributes.get('_route') %}
+            <div class="sd-section">Espace projets</div>
+            <nav class="sd-nav" aria-label="Espace projets">
+                <a href="{{ path('app_admin_pm_overview') }}"
+                   class="sd-link {{ _route == 'app_admin_pm_overview' ? 'sd-link--active' : '' }}">
+                    {# Icône boussole — vue d'ensemble #}
+                    <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9"/>
+                        <path d="m15.5 8.5-2 5-5 2 2-5z"/>
+                    </svg>
+                    Vue d'ensemble
+                </a>
+                <a href="{{ path('app_admin_pm_tasks') }}"
+                   class="sd-link {{ _route starts with 'app_admin_pm_task' ? 'sd-link--active' : '' }}">
+                    {# Icône colonnes Kanban #}
+                    <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="3" y="4" width="5" height="16"/>
+                        <rect x="10" y="4" width="5" height="10"/>
+                        <rect x="17" y="4" width="4" height="13"/>
+                    </svg>
+                    Tâches
+                    {#
+                        Badge : MES tâches en retard (fonction pm_badge_my_overdue()
+                        de ProjectTwigExtension). Orange = action requise.
+                    #}
+                    {% set _pmLate = pm_badge_my_overdue() %}
+                    {% if _pmLate > 0 %}
+                        <span class="sd-badge sd-badge--warn" aria-label="{{ _pmLate }} tâche(s) en retard pour toi">{{ _pmLate }}</span>
+                    {% endif %}
+                </a>
+                <a href="{{ path('app_admin_pm_projects') }}"
+                   class="sd-link {{ _route starts with 'app_admin_pm_project' ? 'sd-link--active' : '' }}">
+                    {# Icône dossier #}
+                    <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 6h6l2 2h10v11H3z"/>
+                    </svg>
+                    Projets
+                </a>
+                <a href="{{ path('app_admin_pm_notes') }}"
+                   class="sd-link {{ _route starts with 'app_admin_pm_note' ? 'sd-link--active' : '' }}">
+                    {# Icône note / post-it #}
+                    <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 4h16v11l-5 5H4z"/>
+                        <path d="M15 20v-5h5"/>
+                    </svg>
+                    Notes d'équipe
+                </a>
+                <a href="{{ path('app_admin_pm_drive') }}"
+                   class="sd-link {{ _route starts with 'app_admin_pm_drive' ? 'sd-link--active' : '' }}">
+                    {# Icône nuage — Google Drive #}
+                    <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 9.2 4.5 4.5 0 0 0 7 18z"/>
+                    </svg>
+                    Drive
+                </a>
+                <a href="{{ path('app_admin_pm_team') }}"
+                   class="sd-link {{ _route starts with 'app_admin_pm_team' ? 'sd-link--active' : '' }}">
+                    {# Icône deux personnes #}
+                    <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="9" cy="8" r="3.5"/>
+                        <path d="M2.5 20a6.5 6.5 0 0 1 13 0"/>
+                        <path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M21.5 20a6.5 6.5 0 0 0-4-6"/>
+                    </svg>
+                    Équipe &amp; réglages
+                </a>
+            </nav>
+        {% endif %}
+
+        {#
+            Les sections ci-dessous (Pilotage, Contenu, Système) sont réservées à
+            ROLE_ADMIN. Une membre de l'Espace projets qui ne serait PAS admin
+            (ROLE_PROJECT seul) ne voit que la section ci-dessus : inutile de lui
+            montrer des liens qui renverraient une erreur 403.
+        #}
+        {% if is_granted('ROLE_ADMIN') %}
+
         {# ── Section : Pilotage ── #}
         <div class="sd-section">Pilotage</div>
         <nav class="sd-nav" aria-label="Pilotage">
@@ -643,6 +727,8 @@
 
         </nav>
 
+        {% endif %}{# fin des sections réservées à ROLE_ADMIN #}
+
         {# ── Section : Liens rapides ── #}
         <div class="sd-section">Liens</div>
         <nav class="sd-nav" aria-label="Liens rapides">
@@ -685,7 +771,7 @@
                 </div>
                 <div style="min-width: 0; flex: 1; overflow: hidden;">
                     <span class="sd-user__name">{{ app.user.email|split('@')|first|e }}</span>
-                    <span class="sd-user__role">Administrateur</span>
+                    <span class="sd-user__role">{{ is_granted('ROLE_ADMIN') ? 'Administrateur' : 'Équipe projets' }}</span>
                 </div>
                 {# Icône porte de sortie — déconnexion #}
                 <a href="{{ path('app_logout') }}" class="sd-logout" title="Se déconnecter">

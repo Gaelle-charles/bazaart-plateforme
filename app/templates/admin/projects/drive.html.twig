@@ -1,0 +1,80 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # drive.html.twig : page Google Drive (AdminProjectDriveController::index).
+ #
+ # - Non configuré (pas d'identifiants OAuth sur le serveur) : explications.
+ # - Non connecté : bouton « Connecter le Drive » (écran de consentement Google).
+ # - Connecté : navigateur de fichiers (même composant JS que le sélecteur),
+ #   en mode « parcourir » : un clic sur un fichier l'ouvre dans Google Drive.
+ #
+ # Variables : connection (ProjectDriveConnection|null), configured, driveAccount
+ #}
+
+{% set pm_tab = 'drive' %}
+{% block title %}Drive · Espace projets · BazaArt{% endblock %}
+{% block page_title %}Google Drive{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+
+<div class="pm-head">
+    <div>
+        <div class="pm-eyebrow">Espace projets</div>
+        <h1 class="pm-title">Google Drive <small>{{ driveAccount }}</small></h1>
+    </div>
+    {% if connection %}
+        <div class="pm-head__actions">
+            <a class="pm-btn" href="https://drive.google.com/drive/my-drive" target="_blank" rel="noopener noreferrer">{{ pm.icon('external') }} Ouvrir Google Drive</a>
+        </div>
+    {% endif %}
+</div>
+
+{% if not configured %}
+    <div class="pm-note-info pm-note-info--warn">
+        <strong>Connexion Google non configurée sur le serveur.</strong><br>
+        Les variables <code>GOOGLE_CLIENT_ID</code> et <code>GOOGLE_CLIENT_SECRET</code> sont vides. La procédure complète est décrite dans <code>docs/espace-projets.md</code>.
+    </div>
+{% elseif not connection %}
+    <section class="pm-card" style="max-width: 760px">
+        <div class="pm-card__head"><h2 class="pm-card__title">Connecter le Drive de l'équipe</h2></div>
+        <div class="pm-card__body">
+            <p style="margin-top: 0">Une seule connexion suffit pour toute l'équipe. Tu vas être redirigée vers Google :</p>
+            <ol style="line-height: 1.7; padding-left: 20px">
+                <li>choisis le compte <strong>{{ driveAccount }}</strong> (tout autre compte sera refusé) ;</li>
+                <li>si Google affiche « application non validée », clique sur <em>Paramètres avancés</em> puis <em>Accéder à BazaArt</em> ;</li>
+                <li>autorise l'accès au Drive.</li>
+            </ol>
+            <p class="pm-muted" style="font-size: 13px">L'autorisation est conservée chiffrée sur le serveur et peut être retirée à tout moment (ici, ou dans le compte Google).</p>
+            <a class="pm-btn pm-btn--primary" href="{{ path('app_admin_pm_drive_connect') }}">{{ pm.icon('drive') }} Connecter le Drive</a>
+        </div>
+    </section>
+{% else %}
+    <div class="pm-note-info" style="margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center">
+        <span>Connecté à <strong>{{ connection.accountEmail }}</strong> par {{ connection.connectedBy|pm_name }}, le {{ connection.connectedAt|pm_datetime }}. Pour joindre un fichier, ouvre une tâche ou un projet.</span>
+        <form method="post" action="{{ path('app_admin_pm_drive_disconnect') }}" onsubmit="return confirm('Déconnecter le Drive pour toute l\'équipe ? Les pièces jointes existantes restent visibles.')">
+            <input type="hidden" name="_token" value="{{ csrf_token('pm_drive_disconnect') }}">
+            <button class="pm-btn pm-btn--sm pm-btn--danger" type="submit">Déconnecter</button>
+        </form>
+    </div>
+
+    {# Navigateur intégré : même composant que le sélecteur, en mode lecture #}
+    <section class="pm-card" data-pm-drive-browser>
+        <div class="pm-card__body">
+            <div class="pm-picker__tabs" role="tablist">
+                <button type="button" role="tab" aria-selected="true" data-pm-picker-tab="browse">Parcourir</button>
+                <button type="button" role="tab" aria-selected="false" data-pm-picker-tab="recent">Récents</button>
+                <button type="button" role="tab" aria-selected="false" data-pm-picker-tab="search">Rechercher</button>
+            </div>
+            <form class="pm-picker__bar" data-pm-picker-search hidden>
+                <label class="pm-sr" for="pm-browser-q">Rechercher dans le Drive</label>
+                <input class="pm-input" id="pm-browser-q" type="search" placeholder="Nom du fichier ou du dossier" maxlength="100">
+                <button class="pm-btn" type="submit">{{ pm.icon('search') }} Chercher</button>
+            </form>
+            <div class="pm-picker__crumbs" data-pm-picker-crumbs></div>
+            <ul class="pm-picker__list" data-pm-picker-list aria-live="polite" style="max-height: none"></ul>
+            <button type="button" class="pm-btn pm-btn--sm" data-pm-picker-more hidden style="margin-top: 8px">Afficher plus</button>
+        </div>
+    </section>
+{% endif %}
+{% endblock %}

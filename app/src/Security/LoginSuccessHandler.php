@@ -136,6 +136,13 @@ class LoginSuccessHandler implements AuthenticationSuccessHandlerInterface
             return new RedirectResponse($this->router->generate('app_admin_dashboard'));
         }
 
+        // Espace projets (ADR-0037) : une membre de l'équipe projets qui n'est PAS
+        // admin n'a pas accès au cockpit admin → on l'amène directement sur la
+        // vue d'ensemble de ses projets.
+        if ($this->authChecker->isGranted('ROLE_PROJECT')) {
+            return new RedirectResponse($this->router->generate('app_admin_pm_overview'));
+        }
+
         // ── PRIORITÉ 4 : Défaut → dashboard utilisateur ──────────────────────────
         //
         // Cas normal : utilisateur classique, pas de matching en cours, pas admin.

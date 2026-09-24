@@ -1,0 +1,53 @@
+{#
+ # _board.html.twig : tableau en colonnes (Kanban par statut, Par personne, Par priorité).
+ #
+ # Variables :
+ #   columns    colonnes construites par ProjectTaskService::buildBoard()
+ #   cardStats  compteurs par ID de tâche
+ #   show_status afficher le statut sur les cartes (vues personne / priorité)
+ #   quick_project ID de projet à pré-remplir dans l'ajout rapide (fiche projet), facultatif
+ #
+ # Chaque colonne est une ZONE DE DÉPÔT (data-pm-drop) : data-field / data-value
+ # disent au serveur quel champ modifier quand on y lâche une carte.
+ #}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+<div class="pm-board" data-pm-board>
+    {% for col in columns %}
+        <section class="pm-col pm-col--{{ col.cssModifier }}"
+                 data-pm-drop
+                 data-field="{{ col.field }}"
+                 data-value="{{ col.value }}"
+                 aria-label="{{ col.label }}">
+            <header class="pm-col__head" {% if col.hint %}title="{{ col.hint }}"{% endif %}>
+                <h2 class="pm-col__title">
+                    {% if col.user %}{{ pm.avatar(col.user, 'xs') }}{% endif %}
+                    {{ col.label }}
+                </h2>
+                <span class="pm-col__count" data-pm-count>{{ col.tasks|length }}</span>
+            </header>
+            <div class="pm-col__list" data-pm-drop-list>
+                {%- for task in col.tasks -%}
+                    {% include 'admin/projects/_task_card.html.twig' with {task: task, stats: cardStats[task.id] ?? null, show_status: show_status ?? false} only %}
+                {%- endfor -%}
+            </div>
+            {% if col.hiddenCount > 0 %}
+                <p class="pm-col__more">+ {{ col.hiddenCount }} tâche(s) terminée(s) plus ancienne(s), visibles dans la <a class="pm-link" href="{{ path('app_admin_pm_tasks', {view: 'list', status: 'done'}) }}">vue Liste</a>.</p>
+            {% endif %}
+            {# Ajout rapide : crée la tâche directement dans cette colonne #}
+            <div class="pm-quickadd">
+                <form method="post" action="{{ path('app_admin_pm_task_new') }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('pm_task_new') }}">
+                    <input type="hidden" name="quick" value="1">
+                    <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+                    {% if quick_project ?? null %}<input type="hidden" name="projectId" value="{{ quick_project }}">{% endif %}
+                    {% if col.field == 'status' %}<input type="hidden" name="status" value="{{ col.value }}">{% endif %}
+                    {% if col.field == 'priority' %}<input type="hidden" name="priority" value="{{ col.value }}">{% endif %}
+                    {% if col.field == 'assignee' and col.value != 'none' %}<input type="hidden" name="assignees[]" value="{{ col.value }}">{% endif %}
+                    <label class="pm-sr" for="pm-qa-{{ col.field }}-{{ col.value }}">Ajouter une tâche dans « {{ col.label }} »</label>
+                    <input class="pm-input" id="pm-qa-{{ col.field }}-{{ col.value }}" name="title" required maxlength="255" placeholder="+ Ajouter une tâche">
+                    <button class="pm-btn pm-btn--sm" type="submit" aria-label="Ajouter">{{ pm.icon('plus') }}</button>
+                </form>
+            </div>
+        </section>
+    {% endfor %}
+</div>
