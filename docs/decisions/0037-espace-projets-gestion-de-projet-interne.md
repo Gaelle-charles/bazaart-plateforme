@@ -7,7 +7,7 @@
 ## Contexte
 
 L'équipe Bazaart (3 personnes : Mllebelamour@gmail.com, zahibowendie@gmail.com,
-g.charlesbel@gmail.com) mène de nombreux projets en parallèle (événements, formations
+hello@gaellecode.fr, qui remplace g.charlesbel@gmail.com depuis le 24/09/2026) mène de nombreux projets en parallèle (événements, formations
 Studio, candidatures du Lab, communication), chacun avec beaucoup de tâches. Il manquait
 un outil de suivi commun : qui fait quoi, pour quand, où en est chaque projet, avec un
 espace de notes partagé où l'on sait qui a écrit quoi, et un accès aux documents rangés
@@ -44,7 +44,8 @@ Module « Espace projets » sous `/admin/projets` (routes `app_admin_pm_*`) :
   internes restent limitées aux personnes désignées). Règle `access_control`
   `^/admin/projets` placée AVANT `^/admin`, plus `ProjectVoter::ACCESS` sur les
   contrôleurs. Une membre non admin ne voit que cette section de la sidebar.
-  Attribution : migration (3 emails, idempotente) + commande `app:projets:acces`.
+  Attribution : migration (3 emails de départ, idempotente) + commande `app:projets:acces`
+  (utilisée pour remplacer g.charlesbel@gmail.com par hello@gaellecode.fr).
 - **Modèle** : `Project`, `ProjectTask` (assignation multiple, étiquettes, checklist,
   commentaires, pièces jointes), `ProjectNote` (mur signé), `ProjectActivity` (journal),
   `ProjectMemberProfile` (préférences et onboarding), `ProjectDriveConnection`.

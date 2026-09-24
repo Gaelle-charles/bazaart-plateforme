@@ -15,7 +15,7 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  * ProjectMemberService — les membres de l'Espace projets et leurs profils (ADR-0037).
  *
  * Qui est membre ? Toute personne dont users.roles contient ROLE_PROJECT.
- * (Aujourd'hui : Mllebelamour@gmail.com, zahibowendie@gmail.com, g.charlesbel@gmail.com.)
+ * (Aujourd'hui : Mllebelamour@gmail.com, zahibowendie@gmail.com, hello@gaellecode.fr.)
  *
  * Ce service centralise :
  *   - la liste des membres (pour les assignations, la vue « Par personne »…) ;
