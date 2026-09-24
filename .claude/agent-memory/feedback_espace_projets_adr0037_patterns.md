@@ -22,7 +22,12 @@ explicitement les erreurs des relectures précédentes (ordre CSRF avant Voter, 
 
 ## Anti-pattern réel repéré
 
-### 1. `position` (Kanban) partagé globalement par statut, pas par projet — logique fragile
+### 1. `position` (Kanban) partagé globalement par statut, pas par projet — CORRIGÉ (commit e3e73a7)
+**Statut : résolu.** `reorder()` recharge désormais la colonne COMPLÈTE du statut, replace les cartes
+affichées dans leurs emplacements et renumérote 0..n-1 (test `testReorderingInProjectBoardKeepsOtherProjectsInPlace`).
+`position` global par statut est donc VOULU ; `nextPosition()` (MAX+1 du statut) reste correct, y compris pour
+les imports en masse. Ne plus signaler. Constat d'origine conservé ci-dessous pour mémoire.
+
 `ProjectTaskRepository::nextPosition()` et `ProjectTaskService::reorder()` traitent
 `position` comme une séquence unique par **statut** (`WHERE t.status = :status`), sans
 tenir compte du projet. Or le Kanban existe en deux contextes qui n'affichent pas la
