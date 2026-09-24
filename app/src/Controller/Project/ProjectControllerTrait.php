@@ -61,6 +61,15 @@ trait ProjectControllerTrait
         return $this->isCsrfTokenValid(self::AJAX_CSRF_ID, (string) $request->headers->get('X-CSRF-Token', ''));
     }
 
+    /**
+     * Message affiché quand un jeton CSRF est invalide (page restée ouverte trop
+     * longtemps, session expirée…) : l'action est bloquée, on explique pourquoi.
+     */
+    private function flashInvalidToken(): void
+    {
+        $this->addFlash('error', 'Jeton de sécurité expiré : recharge la page puis réessaie.');
+    }
+
     private function jsonError(string $message, int $status = 400): JsonResponse
     {
         return new JsonResponse(['ok' => false, 'error' => $message], $status);

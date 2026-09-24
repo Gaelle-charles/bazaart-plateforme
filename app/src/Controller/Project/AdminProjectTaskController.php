@@ -389,6 +389,8 @@ class AdminProjectTaskController extends AbstractController
             if ($error !== null) {
                 $this->addFlash('error', $error);
             }
+        } else {
+            $this->flashInvalidToken();
         }
 
         return $this->redirect($this->generateUrl('app_admin_pm_task_show', ['id' => $task->getId()]) . '#sous-taches');
@@ -408,6 +410,9 @@ class AdminProjectTaskController extends AbstractController
         if ($request->headers->has('X-CSRF-Token')) {
             return $valid ? new JsonResponse(['ok' => true, 'done' => $subtask->isDone()]) : $this->jsonError('Jeton invalide.', 403);
         }
+        if (!$valid) {
+            $this->flashInvalidToken();
+        }
 
         return $this->redirect($this->generateUrl('app_admin_pm_task_show', ['id' => $taskId]) . '#sous-taches');
     }
@@ -418,6 +423,8 @@ class AdminProjectTaskController extends AbstractController
         $taskId = $subtask->getTask()->getId();
         if ($this->isCsrfTokenValid('pm_task_' . $taskId, (string) $request->request->get('_token'))) {
             $this->taskService->deleteSubtask($subtask);
+        } else {
+            $this->flashInvalidToken();
         }
 
         return $this->redirect($this->generateUrl('app_admin_pm_task_show', ['id' => $taskId]) . '#sous-taches');
@@ -435,6 +442,8 @@ class AdminProjectTaskController extends AbstractController
             if ($error !== null) {
                 $this->addFlash('error', $error);
             }
+        } else {
+            $this->flashInvalidToken();
         }
 
         return $this->redirect($this->generateUrl('app_admin_pm_task_show', ['id' => $task->getId()]) . '#commentaires');
@@ -448,6 +457,8 @@ class AdminProjectTaskController extends AbstractController
             // Seule l'autrice peut supprimer son commentaire.
             $this->denyAccessUnlessGranted(ProjectVoter::COMMENT_DELETE, $comment);
             $this->taskService->deleteComment($comment);
+        } else {
+            $this->flashInvalidToken();
         }
 
         return $this->redirect($this->generateUrl('app_admin_pm_task_show', ['id' => $taskId]) . '#commentaires');
@@ -455,10 +466,11 @@ class AdminProjectTaskController extends AbstractController
 
     /**
      * Neutralise l'« injection de formule » CSV : une cellule qui commence par
-     * = + - @ serait interprétée comme une formule par Excel. On la préfixe d'une apostrophe.
+     * = + - @ (ou une tabulation / un retour chariot, recommandation OWASP) peut être
+     * interprétée comme une formule par Excel. On la préfixe d'une apostrophe.
      */
     private static function csvSafe(string $value): string
     {
-        return ($value !== '' && str_contains('=+-@', $value[0])) ? "'" . $value : $value;
+        return ($value !== '' && str_contains("=+-@\t\r", $value[0])) ? "'" . $value : $value;
     }
 }

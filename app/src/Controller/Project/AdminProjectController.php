@@ -410,7 +410,9 @@ class AdminProjectController extends AbstractController
     public function deleteLabel(int $id, Request $request): Response
     {
         $label = $this->labelRepository->find($id);
-        if ($label !== null && $this->isCsrfTokenValid('pm_label_delete_' . $id, (string) $request->request->get('_token'))) {
+        if (!$this->isCsrfTokenValid('pm_label_delete_' . $id, (string) $request->request->get('_token'))) {
+            $this->flashInvalidToken();
+        } elseif ($label !== null) {
             $this->labelService->delete($label);
             $this->addFlash('success', sprintf('Étiquette « %s » supprimée (retirée des tâches).', $label->getName()));
         }
@@ -442,6 +444,8 @@ class AdminProjectController extends AbstractController
             $request->request->get('action') === 'restore'
                 ? $this->onboardingService->restoreChecklist($this->currentUser())
                 : $this->onboardingService->dismissChecklist($this->currentUser());
+        } else {
+            $this->flashInvalidToken();
         }
 
         return $this->redirectBack($request, 'app_admin_pm_overview');

@@ -129,8 +129,8 @@ class ProjectTaskService
                     $task->setStatus($status);
                     $this->logStatusChange($task, $actor);
                 }
-                // Réordonne la colonne d'arrivée (0, 1, 2…) selon l'ordre envoyé par le front.
-                $this->reorder($orderedIds);
+                // Réordonne la colonne d'arrivée selon l'ordre envoyé par le front.
+                $this->reorder($status, $orderedIds, $task);
                 break;
 
             case 'priority':
@@ -449,8 +449,24 @@ class ProjectTaskService
         }
     }
 
-    /** @param list<int> $orderedIds */
-    private function reorder(array $orderedIds): void
+    /**
+     * Renumérote la colonne de statut $status après un glisser-déposer.
+     *
+     * POURQUOI ne pas simplement numéroter 0, 1, 2… les IDs reçus ?
+     *   Le front n'envoie que les cartes AFFICHÉES. Or le même statut est visible
+     *   dans plusieurs Kanban : la page « Tâches » (toutes les tâches, éventuellement
+     *   filtrées) et la fiche d'un projet (ses tâches seulement). Renuméroter le
+     *   seul sous-ensemble affiché créerait des doublons de position avec les tâches
+     *   des autres projets et mélangerait l'ordre de la vue globale.
+     *
+     * ALGORITHME : on prend la colonne COMPLÈTE (toutes les tâches du statut, dans
+     * l'ordre actuel), on repère les emplacements occupés par les cartes affichées,
+     * on y replace ces cartes dans le nouvel ordre, puis on renumérote 0..n-1.
+     * Les tâches non affichées gardent leur place relative.
+     *
+     * @param list<int> $orderedIds
+     */
+    private function reorder(ProjectTaskStatus $status, array $orderedIds, ProjectTask $moved): void
     {
         // Garde-fou : une colonne Kanban ne contient pas des milliers de cartes.
         $orderedIds = array_slice(array_values(array_unique($orderedIds)), 0, 500);
@@ -458,9 +474,37 @@ class ProjectTaskService
             return;
         }
 
-        $positions = array_flip($orderedIds);
-        foreach ($this->taskRepository->findBy(['id' => $orderedIds]) as $task) {
-            $task->setPosition($positions[(int) $task->getId()]);
+        // Colonne actuelle lue en base. La tâche déplacée n'y figure pas encore si
+        // elle vient d'une autre colonne (son nouveau statut n'est pas flushé) : on l'ajoute.
+        $column = $this->taskRepository->findBy(['status' => $status], ['position' => 'ASC', 'id' => 'ASC']);
+        $column = array_values(array_filter($column, static fn (ProjectTask $t): bool => $t->getStatus() === $status));
+        if (!in_array($moved, $column, true)) {
+            $column[] = $moved;
+        }
+
+        $wanted = array_flip($orderedIds);
+        $slots  = [];
+        $byId   = [];
+        foreach ($column as $index => $task) {
+            if (isset($wanted[(int) $task->getId()])) {
+                $slots[]                  = $index;
+                $byId[(int) $task->getId()] = $task;
+            }
+        }
+
+        // Cartes affichées, dans le nouvel ordre (les IDs inconnus sont ignorés).
+        $reordered = [];
+        foreach ($orderedIds as $id) {
+            if (isset($byId[$id])) {
+                $reordered[] = $byId[$id];
+            }
+        }
+        foreach ($slots as $k => $index) {
+            $column[$index] = $reordered[$k];
+        }
+
+        foreach ($column as $position => $task) {
+            $task->setPosition($position);
         }
     }
 

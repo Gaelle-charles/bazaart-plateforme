@@ -241,7 +241,9 @@ class ProjectSpaceTest extends AbstractE2ETestCase
     public function testDragAndDropEndpointMovesTaskAndChecksCsrf(): void
     {
         $task  = $this->createTask('Relancer le traiteur', null, [$this->gaelle], null);
-        $other = $this->createTask('Autre tâche', null, [], null);
+        // Une tâche déjà « À valider » : la colonne d'arrivée n'est pas vide.
+        $other = $this->createTask('Autre tâche', null, [], null)->setStatus(ProjectTaskStatus::Review);
+        $this->em->flush();
         $this->loginAs($this->gaelle);
         $token = $this->ajaxToken();
 
@@ -275,12 +277,36 @@ class ProjectSpaceTest extends AbstractE2ETestCase
         $task = $this->em->getRepository(ProjectTask::class)->find($task->getId());
         self::assertSame(ProjectTaskStatus::Review, $task->getStatus());
         self::assertSame(1, $task->getPosition());
+        self::assertSame(0, $this->em->getRepository(ProjectTask::class)->find($other->getId())?->getPosition());
         self::assertTrue($task->isAssignedTo($this->wendie));
         self::assertFalse($task->isAssignedTo($this->gaelle));
         self::assertSame('2026-11-05', $task->getDueDate()?->format('Y-m-d'));
 
         // Le journal d'activité a gardé la trace du déplacement (étape d'onboarding « move »)
         self::assertGreaterThan(0, $this->em->getRepository(ProjectActivity::class)->count(['action' => ProjectActivity::TASK_MOVED]));
+    }
+
+    public function testReorderingInProjectBoardKeepsOtherProjectsInPlace(): void
+    {
+        // Colonne « À faire » globale : A (projet P), B (sans projet), C (projet P)
+        $project = $this->createProject('Projet P', $this->gaelle);
+        $a = $this->createTask('A', $project, [], null)->setPosition(0);
+        $b = $this->createTask('B', null, [], null)->setPosition(1);
+        $c = $this->createTask('C', $project, [], null)->setPosition(2);
+        $this->em->flush();
+
+        // Dans le Kanban de la fiche projet, on ne voit que A et C : on met C avant A.
+        $this->loginAs($this->gaelle);
+        $this->postJson('/admin/projets/taches/' . $c->getId() . '/deplacer', [
+            'field' => 'status', 'value' => 'todo', 'orderedIds' => [$c->getId(), $a->getId()],
+        ], $this->ajaxToken());
+        $this->assertResponseIsSuccessful();
+
+        $this->em->clear();
+        $repo = $this->em->getRepository(ProjectTask::class);
+        self::assertSame(0, $repo->find($c->getId())?->getPosition(), 'C prend la place de A');
+        self::assertSame(1, $repo->find($b->getId())?->getPosition(), 'B (autre projet) ne bouge pas');
+        self::assertSame(2, $repo->find($a->getId())?->getPosition(), 'A prend la place de C');
     }
 
     public function testTaskPageChecklistAndSignedComments(): void
