@@ -12,7 +12,8 @@
 | Rubrique | Montant |
 |---|---|
 | **Valeur de la plateforme actuelle** (coût pour la refaire chez un prestataire) | **104 650 € HT** (fourchette 80 500 – 120 750 €) |
-| Coût réellement dépensé pour la développer (outil IA de code) | ≈ 610 – 1 220 € HT + temps interne de Gaëlle |
+| Valeur basse (prestataire utilisant lui aussi des outils IA de code) | ≈ 52 000 – 73 000 € HT |
+| Coût réellement dépensé pour la développer (Claude Code + hébergement) | ≈ 750 – 1 465 € HT + temps interne de Gaëlle |
 | **Coût mensuel actuel** (hébergement + services) | **≈ 31 – 90 €/mois** |
 | Coût mensuel actuel avec l'outil IA de développement | **≈ 120 – 265 €/mois** |
 | **Coût de développement de la V2** (prestataire, avec 15 % de marge pour imprévus) | **109 850 € HT** (fourchette 84 500 – 126 750 €) |
@@ -90,11 +91,29 @@ donc une estimation **prudente**.
 
 | Poste | Hypothèse | Montant |
 |---|---|---|
-| Outil IA de code (abonnement Claude Max) | 7 mois (mars à septembre 2026), à 100 $ ou 200 $/mois | ≈ 610 – 1 220 € HT |
+| Claude Code (abonnement Claude Max) | 7 mois (mars à septembre 2026), à 100 $ ou 200 $/mois | ≈ 610 – 1 220 € HT |
 | Hébergement pendant le développement | ≈ 20 – 35 €/mois × 7 mois | ≈ 140 – 245 € |
 | Temps de Gaëlle | à valoriser : **nombre de jours passés × coût journalier chargé** | à compléter |
 
 ⚠️ Remplacez les deux premières lignes par les montants de vos factures réelles.
+
+### 2.4 Effet du développement avec Claude Code sur la valeur
+
+La plateforme a été développée par Gaëlle avec **Claude Code** : l'outil écrit le code, et
+Gaëlle le conçoit, le pilote, le vérifie et le déploie. Cela change le **coût réel**, pas la
+**valeur d'usage** : les fonctionnalités en production sont les mêmes que si un prestataire
+les avait développées. On peut présenter trois chiffres :
+
+| Lecture | Calcul | Montant HT |
+|---|---|---:|
+| **Coût réel décaissé** | abonnement Claude Code + hébergement pendant le développement (§ 2.3) | ≈ 750 – 1 465 € + temps de Gaëlle |
+| **Coût de remplacement par un prestataire qui utilise aussi l'IA** | 161 j/h réduits de 30 à 50 % (gain de productivité des outils IA de code), soit 80 à 113 j/h × 650 € | **≈ 52 000 – 73 000 €** |
+| **Coût de remplacement classique** (§ 2.2) | 161 j/h × 650 € | **104 650 €** |
+
+Pour un dossier de financement, on présente en général le coût de remplacement classique
+comme **valeur de l'actif**, avec à côté le coût réel pour montrer l'économie obtenue grâce
+à l'IA. Le chiffre « prestataire avec IA » sert de **valeur basse défendable** si un
+financeur conteste la valeur.
 
 > Comptabilité : une association ou une société peut, sous conditions, inscrire ces frais de
 > développement à l'actif comme **immobilisation incorporelle** (logiciel créé en interne,
