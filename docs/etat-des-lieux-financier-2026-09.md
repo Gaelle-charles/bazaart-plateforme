@@ -21,6 +21,9 @@
 | Coût mensuel V2 — croissance (1 500 utilisateurs actifs IA) | **≈ 2 190 €/mois** |
 | Coût mensuel V2 — échelle (5 000 utilisateurs actifs IA) | **≈ 6 750 €/mois** |
 | Coût IA par utilisateur actif et par mois (V2) | **≈ 1,20 €** (soit 13 % d'un abonnement à 9 €) |
+| **Développement de l'application mobile** (iOS + Android, § 6) | **79 300 € HT** |
+| Coût mensuel de l'application mobile | **45 €/mois** + 15 % de commission sur les abonnements vendus dans l'application |
+| **Valeur de la plateforme après V2 + application mobile** | **293 800 € HT** |
 
 ---
 
@@ -293,7 +296,64 @@ Mistral pour la lecture en masse, plafonner l'usage par formule.
 
 ---
 
-## 6. Hypothèses et limites
+## 6. Application mobile (iOS + Android)
+
+### 6.1 Choix technique
+
+- **Une seule application pour iOS et Android**, développée avec React Native / Expo. Un
+  seul code sert les deux systèmes, ce qui coûte environ deux fois moins cher que deux
+  applications natives séparées.
+- **Prérequis : une API.** La plateforme actuelle génère ses pages sur le serveur (Twig) et
+  n'a pas d'API complète. Il faut en créer une (API Platform + JWT, bundle JWT déjà installé)
+  que l'application mobile interrogera. C'est le plus gros lot.
+- Contenu de l'application : tous les parcours membres (opportunités, matching, communauté,
+  messagerie, formations, lives, projets et candidatures, assistant IA), plus les
+  **notifications push**. L'administration reste sur le web.
+
+### 6.2 Chiffrage du développement
+
+| # | Lot | j/h | Montant (650 €/j) |
+|---|---|---:|---:|
+| 1 | API REST pour tous les modules (API Platform, JWT, documentation, versions) | 20 | 13 000 € |
+| 2 | Design UX/UI mobile | 10 | 6 500 € |
+| 3 | Socle de l'application : navigation, connexion (email, Google, Apple), cache hors ligne | 10 | 6 500 € |
+| 4 | Opportunités, matching (swipe), favoris, filtres, alertes | 10 | 6 500 € |
+| 5 | Communauté : forum, messagerie en temps réel, notifications | 12 | 7 800 € |
+| 6 | Formations (vidéo), lives | 8 | 5 200 € |
+| 7 | Notifications push (Apple / Google) et préférences | 4 | 2 600 € |
+| 8 | Projets, candidatures, accompagnement IA et chatbot (fonctions V2) | 12 | 7 800 € |
+| 9 | Abonnements : achat intégré (App Store / Google Play) ou renvoi vers le paiement web | 6 | 3 900 € |
+| 10 | Tests sur appareils, publication sur les stores, conformité (RGPD, fiches de confidentialité) | 8 | 5 200 € |
+| 11 | Pilotage de projet | 6 | 3 900 € |
+| | **Sous-total** | **106 j/h** | **68 900 €** |
+| | Marge pour imprévus (15 %) | 16 j/h | 10 400 € |
+| | **Total application mobile** | **122 j/h** | **79 300 € HT** |
+
+Durée : 5 à 6 mois chez un prestataire. L'application mobile doit être développée **après
+ou en même temps que la V2**, pour ne pas devoir refaire les écrans des nouvelles fonctions.
+
+Alternative économique : une **application web installable (PWA)**, c'est-à-dire le site
+actuel installable sur le téléphone avec notifications, pour ≈ 20 j/h (≈ 13 000 €). Elle
+n'est pas présente sur les stores et offre une expérience moins riche.
+
+### 6.3 Coûts mensuels de l'application mobile
+
+| Poste | Coût mensuel |
+|---|---:|
+| Compte développeur Apple (99 $/an) | 7 € |
+| Compte Google Play (25 $, payé une seule fois, ≈ 22 €) | 0 € |
+| Service de compilation et de mise à jour (Expo EAS, offre Starter 19 $) | 17 € |
+| Serveur supplémentaire pour l'API et le temps réel (4 Go) | 21 € |
+| Notifications push (Firebase Cloud Messaging) | 0 € |
+| **Total** | **45 €/mois** |
+
+Commission des stores sur les abonnements vendus dans l'application : **15 %** (programme
+petites entreprises Apple / Google, sous 1 M$ de chiffre d'affaires par an). Elle ne
+s'applique pas aux abonnements payés sur le site web.
+
+---
+
+## 7. Hypothèses et limites
 
 - **Tarifs :** les prix Claude sont à jour au 25/09/2026. Les prix DigitalOcean, Mistral,
   Brevo, Bunny et Sentry sont ceux des grilles publiques connues, sans vérification en ligne
