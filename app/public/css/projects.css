@@ -708,3 +708,20 @@ a.pm-chip:hover span:last-child { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) {
     .pm *, .pm *::before, .pm *::after { transition: none !important; }
 }
+
+/* ═══ Opportunités pour nos associations (ADR-0038) ═══════════════════════ */
+.pm-opps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.pm-opp { display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between; padding: 14px 16px; border: 1px solid var(--ink); background: #fff; }
+.pm-opp__main { flex: 1 1 420px; min-width: 0; }
+.pm-opp__top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.pm-opp__title { margin: 0 0 4px; font-size: 16px; line-height: 1.3; }
+.pm-opp__title a { color: var(--ink); text-decoration: none; }
+.pm-opp__title a:hover { text-decoration: underline; }
+.pm-opp__desc { margin: 0 0 8px; font-size: 13px; line-height: 1.5; color: #444; overflow-wrap: anywhere; }
+.pm-opp__why { margin: 0 0 2px; font-size: 12px; line-height: 1.4; }
+.pm-opp__review { margin: 8px 0 0; font-size: 11px; }
+.pm-opp__actions { flex: 0 1 260px; display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.pm-opp__actions .pm-inline-form { flex-wrap: wrap; }
+.pm-opp__actions .pm-inline-form select { flex: 1; min-width: 0; }
+.pm-opp__decide { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 640px) { .pm-opp__actions { flex-basis: 100%; } }

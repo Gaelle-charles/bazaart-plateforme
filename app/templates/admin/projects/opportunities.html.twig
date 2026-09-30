@@ -1,0 +1,147 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # opportunities.html.twig : onglet « Opportunités » (AdminProjectOpportunityController, ADR-0038).
+ #
+ # Opportunités du catalogue (aides, bourses, appels à projets, résidences…) qui
+ # correspondent à BazaArt Guadeloupe et/ou BazaArt Paris, triées par date limite.
+ # Chaque opportunité affiche POURQUOI elle est proposée (raisons du tri automatique).
+ #
+ # Variables : rows, counts, view, association (BazaartAssociation|null), associations
+ #   rows[] = {resource, matches (list<AssociationMatch>), score, review}
+ #}
+
+{% set pm_tab = 'opportunities' %}
+{% block title %}Opportunités · Espace projets · BazaArt{% endblock %}
+{% block page_title %}Opportunités{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+{% set today = pm_today() %}
+{% set asso = association ? association.value : null %}
+{% set views = {
+    'a-etudier': 'À étudier',
+    'retenues': 'Retenues',
+    'candidatures': 'Candidatures',
+    'ecartees': 'Écartées',
+} %}
+
+<div class="pm-head">
+    <div>
+        <h1 class="pm-title">Opportunités pour nos associations <small>{{ association ? association.label() : 'BazaArt Guadeloupe & BazaArt Paris' }}</small></h1>
+    </div>
+</div>
+
+<p class="pm-muted" style="margin: -6px 0 14px; font-size: 13px; max-width: 760px">
+    Aides, bourses, appels à projets et résidences du catalogue <strong>ouverts aux associations</strong> ou
+    <strong>liés à nos territoires</strong>, dont la date limite n'est pas passée. Retiens celles qui vous
+    intéressent, écarte les autres, et « Candidater » crée le projet avec les étapes planifiées avant la date limite.
+</p>
+
+<div class="pm-toolbar">
+    {# Association : toutes / Guadeloupe / Paris #}
+    <nav class="pm-views" aria-label="Association">
+        <a href="{{ path('app_admin_pm_opportunities', {vue: view}) }}" {{ asso is null ? 'aria-current="page"' }}>Les deux</a>
+        {% for a in associations %}
+            <a href="{{ path('app_admin_pm_opportunities', {vue: view, asso: a.value}) }}" {{ asso == a.value ? 'aria-current="page"' }}>{{ a.label() }}</a>
+        {% endfor %}
+    </nav>
+    {# Étape : à étudier / retenues / candidatures / écartées #}
+    <div class="pm-quick" aria-label="Étape">
+        {% for key, label in views %}
+            <a href="{{ path('app_admin_pm_opportunities', {vue: key, asso: asso}|filter(v => v)) }}" aria-pressed="{{ view == key ? 'true' : 'false' }}">{{ label }} ({{ counts[key] }})</a>
+        {% endfor %}
+    </div>
+</div>
+
+{% if rows|length == 0 %}
+    <div class="pm-empty">
+        <strong>{{ view == 'a-etudier' ? 'Rien de nouveau à étudier' : 'Aucune opportunité ici' }}</strong>
+        <p>{{ view == 'a-etudier'
+            ? 'Toutes les opportunités qui correspondent ont été triées, ou aucune ne correspond pour le moment. Le catalogue est enrichi régulièrement.'
+            : 'Les opportunités apparaîtront ici quand l\'équipe les aura classées.' }}</p>
+    </div>
+{% else %}
+    <ul class="pm-opps">
+        {% for row in rows %}
+            {% set r = row.resource %}
+            {% set review = row.review %}
+            {% set link = r.applicationUrl ?: r.externalUrl %}
+            <li class="pm-opp">
+                <div class="pm-opp__main">
+                    <div class="pm-opp__top">
+                        <span class="pm-chip">{{ r.resourceType.name }}</span>
+                        {% if r.deadline %}
+                            {% set days = ((r.deadline|date('U') - today|date('U')) / 86400)|round(0, 'floor') %}
+                            <span class="pm-due {{ days < 0 ? 'pm-due--overdue' : (days <= 15 ? 'pm-due--soon') }}">
+                                {{ pm.icon('clock') }} {{ days < 0 ? 'Clôturée le ' : 'Jusqu\'au ' }}{{ r.deadline|date('d/m/Y') }}{% if days >= 0 %} · J-{{ days }}{% endif %}
+                            </span>
+                        {% else %}
+                            <span class="pm-due">Sans date limite</span>
+                        {% endif %}
+                        {% if r.fundingAmount %}<span class="pm-chip">{{ r.fundingAmount }}</span>{% endif %}
+                    </div>
+
+                    <h2 class="pm-opp__title">
+                        <a href="{{ path('app_resource_show', {id: r.id}) }}" target="_blank" rel="noopener">{{ r.title }}</a>
+                    </h2>
+                    {% set desc = r.description|striptags|trim %}
+                    <p class="pm-opp__desc">{{ desc|length > 260 ? desc|slice(0, 260) ~ '…' : desc }}</p>
+
+                    {# Pourquoi cette opportunité est proposée, par association #}
+                    {% for m in row.matches %}
+                        <p class="pm-opp__why">
+                            <strong>{{ m.association.label() }}</strong> : {{ m.reasons|join(' · ') }}
+                        </p>
+                    {% endfor %}
+
+                    {% if review %}
+                        <p class="pm-opp__review pm-mono">
+                            {{ review.status.label() }}{% if review.association %} · {{ review.association.label() }}{% endif %}
+                            {% if review.updatedBy %} · par {{ review.updatedBy|pm_name }}{% endif %} {{ review.updatedAt|pm_ago }}
+                            {% if review.project %} · <a class="pm-link" href="{{ path('app_admin_pm_project_show', {id: review.project.id}) }}">Voir le projet</a>{% endif %}
+                        </p>
+                    {% endif %}
+                </div>
+
+                <div class="pm-opp__actions">
+                    {% if link %}
+                        <a class="pm-btn pm-btn--sm" href="{{ link }}" target="_blank" rel="noopener noreferrer">{{ pm.icon('external') }} Site officiel</a>
+                    {% endif %}
+
+                    {% if review and review.project %}
+                        <a class="pm-btn pm-btn--sm pm-btn--primary" href="{{ path('app_admin_pm_project_show', {id: review.project.id}) }}">Ouvrir la candidature</a>
+                    {% else %}
+                        {# Candidater : l'association proposée par défaut est celle qui correspond le mieux #}
+                        <form method="post" action="{{ path('app_admin_pm_opportunity_apply', {id: r.id}) }}" class="pm-inline-form">
+                            <input type="hidden" name="_token" value="{{ csrf_token('pm_opportunity_' ~ r.id) }}">
+                            <label class="pm-sr" for="pm-opp-asso-{{ r.id }}">Association qui candidate</label>
+                            <select class="pm-input" id="pm-opp-asso-{{ r.id }}" name="association">
+                                {% set best = row.matches|length > 0 ? (row.matches|sort((a, b) => b.score <=> a.score)|first).association.value : (asso ?? 'paris') %}
+                                {% for a in associations %}
+                                    <option value="{{ a.value }}" {{ a.value == best ? 'selected' }}>{{ a.label() }}</option>
+                                {% endfor %}
+                            </select>
+                            <button class="pm-btn pm-btn--sm pm-btn--primary" type="submit">Candidater</button>
+                        </form>
+                    {% endif %}
+
+                    <form method="post" action="{{ path('app_admin_pm_opportunity_decide', {id: r.id}) }}" class="pm-opp__decide">
+                        <input type="hidden" name="_token" value="{{ csrf_token('pm_opportunity_' ~ r.id) }}">
+                        <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
+                        {% if not review %}
+                            <button class="pm-btn pm-btn--sm" type="submit" name="decision" value="retenue">{{ pm.icon('pin') }} Retenir</button>
+                            <button class="pm-btn pm-btn--sm pm-btn--ghost" type="submit" name="decision" value="ecartee">{{ pm.icon('x') }} Écarter</button>
+                        {% elseif review.status.value == 'retenue' %}
+                            <button class="pm-btn pm-btn--sm pm-btn--ghost" type="submit" name="decision" value="ecartee">{{ pm.icon('x') }} Écarter</button>
+                            <button class="pm-btn pm-btn--sm pm-btn--ghost" type="submit" name="decision" value="a-etudier">Remettre à étudier</button>
+                        {% elseif review.status.value == 'ecartee' %}
+                            <button class="pm-btn pm-btn--sm pm-btn--ghost" type="submit" name="decision" value="a-etudier">Remettre à étudier</button>
+                        {% endif %}
+                    </form>
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+{% endif %}
+{% endblock %}

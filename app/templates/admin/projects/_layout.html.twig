@@ -11,7 +11,7 @@
  #   - le jeton CSRF des appels JavaScript (balise <meta name="pm-csrf">).
  #
  # Les pages enfants remplissent le bloc « pm_content » (et « page_title »).
- # Variable facultative : pm_tab (onglet actif) : overview | tasks | projects | notes | drive | team
+ # Variable facultative : pm_tab (onglet actif) : overview | tasks | projects | opportunities | notes | drive | team
  #}
 
 {% import 'admin/projects/_macros.html.twig' as pm %}
@@ -46,6 +46,7 @@
             Tâches{% if _late > 0 %}<span class="pm-tabs__badge" title="Tes tâches en retard">{{ _late }}</span>{% endif %}
         </a>
         <a href="{{ path('app_admin_pm_projects') }}" {{ _tab == 'projects' ? 'aria-current="page"' }}>Projets</a>
+        <a href="{{ path('app_admin_pm_opportunities') }}" {{ _tab == 'opportunities' ? 'aria-current="page"' }}>Opportunités</a>
         <a href="{{ path('app_admin_pm_notes') }}" {{ _tab == 'notes' ? 'aria-current="page"' }}>Notes d'équipe</a>
         <a href="{{ path('app_admin_pm_drive') }}" {{ _tab == 'drive' ? 'aria-current="page"' }}>Drive</a>
         <a href="{{ path('app_admin_pm_team') }}" {{ _tab == 'team' ? 'aria-current="page"' }}>Équipe &amp; réglages</a>

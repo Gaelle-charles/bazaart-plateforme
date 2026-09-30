@@ -10,8 +10,11 @@ use App\Entity\ProjectNote;
 use App\Entity\ProjectSubtask;
 use App\Entity\ProjectTask;
 use App\Entity\ProjectTaskComment;
+use App\Entity\Resource;
+use App\Entity\ResourceType;
 use App\Entity\User;
 use App\Enum\ProjectTaskStatus;
+use App\Enum\ResourceStatus;
 
 /**
  * ProjectSpaceTest — parcours fonctionnels de l'Espace projets (ADR-0037).
@@ -422,6 +425,64 @@ class ProjectSpaceTest extends AbstractE2ETestCase
         $note = $this->em->getRepository(ProjectNote::class)->find($note->getId());
         self::assertTrue($note->isPinned());
         self::assertSame('Réunion avec la mairie jeudi.', $note->getContent());
+    }
+
+    // ═════════════════════════════════════════════════════════════════════
+    // Opportunités pour nos associations (ADR-0038)
+    // ═════════════════════════════════════════════════════════════════════
+
+    public function testOpportunitiesAreReservedToProjectMembers(): void
+    {
+        $this->loginAs($this->createAdminUser());
+        $this->client->request('GET', '/admin/projets/opportunites');
+        $this->assertResponseStatusCodeSame(403);
+    }
+
+    public function testOnlyMatchingOpportunitiesAreListedAndApplyingCreatesProject(): void
+    {
+        $type = (new ResourceType())->setName('Subvention');
+        $this->em->persist($type);
+        $forUs = (new Resource())
+            ->setTitle('Aide aux associations culturelles de Guadeloupe')
+            ->setDescription('La Région Guadeloupe soutient les associations loi 1901 du territoire.')
+            ->setResourceType($type)
+            ->setDeadline(new \DateTime('+60 days'))
+            ->setSubmittedBy($this->gaelle)
+            ->setStatus(ResourceStatus::Published);
+        $artistOnly = (new Resource())
+            ->setTitle('Bourse de création individuelle')
+            ->setDescription('Bourse réservée aux artistes individuels.')
+            ->setResourceType($type)
+            ->setSubmittedBy($this->gaelle)
+            ->setStatus(ResourceStatus::Published);
+        $this->em->persist($forUs);
+        $this->em->persist($artistOnly);
+        $this->em->flush();
+
+        $this->loginAs($this->wendie);
+        $crawler = $this->client->request('GET', '/admin/projets/opportunites');
+        $this->assertResponseIsSuccessful();
+        self::assertStringContainsString('Aide aux associations culturelles de Guadeloupe', $crawler->filter('.pm-opps')->text());
+        self::assertStringNotContainsString('Bourse de création individuelle', $crawler->filter('.pm-opps')->text());
+
+        // Filtre « BazaArt Paris » : l'aide guadeloupéenne n'y figure pas.
+        $crawler = $this->client->request('GET', '/admin/projets/opportunites?asso=paris');
+        self::assertCount(0, $crawler->filter('.pm-opp'));
+
+        // Candidater : projet « Candidature » créé avec ses étapes, décision enregistrée.
+        $this->client->request('POST', '/admin/projets/opportunites/' . $forUs->getId() . '/candidater', [
+            '_token'      => $this->tokenFor('pm_opportunity_' . $forUs->getId()),
+            'association' => 'guadeloupe',
+        ]);
+        $this->assertResponseRedirects();
+        $project = $this->em->getRepository(Project::class)->findOneBy(['name' => 'Candidature Guadeloupe · Aide aux associations culturelles de Guadeloupe']);
+        self::assertNotNull($project);
+        self::assertCount(7, $this->em->getRepository(ProjectTask::class)->findBy(['project' => $project]));
+
+        $crawler = $this->client->request('GET', '/admin/projets/opportunites?vue=candidatures');
+        self::assertCount(1, $crawler->filter('.pm-opp'));
+        $crawler = $this->client->request('GET', '/admin/projets/opportunites');
+        self::assertCount(0, $crawler->filter('.pm-opp'), 'Une opportunité à laquelle on candidate quitte « À étudier ».');
     }
 
     // ═════════════════════════════════════════════════════════════════════

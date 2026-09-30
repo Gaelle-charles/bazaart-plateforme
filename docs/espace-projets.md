@@ -140,6 +140,12 @@ Nginx : le conteneur est reconstruit automatiquement par `deploy.sh`.
   Sans choix explicite, le fichier va dans le dossier Drive du projet, sinon « Mon Drive ». Retirer une pièce jointe ne supprime rien
   dans le Drive. Un projet peut avoir son **dossier Drive** (créé automatiquement à la
   création du projet si la case est cochée).
+- **Opportunités** (ADR-0038) : aides, bourses, appels à projets et résidences du catalogue
+  qui correspondent à **BazaArt Guadeloupe** et/ou **BazaArt Paris** (ouvertes aux
+  associations / structures, ou liées à leur territoire), avec la raison affichée.
+  Filtre par association, étapes « À étudier / Retenues / Candidatures / Écartées ».
+  « Candidater » crée le projet avec le modèle « Candidature » planifié avant la date limite.
+  Mots-clés de territoire : `app/src/Enum/BazaartAssociation.php`.
 - **Onboarding** : visite guidée à la première visite (relançable depuis la vue
   d'ensemble ou Équipe & réglages) + checklist de 7 étapes qui se cochent seules
   (dont « Indiquer mon prénom »).
