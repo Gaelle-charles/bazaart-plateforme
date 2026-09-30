@@ -5,19 +5,25 @@
  # par projects.js uniquement dans l'onglet « Parcourir » : c'est là qu'on sait
  # précisément dans quel dossier on se trouve.
  #
- #   « Dossier ouvert : PV »   [Téléverser ici]   [Nouveau dossier]
+ #   « Dossier ouvert : PV »   [Fichiers]   [Dossier]   [Nouveau dossier]
+ #   (Fichiers / Dossier : depuis l'ordinateur, envoyés DANS le dossier ouvert)
  #
  # Le nom du dossier est rempli par projects.js (textContent, jamais innerHTML).
  # Variable : uid (suffixe pour des id HTML uniques sur la page)
  #}
 {% import 'admin/projects/_macros.html.twig' as pm %}
 <div class="pm-picker__tools" data-pm-picker-tools hidden>
-    <span class="pm-picker__here">{{ pm.icon('folder') }} Dossier ouvert : <strong data-pm-picker-here>Mon Drive</strong></span>
+    <span class="pm-picker__here">{{ pm.icon('folder') }} Ajouter depuis ton ordinateur dans : <strong data-pm-picker-here>Mon Drive</strong></span>
     <span class="pm-picker__actions">
-        {# Le <label> déclenche le sélecteur de fichiers de l'ordinateur (plusieurs fichiers possibles) #}
-        <label class="pm-btn pm-btn--sm" data-pm-picker-upload-label>
-            {{ pm.icon('upload') }} <span data-pm-picker-upload-text>Téléverser ici</span>
+        {# Chaque <label> ouvre le sélecteur de l'ordinateur : fichiers (plusieurs) ou dossier entier #}
+        <label class="pm-btn pm-btn--sm pm-btn--primary" data-pm-picker-upload-label title="Envoyer des fichiers de ton ordinateur dans ce dossier">
+            {{ pm.icon('upload') }} <span data-pm-picker-upload-text>Fichiers</span>
             <input type="file" multiple data-pm-picker-upload class="pm-sr">
+        </label>
+        {# webkitdirectory : choix d'un DOSSIER ; son arborescence est recréée dans le Drive #}
+        <label class="pm-btn pm-btn--sm" data-pm-picker-upload-label title="Envoyer un dossier de ton ordinateur (avec ses sous-dossiers)">
+            {{ pm.icon('folder') }} Dossier
+            <input type="file" webkitdirectory multiple data-pm-picker-upload-dir class="pm-sr">
         </label>
         <button type="button" class="pm-btn pm-btn--sm" data-pm-picker-newfolder-toggle>{{ pm.icon('plus') }} Nouveau dossier</button>
     </span>

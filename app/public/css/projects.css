@@ -683,7 +683,7 @@ a.pm-chip:hover span:last-child { text-decoration: underline; }
 .pm-picker__actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .pm-picker__actions label { cursor: pointer; }
 .pm-picker__actions [hidden] { display: none; }
-.pm-picker__actions label.is-busy { opacity: .6; pointer-events: none; }
+.pm-picker__tools.is-busy .pm-picker__actions, .pm-direct.is-busy { opacity: .6; pointer-events: none; }
 .pm-picker__newfolder { display: flex; gap: 6px; width: 100%; }
 .pm-picker__newfolder[hidden] { display: none; }
 .pm-picker__newfolder .pm-input { flex: 1; min-width: 0; }
@@ -734,3 +734,8 @@ a.pm-chip:hover span:last-child { text-decoration: underline; }
 .pm-opp-sum__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .pm-opp-sum__list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 13px; }
 .pm-opp-sum__list .pm-line__title { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Envoi direct depuis l'ordinateur dans un dossier Drive (pièce jointe dossier, dossier du projet) */
+.pm-direct { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pm-direct label { cursor: pointer; }
+.pm-direct__status { font-size: 11px; }

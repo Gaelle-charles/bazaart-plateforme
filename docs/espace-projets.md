@@ -134,9 +134,12 @@ Nginx : le conteneur est reconstruit automatiquement par `deploy.sh`.
   visibles. Seule l'autrice peut modifier ou supprimer ; tout le monde peut épingler.
 - **Drive** : sur une tâche ou un projet, « Joindre ou déposer via le Drive » (fichiers ou
   dossiers, plusieurs à la fois), « Téléverser un fichier » (10 Mo max) ou « Ajouter un lien ».
-  **Déposer dans un dossier précis** : dans le sélecteur (ou la page Drive), ouvrir le dossier
-  puis « Téléverser ici » ; « Nouveau dossier » crée un sous-dossier dans le dossier ouvert.
-  Un dossier déjà joint a son bouton « Ajouter un fichier » qui ouvre le sélecteur dedans.
+  **Déposer depuis l'ordinateur dans un dossier précis** : sous un dossier joint (ou le
+  dossier Drive du projet), boutons « Fichiers » (plusieurs à la fois) et « Dossier » (dossier
+  entier, sous-dossiers recréés dans le Drive, 200 fichiers max par envoi) ; mêmes boutons dans
+  le sélecteur et la page Drive pour le dossier ouvert. « Nouveau dossier » crée un sous-dossier.
+  ⚠️ Après une modification de public/css ou public/js, incrémenter `assets.version`
+  (config/packages/framework.yaml), sinon les navigateurs gardent l'ancien fichier.
   Sans choix explicite, le fichier va dans le dossier Drive du projet, sinon « Mon Drive ». Retirer une pièce jointe ne supprime rien
   dans le Drive. Un projet peut avoir son **dossier Drive** (créé automatiquement à la
   création du projet si la case est cochée).

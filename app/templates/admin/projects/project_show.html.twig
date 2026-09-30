@@ -115,6 +115,10 @@
                         <div class="pm-file__main">
                             <a class="pm-file__name" href="https://drive.google.com/drive/folders/{{ project.driveFolderId|url_encode }}" target="_blank" rel="noopener noreferrer">{{ project.driveFolderName ?? 'Dossier du projet' }}</a>
                             <span class="pm-file__meta">Destination des fichiers téléversés</span>
+                            {% if pm_drive_connected() %}
+                                {# Envoyer des fichiers / un dossier de l'ordinateur dans le dossier du projet #}
+                                {% include 'admin/projects/_drive_upload_buttons.html.twig' with {folder_id: project.driveFolderId, folder_name: project.driveFolderName ?? 'Dossier du projet', browse: true, target: 'project', target_id: project.id} only %}
+                            {% endif %}
                         </div>
                     </div>
                 {% else %}
