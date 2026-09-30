@@ -20,7 +20,7 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  *
  * Trois façons de joindre :
  *   1. choisir un fichier ou dossier existant dans le Drive (sélecteur) → attachDriveFile()
- *   2. téléverser un fichier de l'ordinateur VERS le Drive puis le joindre → uploadAndAttach()
+ *   2. téléverser un fichier de l'ordinateur VERS un dossier du Drive puis le joindre → uploadAndAttach()
  *   3. coller un simple lien web → attachLink()
  *
  * Dans tous les cas, on ne stocke qu'une RÉFÉRENCE : le fichier vit dans le Drive.
@@ -57,16 +57,62 @@ class ProjectAttachmentService
     }
 
     /**
-     * Téléverse dans le Drive (dossier du projet si défini, sinon « Mon Drive ») puis joint.
+     * Téléverse dans le Drive puis joint.
+     *
+     * Dossier de destination, par ordre de priorité :
+     *   1. $folderId : le dossier CHOISI par l'utilisatrice (ex. le dossier « PV »
+     *      ouvert dans le sélecteur, ou un dossier déjà joint à la tâche) ;
+     *   2. le dossier Drive rattaché au projet ;
+     *   3. « Mon Drive » (racine).
+     *
+     * Avant ce correctif, seul 2 ou 3 était possible : un fichier téléversé depuis
+     * une tâche dont on avait joint un dossier « PV » n'atterrissait PAS dans ce
+     * dossier, ce qui était trompeur.
+     *
+     * @return array{attachment: ProjectAttachment, folderName: string}
      *
      * @throws GoogleDriveException
      */
-    public function uploadAndAttach(Project|ProjectTask $parent, UploadedFile $file, User $actor): ProjectAttachment
+    public function uploadAndAttach(Project|ProjectTask $parent, UploadedFile $file, User $actor, ?string $folderId = null): array
     {
-        $project  = $parent instanceof Project ? $parent : $parent->getProject();
-        $uploaded = $this->driveService->upload($file, $project?->getDriveFolderId());
+        $project = $parent instanceof Project ? $parent : $parent->getProject();
+        $folder  = $this->resolveUploadFolder($folderId, $project);
 
-        return $this->persist($parent, $actor, ProjectAttachmentSource::Drive, (string) $uploaded['name'], (string) $uploaded['webViewLink'], is_string($uploaded['mimeType']) ? $uploaded['mimeType'] : null, (string) $uploaded['id']);
+        $uploaded   = $this->driveService->upload($file, $folder['id']);
+        $attachment = $this->persist($parent, $actor, ProjectAttachmentSource::Drive, (string) $uploaded['name'], (string) $uploaded['webViewLink'], is_string($uploaded['mimeType']) ? $uploaded['mimeType'] : null, (string) $uploaded['id']);
+
+        return ['attachment' => $attachment, 'folderName' => $folder['name']];
+    }
+
+    /**
+     * Détermine (et VÉRIFIE chez Google) le dossier où ranger un téléversement.
+     *
+     * Si un dossier est demandé, on relit ses métadonnées : cela confirme qu'il
+     * existe toujours et que c'est bien un DOSSIER (et pas un fichier dont
+     * l'identifiant aurait été envoyé par erreur), et donne son nom pour le
+     * message de confirmation.
+     *
+     * @return array{id: string, name: string}
+     *
+     * @throws GoogleDriveException
+     */
+    public function resolveUploadFolder(?string $folderId, ?Project $project = null): array
+    {
+        $folderId = $folderId !== null ? trim($folderId) : '';
+
+        if ($folderId === '' && $project?->getDriveFolderId() !== null) {
+            return ['id' => (string) $project->getDriveFolderId(), 'name' => $project->getDriveFolderName() ?? 'Dossier du projet'];
+        }
+        if ($folderId === '' || $folderId === 'root') {
+            return ['id' => 'root', 'name' => 'Mon Drive'];
+        }
+
+        $folder = $this->driveService->getFile($folderId);
+        if (($folder['isFolder'] ?? false) !== true) {
+            throw new GoogleDriveException('La destination choisie n\'est pas un dossier du Drive.');
+        }
+
+        return ['id' => (string) $folder['id'], 'name' => (string) $folder['name']];
     }
 
     /**

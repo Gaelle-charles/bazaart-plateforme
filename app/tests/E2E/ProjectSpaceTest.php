@@ -442,6 +442,24 @@ class ProjectSpaceTest extends AbstractE2ETestCase
         self::assertTrue($data['notConnected']);
     }
 
+    public function testDriveUploadAndFolderCreationRequireCsrfAndConnection(): void
+    {
+        $this->loginAs($this->gaelle);
+
+        // Sans jeton CSRF : refusé avant tout appel à Google
+        $this->client->request('POST', '/admin/projets/drive/api/nouveau-dossier', server: ['CONTENT_TYPE' => 'application/json'], content: '{"parentId":"root","name":"PV"}');
+        $this->assertResponseStatusCodeSame(403);
+        $this->client->request('POST', '/admin/projets/drive/api/televerser');
+        $this->assertResponseStatusCodeSame(403);
+
+        // Avec le jeton mais Drive non connecté : réponse claire « notConnected »
+        $token = $this->tokenFor('pm_ajax');
+        $this->client->request('POST', '/admin/projets/drive/api/nouveau-dossier', server: ['CONTENT_TYPE' => 'application/json', 'HTTP_X_CSRF_TOKEN' => $token], content: '{"parentId":"root","name":"PV"}');
+        $this->assertResponseStatusCodeSame(409);
+        $data = json_decode((string) $this->client->getResponse()->getContent(), true);
+        self::assertTrue($data['notConnected']);
+    }
+
     public function testDriveCallbackRejectsForgedState(): void
     {
         $this->loginAs($this->gaelle);

@@ -6,7 +6,8 @@
  # - Non configuré (pas d'identifiants OAuth sur le serveur) : explications.
  # - Non connecté : bouton « Connecter le Drive » (écran de consentement Google).
  # - Connecté : navigateur de fichiers (même composant JS que le sélecteur),
- #   en mode « parcourir » : un clic sur un fichier l'ouvre dans Google Drive.
+ #   en mode « parcourir » : un clic sur un fichier l'ouvre dans Google Drive,
+ #   et la barre « Dossier ouvert » permet d'y téléverser ou d'y créer un dossier.
  #
  # Variables : connection (ProjectDriveConnection|null), configured, driveAccount
  #}
@@ -50,7 +51,7 @@
     </section>
 {% else %}
     <div class="pm-note-info" style="margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center">
-        <span>Connecté à <strong>{{ connection.accountEmail }}</strong> par {{ connection.connectedBy|pm_name }}, le {{ connection.connectedAt|pm_datetime }}. Pour joindre un fichier, ouvre une tâche ou un projet.</span>
+        <span>Connecté à <strong>{{ connection.accountEmail }}</strong> par {{ connection.connectedBy|pm_name }}, le {{ connection.connectedAt|pm_datetime }}. Ouvre un dossier pour y téléverser des fichiers ou créer un sous-dossier. Pour joindre un fichier, ouvre une tâche ou un projet.</span>
         <form method="post" action="{{ path('app_admin_pm_drive_disconnect') }}" onsubmit="return confirm('Déconnecter le Drive pour toute l\'équipe ? Les pièces jointes existantes restent visibles.')">
             <input type="hidden" name="_token" value="{{ csrf_token('pm_drive_disconnect') }}">
             <button class="pm-btn pm-btn--sm pm-btn--danger" type="submit">Déconnecter</button>
@@ -71,6 +72,7 @@
                 <button class="pm-btn" type="submit">{{ pm.icon('search') }} Chercher</button>
             </form>
             <div class="pm-picker__crumbs" data-pm-picker-crumbs></div>
+            {% include 'admin/projects/_drive_tools.html.twig' with {uid: 'browser'} %}
             <ul class="pm-picker__list" data-pm-picker-list aria-live="polite" style="max-height: none"></ul>
             <button type="button" class="pm-btn pm-btn--sm" data-pm-picker-more hidden style="margin-top: 8px">Afficher plus</button>
         </div>

@@ -132,9 +132,12 @@ Nginx : le conteneur est reconstruit automatiquement par `deploy.sh`.
   projet et confiées à la personne responsable, qui les répartit ensuite.
 - **Notes et commentaires signés** : autrice, date et mention « modifiée » toujours
   visibles. Seule l'autrice peut modifier ou supprimer ; tout le monde peut épingler.
-- **Drive** : sur une tâche ou un projet, « Joindre depuis le Drive » (fichiers ou
-  dossiers, plusieurs à la fois), « Téléverser un fichier » (rangé dans le dossier Drive
-  du projet, 10 Mo max) ou « Ajouter un lien ». Retirer une pièce jointe ne supprime rien
+- **Drive** : sur une tâche ou un projet, « Joindre ou déposer via le Drive » (fichiers ou
+  dossiers, plusieurs à la fois), « Téléverser un fichier » (10 Mo max) ou « Ajouter un lien ».
+  **Déposer dans un dossier précis** : dans le sélecteur (ou la page Drive), ouvrir le dossier
+  puis « Téléverser ici » ; « Nouveau dossier » crée un sous-dossier dans le dossier ouvert.
+  Un dossier déjà joint a son bouton « Ajouter un fichier » qui ouvre le sélecteur dedans.
+  Sans choix explicite, le fichier va dans le dossier Drive du projet, sinon « Mon Drive ». Retirer une pièce jointe ne supprime rien
   dans le Drive. Un projet peut avoir son **dossier Drive** (créé automatiquement à la
   création du projet si la case est cochée).
 - **Onboarding** : visite guidée à la première visite (relançable depuis la vue
