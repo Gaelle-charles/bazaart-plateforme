@@ -1,0 +1,29 @@
+{#
+ # _drive_tools.html.twig : barre d'actions sur le DOSSIER OUVERT du Drive.
+ #
+ # Incluse dans le sélecteur (fenêtre) et dans la page « Drive ». Rendue visible
+ # par projects.js uniquement dans l'onglet « Parcourir » : c'est là qu'on sait
+ # précisément dans quel dossier on se trouve.
+ #
+ #   « Dossier ouvert : PV »   [Téléverser ici]   [Nouveau dossier]
+ #
+ # Le nom du dossier est rempli par projects.js (textContent, jamais innerHTML).
+ # Variable : uid (suffixe pour des id HTML uniques sur la page)
+ #}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+<div class="pm-picker__tools" data-pm-picker-tools hidden>
+    <span class="pm-picker__here">{{ pm.icon('folder') }} Dossier ouvert : <strong data-pm-picker-here>Mon Drive</strong></span>
+    <span class="pm-picker__actions">
+        {# Le <label> déclenche le sélecteur de fichiers de l'ordinateur (plusieurs fichiers possibles) #}
+        <label class="pm-btn pm-btn--sm" data-pm-picker-upload-label>
+            {{ pm.icon('upload') }} <span data-pm-picker-upload-text>Téléverser ici</span>
+            <input type="file" multiple data-pm-picker-upload class="pm-sr">
+        </label>
+        <button type="button" class="pm-btn pm-btn--sm" data-pm-picker-newfolder-toggle>{{ pm.icon('plus') }} Nouveau dossier</button>
+    </span>
+    <form class="pm-picker__newfolder" data-pm-picker-newfolder hidden>
+        <label class="pm-sr" for="pm-newfolder-{{ uid }}">Nom du nouveau dossier</label>
+        <input class="pm-input" id="pm-newfolder-{{ uid }}" maxlength="200" placeholder="Nom du dossier (ex. PV 2026)" required>
+        <button class="pm-btn pm-btn--sm pm-btn--primary" type="submit">Créer</button>
+    </form>
+</div>

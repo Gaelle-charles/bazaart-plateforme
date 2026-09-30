@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Twig;
 
 use App\Entity\User;
+use App\Enum\BazaartAssociation;
 use App\Enum\ProjectStatus;
 use App\Enum\ProjectTaskStatus;
 use App\Entity\Project;
@@ -45,6 +46,7 @@ use Twig\TwigFunction;
  *   pm_drive_connected()  le Google Drive de l'équipe est-il connecté ?
  *   pm_show_tour()        faut-il ouvrir la visite guidée (première visite) ?
  *   pm_selectable_projects() projets proposés dans l'ajout rapide de tâche
+ *   pm_associations()     nos deux associations (encart « Opportunités », ADR-0038)
  */
 class ProjectTwigExtension extends AbstractExtension
 {
@@ -99,6 +101,7 @@ class ProjectTwigExtension extends AbstractExtension
             new TwigFunction('pm_selectable_projects', fn (): array => $this->selectableProjects ??= $this->projectRepository->findSelectable()),
             new TwigFunction('pm_task_statuses', static fn (): array => ProjectTaskStatus::cases()),
             new TwigFunction('pm_project_statuses', static fn (): array => ProjectStatus::cases()),
+            new TwigFunction('pm_associations', static fn (): array => BazaartAssociation::cases()),
         ];
     }
 

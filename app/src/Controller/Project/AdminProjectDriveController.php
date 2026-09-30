@@ -30,7 +30,9 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  *   /drive/connexion        démarre la connexion OAuth (redirection vers Google)
  *   /drive/callback         retour de Google après consentement
  *   /drive/deconnexion      révoque et oublie la connexion
- *   /drive/api/*            API JSON utilisée par le sélecteur (fetch)
+ *   /drive/api/*            API JSON utilisée par le sélecteur (fetch) :
+ *                           lister, rechercher, récents, téléverser DANS le
+ *                           dossier ouvert, créer un dossier
  *   /pieces-jointes/*       joindre (Drive, téléversement, lien) / retirer
  */
 #[Route('/admin/projets', name: 'app_admin_pm_')]
@@ -157,6 +159,76 @@ class AdminProjectDriveController extends AbstractController
         return $this->driveJson(fn (): array => $this->driveService->recent());
     }
 
+    /**
+     * POST /admin/projets/drive/api/televerser — dépose UN fichier dans le dossier ouvert.
+     *
+     * Formulaire multipart envoyé par fetch() (un fichier par requête : chaque
+     * requête reste sous la limite de 10 Mo de Nginx, même si l'on en envoie plusieurs).
+     *   file      le fichier
+     *   folderId  dossier Drive de destination (« root » = Mon Drive)
+     *   target / targetId  (facultatifs) tâche ou projet auquel JOINDRE aussi le fichier
+     */
+    #[Route('/drive/api/televerser', name: 'drive_api_upload', methods: ['POST'])]
+    public function apiUpload(Request $request): JsonResponse
+    {
+        if (!$this->isAjaxCsrfValid($request)) {
+            return $this->jsonError('Jeton de sécurité invalide, recharge la page.', 403);
+        }
+
+        $file = $request->files->get('file');
+        if (!$file instanceof UploadedFile) {
+            return $this->jsonError('Aucun fichier reçu (10 Mo maximum).');
+        }
+
+        $folderId = (string) $request->request->get('folderId', 'root');
+        $target   = (string) $request->request->get('target', '');
+        $parent   = $target !== '' ? $this->resolveParent($target, $request->request->getInt('targetId')) : null;
+        if ($target !== '' && $parent === null) {
+            return $this->jsonError('Tâche ou projet introuvable.');
+        }
+
+        return $this->driveJson(function () use ($file, $folderId, $parent): array {
+            if ($parent !== null) {
+                // Rangé dans le dossier ouvert ET joint à la tâche / au projet.
+                $result = $this->attachmentService->uploadAndAttach($parent, $file, $this->currentUser(), $folderId);
+
+                return ['name' => $result['attachment']->getName(), 'folderName' => $result['folderName'], 'attached' => true];
+            }
+
+            // Page « Drive » : simple dépôt, sans pièce jointe.
+            $folder   = $this->attachmentService->resolveUploadFolder($folderId);
+            $uploaded = $this->driveService->upload($file, $folder['id']);
+
+            return ['name' => $uploaded['name'], 'folderName' => $folder['name'], 'attached' => false];
+        });
+    }
+
+    /**
+     * POST /admin/projets/drive/api/nouveau-dossier — crée un sous-dossier.
+     * Corps JSON : {"parentId": "…" | "root", "name": "PV 2026"}
+     */
+    #[Route('/drive/api/nouveau-dossier', name: 'drive_api_create_folder', methods: ['POST'])]
+    public function apiCreateFolder(Request $request): JsonResponse
+    {
+        if (!$this->isAjaxCsrfValid($request)) {
+            return $this->jsonError('Jeton de sécurité invalide, recharge la page.', 403);
+        }
+
+        try {
+            $payload = $request->toArray();
+        } catch (\Throwable) {
+            return $this->jsonError('Requête invalide.');
+        }
+
+        $name     = trim(is_string($payload['name'] ?? null) ? $payload['name'] : '');
+        $parentId = is_string($payload['parentId'] ?? null) && $payload['parentId'] !== '' ? $payload['parentId'] : 'root';
+        if ($name === '') {
+            return $this->jsonError('Donne un nom au dossier.');
+        }
+
+        return $this->driveJson(fn (): array => ['folder' => $this->driveService->createFolder($name, $parentId)]);
+    }
+
     // ═════════════════════════════════════════════════════════════════════════
     // Pièces jointes
     // ═════════════════════════════════════════════════════════════════════════
@@ -197,7 +269,7 @@ class AdminProjectDriveController extends AbstractController
         return new JsonResponse(['ok' => true, 'attached' => $attached]);
     }
 
-    /** POST /admin/projets/pieces-jointes/televerser — fichier de l'ordinateur → Drive → pièce jointe. */
+    /** POST /admin/projets/pieces-jointes/televerser — fichier de l'ordinateur → dossier Drive choisi → pièce jointe. */
     #[Route('/pieces-jointes/televerser', name: 'attachment_upload', methods: ['POST'])]
     public function upload(Request $request): Response
     {
@@ -215,9 +287,13 @@ class AdminProjectDriveController extends AbstractController
             return $this->redirectBack($request, 'app_admin_pm_tasks');
         }
 
+        // Dossier choisi dans la liste « Ranger dans » (vide = dossier du projet, sinon Mon Drive).
+        $folderId = trim((string) $request->request->get('folderId', ''));
+
         try {
-            $attachment = $this->attachmentService->uploadAndAttach($parent, $file, $this->currentUser());
-            $this->addFlash('success', sprintf('« %s » téléversé dans le Drive et joint.', $attachment->getName()));
+            $result = $this->attachmentService->uploadAndAttach($parent, $file, $this->currentUser(), $folderId !== '' ? $folderId : null);
+            // On dit OÙ le fichier a été rangé : l'utilisatrice sait où le retrouver dans le Drive.
+            $this->addFlash('success', sprintf('« %s » rangé dans le dossier Drive « %s » et joint.', $result['attachment']->getName(), $result['folderName']));
         } catch (GoogleDriveException $e) {
             $this->addFlash('error', $e->getMessage());
         }

@@ -23,6 +23,7 @@ use App\Service\Project\ProjectClock;
 use App\Service\Project\ProjectLabelService;
 use App\Service\Project\ProjectMemberService;
 use App\Service\Project\ProjectOnboardingService;
+use App\Service\Project\ProjectOpportunityService;
 use App\Service\Project\ProjectService;
 use App\Service\Project\ProjectTaskService;
 use App\Service\Project\ProjectTemplateCatalog;
@@ -67,6 +68,7 @@ class AdminProjectController extends AbstractController
         private readonly ProjectLabelRepository $labelRepository,
         private readonly ProjectLabelService $labelService,
         private readonly ProjectClock $clock,
+        private readonly ProjectOpportunityService $opportunityService,
     ) {}
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -75,7 +77,8 @@ class AdminProjectController extends AbstractController
 
     /**
      * GET /admin/projets — tableau de bord personnel : mes tâches par urgence,
-     * projets en cours, notes épinglées, activité récente, onboarding.
+     * projets en cours, opportunités pour nos associations (ADR-0038),
+     * notes épinglées, activité récente, onboarding.
      * (La charge de l'équipe est dans « Équipe et réglages » : vue d'ensemble allégée.)
      */
     #[Route('', name: 'overview', methods: ['GET'])]
@@ -109,6 +112,8 @@ class AdminProjectController extends AbstractController
             'steps'         => $steps,
             'showChecklist' => $this->onboardingService->shouldShowChecklist($user, $steps),
             'stepsDone'     => count(array_filter($steps, static fn (array $s): bool => $s['done'])),
+            // Encart « Opportunités » : à étudier, retenues, dates limites proches.
+            'opportunities' => $this->opportunityService->summary($today),
         ]);
     }
 

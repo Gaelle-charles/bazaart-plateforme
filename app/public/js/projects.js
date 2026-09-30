@@ -532,6 +532,11 @@
      *   mode 'attach' : cocher des fichiers/dossiers puis « Joindre la sélection »
      *   mode 'folder' : naviguer puis « Choisir ce dossier » (dossier du projet)
      *   mode 'browse' : simple navigation (page Drive) ; un clic ouvre le fichier
+     *
+     * Dans l'onglet « Parcourir », une barre « Dossier ouvert » permet de
+     * TÉLÉVERSER des fichiers dans ce dossier précis et d'y CRÉER un sous-dossier.
+     * En mode 'attach', les fichiers téléversés sont aussi joints à la tâche /
+     * au projet (options.uploadTarget()).
      */
     class DriveBrowser {
         constructor(container, options) {
@@ -555,6 +560,98 @@
                 if (this.query !== '') { this.load(false); }
             });
             this.moreBtn?.addEventListener('click', () => this.load(true));
+            this.folderName = 'Mon Drive';
+            this.initTools();
+        }
+
+        /** Barre « Dossier ouvert » : téléverser ici + nouveau dossier. */
+        initTools() {
+            this.tools = this.el.querySelector('[data-pm-picker-tools]');
+            if (!this.tools) { return; }
+            this.hereEl = this.tools.querySelector('[data-pm-picker-here]');
+            this.uploadInput = this.tools.querySelector('[data-pm-picker-upload]');
+            this.uploadLabel = this.tools.querySelector('[data-pm-picker-upload-label]');
+            this.uploadText = this.tools.querySelector('[data-pm-picker-upload-text]');
+            this.newFolderForm = this.tools.querySelector('[data-pm-picker-newfolder]');
+
+            this.uploadInput?.addEventListener('change', () => {
+                const files = Array.from(this.uploadInput.files || []);
+                this.uploadInput.value = ''; // permet de re-choisir le même fichier ensuite
+                if (files.length > 0) { this.uploadFiles(files); }
+            });
+
+            this.tools.querySelector('[data-pm-picker-newfolder-toggle]')?.addEventListener('click', () => {
+                this.newFolderForm.hidden = !this.newFolderForm.hidden;
+                if (!this.newFolderForm.hidden) { this.newFolderForm.querySelector('input').focus(); }
+            });
+
+            this.newFolderForm?.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const input = this.newFolderForm.querySelector('input');
+                const name = input.value.trim();
+                if (name === '') { return; }
+                const button = this.newFolderForm.querySelector('button');
+                button.disabled = true;
+                const result = await requestJson(root.dataset.urlDriveCreateFolder, {
+                    method: 'POST',
+                    body: JSON.stringify({parentId: this.folderId, name}),
+                });
+                button.disabled = false;
+                if (!result.ok) {
+                    toast(result.error || 'Impossible de créer le dossier.', true);
+                    return;
+                }
+                input.value = '';
+                this.newFolderForm.hidden = true;
+                toast('Dossier « ' + result.folder.name + ' » créé dans « ' + this.folderName + ' ».');
+                // On entre directement dans le nouveau dossier : on peut y téléverser tout de suite.
+                this.openFolder(result.folder.id);
+            });
+        }
+
+        /** Affiche / masque la barre selon l'onglet et le mode. */
+        refreshTools() {
+            if (!this.tools) { return; }
+            this.tools.hidden = this.tab !== 'browse';
+            if (this.hereEl) { this.hereEl.textContent = this.folderName; }
+            // Mode « choisir le dossier du projet » : on peut créer un dossier, pas téléverser.
+            if (this.uploadLabel) { this.uploadLabel.hidden = this.options.mode === 'folder'; }
+            if (this.newFolderForm && this.tab !== 'browse') { this.newFolderForm.hidden = true; }
+        }
+
+        /**
+         * Téléverse les fichiers UN PAR UN dans le dossier ouvert (chaque requête
+         * reste sous la limite de 10 Mo du serveur), puis rafraîchit la liste.
+         */
+        async uploadFiles(files) {
+            const target = this.options.mode === 'attach' ? this.options.uploadTarget?.() : null;
+            const folderName = this.folderName;
+            let done = 0;
+            const errors = [];
+
+            this.uploadLabel?.classList.add('is-busy');
+            for (const file of files) {
+                if (this.uploadText) { this.uploadText.textContent = 'Envoi ' + (done + errors.length + 1) + '/' + files.length + '…'; }
+                const form = new FormData();
+                form.append('file', file);
+                form.append('folderId', this.folderId);
+                if (target) {
+                    form.append('target', target.target);
+                    form.append('targetId', String(target.targetId));
+                }
+                const result = await requestJson(root.dataset.urlDriveUpload, {method: 'POST', body: form});
+                result.ok ? done++ : errors.push(file.name + ' : ' + (result.error || 'échec'));
+            }
+            this.uploadLabel?.classList.remove('is-busy');
+            if (this.uploadText) { this.uploadText.textContent = 'Téléverser ici'; }
+
+            if (errors.length > 0) {
+                toast(errors.join(' · '), true);
+            } else {
+                toast(done + ' fichier' + (done > 1 ? 's rangés' : ' rangé') + ' dans « ' + folderName + ' »' + (target ? ' et joint' + (done > 1 ? 's' : '') : '') + '.');
+            }
+            this.options.onUploaded?.(this, done);
+            if (done > 0) { this.load(false); }
         }
 
         reset(mode, startFolder) {
@@ -571,6 +668,7 @@
                 this.searchForm.hidden = tab !== 'search';
             }
             this.crumbsEl.hidden = tab !== 'browse';
+            this.refreshTools();
             if (tab === 'search') {
                 this.list.replaceChildren(this.status('Tape le nom d\'un fichier ou d\'un dossier.'));
                 this.moreBtn.hidden = true;
@@ -633,6 +731,10 @@
 
             if (this.tab === 'browse' && data.breadcrumb) {
                 this.renderCrumbs(data.breadcrumb);
+            }
+            if (this.tab === 'browse' && data.folder) {
+                this.folderName = data.folder.name;
+                this.refreshTools();
             }
             if (!append) {
                 this.list.replaceChildren();
@@ -727,8 +829,12 @@
         const hint = pickerDialog.querySelector('[data-pm-picker-hint]');
         let context = null;
 
+        let uploadedSomething = false;
         const picker = new DriveBrowser(pickerDialog, {
             mode: 'attach',
+            // Les fichiers téléversés depuis le sélecteur sont aussi joints à la tâche / au projet.
+            uploadTarget: () => (context && context.target ? {target: context.target, targetId: context.targetId} : null),
+            onUploaded: (browser, count) => { if (count > 0) { uploadedSomething = true; } },
             onChange: (browser) => {
                 if (browser.options.mode === 'attach') {
                     confirmBtn.disabled = browser.selected.size === 0;
@@ -752,10 +858,16 @@
             confirmBtn.hidden = context.mode !== 'attach';
             folderBtn.hidden = context.mode !== 'folder';
             hint.textContent = context.mode === 'folder'
-                ? 'Ouvre le dossier voulu, puis « Choisir ce dossier ».'
-                : 'Coche un ou plusieurs éléments. Clique sur un dossier pour l\'ouvrir.';
+                ? 'Ouvre le dossier voulu (ou crée-le), puis « Choisir ce dossier ».'
+                : 'Coche des éléments existants, ou ouvre un dossier puis « Téléverser ici ».';
+            uploadedSomething = false;
             picker.reset(context.mode, trigger.dataset.startFolder);
             openDialog(pickerDialog);
+        });
+
+        // Fichiers téléversés puis fenêtre fermée : on recharge pour afficher les nouvelles pièces jointes.
+        pickerDialog.addEventListener('close', () => {
+            if (uploadedSomething) { location.reload(); }
         });
 
         confirmBtn.addEventListener('click', async () => {

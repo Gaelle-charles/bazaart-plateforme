@@ -4,7 +4,8 @@
  # overview.html.twig : vue d'ensemble de l'Espace projets (AdminProjectController::overview).
  #
  # Pensée comme « la page du matin » : ce que JE dois faire (par urgence),
- # les projets qui avancent, les notes épinglées et l'activité récente.
+ # les projets qui avancent, les opportunités à étudier pour nos associations,
+ # les notes épinglées et l'activité récente.
  # La checklist « Bien démarrer » s'affiche tant que l'onboarding n'est pas terminé.
  #
  # SOBRIÉTÉ (retour de l'équipe) : 5 tâches maximum par groupe (lien vers la
@@ -176,6 +177,47 @@
     </div>
 
     <aside class="pm-stack">
+        {# ── Opportunités pour nos associations (ADR-0038) ────────────── #}
+        {% set opp = opportunities %}
+        <section class="pm-card">
+            <div class="pm-card__head">
+                <h2 class="pm-card__title">Opportunités</h2>
+                <a class="pm-link pm-mono" href="{{ path('app_admin_pm_opportunities') }}">Tout voir</a>
+            </div>
+            <div class="pm-card__body">
+                <a class="pm-opp-sum" href="{{ path('app_admin_pm_opportunities') }}">
+                    <strong>{{ opp.toReview }}</strong> à étudier
+                </a>
+                <p class="pm-muted" style="margin: 2px 0 10px; font-size: 12px">
+                    {% for a in pm_associations() %}
+                        <a class="pm-link" href="{{ path('app_admin_pm_opportunities', {asso: a.value}) }}">{{ a.label() }} : {{ opp.byAssociation[a.value] ?? 0 }}</a>{{ not loop.last ? ' · ' }}
+                    {% endfor %}
+                    <br>
+                    <a class="pm-link" href="{{ path('app_admin_pm_opportunities', {vue: 'retenues'}) }}">{{ opp.shortlisted }} retenue{{ opp.shortlisted > 1 ? 's' }}</a> ·
+                    <a class="pm-link" href="{{ path('app_admin_pm_opportunities', {vue: 'candidatures'}) }}">{{ opp.applying }} candidature{{ opp.applying > 1 ? 's' }} en cours</a>
+                </p>
+
+                {% if opp.closingSoon|length > 0 %}
+                    <h3 class="pm-opp-sum__title">Se terminent bientôt</h3>
+                    <ul class="pm-opp-sum__list">
+                        {% for row in opp.closingSoon %}
+                            {% set r = row.resource %}
+                            {% set days = ((r.deadline|date('U') - today|date('U')) / 86400)|round(0, 'floor') %}
+                            <li>
+                                <a class="pm-line__title" href="{{ path('app_admin_pm_opportunities', {vue: row.review ? 'retenues' : 'a-etudier'}) }}">{{ r.title }}</a>
+                                <span class="pm-due {{ days <= 7 ? 'pm-due--overdue' : 'pm-due--soon' }}">J-{{ days }}</span>
+                                <span class="pm-muted" style="font-size: 11px">
+                                    {{ row.matches|map(m => m.association.territoryLabel())|join(' · ') }}{% if row.review %} · retenue{% endif %}
+                                </span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% elseif opp.toReview == 0 and opp.shortlisted == 0 %}
+                    <p class="pm-muted" style="margin: 0; font-size: 13px">Rien à étudier pour le moment. Complète les fiches des associations pour affiner le tri.</p>
+                {% endif %}
+            </div>
+        </section>
+
         {# ── Notes épinglées ──────────────────────────────────────────── #}
         <section class="pm-card">
             <div class="pm-card__head">

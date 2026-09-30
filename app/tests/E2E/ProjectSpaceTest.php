@@ -10,8 +10,11 @@ use App\Entity\ProjectNote;
 use App\Entity\ProjectSubtask;
 use App\Entity\ProjectTask;
 use App\Entity\ProjectTaskComment;
+use App\Entity\Resource;
+use App\Entity\ResourceType;
 use App\Entity\User;
 use App\Enum\ProjectTaskStatus;
+use App\Enum\ResourceStatus;
 
 /**
  * ProjectSpaceTest — parcours fonctionnels de l'Espace projets (ADR-0037).
@@ -425,6 +428,105 @@ class ProjectSpaceTest extends AbstractE2ETestCase
     }
 
     // ═════════════════════════════════════════════════════════════════════
+    // Opportunités pour nos associations (ADR-0038)
+    // ═════════════════════════════════════════════════════════════════════
+
+    public function testOpportunitiesAreReservedToProjectMembers(): void
+    {
+        $this->loginAs($this->createAdminUser());
+        $this->client->request('GET', '/admin/projets/opportunites');
+        $this->assertResponseStatusCodeSame(403);
+    }
+
+    public function testOnlyMatchingOpportunitiesAreListedAndApplyingCreatesProject(): void
+    {
+        $type = (new ResourceType())->setName('Subvention');
+        $this->em->persist($type);
+        $forUs = (new Resource())
+            ->setTitle('Aide aux associations culturelles de Guadeloupe')
+            ->setDescription('La Région Guadeloupe soutient les associations loi 1901 du territoire.')
+            ->setResourceType($type)
+            ->setDeadline(new \DateTime('+60 days'))
+            ->setSubmittedBy($this->gaelle)
+            ->setStatus(ResourceStatus::Published);
+        $artistOnly = (new Resource())
+            ->setTitle('Bourse de création individuelle')
+            ->setDescription('Bourse réservée aux artistes individuels.')
+            ->setResourceType($type)
+            ->setSubmittedBy($this->gaelle)
+            ->setStatus(ResourceStatus::Published);
+        $this->em->persist($forUs);
+        $this->em->persist($artistOnly);
+        $this->em->flush();
+
+        $this->loginAs($this->wendie);
+        $crawler = $this->client->request('GET', '/admin/projets/opportunites');
+        $this->assertResponseIsSuccessful();
+        self::assertStringContainsString('Aide aux associations culturelles de Guadeloupe', $crawler->filter('.pm-opps')->text());
+        self::assertStringNotContainsString('Bourse de création individuelle', $crawler->filter('.pm-opps')->text());
+
+        // Filtre « BazaArt Paris » : l'aide guadeloupéenne n'y figure pas.
+        $crawler = $this->client->request('GET', '/admin/projets/opportunites?asso=paris');
+        self::assertCount(0, $crawler->filter('.pm-opp'));
+
+        // Candidater : projet « Candidature » créé avec ses étapes, décision enregistrée.
+        $this->client->request('POST', '/admin/projets/opportunites/' . $forUs->getId() . '/candidater', [
+            '_token'      => $this->tokenFor('pm_opportunity_' . $forUs->getId()),
+            'association' => 'guadeloupe',
+        ]);
+        $this->assertResponseRedirects();
+        $project = $this->em->getRepository(Project::class)->findOneBy(['name' => 'Candidature Guadeloupe · Aide aux associations culturelles de Guadeloupe']);
+        self::assertNotNull($project);
+        self::assertCount(7, $this->em->getRepository(ProjectTask::class)->findBy(['project' => $project]));
+
+        // Vue d'ensemble : l'encart compte la candidature en cours.
+        $crawler = $this->client->request('GET', '/admin/projets');
+        self::assertStringContainsString('1 candidature en cours', $crawler->filter('.pm-card:contains("Opportunités")')->text());
+
+        $crawler = $this->client->request('GET', '/admin/projets/opportunites?vue=candidatures');
+        self::assertCount(1, $crawler->filter('.pm-opp'));
+        $crawler = $this->client->request('GET', '/admin/projets/opportunites');
+        self::assertCount(0, $crawler->filter('.pm-opp'), 'Une opportunité à laquelle on candidate quitte « À étudier ».');
+    }
+
+    public function testAssociationProfileRefinesTheSelection(): void
+    {
+        $type = (new ResourceType())->setName('Subvention');
+        $this->em->persist($type);
+        $aid = (new Resource())
+            ->setTitle('Aide régionale aux associations')
+            ->setDescription('La Région Guadeloupe soutient les associations du secteur jeunesse.')
+            ->setResourceType($type)
+            ->setSubmittedBy($this->gaelle)
+            ->setStatus(ResourceStatus::Published);
+        $this->em->persist($aid);
+        $this->em->flush();
+
+        $this->loginAs($this->wendie);
+        $this->client->request('GET', '/admin/projets/opportunites/associations/guadeloupe');
+        $this->assertResponseIsSuccessful();
+
+        // SIRET invalide : refusé, rien n'est enregistré.
+        $this->client->request('POST', '/admin/projets/opportunites/associations/guadeloupe', [
+            '_token' => $this->tokenFor('pm_association_guadeloupe'),
+            'siret'  => '123',
+        ]);
+        $this->assertSelectorTextContains('[role="alert"]', 'SIRET');
+
+        // Mot exclu « jeunesse » : l'aide n'est plus proposée à BazaArt Guadeloupe.
+        $this->client->request('POST', '/admin/projets/opportunites/associations/guadeloupe', [
+            '_token'            => $this->tokenFor('pm_association_guadeloupe'),
+            'mission'           => 'Promouvoir les artistes afro-caribéens.',
+            'territoryKeywords' => 'Guadeloupe, Antilles',
+            'excludedKeywords'  => 'jeunesse',
+            'soughtTypes'       => ['aides', 'appels'],
+        ]);
+        $this->assertResponseRedirects('/admin/projets/opportunites/associations/guadeloupe');
+        $crawler = $this->client->request('GET', '/admin/projets/opportunites?asso=guadeloupe');
+        self::assertCount(0, $crawler->filter('.pm-opp'));
+    }
+
+    // ═════════════════════════════════════════════════════════════════════
     // Google Drive (non connecté)
     // ═════════════════════════════════════════════════════════════════════
 
@@ -439,6 +541,24 @@ class ProjectSpaceTest extends AbstractE2ETestCase
         $this->assertResponseStatusCodeSame(409);
         $data = json_decode((string) $this->client->getResponse()->getContent(), true);
         self::assertFalse($data['ok']);
+        self::assertTrue($data['notConnected']);
+    }
+
+    public function testDriveUploadAndFolderCreationRequireCsrfAndConnection(): void
+    {
+        $this->loginAs($this->gaelle);
+
+        // Sans jeton CSRF : refusé avant tout appel à Google
+        $this->client->request('POST', '/admin/projets/drive/api/nouveau-dossier', server: ['CONTENT_TYPE' => 'application/json'], content: '{"parentId":"root","name":"PV"}');
+        $this->assertResponseStatusCodeSame(403);
+        $this->client->request('POST', '/admin/projets/drive/api/televerser');
+        $this->assertResponseStatusCodeSame(403);
+
+        // Avec le jeton mais Drive non connecté : réponse claire « notConnected »
+        $token = $this->tokenFor('pm_ajax');
+        $this->client->request('POST', '/admin/projets/drive/api/nouveau-dossier', server: ['CONTENT_TYPE' => 'application/json', 'HTTP_X_CSRF_TOKEN' => $token], content: '{"parentId":"root","name":"PV"}');
+        $this->assertResponseStatusCodeSame(409);
+        $data = json_decode((string) $this->client->getResponse()->getContent(), true);
         self::assertTrue($data['notConnected']);
     }
 

@@ -444,6 +444,23 @@
                     </svg>
                     Projets
                 </a>
+                {#
+                    Opportunités pour nos associations (ADR-0038) : routes
+                    app_admin_pm_opportunit… (liste, décisions) et
+                    app_admin_pm_association_profile (fiches des associations).
+                    Pas de compteur ici : il faudrait analyser tout le catalogue
+                    à chaque page de l'admin. Le compteur est dans la vue d'ensemble.
+                #}
+                <a href="{{ path('app_admin_pm_opportunities') }}"
+                   class="sd-link {{ _route starts with 'app_admin_pm_opportunit' or _route starts with 'app_admin_pm_association' ? 'sd-link--active' : '' }}">
+                    {# Icône cible — opportunités #}
+                    <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9"/>
+                        <circle cx="12" cy="12" r="5"/>
+                        <circle cx="12" cy="12" r="1"/>
+                    </svg>
+                    Opportunités
+                </a>
                 <a href="{{ path('app_admin_pm_notes') }}"
                    class="sd-link {{ _route starts with 'app_admin_pm_note' ? 'sd-link--active' : '' }}">
                     {# Icône note / post-it #}

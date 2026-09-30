@@ -132,11 +132,25 @@ Nginx : le conteneur est reconstruit automatiquement par `deploy.sh`.
   projet et confiées à la personne responsable, qui les répartit ensuite.
 - **Notes et commentaires signés** : autrice, date et mention « modifiée » toujours
   visibles. Seule l'autrice peut modifier ou supprimer ; tout le monde peut épingler.
-- **Drive** : sur une tâche ou un projet, « Joindre depuis le Drive » (fichiers ou
-  dossiers, plusieurs à la fois), « Téléverser un fichier » (rangé dans le dossier Drive
-  du projet, 10 Mo max) ou « Ajouter un lien ». Retirer une pièce jointe ne supprime rien
+- **Drive** : sur une tâche ou un projet, « Joindre ou déposer via le Drive » (fichiers ou
+  dossiers, plusieurs à la fois), « Téléverser un fichier » (10 Mo max) ou « Ajouter un lien ».
+  **Déposer dans un dossier précis** : dans le sélecteur (ou la page Drive), ouvrir le dossier
+  puis « Téléverser ici » ; « Nouveau dossier » crée un sous-dossier dans le dossier ouvert.
+  Un dossier déjà joint a son bouton « Ajouter un fichier » qui ouvre le sélecteur dedans.
+  Sans choix explicite, le fichier va dans le dossier Drive du projet, sinon « Mon Drive ». Retirer une pièce jointe ne supprime rien
   dans le Drive. Un projet peut avoir son **dossier Drive** (créé automatiquement à la
   création du projet si la case est cochée).
+- **Opportunités** (ADR-0038) : aides, bourses, appels à projets et résidences du catalogue
+  qui correspondent à **BazaArt Guadeloupe** et/ou **BazaArt Paris** (ouvertes aux
+  associations / structures, ou liées à leur territoire), avec la raison affichée.
+  Filtre par association, étapes « À étudier / Retenues / Candidatures / Écartées ».
+  « Candidater » crée le projet avec le modèle « Candidature » planifié avant la date limite.
+  Le tri s'appuie sur la **fiche de chaque association** (bouton « Fiche … ») : objet,
+  publics, activités, SIRET, budget… (recopiés dans les candidatures) et critères du tri
+  (territoire, thèmes, mots à exclure, types recherchés, disciplines).
+  Accès : onglet « Opportunités » et lien dans le menu latéral ; la **vue d'ensemble**
+  affiche un encart (à étudier par association, retenues, candidatures, dates limites
+  sous 21 jours).
 - **Onboarding** : visite guidée à la première visite (relançable depuis la vue
   d'ensemble ou Équipe & réglages) + checklist de 7 étapes qui se cochent seules
   (dont « Indiquer mon prénom »).

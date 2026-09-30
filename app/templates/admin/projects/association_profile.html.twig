@@ -1,0 +1,148 @@
+{% extends 'admin/projects/_layout.html.twig' %}
+
+{#
+ # association_profile.html.twig : fiche d'une association (ADR-0038).
+ #
+ # Deux blocs :
+ #   1. « Qui sommes-nous ? » : identité, recopiée dans chaque projet de candidature ;
+ #   2. « Ce qu'on cherche » : critères utilisés par le tri des opportunités
+ #      (AssociationOpportunityMatcher).
+ #
+ # Variables : profile, association, associations, disciplines, types, errors,
+ #             matching (nb d'opportunités à étudier avec la fiche actuelle),
+ #             form (saisie refusée à réafficher, ou null)
+ #}
+
+{# Valeur d'un champ : saisie refusée si le formulaire a été rejeté, sinon valeur de la fiche #}
+{% macro val(form, field, current) %}{{ form is not null ? (form[field] ?? '') : current }}{% endmacro %}
+
+{% set pm_tab = 'opportunities' %}
+{% block title %}{{ association.label() }} · Espace projets · BazaArt{% endblock %}
+{% block page_title %}Nos associations{% endblock %}
+
+{% block pm_content %}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+{% import _self as f %}
+{% set chosenDisciplines = form is not null ? (form.disciplines ?? []) : profile.disciplines|map(d => d.id ~ '') %}
+{% set chosenTypes = form is not null ? (form.soughtTypes ?? []) : profile.soughtTypes %}
+
+<div class="pm-head">
+    <div>
+        <h1 class="pm-title">Nos associations <small>{{ association.label() }} · fiche complétée à {{ profile.completion() }} %</small></h1>
+    </div>
+    <div class="pm-head__actions">
+        <a class="pm-btn" href="{{ path('app_admin_pm_opportunities', {asso: association.value}) }}">Voir ses opportunités ({{ matching }})</a>
+    </div>
+</div>
+
+<div class="pm-toolbar">
+    <nav class="pm-views" aria-label="Association">
+        {% for a in associations %}
+            <a href="{{ path('app_admin_pm_association_profile', {asso: a.value}) }}" {{ a == association ? 'aria-current="page"' }}>{{ a.label() }}</a>
+        {% endfor %}
+    </nav>
+    {% if profile.updatedAt %}
+        <span class="pm-mono pm-muted" style="font-size: 11px">Modifiée par {{ profile.updatedBy|pm_name }} {{ profile.updatedAt|pm_ago }}</span>
+    {% endif %}
+</div>
+
+{% if errors|length > 0 %}
+    <div class="pm-note-info pm-note-info--warn" role="alert" style="margin-bottom: 14px">
+        {% for e in errors %}<div>{{ e }}</div>{% endfor %}
+    </div>
+{% endif %}
+
+<form method="post" action="{{ path('app_admin_pm_association_profile', {asso: association.value}) }}" class="pm-card" style="max-width: 900px">
+    <input type="hidden" name="_token" value="{{ csrf_token('pm_association_' ~ association.value) }}">
+
+    {# ── 1. Identité ─────────────────────────────────────────────────── #}
+    <div class="pm-card__head"><h2 class="pm-card__title">Qui sommes-nous ?</h2></div>
+    <div class="pm-card__body">
+        <p class="pm-field__help" style="margin-top: 0">Ces informations sont recopiées dans chaque projet de candidature : une base pour la note d'intention et le dossier administratif.</p>
+        <div class="pm-field">
+            <label class="pm-field__label" for="pm-a-mission">Objet et objectifs de l'association</label>
+            <textarea class="pm-textarea" id="pm-a-mission" name="mission" rows="4" maxlength="5000" placeholder="L'objet tel qu'écrit dans les statuts, et vos objectifs actuels.">{{ f.val(form, 'mission', profile.mission) }}</textarea>
+        </div>
+        <div class="pm-row pm-row--2">
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-a-publics">Publics visés</label>
+                <textarea class="pm-textarea" id="pm-a-publics" name="publics" rows="3" maxlength="3000" placeholder="Artistes émergents, jeunes 16-25 ans, habitants…">{{ f.val(form, 'publics', profile.publics) }}</textarea>
+            </div>
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-a-activities">Activités principales</label>
+                <textarea class="pm-textarea" id="pm-a-activities" name="activities" rows="3" maxlength="3000" placeholder="Festival, ateliers, expositions, accompagnement…">{{ f.val(form, 'activities', profile.activities) }}</textarea>
+            </div>
+        </div>
+        <div class="pm-row pm-row--3" style="margin-top: 12px">
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-a-siret">SIRET</label>
+                <input class="pm-input" id="pm-a-siret" name="siret" inputmode="numeric" maxlength="20" value="{{ f.val(form, 'siret', profile.siret) }}">
+            </div>
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-a-year">Année de création</label>
+                <input class="pm-input" id="pm-a-year" name="foundedYear" inputmode="numeric" maxlength="4" value="{{ f.val(form, 'foundedYear', profile.foundedYear) }}">
+            </div>
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-a-budget">Budget annuel</label>
+                <input class="pm-input" id="pm-a-budget" name="annualBudget" maxlength="100" placeholder="≈ 25 000 €" value="{{ f.val(form, 'annualBudget', profile.annualBudget) }}">
+            </div>
+        </div>
+        <div class="pm-row pm-row--2" style="margin-top: 12px">
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-a-team">Moyens humains</label>
+                <input class="pm-input" id="pm-a-team" name="team" maxlength="255" placeholder="3 bénévoles, 1 service civique" value="{{ f.val(form, 'team', profile.team) }}">
+            </div>
+            <div class="pm-field">
+                <label class="pm-field__label" for="pm-a-web">Site web</label>
+                <input class="pm-input" type="url" id="pm-a-web" name="websiteUrl" maxlength="255" placeholder="https://…" value="{{ f.val(form, 'websiteUrl', profile.websiteUrl) }}">
+            </div>
+        </div>
+    </div>
+
+    {# ── 2. Critères du tri ──────────────────────────────────────────── #}
+    <div class="pm-card__head"><h2 class="pm-card__title">Ce qu'on cherche (affine le tri des opportunités)</h2></div>
+    <div class="pm-card__body">
+        <p class="pm-field__help" style="margin-top: 0">Mots séparés par des virgules ou un par ligne, avec ou sans accents. Chaque opportunité proposée indique quels critères ont joué : si une opportunité ne colle pas, ajuste ces champs.</p>
+
+        <fieldset class="pm-field" style="border: 0; padding: 0; margin: 0 0 12px">
+            <legend class="pm-field__label">Types d'opportunités recherchés</legend>
+            <div class="pm-checks">
+                {% for key, label in types %}
+                    <label class="pm-check"><input type="checkbox" name="soughtTypes[]" value="{{ key }}" {{ key in chosenTypes ? 'checked' }}> {{ label }}</label>
+                {% endfor %}
+            </div>
+            <span class="pm-field__help">Un type décoché est écarté (ex. décocher « Formations » masque les formations).</span>
+        </fieldset>
+
+        <div class="pm-field">
+            <label class="pm-field__label" for="pm-a-territory">Notre territoire</label>
+            <textarea class="pm-textarea" id="pm-a-territory" name="territoryKeywords" rows="3" maxlength="3000">{{ f.val(form, 'territoryKeywords', profile.territoryKeywords) }}</textarea>
+            <span class="pm-field__help">Villes, départements, régions… Une opportunité qui cite ce territoire gagne des points ; une opportunité liée à une autre ville est écartée.</span>
+        </div>
+        <div class="pm-field">
+            <label class="pm-field__label" for="pm-a-themes">Thèmes, publics, champs d'action</label>
+            <textarea class="pm-textarea" id="pm-a-themes" name="themeKeywords" rows="4" maxlength="5000">{{ f.val(form, 'themeKeywords', profile.themeKeywords) }}</textarea>
+            <span class="pm-field__help">Chaque mot retrouvé dans une opportunité la rend plus pertinente (ex. « jeunesse », « éducation artistique », « diaspora », « patrimoine »).</span>
+        </div>
+        <div class="pm-field">
+            <label class="pm-field__label" for="pm-a-excluded">Mots à exclure</label>
+            <textarea class="pm-textarea" id="pm-a-excluded" name="excludedKeywords" rows="2" maxlength="3000" placeholder="doctorant, entreprise, collectivité…">{{ f.val(form, 'excludedKeywords', profile.excludedKeywords) }}</textarea>
+            <span class="pm-field__help">Une opportunité qui contient un de ces mots n'est jamais proposée.</span>
+        </div>
+
+        <fieldset class="pm-field" style="border: 0; padding: 0; margin: 12px 0 0">
+            <legend class="pm-field__label">Disciplines portées</legend>
+            <div class="pm-checks">
+                {% for d in disciplines %}
+                    <label class="pm-check"><input type="checkbox" name="disciplines[]" value="{{ d.id }}" {{ (d.id ~ '') in chosenDisciplines ? 'checked' }}> {{ d.name }}</label>
+                {% endfor %}
+            </div>
+            <span class="pm-field__help">Aucune case cochée = pluridisciplinaire. Sinon, une opportunité réservée à d'autres disciplines est écartée.</span>
+        </fieldset>
+    </div>
+
+    <div class="pm-card__foot">
+        <button class="pm-btn pm-btn--primary" type="submit">{{ pm.icon('check') }} Enregistrer la fiche</button>
+    </div>
+</form>
+{% endblock %}

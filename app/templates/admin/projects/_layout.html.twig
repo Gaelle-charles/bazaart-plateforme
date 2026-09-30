@@ -11,7 +11,7 @@
  #   - le jeton CSRF des appels JavaScript (balise <meta name="pm-csrf">).
  #
  # Les pages enfants remplissent le bloc « pm_content » (et « page_title »).
- # Variable facultative : pm_tab (onglet actif) : overview | tasks | projects | notes | drive | team
+ # Variable facultative : pm_tab (onglet actif) : overview | tasks | projects | opportunities | notes | drive | team
  #}
 
 {% import 'admin/projects/_macros.html.twig' as pm %}
@@ -32,6 +32,8 @@
      data-url-drive-search="{{ path('app_admin_pm_drive_api_search') }}"
      data-url-drive-recent="{{ path('app_admin_pm_drive_api_recent') }}"
      data-url-attach="{{ path('app_admin_pm_attachment_drive') }}"
+     data-url-drive-upload="{{ path('app_admin_pm_drive_api_upload') }}"
+     data-url-drive-create-folder="{{ path('app_admin_pm_drive_api_create_folder') }}"
      data-url-tour="{{ path('app_admin_pm_onboarding_tour') }}"
      data-show-tour="{{ pm_show_tour() ? '1' : '0' }}">
 
@@ -44,6 +46,7 @@
             Tâches{% if _late > 0 %}<span class="pm-tabs__badge" title="Tes tâches en retard">{{ _late }}</span>{% endif %}
         </a>
         <a href="{{ path('app_admin_pm_projects') }}" {{ _tab == 'projects' ? 'aria-current="page"' }}>Projets</a>
+        <a href="{{ path('app_admin_pm_opportunities') }}" {{ _tab == 'opportunities' ? 'aria-current="page"' }}>Opportunités</a>
         <a href="{{ path('app_admin_pm_notes') }}" {{ _tab == 'notes' ? 'aria-current="page"' }}>Notes d'équipe</a>
         <a href="{{ path('app_admin_pm_drive') }}" {{ _tab == 'drive' ? 'aria-current="page"' }}>Drive</a>
         <a href="{{ path('app_admin_pm_team') }}" {{ _tab == 'team' ? 'aria-current="page"' }}>Équipe &amp; réglages</a>
@@ -138,6 +141,7 @@
                 <button class="pm-btn" type="submit">{{ pm.icon('search') }} Chercher</button>
             </form>
             <div class="pm-picker__crumbs" data-pm-picker-crumbs></div>
+            {% include 'admin/projects/_drive_tools.html.twig' with {uid: 'picker'} %}
             <ul class="pm-picker__list" data-pm-picker-list aria-live="polite"></ul>
             <button type="button" class="pm-btn pm-btn--sm" data-pm-picker-more hidden style="margin-top: 8px">Afficher plus</button>
         </div>
@@ -199,7 +203,7 @@
                 <div class="pm-tour__art">{{ pm.icon('drive') }}</div>
                 <h3>5. Le Google Drive de l'équipe</h3>
                 <p>Le Drive <strong>reinesdestempsmodernes@gmail.com</strong> est accessible depuis l'outil : parcours-le, cherche un document et <strong>joins des fichiers ou dossiers</strong> à une tâche ou un projet.</p>
-                <p>Tu peux aussi téléverser un fichier de ton ordinateur : il est rangé dans le dossier Drive du projet.</p>
+                <p>Pour déposer un fichier dans un dossier précis (ex. « PV ») : ouvre ce dossier dans le sélecteur puis <strong>« Téléverser ici »</strong>. Tu peux aussi y <strong>créer un nouveau dossier</strong>.</p>
             </section>
         </div>
         <div class="pm-dialog__foot">
