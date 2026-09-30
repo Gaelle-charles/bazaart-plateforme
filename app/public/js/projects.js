@@ -527,6 +527,102 @@
         return isNaN(d) ? '' : d.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short', year: 'numeric'});
     }
 
+    /** Fichiers système à ne jamais envoyer (créés automatiquement par macOS / Windows). */
+    const IGNORED_FILES = ['.DS_Store', 'Thumbs.db', 'desktop.ini'];
+    const MAX_UPLOAD_FILES = 200;
+
+    /**
+     * Envoie des fichiers de l'ordinateur dans un dossier du Drive, UN PAR UN
+     * (chaque requête reste sous la limite de 10 Mo du serveur).
+     *
+     * DOSSIER choisi sur l'ordinateur (<input webkitdirectory>) : chaque fichier a
+     * un chemin relatif, ex. « PV/2026/pv-mars.pdf ». On recrée d'abord les
+     * dossiers « PV » puis « 2026 » dans le Drive, puis on y range le fichier :
+     * l'arborescence de l'ordinateur est conservée.
+     *
+     * options.target = {target, targetId} : joindre aussi à la tâche / au projet.
+     *   - fichiers isolés : chaque fichier est joint ;
+     *   - dossier : seul le dossier créé est joint (pas chacun de ses fichiers).
+     * options.onProgress(n, total) : pour afficher « Envoi 3/12… ».
+     *
+     * @return {Promise<{done: number, errors: string[], total: number, folders: number}>}
+     */
+    async function uploadToDrive(folderId, fileList, options = {}) {
+        const files = Array.from(fileList).filter((f) => !IGNORED_FILES.includes(f.name));
+        if (files.length > MAX_UPLOAD_FILES) {
+            return {done: 0, errors: [files.length + ' fichiers : ' + MAX_UPLOAD_FILES + ' maximum par envoi. Envoie le dossier en plusieurs fois.'], total: files.length, folders: 0};
+        }
+
+        const folderIds = new Map([['', folderId]]); // chemin relatif → ID du dossier Drive
+        const topFolders = [];
+        const errors = [];
+        let done = 0;
+
+        // Crée (une seule fois) le dossier Drive correspondant à un chemin « PV/2026 ».
+        async function ensureFolder(path) {
+            if (folderIds.has(path)) { return folderIds.get(path); }
+            const cut = path.lastIndexOf('/');
+            const parentPath = cut === -1 ? '' : path.slice(0, cut);
+            const name = path.slice(cut + 1);
+            const parentId = await ensureFolder(parentPath);
+            let id = null;
+            if (parentId) {
+                const result = await requestJson(root.dataset.urlDriveCreateFolder, {method: 'POST', body: JSON.stringify({parentId, name})});
+                if (result.ok) {
+                    id = result.folder.id;
+                    if (parentPath === '') { topFolders.push(id); }
+                } else {
+                    errors.push('Dossier « ' + name + ' » : ' + (result.error || 'échec'));
+                }
+            }
+            folderIds.set(path, id);
+            return id;
+        }
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            options.onProgress?.(i + 1, files.length);
+            const relative = file.webkitRelativePath || '';
+            const dir = relative.includes('/') ? relative.slice(0, relative.lastIndexOf('/')) : '';
+            const destination = dir === '' ? folderId : await ensureFolder(dir);
+            if (!destination) {
+                errors.push(file.name + ' : dossier de destination non créé');
+                continue;
+            }
+            const form = new FormData();
+            form.append('file', file);
+            form.append('folderId', destination);
+            if (options.target && dir === '') {
+                form.append('target', options.target.target);
+                form.append('targetId', String(options.target.targetId));
+            }
+            const result = await requestJson(root.dataset.urlDriveUpload, {method: 'POST', body: form});
+            result.ok ? done++ : errors.push(file.name + ' : ' + (result.error || 'échec'));
+        }
+
+        // Dossier envoyé depuis une tâche / un projet : on joint le dossier créé.
+        if (options.target && topFolders.length > 0) {
+            const result = await requestJson(root.dataset.urlAttach, {
+                method: 'POST',
+                body: JSON.stringify({target: options.target.target, targetId: options.target.targetId, fileIds: topFolders}),
+            });
+            if (!result.ok) { errors.push(result.error || 'Le dossier n\'a pas pu être joint.'); }
+        }
+
+        return {done, errors, total: files.length, folders: folderIds.size - 1};
+    }
+
+    /** Message de fin d'envoi (toast), en erreur si quelque chose a échoué. */
+    function toastUpload(result, folderName) {
+        if (result.errors.length > 0) {
+            toast((result.done > 0 ? result.done + ' fichier(s) envoyé(s). ' : '') + result.errors.join(' · '), true);
+            return;
+        }
+        let message = result.done + ' fichier' + (result.done > 1 ? 's rangés' : ' rangé') + ' dans « ' + folderName + ' »';
+        if (result.folders > 0) { message += ' (' + result.folders + ' dossier' + (result.folders > 1 ? 's créés' : ' créé') + ')'; }
+        toast(message + '.');
+    }
+
     /**
      * Composant Drive réutilisable.
      *   mode 'attach' : cocher des fichiers/dossiers puis « Joindre la sélection »
@@ -570,15 +666,17 @@
             if (!this.tools) { return; }
             this.hereEl = this.tools.querySelector('[data-pm-picker-here]');
             this.uploadInput = this.tools.querySelector('[data-pm-picker-upload]');
-            this.uploadLabel = this.tools.querySelector('[data-pm-picker-upload-label]');
+            this.uploadDirInput = this.tools.querySelector('[data-pm-picker-upload-dir]');
+            this.uploadLabels = Array.from(this.tools.querySelectorAll('[data-pm-picker-upload-label]'));
             this.uploadText = this.tools.querySelector('[data-pm-picker-upload-text]');
             this.newFolderForm = this.tools.querySelector('[data-pm-picker-newfolder]');
 
-            this.uploadInput?.addEventListener('change', () => {
-                const files = Array.from(this.uploadInput.files || []);
-                this.uploadInput.value = ''; // permet de re-choisir le même fichier ensuite
+            // Fichiers ou dossier choisis sur l'ordinateur → envoyés dans le dossier ouvert.
+            [this.uploadInput, this.uploadDirInput].forEach((input) => input?.addEventListener('change', () => {
+                const files = Array.from(input.files || []);
+                input.value = ''; // permet de re-choisir le même fichier ensuite
                 if (files.length > 0) { this.uploadFiles(files); }
-            });
+            }));
 
             this.tools.querySelector('[data-pm-picker-newfolder-toggle]')?.addEventListener('click', () => {
                 this.newFolderForm.hidden = !this.newFolderForm.hidden;
@@ -615,7 +713,7 @@
             this.tools.hidden = this.tab !== 'browse';
             if (this.hereEl) { this.hereEl.textContent = this.folderName; }
             // Mode « choisir le dossier du projet » : on peut créer un dossier, pas téléverser.
-            if (this.uploadLabel) { this.uploadLabel.hidden = this.options.mode === 'folder'; }
+            this.uploadLabels.forEach((label) => { label.hidden = this.options.mode === 'folder'; });
             if (this.newFolderForm && this.tab !== 'browse') { this.newFolderForm.hidden = true; }
         }
 
@@ -626,32 +724,18 @@
         async uploadFiles(files) {
             const target = this.options.mode === 'attach' ? this.options.uploadTarget?.() : null;
             const folderName = this.folderName;
-            let done = 0;
-            const errors = [];
 
-            this.uploadLabel?.classList.add('is-busy');
-            for (const file of files) {
-                if (this.uploadText) { this.uploadText.textContent = 'Envoi ' + (done + errors.length + 1) + '/' + files.length + '…'; }
-                const form = new FormData();
-                form.append('file', file);
-                form.append('folderId', this.folderId);
-                if (target) {
-                    form.append('target', target.target);
-                    form.append('targetId', String(target.targetId));
-                }
-                const result = await requestJson(root.dataset.urlDriveUpload, {method: 'POST', body: form});
-                result.ok ? done++ : errors.push(file.name + ' : ' + (result.error || 'échec'));
-            }
-            this.uploadLabel?.classList.remove('is-busy');
-            if (this.uploadText) { this.uploadText.textContent = 'Téléverser ici'; }
+            this.tools.classList.add('is-busy');
+            const result = await uploadToDrive(this.folderId, files, {
+                target,
+                onProgress: (n, total) => { if (this.uploadText) { this.uploadText.textContent = 'Envoi ' + n + '/' + total + '…'; } },
+            });
+            this.tools.classList.remove('is-busy');
+            if (this.uploadText) { this.uploadText.textContent = 'Fichiers'; }
 
-            if (errors.length > 0) {
-                toast(errors.join(' · '), true);
-            } else {
-                toast(done + ' fichier' + (done > 1 ? 's rangés' : ' rangé') + ' dans « ' + folderName + ' »' + (target ? ' et joint' + (done > 1 ? 's' : '') : '') + '.');
-            }
-            this.options.onUploaded?.(this, done);
-            if (done > 0) { this.load(false); }
+            toastUpload(result, folderName);
+            this.options.onUploaded?.(this, result.done);
+            if (result.done > 0) { this.load(false); }
         }
 
         reset(mode, startFolder) {
@@ -859,7 +943,7 @@
             folderBtn.hidden = context.mode !== 'folder';
             hint.textContent = context.mode === 'folder'
                 ? 'Ouvre le dossier voulu (ou crée-le), puis « Choisir ce dossier ».'
-                : 'Coche des éléments existants, ou ouvre un dossier puis « Téléverser ici ».';
+                : 'Coche des éléments existants, ou ouvre un dossier puis « Fichiers » / « Dossier » pour envoyer depuis ton ordinateur.';
             uploadedSomething = false;
             picker.reset(context.mode, trigger.dataset.startFolder);
             openDialog(pickerDialog);
@@ -897,6 +981,27 @@
             }
         });
     }
+
+    // ── Envoi direct depuis l'ordinateur dans un dossier Drive déjà connu ──
+    // (dossier joint à une tâche / un projet, dossier Drive du projet) :
+    // pas besoin d'ouvrir le sélecteur. Voir _drive_upload_buttons.html.twig.
+    document.querySelectorAll('[data-pm-direct-upload]').forEach((group) => {
+        const status = group.querySelector('[data-pm-direct-status]');
+        group.querySelectorAll('input[type="file"]').forEach((input) => input.addEventListener('change', async () => {
+            const files = Array.from(input.files || []);
+            input.value = '';
+            if (files.length === 0) { return; }
+            group.classList.add('is-busy');
+            const result = await uploadToDrive(group.dataset.folderId, files, {
+                onProgress: (n, total) => { if (status) { status.textContent = 'Envoi ' + n + '/' + total + '…'; } },
+            });
+            group.classList.remove('is-busy');
+            if (status) {
+                status.textContent = result.errors.length === 0 ? '✓ ' + result.done + ' envoyé' + (result.done > 1 ? 's' : '') : '';
+            }
+            toastUpload(result, group.dataset.folderName || 'le dossier');
+        }));
+    });
 
     // ── Navigateur intégré à la page « Drive » ──
     const browserSection = document.querySelector('[data-pm-drive-browser]');

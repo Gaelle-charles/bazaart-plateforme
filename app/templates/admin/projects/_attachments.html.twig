@@ -7,10 +7,10 @@
  #   target_id    ID du projet ou de la tâche
  #   drive_folder dossier Drive de départ pour le sélecteur (facultatif)
  #
- # Dossiers joints : chaque dossier Drive joint a son bouton « Ajouter un fichier »,
- # qui ouvre le sélecteur DANS ce dossier ; « Téléverser ici » y range alors le
- # fichier (et le joint). Le formulaire de secours (sans JavaScript) propose aussi
- # de choisir le dossier de destination.
+ # Dossiers joints : chaque dossier Drive joint a ses boutons « Fichiers » et
+ # « Dossier » qui envoient DIRECTEMENT depuis l'ordinateur dans ce dossier
+ # (_drive_upload_buttons.html.twig), et « Ouvrir » (sélecteur dans ce dossier).
+ # Le formulaire de secours (sans JavaScript) propose aussi le dossier de destination.
  #}
 {% import 'admin/projects/_macros.html.twig' as pm %}
 {% set connected = pm_drive_connected() %}
@@ -24,16 +24,11 @@
                 <div class="pm-file__main">
                     <a class="pm-file__name" href="{{ a.url }}" target="_blank" rel="noopener noreferrer">{{ a.name }}</a>
                     <span class="pm-file__meta">{{ a.kind.label() }} · ajouté par {{ a.addedBy|pm_name }} {{ a.createdAt|pm_ago }}</span>
+                    {% if connected and a.isFolder() and a.driveFileId %}
+                        {# Dossier Drive joint : y envoyer des fichiers / un dossier de l'ordinateur #}
+                        {% include 'admin/projects/_drive_upload_buttons.html.twig' with {folder_id: a.driveFileId, folder_name: a.name, browse: true, target: target, target_id: target_id} only %}
+                    {% endif %}
                 </div>
-                {% if connected and a.isFolder() and a.driveFileId %}
-                    {# Ouvre le sélecteur directement dans CE dossier : « Téléverser ici » y dépose le fichier #}
-                    <button type="button" class="pm-btn pm-btn--sm"
-                            data-pm-drive-open
-                            data-target="{{ target }}"
-                            data-target-id="{{ target_id }}"
-                            data-start-folder="{{ a.driveFileId }}"
-                            title="Ouvrir « {{ a.name }} » pour y téléverser un fichier ou créer un sous-dossier">{{ pm.icon('upload') }} Ajouter un fichier</button>
-                {% endif %}
                 <form method="post" action="{{ path('app_admin_pm_attachment_remove', {id: a.id}) }}" onsubmit="return confirm('Retirer cette pièce jointe ? Le fichier reste dans le Drive.')">
                     <input type="hidden" name="_token" value="{{ csrf_token('pm_attachment_' ~ a.id) }}">
                     <input type="hidden" name="_back" value="{{ app.request.requestUri }}">
@@ -78,7 +73,7 @@
                 </select>
                 <button class="pm-btn pm-btn--sm" type="submit">{{ pm.icon('upload') }} Vers le Drive</button>
             </form>
-            <p class="pm-field__help">10 Mo maximum. Choisis le dossier où ranger le fichier. Pour un autre dossier ou en créer un : « Joindre depuis le Drive », ouvre le dossier puis « Téléverser ici ».</p>
+            <p class="pm-field__help">10 Mo maximum. Choisis le dossier où ranger le fichier. Pour un autre dossier, un dossier entier ou en créer un : « Joindre ou déposer via le Drive », ouvre le dossier puis « Fichiers » ou « Dossier ».</p>
         {% endif %}
         <form method="post" action="{{ path('app_admin_pm_attachment_link') }}" class="pm-inline-form" style="flex-wrap: wrap">
             <input type="hidden" name="_token" value="{{ csrf_token('pm_attachment') }}">

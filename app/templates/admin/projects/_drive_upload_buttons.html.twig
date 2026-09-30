@@ -1,0 +1,32 @@
+{#
+ # _drive_upload_buttons.html.twig : envoyer des fichiers ou un dossier de
+ # l'ordinateur DIRECTEMENT dans un dossier Drive connu (sans ouvrir le sélecteur).
+ #
+ # Utilisé sur les dossiers joints à une tâche / un projet et sur le dossier
+ # Drive du projet. L'envoi est fait par projects.js ([data-pm-direct-upload]) :
+ # un fichier par requête ; pour un dossier, l'arborescence est recréée.
+ #
+ # Variables : folder_id (ID Drive), folder_name, uid (suffixe unique), browse (bool :
+ #             ajouter le bouton « Parcourir » qui ouvre le sélecteur dans ce dossier),
+ #             target / target_id (pour « Parcourir » : joindre depuis le sélecteur)
+ #}
+{% import 'admin/projects/_macros.html.twig' as pm %}
+<div class="pm-direct" data-pm-direct-upload data-folder-id="{{ folder_id }}" data-folder-name="{{ folder_name }}">
+    <label class="pm-btn pm-btn--sm pm-btn--primary" title="Envoyer des fichiers de ton ordinateur dans « {{ folder_name }} »">
+        {{ pm.icon('upload') }} Fichiers
+        <input type="file" multiple class="pm-sr" aria-label="Fichiers à envoyer dans {{ folder_name }}">
+    </label>
+    <label class="pm-btn pm-btn--sm" title="Envoyer un dossier de ton ordinateur (avec ses sous-dossiers) dans « {{ folder_name }} »">
+        {{ pm.icon('folder') }} Dossier
+        <input type="file" webkitdirectory multiple class="pm-sr" aria-label="Dossier à envoyer dans {{ folder_name }}">
+    </label>
+    {% if browse ?? false %}
+        <button type="button" class="pm-btn pm-btn--sm pm-btn--ghost"
+                data-pm-drive-open
+                data-target="{{ target }}"
+                data-target-id="{{ target_id }}"
+                data-start-folder="{{ folder_id }}"
+                title="Ouvrir « {{ folder_name }} » : voir son contenu, créer un sous-dossier">Ouvrir</button>
+    {% endif %}
+    <span class="pm-direct__status pm-mono pm-muted" data-pm-direct-status aria-live="polite"></span>
+</div>
