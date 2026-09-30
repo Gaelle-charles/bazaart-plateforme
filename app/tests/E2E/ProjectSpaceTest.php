@@ -479,6 +479,10 @@ class ProjectSpaceTest extends AbstractE2ETestCase
         self::assertNotNull($project);
         self::assertCount(7, $this->em->getRepository(ProjectTask::class)->findBy(['project' => $project]));
 
+        // Vue d'ensemble : l'encart compte la candidature en cours.
+        $crawler = $this->client->request('GET', '/admin/projets');
+        self::assertStringContainsString('1 candidature en cours', $crawler->filter('.pm-card:contains("Opportunités")')->text());
+
         $crawler = $this->client->request('GET', '/admin/projets/opportunites?vue=candidatures');
         self::assertCount(1, $crawler->filter('.pm-opp'));
         $crawler = $this->client->request('GET', '/admin/projets/opportunites');

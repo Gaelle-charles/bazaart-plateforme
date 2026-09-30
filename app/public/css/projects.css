@@ -725,3 +725,12 @@ a.pm-chip:hover span:last-child { text-decoration: underline; }
 .pm-opp__actions .pm-inline-form select { flex: 1; min-width: 0; }
 .pm-opp__decide { display: flex; flex-wrap: wrap; gap: 6px; }
 @media (max-width: 640px) { .pm-opp__actions { flex-basis: 100%; } }
+
+/* Encart « Opportunités » de la vue d'ensemble */
+.pm-opp-sum { display: block; color: var(--ink); text-decoration: none; font-size: 14px; }
+.pm-opp-sum strong { font-size: 28px; line-height: 1; margin-right: 4px; }
+.pm-opp-sum:hover { text-decoration: underline; }
+.pm-opp-sum__title { margin: 0 0 6px; font: 700 10px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.pm-opp-sum__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pm-opp-sum__list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 13px; }
+.pm-opp-sum__list .pm-line__title { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

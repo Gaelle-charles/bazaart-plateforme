@@ -148,6 +148,9 @@ Nginx : le conteneur est reconstruit automatiquement par `deploy.sh`.
   Le tri s'appuie sur la **fiche de chaque association** (bouton « Fiche … ») : objet,
   publics, activités, SIRET, budget… (recopiés dans les candidatures) et critères du tri
   (territoire, thèmes, mots à exclure, types recherchés, disciplines).
+  Accès : onglet « Opportunités » et lien dans le menu latéral ; la **vue d'ensemble**
+  affiche un encart (à étudier par association, retenues, candidatures, dates limites
+  sous 21 jours).
 - **Onboarding** : visite guidée à la première visite (relançable depuis la vue
   d'ensemble ou Équipe & réglages) + checklist de 7 étapes qui se cochent seules
   (dont « Indiquer mon prénom »).

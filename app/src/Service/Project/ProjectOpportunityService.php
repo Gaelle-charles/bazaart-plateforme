@@ -61,24 +61,87 @@ class ProjectOpportunityService
      */
     public function listing(string $view, ?BazaartAssociation $association): array
     {
+        $groups = $this->collect($association);
+        $rows   = $view === 'a-etudier' ? $groups['a-etudier'] : ($groups[$view] ?? []);
+
+        return [
+            'rows'   => self::sortByDeadline($rows),
+            'counts' => array_map('count', $groups),
+        ];
+    }
+
+    /**
+     * Résumé pour la vue d'ensemble de l'Espace projets (encart « Opportunités ») :
+     *   - nombre d'opportunités à étudier, au total et par association ;
+     *   - nombre de retenues et de candidatures en cours ;
+     *   - celles qui se terminent bientôt (à étudier ou retenues, date limite
+     *     dans les $soonDays jours), les plus urgentes d'abord.
+     *
+     * Une seule lecture du catalogue (collect()) pour tout l'encart.
+     *
+     * @return array{
+     *     toReview: int,
+     *     byAssociation: array<string, int>,
+     *     shortlisted: int,
+     *     applying: int,
+     *     closingSoon: list<array{resource: Resource, matches: list<AssociationMatch>, score: int, review: ProjectOpportunityReview|null}>
+     * }
+     */
+    public function summary(\DateTimeImmutable $today, int $soonDays = 21, int $limit = 4): array
+    {
+        $groups = $this->collect(null);
+
+        $byAssociation = [];
+        foreach (BazaartAssociation::cases() as $association) {
+            $byAssociation[$association->value] = count(array_filter(
+                $groups['a-etudier'],
+                static fn (array $row): bool => array_filter($row['matches'], static fn (AssociationMatch $m): bool => $m->association === $association) !== [],
+            ));
+        }
+
+        $limitDate   = $today->modify(sprintf('+%d days', $soonDays))->setTime(23, 59, 59);
+        $closingSoon = array_filter(
+            array_merge($groups['a-etudier'], $groups['retenues']),
+            static function (array $row) use ($today, $limitDate): bool {
+                $deadline = $row['resource']->getDeadline();
+
+                return $deadline !== null && $deadline >= $today && $deadline <= $limitDate;
+            },
+        );
+
+        return [
+            'toReview'      => count($groups['a-etudier']),
+            'byAssociation' => $byAssociation,
+            'shortlisted'   => count($groups['retenues']),
+            'applying'      => count($groups['candidatures']),
+            'closingSoon'   => array_slice(self::sortByDeadline(array_values($closingSoon)), 0, $limit),
+        ];
+    }
+
+    /**
+     * Toutes les lignes, rangées par vue (a-etudier, retenues, candidatures, ecartees).
+     *
+     * @return array<string, list<array{resource: Resource, matches: list<AssociationMatch>, score: int, review: ProjectOpportunityReview|null}>>
+     */
+    private function collect(?BazaartAssociation $association): array
+    {
         $reviews  = $this->reviewRepository->findAllIndexedByResource();
         $profiles = $this->profileService->getProfiles();
+        $groups   = ['a-etudier' => [], 'retenues' => [], 'candidatures' => [], 'ecartees' => []];
 
         // ── Opportunités ouvertes qui correspondent, sans décision ────────────
-        $toReview = [];
         foreach ($this->resourceRepository->findPublishedForMatching() as $resource) {
             if (isset($reviews[(int) $resource->getId()])) {
                 continue;
             }
             $row = $this->buildRow($resource, null, $association, $profiles);
             if ($row !== null) {
-                $toReview[] = $row;
+                $groups['a-etudier'][] = $row;
             }
         }
 
         // ── Opportunités avec une décision (même si l'échéance est passée :
         //    une candidature en cours doit rester visible) ─────────────────────
-        $byView = ['retenues' => [], 'candidatures' => [], 'ecartees' => []];
         foreach ($reviews as $review) {
             $key = array_search($review->getStatus(), self::VIEW_STATUS, true);
             if (!is_string($key)) {
@@ -88,13 +151,22 @@ class ProjectOpportunityService
             // une opportunité retenue / écartée, pour celles auxquelles elle correspond.
             $row = $this->buildRow($review->getResource(), $review, $association, $profiles);
             if ($row !== null) {
-                $byView[$key][] = $row;
+                $groups[$key][] = $row;
             }
         }
 
-        $rows = $view === 'a-etudier' ? $toReview : ($byView[$view] ?? []);
+        return $groups;
+    }
 
-        // Tri : échéance la plus proche d'abord (sans échéance à la fin), puis meilleur score.
+    /**
+     * Tri : échéance la plus proche d'abord (sans échéance à la fin), puis meilleur score.
+     *
+     * @param list<array{resource: Resource, matches: list<AssociationMatch>, score: int, review: ProjectOpportunityReview|null}> $rows
+     *
+     * @return list<array{resource: Resource, matches: list<AssociationMatch>, score: int, review: ProjectOpportunityReview|null}>
+     */
+    private static function sortByDeadline(array $rows): array
+    {
         usort($rows, static function (array $a, array $b): int {
             $da = $a['resource']->getDeadline()?->getTimestamp() ?? PHP_INT_MAX;
             $db = $b['resource']->getDeadline()?->getTimestamp() ?? PHP_INT_MAX;
@@ -102,15 +174,7 @@ class ProjectOpportunityService
             return [$da, -$a['score']] <=> [$db, -$b['score']];
         });
 
-        return [
-            'rows'   => $rows,
-            'counts' => [
-                'a-etudier'    => count($toReview),
-                'retenues'     => count($byView['retenues']),
-                'candidatures' => count($byView['candidatures']),
-                'ecartees'     => count($byView['ecartees']),
-            ],
-        ];
+        return $rows;
     }
 
     /** Retenir ou écarter une opportunité (décision partagée par toute l'équipe). */
