@@ -98,6 +98,8 @@ abstract class AbstractE2ETestCase extends WebTestCase
         //    Dernière mise à jour : opportunités des associations ADR-0038 (project_opportunity_reviews).
         $conn->executeStatement('TRUNCATE TABLE
             project_opportunity_reviews,
+            project_association_profile_disciplines,
+            project_association_profiles,
             project_activities,
             project_attachments,
             project_task_comments,

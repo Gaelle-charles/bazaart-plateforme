@@ -145,7 +145,9 @@ Nginx : le conteneur est reconstruit automatiquement par `deploy.sh`.
   associations / structures, ou liées à leur territoire), avec la raison affichée.
   Filtre par association, étapes « À étudier / Retenues / Candidatures / Écartées ».
   « Candidater » crée le projet avec le modèle « Candidature » planifié avant la date limite.
-  Mots-clés de territoire : `app/src/Enum/BazaartAssociation.php`.
+  Le tri s'appuie sur la **fiche de chaque association** (bouton « Fiche … ») : objet,
+  publics, activités, SIRET, budget… (recopiés dans les candidatures) et critères du tri
+  (territoire, thèmes, mots à exclure, types recherchés, disciplines).
 - **Onboarding** : visite guidée à la première visite (relançable depuis la vue
   d'ensemble ou Équipe & réglages) + checklist de 7 étapes qui se cochent seules
   (dont « Indiquer mon prénom »).

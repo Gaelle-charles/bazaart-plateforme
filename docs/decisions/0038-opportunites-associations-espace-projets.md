@@ -16,21 +16,28 @@ dans un espace réservé aux 3 membres de l'Espace projets (ROLE_PROJECT), et n'
 
 1. Nouvel onglet **« Opportunités »** dans l'Espace projets
    (`/admin/projets/opportunites`, protégé par `ProjectVoter::ACCESS`).
-2. Tri **automatique** par `AssociationOpportunityMatcher`, pour chaque association,
+2. **Fiche de chaque association** (« Nos associations », table `project_association_profiles`),
+   remplie par l'équipe :
+   - identité : objet, publics, activités, SIRET, année de création, budget, moyens
+     humains, site web — recopiée dans chaque projet de candidature ;
+   - critères du tri : territoire, thèmes / publics / champs d'action, mots à exclure,
+     types d'opportunités recherchés, disciplines.
+   Les deux fiches sont créées pré-remplies à la première ouverture.
+3. Tri **automatique** par `AssociationOpportunityMatcher`, pour chaque association,
    sur les opportunités publiées et non expirées du catalogue (même source que le matching
    artistes : `ResourceRepository::findPublishedForMatching()`) :
-   - exclusion si l'opportunité est réservée aux personnes physiques, si elle est
-     rattachée à une ville hors du territoire, ou si elle ne cite que le territoire de
-     l'autre association sans être nationale ;
-   - score : ouverte aux structures (40), territoire cité (35) ou appel national (10),
-     type financement / appel (10), lien afro-diasporique (15) ;
+   - exclusions : réservée aux personnes physiques, mot exclu de la fiche, type non
+     recherché, aucune discipline en commun, ville hors territoire, territoire de l'autre
+     association seulement (sans appel national) ;
+   - score : ouverte aux structures (30), territoire (30) ou appel national (10),
+     thèmes de la fiche (10 par mot, 20 max), discipline commune (10, ou 5 si ouverte à
+     toutes), type recherché (10) ;
    - affichée si non exclue, ouverte aux structures OU sur notre territoire, et score ≥ 40.
-   Les **raisons** sont affichées pour que l'équipe juge elle-même.
-3. Décisions d'équipe dans `project_opportunity_reviews` : **Retenir**, **Écarter**,
+   Les **raisons** sont affichées : si le tri se trompe, on ajuste la fiche.
+4. Décisions d'équipe dans `project_opportunity_reviews` : **Retenir**, **Écarter**,
    **Candidater**. « Candidater » crée un projet avec le modèle « Candidature / appel à
-   projets » (étapes planifiées à rebours depuis la date limite), relié à l'opportunité.
-4. Les deux associations sont un enum (`BazaartAssociation`) : leurs mots-clés de
-   territoire sont modifiables dans le code.
+   projets » (étapes planifiées à rebours depuis la date limite), relié à l'opportunité,
+   avec la fiche de l'association dans sa description.
 
 ## Conséquences
 

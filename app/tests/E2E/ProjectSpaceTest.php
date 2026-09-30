@@ -485,6 +485,43 @@ class ProjectSpaceTest extends AbstractE2ETestCase
         self::assertCount(0, $crawler->filter('.pm-opp'), 'Une opportunité à laquelle on candidate quitte « À étudier ».');
     }
 
+    public function testAssociationProfileRefinesTheSelection(): void
+    {
+        $type = (new ResourceType())->setName('Subvention');
+        $this->em->persist($type);
+        $aid = (new Resource())
+            ->setTitle('Aide régionale aux associations')
+            ->setDescription('La Région Guadeloupe soutient les associations du secteur jeunesse.')
+            ->setResourceType($type)
+            ->setSubmittedBy($this->gaelle)
+            ->setStatus(ResourceStatus::Published);
+        $this->em->persist($aid);
+        $this->em->flush();
+
+        $this->loginAs($this->wendie);
+        $this->client->request('GET', '/admin/projets/opportunites/associations/guadeloupe');
+        $this->assertResponseIsSuccessful();
+
+        // SIRET invalide : refusé, rien n'est enregistré.
+        $this->client->request('POST', '/admin/projets/opportunites/associations/guadeloupe', [
+            '_token' => $this->tokenFor('pm_association_guadeloupe'),
+            'siret'  => '123',
+        ]);
+        $this->assertSelectorTextContains('[role="alert"]', 'SIRET');
+
+        // Mot exclu « jeunesse » : l'aide n'est plus proposée à BazaArt Guadeloupe.
+        $this->client->request('POST', '/admin/projets/opportunites/associations/guadeloupe', [
+            '_token'            => $this->tokenFor('pm_association_guadeloupe'),
+            'mission'           => 'Promouvoir les artistes afro-caribéens.',
+            'territoryKeywords' => 'Guadeloupe, Antilles',
+            'excludedKeywords'  => 'jeunesse',
+            'soughtTypes'       => ['aides', 'appels'],
+        ]);
+        $this->assertResponseRedirects('/admin/projets/opportunites/associations/guadeloupe');
+        $crawler = $this->client->request('GET', '/admin/projets/opportunites?asso=guadeloupe');
+        self::assertCount(0, $crawler->filter('.pm-opp'));
+    }
+
     // ═════════════════════════════════════════════════════════════════════
     // Google Drive (non connecté)
     // ═════════════════════════════════════════════════════════════════════

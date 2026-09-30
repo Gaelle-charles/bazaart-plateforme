@@ -7,7 +7,8 @@
  # correspondent à BazaArt Guadeloupe et/ou BazaArt Paris, triées par date limite.
  # Chaque opportunité affiche POURQUOI elle est proposée (raisons du tri automatique).
  #
- # Variables : rows, counts, view, association (BazaartAssociation|null), associations
+ # Variables : rows, counts, view, association (BazaartAssociation|null), associations,
+ #             profiles (fiches AssociationProfile indexées par association)
  #   rows[] = {resource, matches (list<AssociationMatch>), score, review}
  #}
 
@@ -30,11 +31,19 @@
     <div>
         <h1 class="pm-title">Opportunités pour nos associations <small>{{ association ? association.label() : 'BazaArt Guadeloupe & BazaArt Paris' }}</small></h1>
     </div>
+    <div class="pm-head__actions">
+        {# Fiches des associations : leurs critères affinent ce tri #}
+        {% for a in associations %}
+            {% set p = profiles[a.value] %}
+            <a class="pm-btn pm-btn--sm" href="{{ path('app_admin_pm_association_profile', {asso: a.value}) }}">Fiche {{ a.label() }}{% if p.completion() < 60 %} · à compléter{% endif %}</a>
+        {% endfor %}
+    </div>
 </div>
 
 <p class="pm-muted" style="margin: -6px 0 14px; font-size: 13px; max-width: 760px">
     Aides, bourses, appels à projets et résidences du catalogue <strong>ouverts aux associations</strong> ou
-    <strong>liés à nos territoires</strong>, dont la date limite n'est pas passée. Retiens celles qui vous
+    <strong>liés à nos territoires</strong>, dont la date limite n'est pas passée, triés selon la
+    <strong>fiche de chaque association</strong> (territoire, thèmes, disciplines, types recherchés). Retiens celles qui vous
     intéressent, écarte les autres, et « Candidater » crée le projet avec les étapes planifiées avant la date limite.
 </p>
 

@@ -6,6 +6,7 @@ namespace App\Service\Project;
 
 use App\DTO\Project\AssociationMatch;
 use App\DTO\Project\ProjectData;
+use App\Entity\AssociationProfile;
 use App\Entity\Project;
 use App\Entity\ProjectOpportunityReview;
 use App\Entity\Resource;
@@ -45,6 +46,7 @@ class ProjectOpportunityService
         private readonly ResourceRepository $resourceRepository,
         private readonly ProjectOpportunityReviewRepository $reviewRepository,
         private readonly AssociationOpportunityMatcher $matcher,
+        private readonly AssociationProfileService $profileService,
         private readonly ProjectService $projectService,
         private readonly EntityManagerInterface $em,
     ) {}
@@ -59,7 +61,8 @@ class ProjectOpportunityService
      */
     public function listing(string $view, ?BazaartAssociation $association): array
     {
-        $reviews = $this->reviewRepository->findAllIndexedByResource();
+        $reviews  = $this->reviewRepository->findAllIndexedByResource();
+        $profiles = $this->profileService->getProfiles();
 
         // ── Opportunités ouvertes qui correspondent, sans décision ────────────
         $toReview = [];
@@ -67,7 +70,7 @@ class ProjectOpportunityService
             if (isset($reviews[(int) $resource->getId()])) {
                 continue;
             }
-            $row = $this->buildRow($resource, null, $association);
+            $row = $this->buildRow($resource, null, $association, $profiles);
             if ($row !== null) {
                 $toReview[] = $row;
             }
@@ -83,7 +86,7 @@ class ProjectOpportunityService
             }
             // Filtre association : une candidature compte pour l'association qui candidate ;
             // une opportunité retenue / écartée, pour celles auxquelles elle correspond.
-            $row = $this->buildRow($review->getResource(), $review, $association);
+            $row = $this->buildRow($review->getResource(), $review, $association, $profiles);
             if ($row !== null) {
                 $byView[$key][] = $row;
             }
@@ -167,12 +170,14 @@ class ProjectOpportunityService
      * correspond (avec les raisons), le meilleur score et la décision éventuelle.
      * Renvoie null si la ligne ne doit pas apparaître (filtre association).
      *
+     * @param array<string, AssociationProfile> $profiles
+     *
      * @return array{resource: Resource, matches: list<AssociationMatch>, score: int, review: ProjectOpportunityReview|null}|null
      */
-    private function buildRow(Resource $resource, ?ProjectOpportunityReview $review, ?BazaartAssociation $filter): ?array
+    private function buildRow(Resource $resource, ?ProjectOpportunityReview $review, ?BazaartAssociation $filter, array $profiles): ?array
     {
         $matches = array_values(array_filter(
-            $this->matcher->evaluate($resource),
+            $this->matcher->evaluate($resource, $profiles),
             static fn (AssociationMatch $m): bool => $m->matches && ($filter === null || $m->association === $filter),
         ));
 
@@ -217,6 +222,26 @@ class ProjectOpportunityService
         if ($resource->getHowToApply() !== null && $resource->getHowToApply() !== '') {
             $lines[] = '';
             $lines[] = 'Comment candidater : ' . $resource->getHowToApply();
+        }
+
+        // Fiche de l'association (« Nos associations ») : base de la note d'intention.
+        $profile  = $this->profileService->getProfile($association);
+        $identity = array_filter([
+            'Objet'              => $profile->getMission(),
+            'Publics'            => $profile->getPublics(),
+            'Activités'          => $profile->getActivities(),
+            'SIRET'              => $profile->getSiret(),
+            'Année de création'  => $profile->getFoundedYear() !== null ? (string) $profile->getFoundedYear() : null,
+            'Budget annuel'      => $profile->getAnnualBudget(),
+            'Moyens humains'     => $profile->getTeam(),
+            'Site web'           => $profile->getWebsiteUrl(),
+        ], static fn (?string $v): bool => $v !== null && $v !== '');
+        if ($identity !== []) {
+            $lines[] = '';
+            $lines[] = sprintf('— Fiche %s —', $association->label());
+            foreach ($identity as $label => $value) {
+                $lines[] = $label . ' : ' . $value;
+            }
         }
 
         return mb_substr(implode("\n", $lines), 0, 10000);

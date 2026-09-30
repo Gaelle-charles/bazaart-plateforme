@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Controller\Project;
 
+use App\Entity\AssociationProfile;
 use App\Entity\Resource;
 use App\Enum\BazaartAssociation;
 use App\Enum\OpportunityReviewStatus;
+use App\Repository\DisciplineRepository;
 use App\Security\Voter\ProjectVoter;
+use App\Service\Project\AssociationProfileService;
 use App\Service\Project\ProjectOpportunityService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -24,6 +27,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  *   GET  /admin/projets/opportunites                    liste (?asso=guadeloupe|paris&vue=…)
  *   POST /admin/projets/opportunites/{id}/decision      retenir / écarter / remettre à étudier
  *   POST /admin/projets/opportunites/{id}/candidater    crée le projet de candidature
+ *   GET|POST /admin/projets/opportunites/associations/{asso}  fiche d'une association
+ *                                                       (critères du tri + identité)
  */
 #[Route('/admin/projets/opportunites', name: 'app_admin_pm_')]
 #[IsGranted(ProjectVoter::ACCESS)]
@@ -33,6 +38,8 @@ class AdminProjectOpportunityController extends AbstractController
 
     public function __construct(
         private readonly ProjectOpportunityService $opportunityService,
+        private readonly AssociationProfileService $profileService,
+        private readonly DisciplineRepository $disciplineRepository,
     ) {}
 
     #[Route('', name: 'opportunities', methods: ['GET'])]
@@ -52,6 +59,48 @@ class AdminProjectOpportunityController extends AbstractController
             'view'         => $view,
             'association'  => $association,
             'associations' => BazaartAssociation::cases(),
+            'profiles'     => $this->profileService->getProfiles(),
+        ]);
+    }
+
+    /**
+     * Fiche d'une association : identité (recopiée dans les candidatures) et
+     * critères qui affinent le tri des opportunités.
+     */
+    #[Route('/associations/{asso}', name: 'association_profile', requirements: ['asso' => 'guadeloupe|paris'], methods: ['GET', 'POST'])]
+    public function profile(string $asso, Request $request): Response
+    {
+        $association = BazaartAssociation::from($asso);
+        $profile     = $this->profileService->getProfile($association);
+        $errors      = [];
+
+        if ($request->isMethod('POST')) {
+            if (!$this->isCsrfTokenValid('pm_association_' . $asso, (string) $request->request->get('_token'))) {
+                $this->flashInvalidToken();
+
+                return $this->redirectToRoute('app_admin_pm_association_profile', ['asso' => $asso]);
+            }
+            $errors = $this->profileService->updateFromRequest($profile, $request, $this->currentUser());
+            if ($errors === []) {
+                $this->addFlash('success', sprintf('Fiche %s enregistrée : le tri des opportunités en tient compte.', $association->label()));
+
+                return $this->redirectToRoute('app_admin_pm_association_profile', ['asso' => $asso]);
+            }
+        }
+
+        // Aperçu : combien d'opportunités ouvertes correspondent avec la fiche actuelle.
+        $preview = $this->opportunityService->listing('a-etudier', $association);
+
+        return $this->render('admin/projects/association_profile.html.twig', [
+            'profile'      => $profile,
+            'association'  => $association,
+            'associations' => BazaartAssociation::cases(),
+            'disciplines'  => $this->disciplineRepository->findAllOrdered(),
+            'types'        => AssociationProfile::OPPORTUNITY_TYPES,
+            'errors'       => $errors,
+            'matching'     => $preview['counts']['a-etudier'],
+            // Valeurs du formulaire refusé (pour ne pas perdre la saisie) ou de la fiche.
+            'form'         => $errors !== [] ? $request->request->all() : null,
         ]);
     }
 

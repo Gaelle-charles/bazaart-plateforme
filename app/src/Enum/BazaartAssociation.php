@@ -39,7 +39,8 @@ enum BazaartAssociation: string
     }
 
     /**
-     * Mots qui désignent le territoire de l'association dans une opportunité.
+     * Mots de territoire PROPOSÉS PAR DÉFAUT dans la fiche de l'association (ADR-0038) :
+     * l'équipe peut ensuite les modifier dans « Opportunités › Nos associations ».
      *
      * Écrits SANS accents et en minuscules : le texte de l'opportunité est
      * normalisé de la même façon avant comparaison (« Île-de-France » → « ile-de-france »).
@@ -62,5 +63,21 @@ enum BazaartAssociation: string
                 'grand paris', 'saint-denis', 'montreuil',
             ],
         };
+    }
+
+    /**
+     * Thèmes proposés par défaut dans une fiche neuve (modifiables ensuite dans
+     * « Nos associations ») : le cœur du projet Bazaart, les cultures afro-diasporiques.
+     *
+     * @return list<string>
+     */
+    public static function defaultThemeKeywords(): array
+    {
+        return [
+            'afro', 'afrodescendant', 'afrodescendants', 'afrodiaspora', 'diaspora', 'diasporas',
+            'afrique', 'africain', 'africaine', 'panafricain', 'creole', 'kreyol', 'caribeen', 'caribeenne',
+            'cultures urbaines', 'education artistique', 'education artistique et culturelle', 'jeunesse',
+            'artistes emergents', 'diversite', 'egalite des chances', 'quartiers prioritaires', 'patrimoine immateriel',
+        ];
     }
 }
