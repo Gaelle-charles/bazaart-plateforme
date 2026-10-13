@@ -307,6 +307,23 @@ class AssociationProjectsTest extends AbstractE2ETestCase
         self::assertFalse($created->isPublished(), 'non publiée par défaut');
     }
 
+    public function testEmptyOrderOnEditMovesFicheToTheEnd(): void
+    {
+        $this->loginAs($this->createAdminUser());
+        $id = $this->published->getId();   // ordre 10 ; l'autre fiche a l'ordre 20
+
+        $crawler = $this->client->request('GET', '/admin/fiches-projets/' . $id . '/modifier');
+        $form = $crawler->filter('form[enctype="multipart/form-data"]')->form(['position' => '']);
+        $this->client->submit($form);
+        self::assertResponseRedirects();
+
+        $this->em->clear();
+        $project = $this->em->find(AssociationProject::class, $id);
+        self::assertNotNull($project);
+        self::assertSame(30, $project->getPosition(), 'ordre vidé = à la fin (20 + 10)');
+        self::assertSame('an-ba-lanme-chapitre-2', $project->getSlug(), 'le slug ne change pas');
+    }
+
     // ═════════════════════════════════════════════════════════════════════
     // Garde-fous
     // ═════════════════════════════════════════════════════════════════════

@@ -39,8 +39,11 @@ Le jeton est le « mot de passe » contenu dans l'adresse. Il doit être long et
 ### 1.3 Enregistrer le jeton sur le serveur
 
 Le jeton va dans **`/root/bazaart-plateforme/app/.env.local`** (le fichier du dossier `app`,
-celui que lit Symfony), **pas** dans `/root/bazaart-plateforme/.env.local` à la racine :
-ce dernier ne sert qu'à Docker Compose et son contenu n'arrive pas dans l'application.
+celui que lit Symfony), **pas** dans `/root/bazaart-plateforme/.env.local` à la racine.
+Le fichier de la racine sert à Docker Compose : seules les variables listées sous
+`environment:` dans `docker-compose.prod.yml` (APP_SECRET, la base de données, MAILER_DSN)
+passent de ce fichier à l'application. Une variable nouvelle comme celle-ci n'y est pas :
+elle doit donc aller dans `app/.env.local`.
 
 1. Vérifier que c'est bien le fichier où vivent déjà les clés de l'application
    (la commande affiche un nombre, jamais la clé elle-même) :
@@ -49,10 +52,17 @@ ce dernier ne sert qu'à Docker Compose et son contenu n'arrive pas dans l'appli
    ```
    Résultat attendu : `1`. Si le résultat est `0` ou « No such file », s'arrêter et
    vérifier où sont rangées les clés (`app/.env`) avant d'aller plus loin.
-2. Ajouter la ligne (remplacer `COLLER_LE_JETON_ICI` par le jeton de l'étape 1.2) :
+2. Ajouter la ligne (remplacer `COLLER_LE_JETON_ICI` par le jeton de l'étape 1.2).
+   Le `\n` du début garantit que la ligne ne se colle pas à la dernière ligne du fichier :
    ```bash
-   echo 'PROJETS_PARTENAIRES_TOKEN=COLLER_LE_JETON_ICI' >> /root/bazaart-plateforme/app/.env.local
+   printf '\nPROJETS_PARTENAIRES_TOKEN=%s\n' 'COLLER_LE_JETON_ICI' >> /root/bazaart-plateforme/app/.env.local
    ```
+   Contrôle (affiche le début des 3 dernières lignes, sans révéler les secrets) :
+   ```bash
+   tail -n 3 /root/bazaart-plateforme/app/.env.local | cut -c1-30
+   ```
+   La dernière ligne doit commencer par `PROJETS_PARTENAIRES_TOKEN=`, et la ligne d'avant
+   doit être intacte.
 3. Vider le cache :
    ```bash
    cd /root/bazaart-plateforme && docker compose --env-file .env.local -f docker-compose.prod.yml exec -T platform_app php bin/console cache:clear --env=prod
@@ -128,7 +138,9 @@ liens) : c'est voulu, pour qu'aucun code ne puisse être glissé dans la page.
   « EXIF ») : elles sont envoyées telles quelles. Exporter la photo (ou la faire passer
   par un outil de retouche) avant de l'envoyer si c'est un problème.
 - **Texte alternatif** : une courte description de l'image pour les personnes qui ne la
-  voient pas (lecteurs d'écran). Sans texte saisi, le titre du projet est utilisé.
+  voient pas (lecteurs d'écran). Sans texte saisi : pour le visuel principal, le titre du
+  projet est utilisé ; pour une image de bloc, la légende, sinon l'intertitre, sinon le
+  mot « Image » (peu utile : mieux vaut toujours remplir ce champ).
 
 ### 2.4 Partager le lien
 

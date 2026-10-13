@@ -66,7 +66,8 @@ class AssociationProjectPublicController extends AbstractController
 
         $projects = array_map(
             fn (AssociationProject $project): array => $this->presenter->present($project, $token),
-            $this->repository->findPublishedOrdered(),
+            // withBlocks : blocs chargés dans la même requête (le presenter les parcourt).
+            $this->repository->findPublishedOrdered(withBlocks: true),
         );
 
         return $this->privateHeaders($this->render('association_projects/index.html.twig', [

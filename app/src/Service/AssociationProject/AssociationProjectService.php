@@ -70,9 +70,8 @@ final class AssociationProjectService
         }
 
         $this->applyFields($project, $data);
-        if ($data->position !== null) {
-            $project->setPosition($data->position);
-        }
+        // Champ « ordre » vidé = « à la fin de la liste », comme à la création.
+        $project->setPosition($data->position ?? $this->repository->nextPosition());
 
         $this->em->flush();
 

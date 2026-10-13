@@ -127,13 +127,33 @@
         live.textContent = 'Projet ' + (index + 1) + ' sur ' + count + ' : ' + (title ? title.textContent.trim() : '');
     }
 
-    /** Mode défilement : fait défiler la rangée pour centrer la carte i. */
+    // Pendant un défilement lancé par le script, la carte « la plus centrée » est
+    // encore l'ancienne : on ignore donc la synchronisation par le défilement
+    // jusqu'à la fin du mouvement (sinon l'index reviendrait en arrière).
+    var programmaticScrollUntil = 0;
+
+    /**
+     * Mode défilement : fait défiler la RANGÉE (et seulement elle, jamais la page)
+     * pour centrer la carte i.
+     */
     function scrollToCard(i, smooth) {
-        cards[i].scrollIntoView({
-            behavior: smooth && !mqReduce.matches ? 'smooth' : 'auto',
-            block: 'nearest',
-            inline: 'center'
-        });
+        var trackRect = track.getBoundingClientRect();
+        var cardRect = cards[i].getBoundingClientRect();
+        var delta = (cardRect.left + cardRect.width / 2) - (trackRect.left + trackRect.width / 2);
+        if (Math.abs(delta) < 1) {
+            return;
+        }
+        var animate = smooth && !mqReduce.matches;
+        programmaticScrollUntil = Date.now() + (animate ? 900 : 100);
+        if (animate) {
+            track.scrollBy({ left: delta, behavior: 'smooth' });
+        } else {
+            // Saut immédiat : on neutralise un instant la règle CSS scroll-behavior: smooth
+            // (la valeur 'instant' n'est pas comprise par les anciens navigateurs).
+            track.style.scrollBehavior = 'auto';
+            track.scrollLeft += delta;
+            track.style.scrollBehavior = '';
+        }
     }
 
     /**
@@ -223,7 +243,11 @@
     // ── Clavier ───────────────────────────────────────────────────────────────
 
     root.addEventListener('keydown', function (event) {
-        dragMoved = false; // une touche n'est jamais la fin d'un glisser
+        // Une touche n'est jamais la fin d'un appui souris : on oublie l'état du
+        // dernier appui (sinon un Entrée après un glisser ou un clic sur l'indicateur
+        // serait pris pour un clic sur une voisine et n'ouvrirait pas la fiche).
+        dragMoved = false;
+        centerAtPointerDown = null;
         if (event.altKey || event.ctrlKey || event.metaKey) {
             return;
         }
@@ -250,6 +274,7 @@
 
     // ── Focus, clic ───────────────────────────────────────────────────────────
 
+    var drag = null;                  // glisser en cours (mode 3D), voir plus bas
     var pointerIsDown = false;        // vrai entre l'appui et le relâchement
     var centerAtPointerDown = null;   // carte centrale au moment de l'appui
     var dragMoved = false;            // le dernier appui était un glisser
@@ -259,9 +284,18 @@
         centerAtPointerDown = index;
         dragMoved = false;
     }, true);
-    document.addEventListener('pointerup', function () {
+    // Relâchement OU annulation (un glissement natif au doigt envoie « pointercancel »
+    // et jamais « pointerup ») n'importe où dans la page.
+    function onPointerRelease(event) {
         pointerIsDown = false;
-    }, true);
+        // Appui commencé sur le carrousel mais relâché ailleurs avant de devenir un
+        // glisser : on l'abandonne, sinon un simple survol ferait bouger les cartes.
+        if (drag && !drag.active && event.pointerId === drag.id) {
+            drag = null;
+        }
+    }
+    document.addEventListener('pointerup', onPointerRelease, true);
+    document.addEventListener('pointercancel', onPointerRelease, true);
 
     links.forEach(function (link, i) {
         // Au clavier (Tab), une carte qui reçoit le focus passe au centre.
@@ -279,7 +313,9 @@
                 event.preventDefault();
                 return;
             }
-            var center = centerAtPointerDown !== null ? centerAtPointerDown : index;
+            // Clic venu du clavier (Entrée) : event.detail vaut 0, on se fie à la
+            // carte centrale actuelle. Clic souris ou doigt : à celle du moment de l'appui.
+            var center = event.detail !== 0 && centerAtPointerDown !== null ? centerAtPointerDown : index;
             centerAtPointerDown = null;
             if (i !== center) {
                 // Carte voisine : on la ramène au centre, sans ouvrir la fiche.
@@ -296,6 +332,7 @@
             event.preventDefault();
             event.stopPropagation();
             dragMoved = false;
+            centerAtPointerDown = null;
         }
     }, true);
 
@@ -313,8 +350,6 @@
     });
 
     // ── Glisser (mode 3D) ─────────────────────────────────────────────────────
-
-    var drag = null;
 
     viewport.addEventListener('pointerdown', function (event) {
         if (mode !== '3d' || count < 2) {
@@ -426,6 +461,7 @@
 
     ticks.forEach(function (tick, i) {
         tick.addEventListener('click', function () {
+            centerAtPointerDown = null;
             goTo(i, { announce: true });
         });
     });
@@ -434,7 +470,7 @@
 
     var scrollFrame = null;
     track.addEventListener('scroll', function () {
-        if (mode !== 'scroll' || scrollFrame !== null) {
+        if (mode !== 'scroll' || scrollFrame !== null || Date.now() < programmaticScrollUntil) {
             return;
         }
         scrollFrame = window.requestAnimationFrame(function () {
@@ -456,6 +492,10 @@
             }
         });
     }, { passive: true });
+    // Fin réelle du défilement (navigateurs récents) : on réarme la synchronisation.
+    track.addEventListener('scrollend', function () {
+        programmaticScrollUntil = 0;
+    });
 
     // ── Démarrage ─────────────────────────────────────────────────────────────
 
@@ -477,6 +517,19 @@
     if (mode === 'scroll') {
         scrollToCard(start, false);
     }
+
+    // Les polices du site arrivent APRÈS ce script (font-display: swap) : les titres
+    // peuvent alors prendre une ligne de plus. On re-mesure les cartes à ce moment-là.
+    function remeasure() {
+        if (mode === '3d') {
+            measure3d();
+            render();
+        }
+    }
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(remeasure);
+    }
+    window.addEventListener('load', remeasure);
 
     onMediaChange(mqWide, setMode);
     onMediaChange(mqReduce, setMode);

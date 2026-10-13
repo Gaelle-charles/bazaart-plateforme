@@ -130,9 +130,12 @@ class AssociationProject
      * (ON DELETE CASCADE sur association_project_blocks.project_id) ; les fichiers
      * images des blocs sont supprimés par AssociationProjectService avant.
      *
+     * EXTRA_LAZY : compter les blocs (liste du back-office) fait un simple COUNT
+     * en base, sans charger les textes de tous les blocs.
+     *
      * @var Collection<int, AssociationProjectBlock>
      */
-    #[ORM\OneToMany(targetEntity: AssociationProjectBlock::class, mappedBy: 'project')]
+    #[ORM\OneToMany(targetEntity: AssociationProjectBlock::class, mappedBy: 'project', fetch: 'EXTRA_LAZY')]
     #[ORM\OrderBy(['position' => 'ASC', 'id' => 'ASC'])]
     private Collection $blocks;
 

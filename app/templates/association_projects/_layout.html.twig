@@ -29,9 +29,11 @@
 
     <link rel="icon" type="image/png" href="{{ asset('images/favicon.png') }}">
 
-    {# Polices du thème Street utilisées en premier écran : chargées en priorité. #}
-    <link rel="preload" href="{{ asset('fonts/archivo-black-400.woff2') }}" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="{{ asset('fonts/space-grotesk-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+    {# Polices du thème Street utilisées en premier écran : chargées en priorité.
+       Adresse EXACTEMENT identique à celle de fonts.css (sans « ?v… » ajouté par asset()) :
+       sinon le navigateur télécharge chaque police deux fois. #}
+    <link rel="preload" href="/fonts/archivo-black-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/space-grotesk-400.woff2" as="font" type="font/woff2" crossorigin>
 
     {# Tokens de design EN PREMIER (variables --bg, --ink, --accent, --display…), puis les polices. #}
     <link rel="stylesheet" href="{{ asset('css/design-tokens.css') }}">
