@@ -76,7 +76,10 @@
         Chaque bloc contient un intertitre facultatif, du texte et, si besoin, une image
         avec sa légende. Pour plusieurs images, créez plusieurs blocs.
     </p>
-    <a href="{{ path('app_admin_asso_project_edit', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost">Modifier la fiche</a>
+    <span>
+        <a href="{{ path('app_admin_asso_project_edit', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost">Modifier la fiche</a>
+        <a href="{{ path('app_admin_asso_project_preview', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost" target="_blank" rel="noopener">Aperçu</a>
+    </span>
 </div>
 
 {% if blocks is empty %}

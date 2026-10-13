@@ -10,6 +10,7 @@ use App\Enum\AssociationProjectState;
 use App\Enum\AssociationProjectType;
 use App\Repository\AssociationProjectRepository;
 use App\Service\AssociationProject\AssociationProjectImageStorage;
+use App\Service\AssociationProject\AssociationProjectPresenter;
 use App\Service\AssociationProject\AssociationProjectService;
 use App\Service\AssociationProject\PublicAccessToken;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -52,6 +53,7 @@ class AdminAssociationProjectController extends AbstractController
         private readonly AssociationProjectService $service,
         private readonly AssociationProjectImageStorage $imageStorage,
         private readonly PublicAccessToken $accessToken,
+        private readonly AssociationProjectPresenter $presenter,
     ) {
     }
 
@@ -141,6 +143,30 @@ class AdminAssociationProjectController extends AbstractController
         }
 
         return $this->renderProjectForm($project, $data);
+    }
+
+    /**
+     * GET /admin/fiches-projets/{id}/apercu : la fiche telle que la verront les
+     * partenaires, MÊME SI elle n'est pas encore publiée (pour relire avant de publier).
+     *
+     * Même gabarit que la vraie fiche ; seules les adresses des images changent
+     * (routes du back-office, réservées aux admins).
+     */
+    #[Route('/{id}/apercu', name: 'preview', requirements: ['id' => '\d+'], methods: ['GET'])]
+    public function preview(AssociationProject $project): Response
+    {
+        $response = $this->render('association_projects/show.html.twig', [
+            'project'      => $this->presenter->present($project, null, adminPreview: true),
+            'token'        => null,
+            'contactEmail' => AssociationProjectPublicController::CONTACT_EMAIL,
+            'preview'      => [
+                'published' => $project->isPublished(),
+                'editUrl'   => $this->generateUrl('app_admin_asso_project_edit', ['id' => $project->getId()]),
+            ],
+        ]);
+        $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
+
+        return $response;
     }
 
     /** POST /admin/fiches-projets/{id}/supprimer : suppression définitive (fiche, blocs, images). */

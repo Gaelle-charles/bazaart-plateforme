@@ -110,6 +110,7 @@
                             <td class="adm-ap-table__actions">
                                 <a href="{{ path('app_admin_asso_project_edit', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost adm-ap-btn--small">Modifier</a>
                                 <a href="{{ path('app_admin_asso_project_presentation', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost adm-ap-btn--small">Présentation ({{ project.blocks|length }})</a>
+                                <a href="{{ path('app_admin_asso_project_preview', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost adm-ap-btn--small" target="_blank" rel="noopener">Aperçu</a>
                                 <button type="submit"
                                         form="adm-ap-delete-{{ project.id }}"
                                         class="adm-ap-btn adm-ap-btn--danger adm-ap-btn--small">Supprimer</button>

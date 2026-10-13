@@ -38,9 +38,12 @@
             Informations principales de la fiche. Le texte de présentation et ses images
             (ce que le partenaire lit en descendant) se gèrent dans la page « Présentation ».
         </p>
-        <a href="{{ path('app_admin_asso_project_presentation', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost">
-            Présentation ({{ project.blocks|length }} bloc{{ project.blocks|length > 1 ? 's' }})
-        </a>
+        <span>
+            <a href="{{ path('app_admin_asso_project_presentation', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost">
+                Présentation ({{ project.blocks|length }} bloc{{ project.blocks|length > 1 ? 's' }})
+            </a>
+            <a href="{{ path('app_admin_asso_project_preview', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost" target="_blank" rel="noopener">Aperçu</a>
+        </span>
     </div>
 {% endif %}
 

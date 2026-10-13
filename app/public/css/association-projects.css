@@ -313,3 +313,176 @@
     .ap-card__link,
     .ap-indicator__tick::before { transition: none !important; }
 }
+
+
+/* ============================================================
+   FICHE D'UN PROJET (/projets/{jeton}/{slug})
+   Ordre : en-tête, description, présentation (blocs), en pratique,
+   « Ce qu'un partenaire peut apporter » (mis en valeur), contact.
+   ============================================================ */
+
+.ap-back {
+    display: inline-flex;
+    gap: var(--space-sm);
+    margin: var(--space-sm) 0 var(--space-lg);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink);
+    text-decoration: none;
+}
+.ap-back:hover { text-decoration: underline; }
+
+/* Bandeau de l'aperçu admin (jamais vu par les partenaires). */
+.ap-preview {
+    margin: var(--space-sm) 0 var(--space-lg);
+    padding: var(--space-md);
+    border: 2px dashed var(--ink);
+    background: var(--bg-alt);
+    font-size: 14px;
+}
+.ap-preview a { color: var(--ink); font-weight: 700; margin-left: var(--space-sm); }
+
+.ap-sheet { max-width: 1040px; }
+
+/* ── En-tête : visuel + titre ─────────────────────────────── */
+.ap-sheet__hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: var(--space-xl);
+    align-items: end;
+    margin-bottom: var(--space-xl);
+}
+.ap-sheet__visual {
+    aspect-ratio: 4 / 3;
+    border: var(--card-border);
+    background: var(--bg-alt);
+    overflow: hidden;
+    box-shadow: var(--shadow-offset-md);
+}
+.ap-sheet__visual img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ap-sheet__title {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(30px, 4.2vw, 52px);
+    line-height: 1;
+    text-transform: uppercase;
+    margin: 0 0 var(--space-md);
+    overflow-wrap: anywhere;
+}
+.ap-sheet__period {
+    margin: var(--space-md) 0 0;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--ink-mute);
+}
+
+/* ── Description (chapeau) ────────────────────────────────── */
+.ap-sheet__lead {
+    max-width: 68ch;
+    margin: 0 0 var(--space-2xl);
+    font-family: var(--serif);
+    font-size: clamp(20px, 2.2vw, 26px);
+    line-height: 1.35;
+}
+
+/* ── Présentation : blocs ─────────────────────────────────── */
+.ap-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xl);
+    margin-bottom: var(--space-3xl);
+}
+.ap-block__text { max-width: 68ch; }
+.ap-block__text p { margin: 0 0 var(--space-md); }
+.ap-block__heading {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 22px;
+    text-transform: uppercase;
+    margin: 0 0 var(--space-md);
+}
+.ap-block__figure { margin: 0; }
+.ap-block__figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: var(--card-border);
+}
+.ap-block__figure figcaption {
+    margin-top: var(--space-sm);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-mute);
+}
+/* Texte ET image : côte à côte sur grand écran, image une fois à droite, une fois à gauche. */
+@media (min-width: 900px) {
+    .ap-block--split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: var(--space-xl);
+        align-items: start;
+    }
+    .ap-block--split.ap-block--even .ap-block__figure { order: -1; }
+}
+.ap-block--split .ap-block__figure { margin-top: var(--space-xs); }
+
+/* ── En pratique ──────────────────────────────────────────── */
+.ap-section-title {
+    font-family: var(--mono);
+    font-size: var(--eyebrow-font-size);
+    font-weight: var(--eyebrow-font-weight);
+    letter-spacing: var(--eyebrow-letter-spacing);
+    text-transform: uppercase;
+    margin: 0 0 var(--space-md);
+    padding-bottom: var(--space-sm);
+    border-bottom: var(--section-border);
+}
+.ap-facts { margin-bottom: var(--space-2xl); }
+.ap-facts__list { margin: 0; }
+.ap-facts__item {
+    display: grid;
+    grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+    gap: var(--space-lg);
+    padding: var(--space-md) 0;
+    border-bottom: 1px solid var(--line-soft);
+}
+.ap-facts__item dt {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+.ap-facts__item dd { margin: 0; }
+
+/* ── Bloc mis en valeur : « Ce qu'un partenaire peut apporter » ── */
+.ap-contribution {
+    margin: 0 0 var(--space-2xl);
+    padding: var(--space-xl);
+    background: var(--accent);
+    color: var(--ink);
+    border: 2px solid var(--ink);
+    box-shadow: var(--shadow-offset-md);
+}
+.ap-contribution__title {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(22px, 2.6vw, 30px);
+    text-transform: uppercase;
+    line-height: 1.05;
+    margin: 0 0 var(--space-md);
+}
+.ap-contribution__text { margin: 0; font-size: 18px; line-height: 1.5; max-width: 68ch; }
+
+/* ── Contact ──────────────────────────────────────────────── */
+.ap-contact p { margin: 0; font-size: 16px; }
+.ap-contact a { color: var(--ink); font-weight: 700; }
+
+@media (max-width: 760px) {
+    .ap-sheet__hero { grid-template-columns: 1fr; gap: var(--space-lg); }
+    .ap-facts__item { grid-template-columns: 1fr; gap: var(--space-xs); }
+    .ap-contribution { padding: var(--space-lg); }
+}

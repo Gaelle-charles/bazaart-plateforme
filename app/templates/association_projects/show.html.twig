@@ -3,18 +3,178 @@
 {#
  # association_projects/show.html.twig : fiche complète d'un projet (ADR-0039).
  #
- # Variables (AssociationProjectPublicController::show) :
- #   - project      : tableau produit par AssociationProjectPresenter (fiche PUBLIÉE)
- #   - token        : jeton de l'adresse (lien de retour)
+ # Variables :
+ #   - project      : tableau produit par AssociationProjectPresenter
+ #   - token        : jeton de l'adresse (null dans l'aperçu admin)
  #   - contactEmail : adresse de contact de l'association
+ #   - preview      : (aperçu admin seulement) {published: bool, editUrl: string}
+ #
+ # ORDRE DE LA FICHE (validé avec l'association) :
+ #   en-tête (visuel, titre, type, état, dates) → description → présentation
+ #   (blocs de texte et d'images) → artistes concernés → dates et lieux →
+ #   partenaires confirmés et pressentis → financeurs sollicités → bloc mis en
+ #   valeur « Ce qu'un partenaire peut apporter » → contact.
+ #   Une rubrique vide n'est pas affichée.
+ #
+ # SÉCURITÉ : tous les textes viennent de la base. Ils sont affichés avec
+ # {{ … }} (échappement automatique) et le filtre nl2br, qui échappe AVANT
+ # d'ajouter les <br> : un « <script> » saisi s'affiche comme du texte.
+ # Ne jamais utiliser |raw sur ces champs.
  #}
+
+{% set isPreview = preview is defined and preview %}
 
 {% block title %}{{ project.title }} · Projets en cours · BazaArt{% endblock %}
 
 {% block body %}
-    <p><a href="{{ path('app_asso_projects_page', {token: token}) }}">Tous les projets</a></p>
-    <h1 class="ap-title">{{ project.title }}</h1>
-    <p>{{ project.type.label }} · {{ project.state.label }}{% if project.period %} · {{ project.period }}{% endif %}</p>
-    {% if project.description %}<p>{{ project.description|nl2br }}</p>{% endif %}
-    <p>Contact : {% if project.leadName %}{{ project.leadName }}, {% endif %}<a href="mailto:{{ contactEmail }}">{{ contactEmail }}</a></p>
+
+    {% if isPreview %}
+        {# Bandeau visible uniquement dans l'aperçu du back-office. #}
+        <div class="ap-preview" role="note">
+            <strong>Aperçu admin.</strong>
+            {% if preview.published %}
+                Cette fiche est publiée : les partenaires la voient ainsi.
+            {% else %}
+                Cette fiche n'est PAS publiée : les partenaires ne la voient pas encore.
+            {% endif %}
+            <a href="{{ preview.editUrl }}">Modifier la fiche</a>
+        </div>
+    {% else %}
+        {# Retour au carrousel, recentré sur ce projet (#projet-…). #}
+        <a class="ap-back" href="{{ path('app_asso_projects_page', {token: token}) }}#projet-{{ project.slug }}">
+            <span aria-hidden="true">←</span> Tous les projets
+        </a>
+    {% endif %}
+
+    <article class="ap-sheet">
+
+        {# ── En-tête ─────────────────────────────────────────────────────── #}
+        <header class="ap-sheet__hero">
+            <div class="ap-sheet__visual">
+                {% if project.image %}
+                    <img src="{{ project.image.url }}"
+                         alt="{{ project.image.alt }}"
+                         {% if project.image.width %}width="{{ project.image.width }}" height="{{ project.image.height }}"{% endif %}
+                         fetchpriority="high">
+                {% else %}
+                    <span class="ap-card__placeholder" aria-hidden="true">{{ project.type.label }}</span>
+                {% endif %}
+            </div>
+            <div class="ap-sheet__heading">
+                <h1 class="ap-sheet__title">{{ project.title }}</h1>
+                <p class="ap-card__meta">
+                    <span class="ap-chip">{{ project.type.label }}</span>
+                    <span class="ap-chip ap-chip--state">{{ project.state.label }}</span>
+                </p>
+                {% if project.period %}
+                    <p class="ap-sheet__period">{{ project.period }}</p>
+                {% endif %}
+            </div>
+        </header>
+
+        {# ── Description ─────────────────────────────────────────────────── #}
+        {% if project.description %}
+            <p class="ap-sheet__lead">{{ project.description|nl2br }}</p>
+        {% endif %}
+
+        {# ── Présentation : blocs de texte, avec parfois une image ───────── #}
+        {% if project.blocks is not empty %}
+            <section class="ap-blocks" aria-label="Présentation du projet">
+                {% for block in project.blocks %}
+                    <div class="ap-block{{ block.image and block.body ? ' ap-block--split' }}{{ loop.index is even ? ' ap-block--even' }}">
+                        {% if block.body or block.heading %}
+                            <div class="ap-block__text">
+                                {% if block.heading %}
+                                    <h2 class="ap-block__heading">{{ block.heading }}</h2>
+                                {% endif %}
+                                {# Une ligne vide sépare deux paragraphes ; un simple retour à la ligne reste un <br>. #}
+                                {% for paragraph in (block.body ?? '')|split("\n\n") %}
+                                    {% if paragraph|trim is not empty %}
+                                        <p>{{ paragraph|trim|nl2br }}</p>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        {% if block.image %}
+                            <figure class="ap-block__figure">
+                                <img src="{{ block.image.url }}"
+                                     alt="{{ block.image.alt }}"
+                                     {% if block.image.width %}width="{{ block.image.width }}" height="{{ block.image.height }}"{% endif %}
+                                     loading="lazy"
+                                     decoding="async">
+                                {% if block.image.caption %}
+                                    <figcaption>{{ block.image.caption }}</figcaption>
+                                {% endif %}
+                            </figure>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </section>
+        {% endif %}
+
+        {# ── Informations pratiques ──────────────────────────────────────── #}
+        {% set hasFacts = project.artists or project.period or project.places
+            or project.confirmedPartners or project.prospectivePartners or project.solicitedFunders %}
+        {% if hasFacts %}
+            <section class="ap-facts" aria-labelledby="ap-facts-title">
+                <h2 class="ap-section-title" id="ap-facts-title">En pratique</h2>
+                <dl class="ap-facts__list">
+                    {% if project.artists %}
+                        <div class="ap-facts__item">
+                            <dt>Artistes concernés</dt>
+                            <dd>{{ project.artists }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if project.period or project.places %}
+                        <div class="ap-facts__item">
+                            <dt>Dates et lieux</dt>
+                            <dd>
+                                {% if project.period %}{{ project.period }}{% endif %}
+                                {% if project.period and project.places %}<br>{% endif %}
+                                {% if project.places %}{{ project.places }}{% endif %}
+                            </dd>
+                        </div>
+                    {% endif %}
+                    {% if project.confirmedPartners %}
+                        <div class="ap-facts__item">
+                            <dt>Partenaires confirmés</dt>
+                            <dd>{{ project.confirmedPartners|nl2br }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if project.prospectivePartners %}
+                        <div class="ap-facts__item">
+                            <dt>Partenaires pressentis</dt>
+                            <dd>{{ project.prospectivePartners|nl2br }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if project.solicitedFunders %}
+                        <div class="ap-facts__item">
+                            <dt>Financeurs sollicités</dt>
+                            <dd>{{ project.solicitedFunders|nl2br }}</dd>
+                        </div>
+                    {% endif %}
+                </dl>
+            </section>
+        {% endif %}
+
+        {# ── Bloc mis en valeur ──────────────────────────────────────────── #}
+        {% if project.partnerContribution %}
+            <section class="ap-contribution" aria-labelledby="ap-contribution-title">
+                <h2 class="ap-contribution__title" id="ap-contribution-title">Ce qu'un partenaire peut apporter</h2>
+                <p class="ap-contribution__text">{{ project.partnerContribution|nl2br }}</p>
+            </section>
+        {% endif %}
+
+        {# ── Contact ─────────────────────────────────────────────────────── #}
+        <footer class="ap-contact" aria-labelledby="ap-contact-title">
+            <h2 class="ap-section-title" id="ap-contact-title">Contact</h2>
+            <p>
+                {% if project.leadName %}
+                    Référente du projet : <strong>{{ project.leadName }}</strong><br>
+                {% endif %}
+                <a href="mailto:{{ contactEmail }}?subject={{ ('Projet ' ~ project.title)|url_encode }}">{{ contactEmail }}</a>
+            </p>
+        </footer>
+    </article>
+
 {% endblock %}

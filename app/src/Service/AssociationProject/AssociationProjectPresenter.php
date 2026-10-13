@@ -23,6 +23,11 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
  * Les URL des images contiennent un numéro de version (?v=…) tiré du nom du fichier :
  * quand l'équipe remplace une image, l'URL change, donc aucun navigateur ne garde
  * l'ancienne image en cache.
+ *
+ * APERÇU ADMIN : avec $adminPreview = true, les URL pointent vers les routes du
+ * back-office (réservées ROLE_ADMIN, qui servent aussi les fiches non publiées) au
+ * lieu des routes à jeton. Le rendu de la fiche est ainsi identique à celui que
+ * verront les partenaires.
  */
 final class AssociationProjectPresenter
 {
@@ -52,18 +57,17 @@ final class AssociationProjectPresenter
      *     blocks: list<array{heading: string|null, body: string|null, image: array{url: string, alt: string, caption: string|null, width: int|null, height: int|null}|null}>
      * }
      */
-    public function present(AssociationProject $project, string $token): array
+    public function present(AssociationProject $project, ?string $token, bool $adminPreview = false): array
     {
         $slug = $project->getSlug();
 
         $image = null;
         if ($project->getImagePath() !== null) {
+            $version = $this->version($project->getImagePath());
             $image = [
-                'url'    => $this->urlGenerator->generate('app_asso_projects_image', [
-                    'token' => $token,
-                    'slug'  => $slug,
-                    'v'     => $this->version($project->getImagePath()),
-                ]),
+                'url'    => $adminPreview
+                    ? $this->urlGenerator->generate('app_admin_asso_project_image', ['id' => $project->getId(), 'v' => $version])
+                    : $this->urlGenerator->generate('app_asso_projects_image', ['token' => $token, 'slug' => $slug, 'v' => $version]),
                 // Texte alternatif : celui saisi par l'équipe, sinon le titre du projet.
                 'alt'    => $project->getImageAlt() ?? $project->getTitle(),
                 'width'  => $project->getImageWidth(),
@@ -73,7 +77,7 @@ final class AssociationProjectPresenter
 
         $blocks = [];
         foreach ($project->getBlocks() as $block) {
-            $blocks[] = $this->presentBlock($block, $token, $slug);
+            $blocks[] = $this->presentBlock($block, $token, $slug, $adminPreview);
         }
 
         return [
@@ -91,7 +95,9 @@ final class AssociationProjectPresenter
             'partnerContribution' => $project->getPartnerContribution(),
             'leadName'            => $project->getLeadName(),
             'position'            => $project->getPosition(),
-            'url'                 => $this->urlGenerator->generate('app_asso_projects_show', ['token' => $token, 'slug' => $slug]),
+            'url'                 => $adminPreview
+                ? $this->urlGenerator->generate('app_admin_asso_project_preview', ['id' => $project->getId()])
+                : $this->urlGenerator->generate('app_asso_projects_show', ['token' => $token, 'slug' => $slug]),
             'image'               => $image,
             'blocks'              => $blocks,
         ];
@@ -100,17 +106,15 @@ final class AssociationProjectPresenter
     /**
      * @return array{heading: string|null, body: string|null, image: array{url: string, alt: string, caption: string|null, width: int|null, height: int|null}|null}
      */
-    private function presentBlock(AssociationProjectBlock $block, string $token, string $slug): array
+    private function presentBlock(AssociationProjectBlock $block, ?string $token, string $slug, bool $adminPreview): array
     {
         $image = null;
         if ($block->getImagePath() !== null) {
+            $version = $this->version($block->getImagePath());
             $image = [
-                'url'     => $this->urlGenerator->generate('app_asso_projects_block_image', [
-                    'token'   => $token,
-                    'slug'    => $slug,
-                    'blockId' => $block->getId(),
-                    'v'       => $this->version($block->getImagePath()),
-                ]),
+                'url'     => $adminPreview
+                    ? $this->urlGenerator->generate('app_admin_asso_project_block_image', ['blockId' => $block->getId(), 'v' => $version])
+                    : $this->urlGenerator->generate('app_asso_projects_block_image', ['token' => $token, 'slug' => $slug, 'blockId' => $block->getId(), 'v' => $version]),
                 // Pas de texte alternatif saisi : on prend la légende, sinon rien de mieux
                 // que le titre du bloc ou « Image » (une image sans alt serait pire).
                 'alt'     => $block->getImageAlt() ?? $block->getImageCaption() ?? $block->getHeading() ?? 'Image',
