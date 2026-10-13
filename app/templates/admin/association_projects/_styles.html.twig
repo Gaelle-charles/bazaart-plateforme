@@ -1,0 +1,219 @@
+{#
+ # admin/association_projects/_styles.html.twig
+ #
+ # Styles communs aux écrans du back-office « Projets de l'association » (ADR-0039) :
+ # liste, formulaire de fiche, page Présentation. Inclus dans {% block stylesheets %}
+ # de chaque écran, après {{ parent() }} (qui charge les styles du layout admin).
+ #
+ # Thème Street : bords francs (radius 0), bordures 1px --ink, tokens de design-tokens.css.
+ # Préfixe .adm-ap- (admin association projects) pour éviter toute collision.
+ #}
+<style>
+/* ── En-tête de page ──────────────────────────────────────────────────────── */
+.adm-ap-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+.adm-ap-header__intro {
+    margin: 0;
+    max-width: 640px;
+    font-family: var(--body);
+    font-size: 14px;
+    color: var(--ink-mute);
+    line-height: 1.5;
+}
+.adm-ap-breadcrumb {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 18px;
+}
+.adm-ap-breadcrumb a { color: var(--ink-mute); text-decoration: none; }
+.adm-ap-breadcrumb a:hover { color: var(--ink); text-decoration: underline; }
+.adm-ap-breadcrumb span { margin: 0 6px; }
+
+/* ── Boutons ──────────────────────────────────────────────────────────────── */
+.adm-ap-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--body);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 16px;
+    background: var(--ink);
+    color: var(--bg);
+    border: 1px solid var(--ink);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.adm-ap-btn:hover { background: var(--accent); color: var(--ink); border-color: var(--accent); }
+.adm-ap-btn--ghost { background: transparent; color: var(--ink); }
+.adm-ap-btn--ghost:hover { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.adm-ap-btn--small { padding: 5px 10px; font-size: 12px; }
+.adm-ap-btn--danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+.adm-ap-btn--danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+/* Focus visible au clavier : contour noir, lisible sur le fond crème. */
+.adm-ap-btn:focus-visible,
+.adm-ap-input:focus-visible,
+.adm-ap-select:focus-visible,
+.adm-ap-textarea:focus-visible,
+.adm-ap-table a:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+}
+
+/* ── Tableau de la liste ──────────────────────────────────────────────────── */
+.adm-ap-table-wrap { overflow-x: auto; border: 1px solid var(--ink); background: var(--bg); }
+.adm-ap-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--body);
+    font-size: 13px;
+}
+.adm-ap-table th {
+    text-align: left;
+    padding: 10px 12px;
+    background: var(--ink);
+    color: var(--bg);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.adm-ap-table td {
+    padding: 10px 12px;
+    border-top: 1px solid var(--line-soft);
+    vertical-align: middle;
+}
+.adm-ap-table td a { color: var(--ink); font-weight: 600; }
+.adm-ap-table__order { width: 84px; }
+.adm-ap-table__actions { white-space: nowrap; text-align: right; }
+.adm-ap-table__actions > * { margin-left: 6px; }
+.adm-ap-order-input { width: 70px; }
+
+/* Badges Publié / Brouillon */
+.adm-ap-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 3px 7px;
+    border: 1px solid var(--ink);
+    white-space: nowrap;
+}
+.adm-ap-badge--published { background: var(--ok); border-color: var(--ok); color: #fff; }
+.adm-ap-badge--draft { background: transparent; color: var(--ink-mute); border-color: var(--ink-mute); }
+
+.adm-ap-list-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+.adm-ap-empty {
+    padding: 28px;
+    border: 1px dashed var(--ink-mute);
+    font-family: var(--body);
+    color: var(--ink-mute);
+}
+
+/* ── Formulaires ──────────────────────────────────────────────────────────── */
+.adm-ap-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 28px;
+    align-items: start;
+}
+@media (max-width: 960px) {
+    .adm-ap-layout { grid-template-columns: 1fr; }
+}
+.adm-ap-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.adm-ap-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 640px) { .adm-ap-row { grid-template-columns: 1fr; } }
+.adm-ap-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink);
+}
+.adm-ap-label--required::after { content: " *"; color: var(--danger); }
+.adm-ap-hint { font-family: var(--body); font-size: 12px; color: var(--ink-mute); line-height: 1.4; }
+.adm-ap-input,
+.adm-ap-select,
+.adm-ap-textarea {
+    font-family: var(--body);
+    font-size: 14px;
+    padding: 9px 11px;
+    border: 1px solid var(--ink);
+    border-radius: 0;
+    background: #fff;
+    color: var(--ink);
+    width: 100%;
+    box-sizing: border-box;
+}
+.adm-ap-textarea { min-height: 110px; resize: vertical; line-height: 1.5; }
+.adm-ap-textarea--tall { min-height: 160px; }
+.adm-ap-counter { font-family: var(--mono); font-size: 11px; color: var(--ink-mute); text-align: right; }
+.adm-ap-counter.is-over { color: var(--danger); font-weight: 700; }
+.adm-ap-check { display: flex; align-items: center; gap: 8px; font-family: var(--body); font-size: 14px; }
+.adm-ap-check input { width: 18px; height: 18px; accent-color: var(--ink); }
+
+/* Encart latéral (publication, visuel) */
+.adm-ap-panel {
+    border: 1px solid var(--ink);
+    background: var(--bg);
+    padding: 16px;
+    margin-bottom: 18px;
+}
+.adm-ap-panel__title {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line-soft);
+}
+.adm-ap-preview {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--line-soft);
+    margin-bottom: 10px;
+}
+.adm-ap-highlight { border-left: 4px solid var(--accent); padding-left: 12px; }
+
+.adm-ap-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line-soft);
+}
+.adm-ap-cancel { font-family: var(--body); font-size: 13px; color: var(--ink-mute); }
+.adm-ap-cancel:hover { color: var(--ink); }
+
+/* Texte réservé aux lecteurs d'écran (ex. libellés des champs « ordre »). */
+.visually-hidden {
+    position: absolute !important;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0);
+    white-space: nowrap; border: 0;
+}
+</style>

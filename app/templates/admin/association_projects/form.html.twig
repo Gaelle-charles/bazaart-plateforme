@@ -1,0 +1,214 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/association_projects/form.html.twig : création / édition d'une fiche (ADR-0039).
+ #
+ # Variables (AdminAssociationProjectController::renderProjectForm) :
+ #   - project        : AssociationProject|null (null = création)
+ #   - data           : AssociationProjectData (valeurs du formulaire, re-affichées après une erreur)
+ #   - types / states : listes des enums pour les menus déroulants
+ #   - descriptionMax : 600 (limite de la description)
+ #
+ # Tout le texte saisi est affiché avec l'échappement automatique de Twig ({{ … }}) :
+ # aucun HTML saisi n'est jamais interprété.
+ #}
+
+{% set isEdit = project is not null %}
+{% set formTitle = isEdit ? project.title : 'Nouvelle fiche' %}
+
+{% block title %}{{ formTitle }} · Projets de l'association · Admin BazaArt{% endblock %}
+{% block page_title %}{{ isEdit ? 'Modifier la fiche' : 'Nouvelle fiche' }}{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+{{ include('admin/association_projects/_styles.html.twig') }}
+{% endblock %}
+
+{% block content %}
+
+<nav class="adm-ap-breadcrumb" aria-label="Fil d'Ariane">
+    <a href="{{ path('app_admin_asso_project_index') }}">Projets de l'association</a>
+    <span aria-hidden="true">/</span>
+    <span>{{ formTitle }}</span>
+</nav>
+
+{#
+    enctype="multipart/form-data" : obligatoire pour envoyer un fichier (le visuel).
+    L'action est l'URL courante (création ou édition).
+#}
+<form method="post"
+      action="{{ isEdit ? path('app_admin_asso_project_edit', {id: project.id}) : path('app_admin_asso_project_new') }}"
+      enctype="multipart/form-data">
+    <input type="hidden" name="_token" value="{{ csrf_token('asso_project_form') }}">
+
+    <div class="adm-ap-layout">
+
+        {# ── Colonne principale ─────────────────────────────────────────────── #}
+        <div>
+            <div class="adm-ap-group">
+                <label class="adm-ap-label adm-ap-label--required" for="ap-title">Titre</label>
+                <input type="text" id="ap-title" name="title" class="adm-ap-input"
+                       required minlength="2" maxlength="150" value="{{ data.title }}">
+                {% if isEdit %}
+                    <span class="adm-ap-hint">
+                        Adresse de la fiche : …/{{ project.slug }}. Elle ne change pas si vous modifiez
+                        le titre, pour que les liens déjà envoyés restent valables.
+                    </span>
+                {% endif %}
+            </div>
+
+            <div class="adm-ap-row">
+                <div class="adm-ap-group">
+                    <label class="adm-ap-label adm-ap-label--required" for="ap-type">Type</label>
+                    <select id="ap-type" name="type" class="adm-ap-select" required>
+                        {% for type in types %}
+                            <option value="{{ type.value }}" {{ data.type == type ? 'selected' }}>{{ type.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="adm-ap-group">
+                    <label class="adm-ap-label adm-ap-label--required" for="ap-state">État</label>
+                    <select id="ap-state" name="state" class="adm-ap-select" required>
+                        {% for state in states %}
+                            <option value="{{ state.value }}" {{ data.state == state ? 'selected' }}>{{ state.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="adm-ap-row">
+                <div class="adm-ap-group">
+                    <label class="adm-ap-label" for="ap-period">Dates</label>
+                    <input type="text" id="ap-period" name="period" class="adm-ap-input" maxlength="120"
+                           value="{{ data.period }}" placeholder="ex. mai-juin 2027">
+                </div>
+                <div class="adm-ap-group">
+                    <label class="adm-ap-label" for="ap-places">Lieux</label>
+                    <input type="text" id="ap-places" name="places" class="adm-ap-input" maxlength="255"
+                           value="{{ data.places }}">
+                </div>
+            </div>
+
+            <div class="adm-ap-group">
+                <label class="adm-ap-label" for="ap-artists">Artistes concernés</label>
+                <input type="text" id="ap-artists" name="artists" class="adm-ap-input" maxlength="255"
+                       value="{{ data.artists }}">
+            </div>
+
+            <div class="adm-ap-group">
+                <label class="adm-ap-label" for="ap-description">Description</label>
+                <span class="adm-ap-hint" id="ap-description-hint">
+                    Résumé du projet, {{ descriptionMax }} caractères maximum. Le texte plus long
+                    (et les images) se met dans la page « Présentation » de la fiche.
+                </span>
+                <textarea id="ap-description" name="description" class="adm-ap-textarea"
+                          maxlength="{{ descriptionMax }}"
+                          aria-describedby="ap-description-hint ap-description-counter"
+                          data-counter="ap-description-counter">{{ data.description }}</textarea>
+                <span class="adm-ap-counter" id="ap-description-counter"></span>
+            </div>
+
+            <div class="adm-ap-row">
+                <div class="adm-ap-group">
+                    <label class="adm-ap-label" for="ap-confirmed">Partenaires confirmés</label>
+                    <textarea id="ap-confirmed" name="confirmedPartners" class="adm-ap-textarea">{{ data.confirmedPartners }}</textarea>
+                </div>
+                <div class="adm-ap-group">
+                    <label class="adm-ap-label" for="ap-prospective">Partenaires pressentis</label>
+                    <textarea id="ap-prospective" name="prospectivePartners" class="adm-ap-textarea">{{ data.prospectivePartners }}</textarea>
+                </div>
+            </div>
+
+            <div class="adm-ap-group">
+                <label class="adm-ap-label" for="ap-funders">Financeurs sollicités</label>
+                <textarea id="ap-funders" name="solicitedFunders" class="adm-ap-textarea">{{ data.solicitedFunders }}</textarea>
+            </div>
+
+            <div class="adm-ap-group adm-ap-highlight">
+                <label class="adm-ap-label" for="ap-contribution">Ce qu'un partenaire peut apporter</label>
+                <span class="adm-ap-hint">Mis en avant sur la fiche : c'est le bloc que les partenaires liront le plus.</span>
+                <textarea id="ap-contribution" name="partnerContribution" class="adm-ap-textarea adm-ap-textarea--tall">{{ data.partnerContribution }}</textarea>
+            </div>
+
+            <div class="adm-ap-group">
+                <label class="adm-ap-label" for="ap-lead">Référente dans l'équipe</label>
+                <span class="adm-ap-hint">Prénom et nom seulement, sans e-mail. Le contact affiché est bonjourbazaart@gmail.com.</span>
+                <input type="text" id="ap-lead" name="leadName" class="adm-ap-input" maxlength="120"
+                       value="{{ data.leadName }}">
+            </div>
+        </div>
+
+        {# ── Colonne latérale : publication + visuel ────────────────────────── #}
+        <div>
+            <div class="adm-ap-panel">
+                <h2 class="adm-ap-panel__title">Publication</h2>
+                <div class="adm-ap-group">
+                    <label class="adm-ap-check">
+                        <input type="checkbox" name="isPublished" value="1" {{ data.isPublished ? 'checked' }}>
+                        Publié (visible par les partenaires)
+                    </label>
+                </div>
+                <div class="adm-ap-group">
+                    <label class="adm-ap-label" for="ap-position">Ordre d'affichage</label>
+                    <input type="number" id="ap-position" name="position" class="adm-ap-input" step="1"
+                           value="{{ data.position }}">
+                    <span class="adm-ap-hint">Plus petit = plus à gauche. Vide = à la fin.</span>
+                </div>
+            </div>
+
+            <div class="adm-ap-panel">
+                <h2 class="adm-ap-panel__title">Visuel</h2>
+                {% if isEdit and project.imagePath %}
+                    <img src="{{ path('app_admin_asso_project_image', {id: project.id, v: project.updatedAt|date('U')}) }}"
+                         alt="Visuel actuel de la fiche"
+                         class="adm-ap-preview"
+                         {% if project.imageWidth %}width="{{ project.imageWidth }}" height="{{ project.imageHeight }}"{% endif %}>
+                    <div class="adm-ap-group">
+                        <label class="adm-ap-check">
+                            <input type="checkbox" name="removeImage" value="1">
+                            Retirer le visuel
+                        </label>
+                    </div>
+                {% endif %}
+                <div class="adm-ap-group">
+                    <label class="adm-ap-label" for="ap-image">{{ isEdit and project.imagePath ? 'Remplacer le visuel' : 'Ajouter un visuel' }}</label>
+                    <input type="file" id="ap-image" name="image" accept="image/jpeg,image/png,image/webp">
+                    <span class="adm-ap-hint">JPEG, PNG ou WebP, 5 Mo maximum. 1600 px de large conseillés.</span>
+                </div>
+                <div class="adm-ap-group">
+                    <label class="adm-ap-label" for="ap-image-alt">Texte alternatif</label>
+                    <input type="text" id="ap-image-alt" name="imageAlt" class="adm-ap-input" maxlength="200"
+                           value="{{ data.imageAlt }}">
+                    <span class="adm-ap-hint">Décrit l'image pour les personnes qui ne la voient pas. Vide = le titre du projet.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="adm-ap-actions">
+        <button type="submit" class="adm-ap-btn">{{ isEdit ? 'Enregistrer' : 'Créer la fiche' }}</button>
+        <a href="{{ path('app_admin_asso_project_index') }}" class="adm-ap-cancel">Retour à la liste</a>
+    </div>
+</form>
+
+{#
+    Compteur de caractères de la description.
+    value.length compte un retour à la ligne pour 1 caractère, comme le serveur
+    (qui convertit « \r\n » en « \n » avant de compter) : les deux sont d'accord.
+#}
+<script>
+document.querySelectorAll('textarea[data-counter]').forEach(function (field) {
+    var counter = document.getElementById(field.dataset.counter);
+    var max = parseInt(field.getAttribute('maxlength'), 10);
+    if (!counter || !max) { return; }
+    function update() {
+        var length = field.value.length;
+        counter.textContent = length + ' / ' + max + ' caractères';
+        counter.classList.toggle('is-over', length > max);
+    }
+    field.addEventListener('input', update);
+    update();
+});
+</script>
+
+{% endblock %}
