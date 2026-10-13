@@ -231,10 +231,10 @@ Toutes les commandes serveur se lancent depuis `/root/bazaart-plateforme`.
    ssh root@206.189.3.112 "mkdir -p /root/bazaart-plateforme/app/var/import"
    scp -r ~/Downloads/import-projets/projets.json ~/Downloads/import-projets/images root@206.189.3.112:/root/bazaart-plateforme/app/var/import/
    ```
-3. **Donner l'accès au serveur web, puis vérifier** (sur le serveur). `git status` ne doit
-   rien afficher (les données sont bien ignorées par git) :
+3. **Donner l'accès en lecture au serveur web, puis vérifier** (sur le serveur).
+   `git status` ne doit rien afficher (les données sont bien ignorées par git) :
    ```bash
-   cd /root/bazaart-plateforme && chmod -R a+rwX app/var/import && ls -la app/var/import app/var/import/images && git status --porcelain
+   cd /root/bazaart-plateforme && chmod -R a+rX app/var/import && ls -la app/var/import app/var/import/images && git status --porcelain
    ```
 4. **Prévenir l'équipe** : personne ne garde une page « Modifier une fiche » ouverte
    pendant l'import. Un formulaire ouvert avant l'import puis enregistré après remettrait

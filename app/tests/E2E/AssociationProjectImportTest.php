@@ -139,6 +139,7 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
 
         self::assertSame(Command::SUCCESS, $code, $output);
         self::assertStringContainsString('rien à remplir', $output);
+        self::assertStringContainsString('Rien à enregistrer : les fiches sont déjà à jour.', $output);
         self::assertMatchesRegularExpression('/Champs remplis \(visuel compris\)\s+0\b/', $output);
         self::assertMatchesRegularExpression('/dont identiques au JSON\s+2\b/', $output);
         self::assertMatchesRegularExpression('/Visuels envoyés\s+0\b/', $output);

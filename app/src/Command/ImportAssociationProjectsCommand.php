@@ -106,7 +106,9 @@ class ImportAssociationProjectsCommand extends Command
             $io->listing($report->storedImages);
         }
 
-        if ($report->written) {
+        if ($report->written && $report->sum('filled') === 0 && !$report->hasProblems()) {
+            $io->success('Rien à enregistrer : les fiches sont déjà à jour. Aucune fiche n\'a été modifiée.');
+        } elseif ($report->written) {
             $report->hasProblems()
                 ? $io->warning('Import enregistré, mais certains points sont à vérifier (voir ci-dessus).')
                 : $io->success('Import enregistré. Aucune fiche n\'a été publiée : l\'équipe relit et publie elle-même.');
