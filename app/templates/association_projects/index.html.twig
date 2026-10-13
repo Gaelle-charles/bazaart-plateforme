@@ -1,17 +1,32 @@
 {% extends 'association_projects/_layout.html.twig' %}
 
 {#
- # association_projects/index.html.twig : page « Projets en cours » (ADR-0039).
+ # association_projects/index.html.twig : page « Projets en cours », carrousel de cartes (ADR-0039).
  #
  # Variables (AssociationProjectPublicController::page) :
  #   - projects     : list de tableaux produits par AssociationProjectPresenter
  #                    (uniquement les fiches PUBLIÉES, dans l'ordre d'affichage)
- #   - token        : jeton de l'adresse (pour les liens internes)
+ #   - token        : jeton de l'adresse
  #   - contactEmail : adresse de contact de l'association
  #
- # Les cartes sont écrites ici, côté serveur : sans JavaScript, la page reste une
- # liste de cartes qui défile horizontalement, chaque carte menant à sa fiche.
+ # AMÉLIORATION PROGRESSIVE :
+ #   1. Le HTML ci-dessous suffit : une liste de cartes-liens qui défile
+ #      horizontalement (glisser au doigt, barre de défilement), chaque carte
+ #      menant à sa fiche. C'est aussi le mode utilisé sur mobile et quand le
+ #      système demande de réduire les animations (prefers-reduced-motion).
+ #   2. public/js/association-projects.js ajoute, sur grand écran, le carrousel
+ #      en perspective (carte centrale de face, voisines inclinées), le clavier,
+ #      le glisser à la souris et la molette horizontale.
+ #
+ # Les textes viennent de la base : Twig les échappe ({{ … }}), aucun HTML saisi
+ # n'est interprété.
  #}
+
+{% block javascripts %}
+    {% if projects|length > 0 %}
+        <script src="{{ asset('js/association-projects.js') }}" defer></script>
+    {% endif %}
+{% endblock %}
 
 {% block body %}
     <h1 class="ap-title">Projets en cours</h1>
@@ -19,13 +34,70 @@
     {% if projects is empty %}
         <p class="ap-empty">Aucun projet n'est présenté pour le moment.</p>
     {% else %}
-        <ul class="ap-list">
-            {% for project in projects %}
-                <li class="ap-list__item">
-                    <a href="{{ project.url }}">{{ project.title }}</a>
-                    · {{ project.type.label }} · {{ project.state.label }}{% if project.period %} · {{ project.period }}{% endif %}
-                </li>
-            {% endfor %}
-        </ul>
+        <section class="ap-carousel"
+                 aria-roledescription="carrousel"
+                 aria-label="Projets en cours"
+                 aria-describedby="ap-carousel-help"
+                 data-carousel>
+
+            <p class="ap-visually-hidden" id="ap-carousel-help">
+                {{ projects|length }} projets. Flèches gauche et droite pour passer d'un projet à l'autre,
+                Entrée pour ouvrir la fiche du projet.
+            </p>
+
+            <div class="ap-carousel__viewport" data-viewport>
+                <ul class="ap-carousel__track" data-track>
+                    {% for project in projects %}
+                        <li class="ap-card" data-card data-slug="{{ project.slug }}" id="projet-{{ project.slug }}">
+                            {# draggable="false" : sinon le navigateur lance son propre
+                               « glisser-déposer » de lien et interrompt le glisser du carrousel. #}
+                            <a class="ap-card__link" href="{{ project.url }}" draggable="false">
+                                <span class="ap-card__media">
+                                    {% if project.image %}
+                                        <img src="{{ project.image.url }}"
+                                             alt="{{ project.image.alt }}"
+                                             {% if project.image.width %}width="{{ project.image.width }}" height="{{ project.image.height }}"{% endif %}
+                                             draggable="false"
+                                             decoding="async"
+                                             {% if loop.first %}fetchpriority="high"{% elseif loop.index0 >= 3 %}loading="lazy"{% endif %}>
+                                    {% else %}
+                                        {# Pas de visuel : motif de remplissage du design system. #}
+                                        <span class="ap-card__placeholder" aria-hidden="true">{{ project.type.label }}</span>
+                                    {% endif %}
+                                </span>
+                                <span class="ap-card__body">
+                                    <span class="ap-card__title">{{ project.title }}</span>
+                                    <span class="ap-card__meta">
+                                        <span class="ap-chip">{{ project.type.label }}</span>
+                                        <span class="ap-chip ap-chip--state">{{ project.state.label }}</span>
+                                    </span>
+                                    {% if project.period %}
+                                        <span class="ap-card__dates">{{ project.period }}</span>
+                                    {% endif %}
+                                </span>
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            {# Indicateur de position : une série de petits traits verticaux, le trait actif plus haut. #}
+            {% if projects|length > 1 %}
+                <ol class="ap-indicator" aria-label="Choisir un projet" data-indicator>
+                    {% for project in projects %}
+                        <li>
+                            <button type="button"
+                                    class="ap-indicator__tick"
+                                    data-tick="{{ loop.index0 }}"
+                                    aria-label="Projet {{ loop.index }} sur {{ projects|length }} : {{ project.title }}"
+                                    {% if loop.first %}aria-current="true"{% endif %}></button>
+                        </li>
+                    {% endfor %}
+                </ol>
+            {% endif %}
+
+            {# Annonce pour les lecteurs d'écran quand le projet central change. #}
+            <p class="ap-visually-hidden" aria-live="polite" data-live></p>
+        </section>
     {% endif %}
 {% endblock %}
