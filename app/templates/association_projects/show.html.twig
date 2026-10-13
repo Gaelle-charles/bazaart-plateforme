@@ -1,0 +1,20 @@
+{% extends 'association_projects/_layout.html.twig' %}
+
+{#
+ # association_projects/show.html.twig : fiche complète d'un projet (ADR-0039).
+ #
+ # Variables (AssociationProjectPublicController::show) :
+ #   - project      : tableau produit par AssociationProjectPresenter (fiche PUBLIÉE)
+ #   - token        : jeton de l'adresse (lien de retour)
+ #   - contactEmail : adresse de contact de l'association
+ #}
+
+{% block title %}{{ project.title }} · Projets en cours · BazaArt{% endblock %}
+
+{% block body %}
+    <p><a href="{{ path('app_asso_projects_page', {token: token}) }}">Tous les projets</a></p>
+    <h1 class="ap-title">{{ project.title }}</h1>
+    <p>{{ project.type.label }} · {{ project.state.label }}{% if project.period %} · {{ project.period }}{% endif %}</p>
+    {% if project.description %}<p>{{ project.description|nl2br }}</p>{% endif %}
+    <p>Contact : {% if project.leadName %}{{ project.leadName }}, {% endif %}<a href="mailto:{{ contactEmail }}">{{ contactEmail }}</a></p>
+{% endblock %}

@@ -1,0 +1,55 @@
+{#
+ # association_projects/_layout.html.twig : gabarit AUTONOME des pages « Projets en cours » (ADR-0039).
+ #
+ # POURQUOI NE PAS ÉTENDRE base.html.twig ?
+ #   Les personnes qui reçoivent le lien n'ont accès qu'à cette page : pas de menu
+ #   de la plateforme, pas de pied de page. base.html.twig apporte aussi l'écran de
+ #   chargement (placé hors de tout bloc, donc impossible à retirer), le bandeau
+ #   cookies et Google Analytics : rien de tout cela ici. Aucun service tiers ne voit
+ #   donc passer l'adresse de la page, qui contient le jeton secret.
+ #
+ # On garde l'identité visuelle de la plateforme : design-tokens.css (couleurs, espaces)
+ # et fonts.css (polices auto-hébergées, thème Street).
+ #
+ # Blocs : title, description, stylesheets, body, javascripts.
+ #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Projets en cours · BazaArt{% endblock %}</title>
+
+    {# Page privée : ni indexation, ni suivi des liens (doublé par l'en-tête X-Robots-Tag). #}
+    <meta name="robots" content="noindex, nofollow">
+    {# Aucun « referrer » envoyé quand on clique un lien : l'adresse (avec le jeton) ne fuit pas.
+       Doublé par l'en-tête HTTP Referrer-Policy: no-referrer posé par le contrôleur. #}
+    <meta name="referrer" content="no-referrer">
+    <meta name="description" content="{% block description %}Projets en cours de l'association BazaArt.{% endblock %}">
+
+    <link rel="icon" type="image/png" href="{{ asset('images/favicon.png') }}">
+
+    {# Polices du thème Street utilisées en premier écran : chargées en priorité. #}
+    <link rel="preload" href="{{ asset('fonts/archivo-black-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="{{ asset('fonts/space-grotesk-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+
+    {# Tokens de design EN PREMIER (variables --bg, --ink, --accent, --display…), puis les polices. #}
+    <link rel="stylesheet" href="{{ asset('css/design-tokens.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/fonts.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/association-projects.css') }}">
+    {% block stylesheets %}{% endblock %}
+</head>
+<body class="ap-body">
+    <a class="ap-skip" href="#contenu">Aller au contenu</a>
+
+    <header class="ap-header">
+        <img class="ap-header__logo" src="{{ asset('images/logo-black.svg') }}" alt="BazaArt" width="132" height="24">
+    </header>
+
+    <main id="contenu" class="ap-main">
+        {% block body %}{% endblock %}
+    </main>
+
+    {% block javascripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,85 @@
+/* ============================================================
+   BAZAART : page « Projets en cours » de l'association (ADR-0039)
+
+   Pages : /projets/{jeton} (carrousel) et /projets/{jeton}/{slug} (fiche).
+   Gabarit autonome : templates/association_projects/_layout.html.twig.
+
+   Thème Street : uniquement les tokens de design-tokens.css (--bg, --ink,
+   --accent, --display, --body, --mono…), chargé avant ce fichier.
+   Préfixe de classes : .ap- (association projects).
+   ============================================================ */
+
+/* ── Base de page ──────────────────────────────────────────── */
+.ap-body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);           /* fond clair crème */
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+}
+.ap-body *,
+.ap-body *::before,
+.ap-body *::after { box-sizing: border-box; }
+
+/* Lien « Aller au contenu » : invisible tant qu'on n'y arrive pas au clavier. */
+.ap-skip {
+    position: absolute;
+    left: var(--space-md);
+    top: -100px;
+    z-index: 100;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--ink);
+    color: var(--bg);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-decoration: none;
+}
+.ap-skip:focus { top: var(--space-md); }
+
+/* Focus visible au clavier : contour NOIR (--ink). Un contour jaune (--accent)
+   serait presque invisible sur le fond crème (contraste 1,3:1). */
+.ap-body a:focus-visible,
+.ap-body button:focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: 3px;
+}
+
+.ap-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: var(--container-max);
+    margin: 0 auto;
+    padding: var(--space-lg) var(--container-px);
+}
+.ap-header__logo { display: block; height: 24px; width: auto; }
+
+.ap-main {
+    max-width: var(--container-max);
+    margin: 0 auto;
+    padding: 0 var(--container-px) var(--space-3xl);
+}
+
+.ap-title {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(32px, 5vw, 56px);
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: -.01em;
+    margin: var(--space-md) 0 var(--space-xl);
+}
+
+.ap-empty {
+    font-family: var(--body);
+    color: var(--ink-mute);
+    padding: var(--space-2xl) 0;
+}
+
+@media (max-width: 640px) {
+    .ap-header { padding: var(--space-md); }
+    .ap-main { padding: 0 var(--space-md) var(--space-2xl); }
+}

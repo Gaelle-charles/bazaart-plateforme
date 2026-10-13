@@ -4,7 +4,10 @@
  # admin/association_projects/index.html.twig : liste des fiches « Projets en cours » (ADR-0039).
  #
  # Variables (AdminAssociationProjectController::index) :
- #   - projects : list<AssociationProject>, toutes les fiches (publiées ou non), dans l'ordre.
+ #   - projects      : list<AssociationProject>, toutes les fiches (publiées ou non), dans l'ordre.
+ #   - shareUrl      : adresse secrète de la page partenaires, ou null si le jeton
+ #                     PROJETS_PARTENAIRES_TOKEN n'est pas configuré (page éteinte).
+ #   - tokenTooShort : vrai si le jeton configuré fait moins de 32 caractères.
  #
  # RÉORDONNANCEMENT : un champ « ordre » par ligne et UN bouton « Enregistrer l'ordre ».
  # Le formulaire d'ordre entoure le tableau. Les boutons « Supprimer » ont chacun leur
@@ -30,6 +33,37 @@
     </p>
     <a href="{{ path('app_admin_asso_project_new') }}" class="adm-ap-btn">+ Nouvelle fiche</a>
 </div>
+
+{#
+    Lien à partager avec les partenaires. Il contient le jeton secret : quiconque
+    l'a peut voir la page (sans compte). À envoyer seulement aux bonnes personnes.
+#}
+<section class="adm-ap-panel adm-ap-share" aria-labelledby="adm-ap-share-title">
+    <h2 class="adm-ap-panel__title" id="adm-ap-share-title">Lien à partager</h2>
+    {% if shareUrl %}
+        <div class="adm-ap-share__row">
+            <label class="visually-hidden" for="adm-ap-share-url">Adresse de la page partenaires</label>
+            <input type="text" id="adm-ap-share-url" class="adm-ap-input" value="{{ shareUrl }}" readonly>
+            <button type="button" class="adm-ap-btn" data-copy="adm-ap-share-url">Copier</button>
+            <a href="{{ shareUrl }}" class="adm-ap-btn adm-ap-btn--ghost" target="_blank" rel="noopener noreferrer">Ouvrir</a>
+        </div>
+        <p class="adm-ap-hint">
+            Sans compte ni mot de passe : toute personne qui a ce lien voit les fiches publiées.
+            Ne l'envoyez qu'aux partenaires concernés.
+        </p>
+        {% if tokenTooShort %}
+            <p class="adm-ap-hint adm-ap-warning">
+                Attention : le jeton secret est court, donc plus facile à deviner. Demandez à
+                la personne qui gère le serveur d'en générer un de 64 caractères.
+            </p>
+        {% endif %}
+    {% else %}
+        <p class="adm-ap-hint">
+            Lien désactivé : la variable PROJETS_PARTENAIRES_TOKEN n'est pas configurée sur
+            le serveur. Tant qu'elle est vide, la page partenaires répond « page introuvable ».
+        </p>
+    {% endif %}
+</section>
 
 {% if projects is empty %}
     <p class="adm-ap-empty">Aucune fiche pour le moment.</p>
@@ -108,6 +142,26 @@
     contenant une apostrophe ne peut donc pas casser le script.
 #}
 <script>
+// Bouton « Copier » : copie le lien secret dans le presse-papiers.
+document.querySelectorAll('[data-copy]').forEach(function (button) {
+    button.addEventListener('click', function () {
+        var field = document.getElementById(button.dataset.copy);
+        if (!field) { return; }
+        var done = function () {
+            button.textContent = 'Copié';
+            setTimeout(function () { button.textContent = 'Copier'; }, 2000);
+        };
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(field.value).then(done);
+        } else {
+            // Repli (page en http, ancien navigateur) : sélection + commande copier.
+            field.select();
+            document.execCommand('copy');
+            done();
+        }
+    });
+});
+
 document.querySelectorAll('form[data-confirm]').forEach(function (form) {
     form.addEventListener('submit', function (event) {
         if (!window.confirm(form.dataset.confirm)) {

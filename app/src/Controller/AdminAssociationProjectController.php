@@ -11,6 +11,7 @@ use App\Enum\AssociationProjectType;
 use App\Repository\AssociationProjectRepository;
 use App\Service\AssociationProject\AssociationProjectImageStorage;
 use App\Service\AssociationProject\AssociationProjectService;
+use App\Service\AssociationProject\PublicAccessToken;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -18,6 +19,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
@@ -49,15 +51,27 @@ class AdminAssociationProjectController extends AbstractController
         private readonly AssociationProjectRepository $repository,
         private readonly AssociationProjectService $service,
         private readonly AssociationProjectImageStorage $imageStorage,
+        private readonly PublicAccessToken $accessToken,
     ) {
     }
 
-    /** GET /admin/fiches-projets : liste de toutes les fiches, dans l'ordre d'affichage. */
+    /**
+     * GET /admin/fiches-projets : liste de toutes les fiches, dans l'ordre d'affichage,
+     * avec le lien secret à partager (si le jeton est configuré sur le serveur).
+     */
     #[Route('', name: 'index', methods: ['GET'])]
     public function index(): Response
     {
+        // Lien à partager : généré seulement si le jeton existe. Avec un jeton vide,
+        // le routeur refuserait de construire l'adresse (paramètre {token} vide).
+        $shareUrl = $this->accessToken->isEnabled()
+            ? $this->generateUrl('app_asso_projects_page', ['token' => $this->accessToken->value()], UrlGeneratorInterface::ABSOLUTE_URL)
+            : null;
+
         return $this->render('admin/association_projects/index.html.twig', [
-            'projects' => $this->repository->findAllOrdered(),
+            'projects'       => $this->repository->findAllOrdered(),
+            'shareUrl'       => $shareUrl,
+            'tokenTooShort'  => $this->accessToken->isTooShort(),
         ]);
     }
 

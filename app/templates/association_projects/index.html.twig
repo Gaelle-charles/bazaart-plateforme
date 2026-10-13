@@ -1,0 +1,31 @@
+{% extends 'association_projects/_layout.html.twig' %}
+
+{#
+ # association_projects/index.html.twig : page « Projets en cours » (ADR-0039).
+ #
+ # Variables (AssociationProjectPublicController::page) :
+ #   - projects     : list de tableaux produits par AssociationProjectPresenter
+ #                    (uniquement les fiches PUBLIÉES, dans l'ordre d'affichage)
+ #   - token        : jeton de l'adresse (pour les liens internes)
+ #   - contactEmail : adresse de contact de l'association
+ #
+ # Les cartes sont écrites ici, côté serveur : sans JavaScript, la page reste une
+ # liste de cartes qui défile horizontalement, chaque carte menant à sa fiche.
+ #}
+
+{% block body %}
+    <h1 class="ap-title">Projets en cours</h1>
+
+    {% if projects is empty %}
+        <p class="ap-empty">Aucun projet n'est présenté pour le moment.</p>
+    {% else %}
+        <ul class="ap-list">
+            {% for project in projects %}
+                <li class="ap-list__item">
+                    <a href="{{ project.url }}">{{ project.title }}</a>
+                    · {{ project.type.label }} · {{ project.state.label }}{% if project.period %} · {{ project.period }}{% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endblock %}
