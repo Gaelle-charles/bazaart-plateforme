@@ -184,8 +184,10 @@ d'un dossier qui contient `projets.json` (une fiche par projet) et `images/` (le
 
 ### 5.1 Ce que fait l'import, et ce qu'il ne fait jamais
 
-- Il retrouve chaque fiche par son **titre exact**. Un titre inconnu ne crée rien : il est
-  signalé (avec le titre voisin s'il ne diffère que par un espace, une apostrophe…).
+- Il retrouve chaque fiche par son **titre exact** (même texte, caractère pour caractère ;
+  seul l'encodage invisible des accents, parfois différent sur Mac, est neutralisé). Un
+  titre inconnu ne crée rien : il est signalé (avec le titre voisin s'il ne diffère que par
+  un espace, une apostrophe ou une majuscule).
 - Il remplit **uniquement les champs vides**. Un champ déjà rempli dans le back-office
   n'est jamais écrasé : il est listé dans le compte rendu.
 - Il ne touche **jamais** à la case « Publié ». Une fiche **déjà publiée** n'est pas
@@ -195,9 +197,13 @@ d'un dossier qui contient `projets.json` (une fiche par projet) et `images/` (le
 - Les visuels passent par les mêmes contrôles qu'un envoi depuis le back-office ; leur
   texte alternatif est le titre de la fiche.
 - Il peut être **relancé** : rien n'est rempli deux fois. Un **journal**
-  (`.journal-import.json`, rangé à côté de `projets.json`) retient chaque champ rempli :
-  si l'équipe vide un champ ou retire un visuel pendant sa relecture, une relance ne le
-  remplit pas à nouveau.
+  (`app/var/association-projects-import-journal-prod.json` sur le serveur, ignoré par git)
+  retient, par fiche, chaque champ que l'import a rempli **ou trouvé déjà rempli**, et le
+  visuel qu'il a envoyé : si l'équipe vide un champ ou retire un visuel, une relance ne le
+  remplit pas à nouveau. **Ne pas supprimer ce fichier.**
+- Les champs sur une ligne dans le back-office (dates, lieux, artistes, référente) ne
+  doivent pas contenir de retour à la ligne : sinon le champ n'est pas rempli et c'est
+  signalé (le formulaire l'effacerait sans prévenir au prochain enregistrement).
 - Le compte rendu ne contient **aucun texte des fiches** (seulement les titres et les noms
   de champs) : on peut le copier-coller sans risque.
 
@@ -248,8 +254,9 @@ Toutes les commandes serveur se lancent depuis `/root/bazaart-plateforme`.
    l'aperçu de deux ou trois fiches. Pour l'import lui-même, la preuve est son compte rendu
    et son code de sortie.
 8. **Nettoyer**, une fois la relecture de l'équipe terminée :
-   `rm -rf /root/bazaart-plateforme/app/var/import` (le journal part avec : une relance
-   n'est alors plus possible, ce qui est voulu).
+   `rm -rf /root/bazaart-plateforme/app/var/import`. Le journal, lui, reste dans
+   `app/var/` : si un nouveau fichier est importé plus tard, il empêchera toujours de
+   re-remplir ce que l'équipe a vidé.
 
 **Pourquoi `-u www-data` ?** En production, la commande refuse de tourner en root : le
 dossier des images serait créé au nom de root, et le back-office (qui tourne sous

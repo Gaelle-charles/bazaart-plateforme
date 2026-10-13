@@ -10,10 +10,12 @@ use App\Enum\AssociationProjectState;
 use App\Enum\AssociationProjectType;
 use App\Service\AssociationProject\AssociationProjectImageStorage;
 use App\Service\AssociationProject\AssociationProjectImporter;
+use App\Service\AssociationProject\StoredImage;
 use Doctrine\ORM\Events;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
  * AssociationProjectImportTest : commande app:import-association-projects (ADR-0039).
@@ -47,6 +49,8 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
         // le test qui vérifie qu'aucune copie ne traîne ne doit pas compter ce dossier.
         $this->dir = sys_get_temp_dir() . '/ap-import-test-' . bin2hex(random_bytes(6));
         mkdir($this->dir . '/images', 0777, true);
+        // Chaque test repart sans journal (il est propre à l'environnement de test).
+        @unlink($this->journalPath());
     }
 
     protected function tearDown(): void
@@ -57,6 +61,7 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
             $storage->delete($project->getImagePath());
         }
         $this->removeTree($this->dir);
+        @unlink($this->journalPath());
         parent::tearDown();
     }
 
@@ -111,8 +116,9 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
         // Confidentialité : aucun contenu dans le compte rendu.
         self::assertStringNotContainsString('Valeur-factice', $output);
         self::assertStringNotContainsString("Saisie de l'équipe", $output);
-        // Journal écrit à côté des données.
-        self::assertFileExists($this->dir . '/' . AssociationProjectImporter::JOURNAL_FILE);
+        // Journal écrit hors du dossier de données (qu'on supprime après coup).
+        self::assertFileExists($this->journalPath());
+        self::assertFileDoesNotExist($this->dir . '/.journal-import.json');
     }
 
     public function testSecondRunChangesNothing(): void
@@ -216,7 +222,7 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
         self::assertNull($project->getPlaces());
         self::assertNull($project->getImagePath());
         self::assertSame($filesBefore, $this->storedFileCount());
-        self::assertFileDoesNotExist($this->dir . '/' . AssociationProjectImporter::JOURNAL_FILE);
+        self::assertFileDoesNotExist($this->journalPath());
     }
 
     public function testFieldsEmptiedByTheTeamAreNotRefilled(): void
@@ -243,6 +249,60 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
         self::assertNull($project->getImagePath(), 'visuel retiré par l\'équipe : non renvoyé');
         self::assertSame('Dates factices', $project->getPeriod());
         self::assertStringContainsString('Vidés depuis un import précédent, non re-remplis (2) : lieux, visuel', $output);
+    }
+
+    public function testTeamValuesEmptiedAfterAnImportAreNotRefilled(): void
+    {
+        // L'équipe avait déjà saisi deux champs (l'un identique au JSON, l'autre non)
+        // et son propre visuel : le 1er import n'y touche pas.
+        $project = $this->createProject('Zagaza · Maison Verveau', 'zagaza-maison-verveau');
+        $project->setPeriod('Dates factices')->setPlaces("Saisie de l'équipe");
+        $teamImage = $this->storeTinyPng();
+        $project->setImagePath($teamImage)->setImageSize(1, 1);
+        $this->em->flush();
+        $this->writeImage('zagaza.png');
+        $this->writeJson([$this->item('Zagaza · Maison Verveau', [
+            'dates' => 'Dates factices', 'lieux' => 'Lieu factice', 'visuel' => 'zagaza.png',
+        ])]);
+        [, $first] = $this->runImport();
+        self::assertStringContainsString('Déjà remplis, identiques au JSON (1) : dates', $first);
+        self::assertStringContainsString('Déjà remplis avec une autre valeur, NON écrasés (2) : lieux, visuel', $first);
+
+        // Pendant sa relecture, l'équipe vide ces champs et retire son visuel.
+        $project = $this->reload('zagaza-maison-verveau');
+        static::getContainer()->get(AssociationProjectImageStorage::class)->delete($project->getImagePath());
+        $project->setPeriod(null)->setPlaces(null)->setImagePath(null)->setImageSize(null, null);
+        $this->em->flush();
+
+        [$code, $output] = $this->runImport();
+
+        self::assertSame(Command::SUCCESS, $code, $output);
+        $project = $this->reload('zagaza-maison-verveau');
+        self::assertNull($project->getPeriod());
+        self::assertNull($project->getPlaces());
+        self::assertNull($project->getImagePath());
+        self::assertStringContainsString('Vidés depuis un import précédent, non re-remplis (3) : dates, lieux, visuel', $output);
+    }
+
+    public function testVisualReplacedByTheTeamIsReportedAsAnotherValue(): void
+    {
+        $this->createProject('masonn · Bolivie', 'masonn-bolivie');
+        $this->em->flush();
+        $this->writeImage('masonn.png');
+        $this->writeJson([$this->item('masonn · Bolivie', ['visuel' => 'masonn.png'])]);
+        $this->runImport();
+
+        // L'équipe remplace le visuel importé par le sien.
+        $project = $this->reload('masonn-bolivie');
+        static::getContainer()->get(AssociationProjectImageStorage::class)->delete($project->getImagePath());
+        $project->setImagePath($this->storeTinyPng());
+        $this->em->flush();
+
+        [$code, $output] = $this->runImport();
+
+        self::assertSame(Command::SUCCESS, $code, $output);
+        self::assertStringContainsString('Déjà remplis avec une autre valeur, NON écrasés (1) : visuel', $output);
+        self::assertMatchesRegularExpression('/dont identiques au JSON\s+0\b/', $output);
     }
 
     public function testFailureRollsBackEverything(): void
@@ -274,7 +334,7 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
         self::assertNull($project->getPlaces());
         self::assertNull($project->getImagePath());
         self::assertSame($filesBefore, $this->storedFileCount(), 'image de cette exécution supprimée');
-        self::assertFileDoesNotExist($this->dir . '/' . AssociationProjectImporter::JOURNAL_FILE);
+        self::assertFileDoesNotExist($this->journalPath());
     }
 
     // ═════════════════════════════════════════════════════════════════════
@@ -285,9 +345,13 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
     {
         $this->createProject('Zagaza · Maison Verveau', 'zagaza-maison-verveau');
         $this->createProject('masonn · Bolivie', 'masonn-bolivie');
+        $this->createProject('Plateforme app.bazaart.fr', 'plateforme-app-bazaart-fr');
         $this->em->flush();
         file_put_contents($this->dir . '/images/pas-une-image.png', 'ceci est du texte');
+        // Plus de 5 Mo : refusée AVANT d'être recopiée dans le dossier temporaire.
+        file_put_contents($this->dir . '/images/trop-lourde.png', str_repeat("\0", AssociationProjectImageStorage::MAX_SIZE_BYTES + 1));
         $first = $this->item('Zagaza · Maison Verveau', [
+            'artistes_concernes' => "Artiste un\nArtiste deux",
             'description'       => str_repeat('a', 601),
             'lieux'             => ['liste', 'non acceptée'],
             'referente'         => 'prenom@exemple.fr',
@@ -298,7 +362,8 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
         unset($first['dates']);
         $first['artiste'] = 'clé mal orthographiée';
         $second = $this->item('masonn · Bolivie', ['visuel' => 'pas-une-image.png']);
-        $this->writeJson([$first, $second]);
+        $third = $this->item('Plateforme app.bazaart.fr', ['visuel' => 'trop-lourde.png']);
+        $this->writeJson([$first, $second, $third]);
         $temporaryBefore = count(glob(sys_get_temp_dir() . '/asso-import-*') ?: []);
 
         [$code, $output] = $this->runImport();
@@ -310,8 +375,12 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
         self::assertNull($zagaza->getLeadName());
         self::assertNull($zagaza->getImagePath());
         self::assertSame('Apport factice', $zagaza->getPartnerContribution(), 'les champs valides sont remplis');
+        self::assertNull($zagaza->getArtists());
         self::assertNull($this->reload('masonn-bolivie')->getImagePath());
+        self::assertNull($this->reload('plateforme-app-bazaart-fr')->getImagePath());
         foreach ([
+            'artistes concernés : contient un retour à la ligne',
+            "L'image ne doit pas dépasser 5 Mo.",
             'La description fait 601 caractères : 600 maximum. Champ non rempli.',
             'lieux : valeur de type array, texte attendu. Champ non rempli.',
             'Référente : indique seulement le prénom et le nom',
@@ -327,18 +396,47 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
         self::assertCount($temporaryBefore, glob(sys_get_temp_dir() . '/asso-import-*') ?: []);
     }
 
-    public function testFindsAVisualWhoseFileNameIsInNfdForm(): void
+    public function testNfdTitleAndFileNameAreMatched(): void
     {
         $this->createProject('Média BazaArt', 'media-bazaart');
         $this->em->flush();
+        // Titre du JSON en NFD (« é » = e + accent combinant, comme peut l'écrire un Mac) :
+        // c'est le même texte que le titre en base, il doit être rattaché.
         // Nom de fichier écrit en NFD sur le disque, nom du JSON en NFC.
         $this->writeImage("fe\u{0302}te.png");
-        $this->writeJson([$this->item('Média BazaArt', ['visuel' => "f\u{00EA}te.png"])]);
+        $this->writeJson([$this->item("Me\u{0301}dia BazaArt", ['lieux' => 'Lieu factice', 'visuel' => "f\u{00EA}te.png"])]);
 
         [$code, $output] = $this->runImport();
 
         self::assertSame(Command::SUCCESS, $code, $output);
-        self::assertNotNull($this->reload('media-bazaart')->getImagePath());
+        $project = $this->reload('media-bazaart');
+        self::assertSame('Lieu factice', $project->getPlaces());
+        self::assertNotNull($project->getImagePath());
+    }
+
+    public function testImagesFolderMustNotBeALink(): void
+    {
+        $this->createProject('Média BazaArt', 'media-bazaart');
+        $this->em->flush();
+        // images/ remplacé par un lien vers un dossier extérieur contenant une vraie image.
+        $outside = $this->dir . '-ailleurs';
+        mkdir($outside);
+        file_put_contents($outside . '/photo.png', base64_decode(self::TINY_PNG, true));
+        rmdir($this->dir . '/images');
+        symlink($outside, $this->dir . '/images');
+        $this->writeJson([$this->item('Média BazaArt', ['visuel' => 'photo.png'])]);
+
+        try {
+            [$code, $output] = $this->runImport();
+        } finally {
+            unlink($this->dir . '/images');
+            $this->removeTree($outside);
+            mkdir($this->dir . '/images');
+        }
+
+        self::assertSame(Command::FAILURE, $code);
+        self::assertStringContainsString('le dossier images/ est un lien vers un autre dossier', $output);
+        self::assertNull($this->reload('media-bazaart')->getImagePath());
     }
 
     // ═════════════════════════════════════════════════════════════════════
@@ -358,10 +456,15 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
             }
         };
         $tester = new CommandTester($command);
-        $code = $tester->execute(['dossier' => $this->dir]);
+        $code = $tester->execute(['dossier' => $this->dir, '--dry-run' => true]);
 
         self::assertSame(Command::FAILURE, $code);
-        self::assertStringContainsString('-u www-data', $tester->getDisplay());
+        // Commande complète, prête à copier, qui garde l'option d'essai.
+        self::assertStringContainsString(
+            'docker compose --env-file .env.local -f docker-compose.prod.yml exec -T -u www-data platform_app php bin/console app:import-association-projects',
+            $tester->getDisplay(),
+        );
+        self::assertStringContainsString('--dry-run', $tester->getDisplay());
         self::assertNull($this->reload('media-bazaart')->getPlaces());
     }
 
@@ -438,6 +541,26 @@ class AssociationProjectImportTest extends AbstractE2ETestCase
         self::assertNotNull($project, $slug);
 
         return $project;
+    }
+
+    private function journalPath(): string
+    {
+        $path = static::getContainer()->getParameter('association_projects.import_journal');
+        self::assertIsString($path);
+
+        return $path;
+    }
+
+    /** Enregistre une image comme le ferait le back-office ; renvoie son nom de fichier. */
+    private function storeTinyPng(): string
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'ap-test-');
+        file_put_contents($tmp, base64_decode(self::TINY_PNG, true));
+        $stored = static::getContainer()->get(AssociationProjectImageStorage::class)
+            ->store(new UploadedFile($tmp, 'equipe.png', 'image/png', null, true));
+        self::assertInstanceOf(StoredImage::class, $stored);
+
+        return $stored->path;
     }
 
     private function storedFileCount(): int

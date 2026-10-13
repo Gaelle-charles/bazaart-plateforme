@@ -40,6 +40,10 @@ parameters:
     # Partagé par le stockage des images et par la commande d'import des fiches, qui
     # vérifie avant d'écrire qu'il est accessible (app:import-association-projects).
     association_projects.storage_dir: '%kernel.project_dir%/var/secure_uploads/association-projects/%kernel.environment%'
+    # Journal de cet import (hors git, dans var/) : champs que l'import ne doit plus jamais
+    # remplir. Volontairement HORS du dossier de données (var/import), qu'on supprime
+    # après coup : sans lui, une relance re-remplirait les champs vidés par l'équipe.
+    association_projects.import_journal: '%kernel.project_dir%/var/association-projects-import-journal-%kernel.environment%.json'
 
 services:
     # default configuration for services in *this* file
@@ -180,6 +184,7 @@ services:
         arguments:
             $storageDir: '%association_projects.storage_dir%'
             $projectDir: '%kernel.project_dir%'
+            $journalPath: '%association_projects.import_journal%'
 
     App\Service\AssociationProject\PublicAccessToken:
         arguments:

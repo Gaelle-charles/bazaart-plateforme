@@ -28,9 +28,13 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  *   - Visuels : envoyés par AssociationProjectImageStorage::store(), exactement comme un
  *     envoi depuis le back-office (vrai format, 5 Mo, 8 000 px, nom aléatoire, stockage
  *     privé). Texte alternatif = titre de la fiche.
- *   - Relançable : un JOURNAL (.journal-import.json, à côté de projets.json, donc hors
- *     git) retient chaque champ rempli. Un champ vidé ensuite par l'équipe pendant sa
- *     relecture n'est JAMAIS re-rempli, et un visuel retiré n'est jamais renvoyé.
+ *   - Relançable : un JOURNAL (var/association-projects-import-journal-<env>.json, hors
+ *     git, indépendant du dossier de données qu'on supprime après coup) retient, par
+ *     fiche, chaque champ que l'import a rempli OU qu'il a trouvé déjà rempli, ainsi que
+ *     le visuel qu'il a envoyé. Un tel champ, vidé ensuite par l'équipe, n'est JAMAIS
+ *     re-rempli ; un visuel retiré n'est jamais renvoyé.
+ *   - Titre « exact » : même texte, caractère pour caractère. Seul l'encodage des accents
+ *     est neutralisé (formes Unicode NFC et NFD, invisibles à l'écran).
  *
  * SÛRETÉ :
  *   - Tout se passe dans UNE transaction ; chaque fiche est verrouillée (SELECT … FOR
@@ -50,8 +54,10 @@ final class AssociationProjectImporter
 {
     public const DATA_FILE = 'projets.json';
     public const IMAGES_DIR = 'images';
-    public const JOURNAL_FILE = '.journal-import.json';
     public const IMAGE_LABEL = 'visuel';
+
+    /** Champs qui tiennent sur UNE ligne dans le back-office (<input type="text">). */
+    private const SINGLE_LINE_FIELDS = ['dates', 'lieux', 'artistes_concernes', 'referente'];
 
     /** Fiches jamais modifiées par l'import, repérées par leur slug (figé à la création). */
     public const EXCLUDED_SLUGS = ['formations'];
@@ -82,6 +88,8 @@ final class AssociationProjectImporter
         /** Dossier privé des images (même paramètre que AssociationProjectImageStorage). */
         private readonly string $storageDir,
         private readonly string $projectDir,
+        /** Journal des imports (paramètre association_projects.import_journal). */
+        private readonly string $journalPath,
     ) {
     }
 
@@ -101,17 +109,18 @@ final class AssociationProjectImporter
             return $report;
         }
 
-        $journalPath = $dir . DIRECTORY_SEPARATOR . self::JOURNAL_FILE;
-        $journal = $this->readJournal($journalPath, $report);
-        $this->checkWritable($dir, $journalPath, $report);
+        $journal = $this->readJournal($report);
+        $this->checkWritable($report);
 
         // On n'écrit que si ce n'est pas un essai ET qu'aucune erreur générale n'est apparue.
         $canWrite = !$dryRun && $report->globalErrors === [];
 
+        // Doublons comptés sur le texte du titre (forme NFC : même texte, même clé).
         $titleCounts = [];
         foreach ($items as $item) {
             if (is_array($item) && is_string($item['titre'] ?? null)) {
-                $titleCounts[$item['titre']] = ($titleCounts[$item['titre']] ?? 0) + 1;
+                $key = self::nfc($item['titre']);
+                $titleCounts[$key] = ($titleCounts[$key] ?? 0) + 1;
             }
         }
 
@@ -121,15 +130,19 @@ final class AssociationProjectImporter
         $trialDir = null;
 
         try {
+            // Titres en base, pour le rattachement (quelques lignes : id et titre seulement).
+            /** @var list<array{id: int, title: string}> $titles */
+            $titles = $this->em->createQuery('SELECT p.id, p.title FROM ' . AssociationProject::class . ' p')->getArrayResult();
+
             // ── 1. Analyse de chaque fiche (lecture seule, fiches verrouillées) ──
-            /** @var list<array{entry: AssociationProjectImportEntry, project: AssociationProject, texts: array<string, string>, imageSource: ?string, storedImage: ?StoredImage}> $plans */
+            /** @var list<array{entry: AssociationProjectImportEntry, project: AssociationProject, texts: array<string, string>, imageSource: ?string, storedImage: ?StoredImage, seen: list<string>}> $plans */
             $plans = [];
             foreach ($items as $index => $item) {
                 $title = is_array($item) && is_string($item['titre'] ?? null) ? $item['titre'] : '';
                 $entry = new AssociationProjectImportEntry($index + 1, $title);
                 $report->entries[] = $entry;
 
-                $plan = $this->planEntry($entry, $item, $titleCounts, $journal, $dir . DIRECTORY_SEPARATOR . self::IMAGES_DIR, $canWrite);
+                $plan = $this->planEntry($entry, $item, $titleCounts, $titles, $journal, $dir . DIRECTORY_SEPARATOR . self::IMAGES_DIR, $canWrite);
                 if ($plan !== null) {
                     $plans[] = $plan;
                 }
@@ -206,7 +219,7 @@ final class AssociationProjectImporter
 
         $report->written = true;
         $report->storedImages = $storedPaths;
-        $this->writeJournal($journalPath, $journal, $plans, $report);
+        $this->writeJournal($journal, $plans, $report);
 
         return $report;
     }
@@ -214,15 +227,20 @@ final class AssociationProjectImporter
     /**
      * Analyse une entrée du JSON et prépare ce qu'il faut remplir.
      *
-     * @param array<string, int>          $titleCounts nombre d'apparitions de chaque titre dans le JSON
-     * @param array<string, list<string>> $journal     id de fiche => clés déjà remplies par un import
+     * Renvoie un « plan » pour CHAQUE fiche retrouvée et modifiable, même s'il n'y a rien
+     * à remplir : le journal doit aussi retenir les champs trouvés déjà remplis.
      *
-     * @return array{entry: AssociationProjectImportEntry, project: AssociationProject, texts: array<string, string>, imageSource: ?string, storedImage: ?StoredImage}|null
+     * @param array<string, int>                                         $titleCounts nombre d'apparitions de chaque titre (NFC) dans le JSON
+     * @param list<array{id: int, title: string}>                        $titles      titres en base
+     * @param array<string, array{champs: list<string>, visuel: ?string}> $journal     id de fiche => champs protégés, visuel envoyé
+     *
+     * @return array{entry: AssociationProjectImportEntry, project: AssociationProject, texts: array<string, string>, imageSource: ?string, storedImage: ?StoredImage, seen: list<string>}|null
      */
     private function planEntry(
         AssociationProjectImportEntry $entry,
         mixed $item,
         array $titleCounts,
+        array $titles,
         array $journal,
         string $imagesDir,
         bool $lock,
@@ -254,35 +272,30 @@ final class AssociationProjectImporter
             }
         }
 
-        if (($titleCounts[$title] ?? 0) > 1) {
+        $titleKey = self::nfc($title);
+        if (($titleCounts[$titleKey] ?? 0) > 1) {
             $entry->status = AssociationProjectImportEntry::STATUS_DUPLICATE;
-            $entry->errors[] = sprintf('Ce titre apparaît %d fois dans le JSON : fiche non touchée.', $titleCounts[$title]);
+            $entry->errors[] = sprintf('Ce titre apparaît %d fois dans le JSON : fiche non touchée.', $titleCounts[$titleKey]);
 
             return null;
         }
 
-        // Égalité STRICTE du titre (consigne). La fiche est verrouillée jusqu'à la fin de
-        // la transaction et RELUE (HINT_REFRESH) : on compare avec l'état réel de la base.
-        $query = $this->em->createQueryBuilder()
-            ->select('p')
-            ->from(AssociationProject::class, 'p')
-            ->where('p.title = :title')
-            ->setParameter('title', $title)
-            ->getQuery()
-            ->setHint(Query::HINT_REFRESH, true);
-        if ($lock) {
-            $query->setLockMode(LockMode::PESSIMISTIC_WRITE);
+        // Titre EXACT : même texte, caractère pour caractère. On compare les formes NFC,
+        // qui ne changent rien de visible (un « é » écrit en un ou deux caractères).
+        $ids = [];
+        foreach ($titles as $row) {
+            if (self::nfc($row['title']) === $titleKey) {
+                $ids[] = $row['id'];
+            }
         }
-        /** @var list<AssociationProject> $found */
-        $found = $query->getResult();
 
-        if ($found === []) {
+        if ($ids === []) {
             $entry->status = AssociationProjectImportEntry::STATUS_NOT_FOUND;
             $message = "Aucune fiche n'a exactement ce titre : rien n'est créé.";
-            $similar = $this->similarTitle($title);
+            $similar = $this->similarTitle($title, $titles);
             if ($similar !== null) {
                 $message .= sprintf(
-                    ' Une fiche a un titre presque identique (« %s ») : vérifiez les espaces, apostrophes, accents ou majuscules dans le JSON.',
+                    ' Une fiche a un titre presque identique (« %s ») : vérifiez les espaces, apostrophes ou majuscules dans le JSON.',
                     $similar,
                 );
             }
@@ -290,14 +303,34 @@ final class AssociationProjectImporter
 
             return null;
         }
-        if (count($found) > 1) {
+        if (count($ids) > 1) {
             $entry->status = AssociationProjectImportEntry::STATUS_DUPLICATE;
-            $entry->errors[] = sprintf('%d fiches portent ce titre en base : aucune n\'est touchée.', count($found));
+            $entry->errors[] = sprintf('%d fiches portent ce titre en base : aucune n\'est touchée.', count($ids));
 
             return null;
         }
 
-        $project = $found[0];
+        // La fiche est verrouillée jusqu'à la fin de la transaction et RELUE
+        // (HINT_REFRESH) : on compare avec l'état réel de la base, pas une copie en mémoire.
+        $query = $this->em->createQueryBuilder()
+            ->select('p')
+            ->from(AssociationProject::class, 'p')
+            ->where('p.id = :id')
+            ->setParameter('id', $ids[0])
+            ->getQuery()
+            ->setHint(Query::HINT_REFRESH, true);
+        if ($lock) {
+            $query->setLockMode(LockMode::PESSIMISTIC_WRITE);
+        }
+        $project = $query->getOneOrNullResult();
+        if (!$project instanceof AssociationProject || self::nfc($project->getTitle()) !== $titleKey) {
+            // Fiche supprimée ou renommée entre-temps dans le back-office.
+            $entry->status = AssociationProjectImportEntry::STATUS_NOT_FOUND;
+            $entry->errors[] = "La fiche vient d'être supprimée ou renommée dans le back-office : rien n'est fait.";
+
+            return null;
+        }
+
         if (in_array($project->getSlug(), self::EXCLUDED_SLUGS, true)) {
             $entry->status = AssociationProjectImportEntry::STATUS_EXCLUDED;
             $entry->errors[] = "Fiche exclue de l'import (consigne) : non touchée.";
@@ -311,7 +344,20 @@ final class AssociationProjectImporter
             return null;
         }
 
-        $alreadyImported = $journal[(string) $project->getId()] ?? [];
+        $journalEntry = $journal[(string) $project->getId()] ?? ['champs' => [], 'visuel' => null];
+        $protected = $journalEntry['champs'];
+
+        // Champs remplis AVANT cet import (saisie de l'équipe ou import précédent) : le
+        // journal les retiendra, pour ne jamais les re-remplir s'ils sont vidés ensuite.
+        $seen = [];
+        foreach (array_keys(self::TEXT_FIELDS) as $jsonKey) {
+            if (!self::isBlank($this->getValue($project, $jsonKey))) {
+                $seen[] = $jsonKey;
+            }
+        }
+        if ($project->getImagePath() !== null) {
+            $seen[] = self::IMAGE_LABEL;
+        }
 
         $this->compareEnum($item['type'] ?? null, AssociationProjectType::cases(), $project->getType(), 'type', $entry);
         $this->compareEnum($item['etat'] ?? null, AssociationProjectState::cases(), $project->getState(), 'état', $entry);
@@ -340,8 +386,15 @@ final class AssociationProjectImporter
                 }
                 continue;
             }
-            if (in_array($jsonKey, $alreadyImported, true)) {
+            if (in_array($jsonKey, $protected, true)) {
                 $entry->notRefilled[] = $label;
+                continue;
+            }
+
+            // Champ sur une ligne dans le back-office : un retour à la ligne y serait
+            // effacé sans prévenir au prochain enregistrement du formulaire.
+            if (in_array($jsonKey, self::SINGLE_LINE_FIELDS, true) && preg_match('/[\n\t]/', $value) === 1) {
+                $entry->errors[] = sprintf('%s : contient un retour à la ligne, alors que ce champ tient sur une seule ligne dans le back-office. Champ non rempli.', $label);
                 continue;
             }
 
@@ -365,14 +418,15 @@ final class AssociationProjectImporter
         } elseif ($rawImage === null || $rawImage === '') {
             $entry->nullInJson[] = self::IMAGE_LABEL;
         } elseif ($project->getImagePath() !== null) {
-            // On ne peut pas comparer deux images : un visuel envoyé par un import
-            // précédent compte comme « identique », un visuel de l'équipe comme « autre ».
-            if (in_array(self::IMAGE_LABEL, $alreadyImported, true)) {
+            // On ne compare pas deux images : seul le visuel envoyé par un import (son nom
+            // de fichier est au journal) compte comme « identique » ; tout autre visuel,
+            // ajouté ou remplacé par l'équipe, est « une autre valeur ».
+            if ($journalEntry['visuel'] !== null && $journalEntry['visuel'] === $project->getImagePath()) {
                 $entry->alreadySame[] = self::IMAGE_LABEL;
             } else {
                 $entry->alreadyDifferent[] = self::IMAGE_LABEL;
             }
-        } elseif (in_array(self::IMAGE_LABEL, $alreadyImported, true)) {
+        } elseif (in_array(self::IMAGE_LABEL, $protected, true)) {
             $entry->notRefilled[] = self::IMAGE_LABEL;
         } else {
             [$imageSource, $imageError] = $this->resolveImage($imagesDir, $rawImage);
@@ -381,11 +435,7 @@ final class AssociationProjectImporter
             }
         }
 
-        if ($texts === [] && $imageSource === null) {
-            return null;
-        }
-
-        return ['entry' => $entry, 'project' => $project, 'texts' => $texts, 'imageSource' => $imageSource, 'storedImage' => null];
+        return ['entry' => $entry, 'project' => $project, 'texts' => $texts, 'imageSource' => $imageSource, 'storedImage' => null, 'seen' => $seen];
     }
 
     /**
@@ -490,8 +540,11 @@ final class AssociationProjectImporter
      *
      * Le nom doit désigner DIRECTEMENT un fichier de images/ : « ../ », sous-dossier,
      * fichier caché ou lien symbolique qui sort du dossier sont refusés (on ne tronque
-     * jamais un nom, on refuse). Si le nom exact est absent, on compare les noms en
+     * jamais un nom, on refuse), de même qu'un dossier images/ qui serait lui-même un
+     * lien vers un autre dossier. Si le nom exact est absent, on compare les noms en
      * forme Unicode NFC : un Mac peut avoir écrit « é » en deux caractères.
+     * La taille est contrôlée ICI, avant toute copie : un fichier énorme n'est jamais
+     * recopié dans le dossier temporaire.
      *
      * @return array{0: ?string, 1: ?string} [chemin réel du fichier, message d'erreur]
      */
@@ -502,6 +555,9 @@ final class AssociationProjectImporter
             return [null, 'nom de fichier refusé : il doit désigner directement un fichier du dossier images/.'];
         }
 
+        if (is_link($imagesDir)) {
+            return [null, 'le dossier images/ est un lien vers un autre dossier : refusé.'];
+        }
         $base = realpath($imagesDir);
         if ($base === false || !is_dir($base)) {
             return [null, 'dossier images/ introuvable.'];
@@ -525,6 +581,11 @@ final class AssociationProjectImporter
         $real = realpath($candidate);
         if ($real === false || !is_file($real) || !str_starts_with($real, $base . DIRECTORY_SEPARATOR)) {
             return [null, 'fichier refusé : il se trouve en dehors du dossier images/.'];
+        }
+
+        $size = filesize($real);
+        if ($size === false || $size > AssociationProjectImageStorage::MAX_SIZE_BYTES) {
+            return [null, "L'image ne doit pas dépasser 5 Mo."];
         }
 
         return [$real, null];
@@ -601,15 +662,18 @@ final class AssociationProjectImporter
     }
 
     /**
-     * @return array<string, list<string>> id de fiche => clés JSON déjà remplies par un import
+     * Journal des imports : pour chaque fiche, les champs que l'import ne doit plus
+     * jamais remplir (remplis par lui ou trouvés déjà remplis) et le visuel qu'il a envoyé.
+     *
+     * @return array<string, array{champs: list<string>, visuel: ?string}> id de fiche => entrée
      */
-    private function readJournal(string $path, AssociationProjectImportReport $report): array
+    private function readJournal(AssociationProjectImportReport $report): array
     {
-        if (!is_file($path)) {
+        if (!is_file($this->journalPath)) {
             return [];
         }
 
-        $raw = file_get_contents($path);
+        $raw = file_get_contents($this->journalPath);
         try {
             $data = json_decode((string) $raw, true, 16, \JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
@@ -618,59 +682,70 @@ final class AssociationProjectImporter
         if (!is_array($data) || !is_array($data['fiches'] ?? null)) {
             $report->globalErrors[] = sprintf(
                 "Journal d'import illisible (%s) : import bloqué, pour ne pas re-remplir des champs vidés par l'équipe.",
-                $path,
+                $this->journalPath,
             );
 
             return [];
         }
 
         $journal = [];
-        foreach ($data['fiches'] as $id => $fields) {
-            $journal[(string) $id] = is_array($fields) ? array_values(array_filter($fields, 'is_string')) : [];
+        foreach ($data['fiches'] as $id => $fiche) {
+            $fields = is_array($fiche) && is_array($fiche['champs'] ?? null) ? $fiche['champs'] : [];
+            $journal[(string) $id] = [
+                'champs' => array_values(array_filter($fields, 'is_string')),
+                'visuel' => is_array($fiche) && is_string($fiche['visuel'] ?? null) ? $fiche['visuel'] : null,
+            ];
         }
 
         return $journal;
     }
 
     /**
-     * Ajoute au journal les champs remplis par cette exécution. Écriture atomique
-     * (fichier temporaire puis renommage) : le journal n'est jamais à moitié écrit.
+     * Met à jour le journal après un import RÉEL : champs remplis + champs trouvés déjà
+     * remplis, nom du visuel envoyé. Écriture atomique (fichier temporaire puis
+     * renommage) : le journal n'est jamais à moitié écrit. Rien n'est réécrit s'il
+     * n'a pas changé (cas d'une 2e exécution).
      *
-     * @param array<string, list<string>> $journal
-     * @param list<array{entry: AssociationProjectImportEntry, project: AssociationProject, texts: array<string, string>, imageSource: ?string, storedImage: ?StoredImage}> $plans
+     * @param array<string, array{champs: list<string>, visuel: ?string}> $journal
+     * @param list<array{entry: AssociationProjectImportEntry, project: AssociationProject, texts: array<string, string>, imageSource: ?string, storedImage: ?StoredImage, seen: list<string>}> $plans
      */
-    private function writeJournal(string $path, array $journal, array $plans, AssociationProjectImportReport $report): void
+    private function writeJournal(array $journal, array $plans, AssociationProjectImportReport $report): void
     {
-        $changed = false;
+        $updated = $journal;
         foreach ($plans as $plan) {
-            $keys = array_keys($plan['texts']);
+            $id = (string) $plan['project']->getId();
+            $entry = $updated[$id] ?? ['champs' => [], 'visuel' => null];
+            $keys = [...$plan['seen'], ...array_keys($plan['texts'])];
             if ($plan['storedImage'] !== null) {
                 $keys[] = self::IMAGE_LABEL;
+                $entry['visuel'] = $plan['storedImage']->path;
             }
-            if ($keys === []) {
-                continue;
-            }
-            $id = (string) $plan['project']->getId();
-            $journal[$id] = array_values(array_unique([...($journal[$id] ?? []), ...$keys]));
-            $changed = true;
+            $champs = array_values(array_unique([...$entry['champs'], ...$keys]));
+            sort($champs);
+            $entry['champs'] = $champs;
+            $updated[$id] = $entry;
         }
-        if (!$changed) {
+        if ($updated === $journal) {
             return;
         }
 
         $payload = [
-            'note'   => "Journal de la commande app:import-association-projects : champs déjà remplis par l'import, à ne jamais re-remplir. Ne pas modifier ni supprimer tant qu'un import peut être relancé.",
-            'fiches' => (object) $journal,
+            'note'   => "Journal de app:import-association-projects : par fiche (id), champs que l'import ne remplira plus jamais (remplis par lui ou trouvés déjà remplis) et visuel qu'il a envoyé. Ne pas modifier ni supprimer.",
+            'fiches' => (object) $updated,
         ];
-        $temporary = $path . '.tmp';
+        $directory = dirname($this->journalPath);
+        $temporary = $this->journalPath . '.tmp';
         $json = json_encode($payload, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
-        if ($json === false || file_put_contents($temporary, $json . "\n") === false || !rename($temporary, $path)) {
+        if ($json === false
+            || (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory))
+            || file_put_contents($temporary, $json . "\n") === false
+            || !rename($temporary, $this->journalPath)) {
             if (is_file($temporary)) {
                 unlink($temporary);
             }
             $report->globalErrors[] = sprintf(
                 "L'import est enregistré, mais le journal (%s) n'a pas pu être écrit : ne relancez pas l'import avant d'avoir réglé ce problème.",
-                $path,
+                $this->journalPath,
             );
         }
     }
@@ -679,7 +754,7 @@ final class AssociationProjectImporter
      * Vérifie AVANT toute écriture que les dossiers sont accessibles : sinon, en
      * production, l'erreur n'apparaîtrait qu'au milieu de l'import réel.
      */
-    private function checkWritable(string $dir, string $journalPath, AssociationProjectImportReport $report): void
+    private function checkWritable(AssociationProjectImportReport $report): void
     {
         $user = self::currentUser();
 
@@ -692,25 +767,30 @@ final class AssociationProjectImporter
             );
         }
 
-        $journalTarget = is_file($journalPath) ? $journalPath : $dir;
-        if (!is_writable($journalTarget)) {
+        // Le journal est réécrit par fichier temporaire + renommage : il faut pouvoir
+        // écrire dans son DOSSIER, et dans le fichier lui-même s'il existe déjà.
+        $journalDir = self::firstExistingDirectory(dirname($this->journalPath));
+        if (!is_writable($journalDir) || (is_file($this->journalPath) && !is_writable($this->journalPath))) {
             $report->globalErrors[] = sprintf(
                 "Le journal d'import (%s) ne peut pas être écrit par l'utilisateur « %s ».",
-                $journalTarget,
+                $this->journalPath,
                 $user,
             );
         }
     }
 
-    /** Titre d'une fiche qui ne diffère que par des détails invisibles (espaces, apostrophes, accents, casse). */
-    private function similarTitle(string $title): ?string
+    /**
+     * Titre d'une fiche qui ne diffère que par des détails (espaces, apostrophes, casse) :
+     * sert seulement à aider à corriger le JSON, jamais à rattacher.
+     *
+     * @param list<array{id: int, title: string}> $titles
+     */
+    private function similarTitle(string $title, array $titles): ?string
     {
         $wanted = self::looseKey($title);
-        /** @var list<string> $titles */
-        $titles = $this->em->createQuery('SELECT p.title FROM ' . AssociationProject::class . ' p')->getSingleColumnResult();
-        foreach ($titles as $candidate) {
-            if (self::looseKey($candidate) === $wanted) {
-                return $candidate;
+        foreach ($titles as $row) {
+            if (self::looseKey($row['title']) === $wanted) {
+                return $row['title'];
             }
         }
 

@@ -64,8 +64,14 @@ class ImportAssociationProjectsCommand extends Command
             $io->error([
                 'Cette commande ne doit pas être lancée en root en production.',
                 'Sinon, le dossier des images appartiendrait à root et le back-office ne pourrait plus y enregistrer d\'image.',
-                'Relancez-la avec « -u www-data » : docker compose … exec -T -u www-data platform_app php bin/console app:import-association-projects',
+                'Relancez-la avec « -u www-data », en copiant cette ligne sur le serveur :',
             ]);
+            // Commande complète, prête à copier (même dossier, même option d'essai).
+            $output->writeln(sprintf(
+                'cd /root/bazaart-plateforme && docker compose --env-file .env.local -f docker-compose.prod.yml exec -T -u www-data platform_app php bin/console app:import-association-projects%s%s',
+                $input->getArgument('dossier') !== 'var/import' ? ' ' . escapeshellarg((string) $input->getArgument('dossier')) : '',
+                $dryRun ? ' --dry-run' : '',
+            ));
 
             return Command::FAILURE;
         }

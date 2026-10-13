@@ -107,8 +107,10 @@ le fichier étant copié par `scp` dans `app/var/import/` (ignoré par git).
   et les images auraient été copiées sans passer par le contrôle d'upload.
 - **Règles** : rattachement par titre exact, aucun champ déjà rempli écrasé, « publié »
   jamais modifié, fiche publiée et fiche « Formations » non touchées, visuels envoyés par
-  `AssociationProjectImageStorage::store()`, journal empêchant de re-remplir un champ vidé
-  par l'équipe, une transaction avec verrou par fiche, essai `--dry-run`.
+  `AssociationProjectImageStorage::store()`, journal (dans `var/`, hors du dossier de
+  données qu'on supprime) qui retient les champs remplis ou trouvés remplis pour ne jamais
+  re-remplir un champ vidé par l'équipe, une transaction avec verrou par fiche, essai
+  `--dry-run`.
 - **Limite connue** : une page « Modifier une fiche » ouverte avant l'import puis
   enregistrée après remet à vide les champs importés (le formulaire réécrit tous les
   champs). D'où la consigne : aucun formulaire ouvert pendant l'import.
