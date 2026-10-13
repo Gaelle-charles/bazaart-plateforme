@@ -177,7 +177,103 @@ Pour **éteindre** la page : vider la valeur (`PROJETS_PARTENAIRES_TOKEN=`) puis
 
 ---
 
-## 5. Pour les développeurs
+## 5. Remplir les fiches depuis un fichier (import)
+
+La commande `app:import-association-projects` remplit les fiches **existantes** à partir
+d'un dossier qui contient `projets.json` (une fiche par projet) et `images/` (les visuels).
+
+### 5.1 Ce que fait l'import, et ce qu'il ne fait jamais
+
+- Il retrouve chaque fiche par son **titre exact** (même texte, caractère pour caractère ;
+  seul l'encodage invisible des accents, parfois différent sur Mac, est neutralisé). Un
+  titre inconnu ne crée rien : il est signalé (avec le titre voisin s'il ne diffère que par
+  un espace, une apostrophe ou une majuscule).
+- Il remplit **uniquement les champs vides**. Un champ déjà rempli dans le back-office
+  n'est jamais écrasé : il est listé dans le compte rendu.
+- Il ne touche **jamais** à la case « Publié ». Une fiche **déjà publiée** n'est pas
+  remplie du tout (rien de non relu ne doit être visible des partenaires).
+- Il ne modifie **jamais** la fiche « Formations ».
+- Type et état ne sont jamais modifiés ; une différence avec le fichier est signalée.
+- Les visuels passent par les mêmes contrôles qu'un envoi depuis le back-office ; leur
+  texte alternatif est le titre de la fiche.
+- Il peut être **relancé** : rien n'est rempli deux fois. Un **journal**
+  (`app/var/association-projects-import-journal-prod.json` sur le serveur, ignoré par git)
+  retient, par fiche, chaque champ que l'import a rempli **ou trouvé déjà rempli**, et le
+  visuel qu'il a envoyé : si l'équipe vide un champ ou retire un visuel, une relance ne le
+  remplit pas à nouveau. **Ne pas supprimer ce fichier.**
+- Les champs sur une ligne dans le back-office (dates, lieux, artistes, référente) ne
+  doivent pas contenir de retour à la ligne : sinon le champ n'est pas rempli et c'est
+  signalé (le formulaire l'effacerait sans prévenir au prochain enregistrement).
+- Le compte rendu ne contient **aucun texte des fiches** (seulement les titres et les noms
+  de champs) : on peut le copier-coller sans risque.
+
+**Format de `projets.json`** : `{ "projets": [ { … }, … ] }` (ou directement la liste).
+Clés de chaque fiche : `titre`, `type`, `etat`, `dates`, `lieux`, `artistes_concernes`,
+`description`, `partenaires_confirmes`, `partenaires_pressentis`, `financeurs_sollicites`,
+`apport_partenaire`, `referente`, `visuel` (nom d'un fichier du dossier `images/`).
+`null` = champ laissé tel quel. Mêmes limites que le formulaire (description : 600
+caractères ; images : JPEG, PNG ou WebP, 5 Mo).
+
+**Ces fichiers ne doivent jamais être commités** (le dépôt GitHub est public). Ils vont
+dans `app/var/import/`, que git ignore (`app/.gitignore`, règle `/var/`). Attention :
+`var/import/` à la **racine** du dépôt, lui, n'est pas ignoré.
+
+### 5.2 Procédure sur le serveur
+
+Toutes les commandes serveur se lancent depuis `/root/bazaart-plateforme`.
+
+1. **Sauvegarder la base** (sur le serveur). Le fichier doit faire plus de 0 octet :
+   ```bash
+   mkdir -p /root/backups && docker exec bazaart_platform_postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > /root/backups/avant-import-projets_$(date +%F_%H%M).sql && ls -lh /root/backups/ | tail -1
+   ```
+2. **Copier le dossier** (depuis le Terminal du **Mac**) :
+   ```bash
+   ssh root@206.189.3.112 "mkdir -p /root/bazaart-plateforme/app/var/import"
+   scp -r ~/Downloads/import-projets/projets.json ~/Downloads/import-projets/images root@206.189.3.112:/root/bazaart-plateforme/app/var/import/
+   ```
+3. **Donner l'accès en lecture au serveur web, puis vérifier** (sur le serveur).
+   `git status` ne doit rien afficher (les données sont bien ignorées par git) :
+   ```bash
+   cd /root/bazaart-plateforme && chmod -R a+rX app/var/import && ls -la app/var/import app/var/import/images && git status --porcelain
+   ```
+4. **Prévenir l'équipe** : personne ne garde une page « Modifier une fiche » ouverte
+   pendant l'import. Un formulaire ouvert avant l'import puis enregistré après remettrait
+   à vide les champs importés.
+5. **Essai** (rien n'est enregistré). Code de sortie attendu : `0`.
+   ```bash
+   cd /root/bazaart-plateforme && docker compose --env-file .env.local -f docker-compose.prod.yml exec -T -u www-data platform_app php bin/console app:import-association-projects --dry-run; echo "code de sortie : $?"
+   ```
+6. **Import réel** : la même commande **sans** `--dry-run`. Puis la relancer une seconde
+   fois : elle doit annoncer « Champs remplis (visuel compris) : 0 ».
+7. **Contrôles** : aucune fiche publiée par l'import, et pas d'erreur dans les journaux :
+   ```bash
+   cd /root/bazaart-plateforme && docker compose --env-file .env.local -f docker-compose.prod.yml exec -T platform_app php bin/console dbal:run-sql "SELECT position, title, is_published, image_path IS NOT NULL AS visuel FROM association_projects ORDER BY position"
+   cd /root/bazaart-plateforme && docker compose --env-file .env.local -f docker-compose.prod.yml logs platform_app --since=10m 2>&1 | grep -iE "critical|exception" || echo "Aucune erreur dans les journaux"
+   ```
+   Les journaux ne montrent que les pages web : ouvrir d'abord `/admin/fiches-projets` et
+   l'aperçu de deux ou trois fiches. Pour l'import lui-même, la preuve est son compte rendu
+   et son code de sortie.
+8. **Nettoyer**, une fois la relecture de l'équipe terminée :
+   `rm -rf /root/bazaart-plateforme/app/var/import`. Le journal, lui, reste dans
+   `app/var/` : si un nouveau fichier est importé plus tard, il empêchera toujours de
+   re-remplir ce que l'équipe a vidé.
+
+**Pourquoi `-u www-data` ?** En production, la commande refuse de tourner en root : le
+dossier des images serait créé au nom de root, et le back-office (qui tourne sous
+`www-data`) ne pourrait plus y enregistrer d'image.
+
+**Code de sortie `1`** : il reste une erreur, un titre introuvable ou une fiche non
+touchée (publiée, exclue, en double). Lire le compte rendu : les champs valides ont été
+remplis, les autres non.
+
+**En cas d'échec pendant l'enregistrement**, rien n'est enregistré (retour arrière en
+base, images de cette exécution supprimées). Pour revenir à l'état d'avant un import
+**réussi**, la sauvegarde de l'étape 1 contient la base complète : demander de l'aide
+avant de la restaurer (une restauration remplace toute la base, pas seulement les fiches).
+
+---
+
+## 6. Pour les développeurs
 
 | Élément | Fichier |
 |---|---|
@@ -188,7 +284,8 @@ Pour **éteindre** la page : vider la valeur (`PROJETS_PARTENAIRES_TOKEN=`) puis
 | Gabarits publics | `app/templates/association_projects/` (gabarit autonome `_layout.html.twig`) |
 | Carrousel | `app/public/js/association-projects.js`, `app/public/css/association-projects.css` |
 | Accès public | `app/config/packages/security.yaml`, règle `^/projets/` |
-| Tests | `app/tests/E2E/AssociationProjectsTest.php`, `app/tests/Unit/Service/AssociationProject/` |
+| Import des fiches | `app/src/Command/ImportAssociationProjectsCommand.php`, `app/src/Service/AssociationProject/AssociationProjectImporter.php` |
+| Tests | `app/tests/E2E/AssociationProjectsTest.php`, `app/tests/E2E/AssociationProjectImportTest.php`, `app/tests/Unit/Service/AssociationProject/` |
 
 Routes publiques (toutes exigent le jeton) : `/projets/{jeton}`, `/projets/{jeton}/api`,
 `/projets/{jeton}/{slug}`, `/projets/{jeton}/{slug}/visuel`,
@@ -199,4 +296,4 @@ Routes publiques (toutes exigent le jeton) : `/projets/{jeton}`, `/projets/{jeto
 - Après une modification de `association-projects.css` ou `association-projects.js`,
   incrémenter `assets.version` dans `app/config/packages/framework.yaml`, sinon les
   navigateurs gardent l'ancienne version en cache.
-- Tests : `docker compose exec app php bin/phpunit tests/E2E/AssociationProjectsTest.php tests/Unit/Service/AssociationProject`
+- Tests : `docker compose exec app php bin/phpunit tests/E2E/AssociationProjectsTest.php tests/E2E/AssociationProjectImportTest.php tests/Unit/Service/AssociationProject`

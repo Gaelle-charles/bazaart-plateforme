@@ -94,3 +94,25 @@ Ce besoin n'est pas dans le cahier des charges V3 : c'est un ajout arbitré par 
 - **Évolution prévue** : pages projets des artistes. Le même mécanisme (règle publique +
   vérification d'un jeton) s'y prête ; il faudra probablement un jeton par projet (stocké
   en base) plutôt qu'un jeton commun, et un autre préfixe d'URL.
+
+## Complément : import des fiches depuis un fichier (octobre 2026)
+
+Pour remplir les 8 premières fiches à partir d'un `projets.json` fourni par l'équipe, on a
+retenu une **commande console lancée sur le serveur** (`app:import-association-projects`),
+le fichier étant copié par `scp` dans `app/var/import/` (ignoré par git).
+
+- **Écarté : une migration de données.** Le contenu aurait dû être commité dans un dépôt
+  public, et les images ne passent pas par une migration.
+- **Écarté : importer en local puis transférer la base.** Risque d'écraser la production,
+  et les images auraient été copiées sans passer par le contrôle d'upload.
+- **Règles** : rattachement par titre exact, aucun champ déjà rempli écrasé, « publié »
+  jamais modifié, fiche publiée et fiche « Formations » non touchées, visuels envoyés par
+  `AssociationProjectImageStorage::store()`, journal (dans `var/`, hors du dossier de
+  données qu'on supprime) qui retient les champs remplis ou trouvés remplis pour ne jamais
+  re-remplir un champ vidé par l'équipe, une transaction avec verrou par fiche, essai
+  `--dry-run`.
+- **Limite connue** : une page « Modifier une fiche » ouverte avant l'import puis
+  enregistrée après remet à vide les champs importés (le formulaire réécrit tous les
+  champs). D'où la consigne : aucun formulaire ouvert pendant l'import.
+
+Procédure : `docs/projets-association.md`, section 5.
