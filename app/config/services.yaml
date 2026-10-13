@@ -155,3 +155,12 @@ services:
             $googleClientId:     '%env(GOOGLE_CLIENT_ID)%'
             $googleClientSecret: '%env(GOOGLE_CLIENT_SECRET)%'
             $expectedAccount:    '%env(PROJECT_DRIVE_ACCOUNT)%'
+
+    # ── Page « Projets en cours » de l'association (ADR-0039) ──────────────────
+    # Images des fiches stockées HORS du dossier public (comme CreatorDocumentStorage) :
+    # seul PHP les envoie, après vérification du jeton secret ou du rôle admin.
+    # Un sous-dossier par environnement (dev, test, prod) : les tests automatiques
+    # n'écrivent jamais dans le dossier utilisé en développement.
+    App\Service\AssociationProject\AssociationProjectImageStorage:
+        arguments:
+            $storageDir: '%kernel.project_dir%/var/secure_uploads/association-projects/%kernel.environment%'
