@@ -36,6 +36,10 @@ parameters:
     # app/.env.local (voir app/.env.example et docs/projets-association.md).
     # Jamais de vraie valeur ici : ce fichier est commité et le dépôt est public.
     env(PROJETS_PARTENAIRES_TOKEN): ''
+    # Dossier PRIVÉ des images des fiches (ADR-0039), un sous-dossier par environnement.
+    # Partagé par le stockage des images et par la commande d'import des fiches, qui
+    # vérifie avant d'écrire qu'il est accessible (app:import-association-projects).
+    association_projects.storage_dir: '%kernel.project_dir%/var/secure_uploads/association-projects/%kernel.environment%'
 
 services:
     # default configuration for services in *this* file
@@ -169,7 +173,13 @@ services:
     # n'écrivent jamais dans le dossier utilisé en développement.
     App\Service\AssociationProject\AssociationProjectImageStorage:
         arguments:
-            $storageDir: '%kernel.project_dir%/var/secure_uploads/association-projects/%kernel.environment%'
+            $storageDir: '%association_projects.storage_dir%'
+
+    # Import des fiches depuis projets.json + images/ (commande app:import-association-projects).
+    App\Service\AssociationProject\AssociationProjectImporter:
+        arguments:
+            $storageDir: '%association_projects.storage_dir%'
+            $projectDir: '%kernel.project_dir%'
 
     App\Service\AssociationProject\PublicAccessToken:
         arguments:
