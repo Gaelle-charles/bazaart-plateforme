@@ -23,6 +23,9 @@
 .ap-body *,
 .ap-body *::before,
 .ap-body *::after { box-sizing: border-box; }
+/* Le carrousel s'étend jusqu'aux bords de la fenêtre (voir .is-3d plus bas) :
+   jamais de défilement horizontal de la page pour autant. */
+.ap-body { overflow-x: hidden; overflow-x: clip; }
 
 /* Lien « Aller au contenu » : invisible tant qu'on n'y arrive pas au clavier. */
 .ap-skip {
@@ -66,11 +69,21 @@
 .ap-title {
     font-family: var(--display);
     font-weight: 400;
-    font-size: clamp(32px, 5vw, 56px);
+    font-size: clamp(28px, 4vw, 44px);
     line-height: 1;
     text-transform: uppercase;
     letter-spacing: -.01em;
-    margin: var(--space-md) 0 var(--space-xl);
+    margin: var(--space-sm) 0 var(--space-sm);
+}
+
+/* Sous-titre sous le titre de la page carrousel. */
+.ap-subtitle {
+    max-width: 100ch;
+    margin: 0 0 var(--space-md);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.45;
+    color: var(--ink-mute);
 }
 
 .ap-empty {
@@ -82,6 +95,7 @@
 @media (max-width: 640px) {
     .ap-header { padding: var(--space-md); }
     .ap-main { padding: 0 var(--space-md) var(--space-2xl); }
+    .ap-subtitle { font-size: 15px; }
 }
 
 /* Texte réservé aux lecteurs d'écran (consignes du carrousel, annonces). */
@@ -109,8 +123,16 @@
    ============================================================ */
 
 .ap-carousel {
-    /* Largeur d'une carte : grande sur ordinateur, presque tout l'écran sur mobile. */
-    --ap-card-w: clamp(240px, 26vw, 360px);
+    /* Largeur d'une carte sur ordinateur : elle grandit avec la HAUTEUR de l'écran
+       (pour remplir la page sans espace vide en bas), dans les limites suivantes :
+         - jamais plus de 34 % de la largeur (les voisines doivent rester visibles) ;
+         - au moins 360 px quand la largeur le permet, 560 px au plus ;
+         - 240 px minimum sur les petits écrans.
+       (100vh - 480px) * 1.33 : hauteur disponible une fois retirés l'en-tête, le
+       titre, le sous-titre et l'indicateur, convertie en largeur (image 4:3). */
+    --ap-card-w: max(240px, min(34vw, max(360px, (100vh - 480px) * 1.33), 560px));
+    /* Coins légèrement arrondis (le thème Street est à bords francs : 0). */
+    --ap-card-radius: 12px;
     position: relative;
 }
 
@@ -144,14 +166,20 @@
     height: 100%;
     background: var(--card-bg);
     border: var(--card-border);
-    border-radius: var(--card-radius);
+    border-radius: var(--ap-card-radius);
+    /* L'image suit l'arrondi des coins du haut. isolation : sans elle, Safari
+       laisse la photo agrandie (survol) déborder des coins arrondis. */
+    overflow: hidden;
+    isolation: isolate;
     color: var(--ink);
     text-decoration: none;
     /* Pas de sélection de texte quand on glisse le carrousel. */
     -webkit-user-select: none;
     user-select: none;
     -webkit-user-drag: none;
-    transition: box-shadow var(--transition-normal);
+    transition:
+        transform .35s cubic-bezier(.2, .75, .25, 1),
+        box-shadow .35s cubic-bezier(.2, .75, .25, 1);
 }
 
 .ap-card__media {
@@ -168,6 +196,7 @@
     height: 100%;
     object-fit: cover;
     pointer-events: none;   /* l'image ne capte pas le glisser */
+    transition: transform .6s cubic-bezier(.2, .75, .25, 1);
 }
 .ap-card__placeholder {
     display: flex;
@@ -193,7 +222,8 @@
 }
 .ap-card__title {
     font-family: var(--display);
-    font-size: 20px;
+    /* Titre proportionnel à la carte : 20 px (petite carte) à 24 px (grande). */
+    font-size: clamp(20px, calc(var(--ap-card-w) * .05), 24px);
     line-height: 1.1;
     text-transform: uppercase;
     /* Titre long : 3 lignes maximum, puis « … ». */
@@ -219,12 +249,31 @@
 .ap-chip--state { background: var(--chip-dark-bg); color: var(--chip-dark-color); }
 .ap-card__dates {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 13px;
     color: var(--ink-mute);
 }
 
 /* Carte centrale : ombre décalée « affiche » du design system. */
 .ap-card.is-active .ap-card__link { box-shadow: var(--shadow-offset-md); }
+
+/* ── Survol (souris) et focus clavier : la carte se soulève ───────
+   Seulement avec une souris (hover: hover) : sur écran tactile, l'effet
+   resterait « collé » après un appui. La carte monte, son ombre décalée
+   s'allonge et la photo zoome légèrement. Rien pendant un glisser. */
+@media (hover: hover) and (pointer: fine) {
+    .ap-card__link:hover {
+        transform: translateY(-8px);
+        box-shadow: var(--shadow-offset-sm);
+    }
+    .ap-card.is-active .ap-card__link:hover {
+        box-shadow: 10px 12px 0 var(--ink);
+    }
+    .ap-card__link:hover .ap-card__media img { transform: scale(1.05); }
+}
+.ap-card__link:focus-visible { transform: translateY(-8px); }
+.ap-card.is-active .ap-card__link:focus-visible { box-shadow: 10px 12px 0 var(--ink); }
+.ap-carousel.is-dragging .ap-card__link,
+.ap-carousel.is-dragging .ap-card__media img { transform: none; }
 
 /* ── Indicateur de position : traits verticaux, l'actif plus haut ── */
 .ap-indicator {
@@ -266,6 +315,10 @@
 
 /* ── Mode 3D (grand écran, JavaScript actif) ───────────────── */
 .ap-carousel.is-3d .ap-carousel__viewport {
+    /* Pleine largeur de fenêtre (et non celle du contenu) : les cartes lointaines
+       disparaissent au bord de l'écran au lieu d'être coupées au milieu de la page.
+       Le centre ne change pas (le contenu est lui-même centré dans la fenêtre). */
+    margin-inline: calc(50% - 50vw);
     overflow: hidden;              /* les cartes lointaines sortent du cadre proprement */
     overflow: clip;                /* et le cadre ne peut pas défiler (même quand une carte prend le focus) */
     touch-action: pan-y;           /* défilement vertical natif ; l'horizontal = carrousel */
@@ -311,7 +364,12 @@
     .ap-carousel__track { scroll-behavior: auto; }
     .ap-card,
     .ap-card__link,
+    .ap-card__media img,
     .ap-indicator__tick::before { transition: none !important; }
+    /* Survol : l'ombre change toujours, mais la carte et la photo ne bougent pas. */
+    .ap-card__link:hover,
+    .ap-card__link:focus-visible,
+    .ap-card__link:hover .ap-card__media img { transform: none !important; }
 }
 
 
