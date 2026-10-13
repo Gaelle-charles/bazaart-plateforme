@@ -32,6 +32,18 @@
     <span>{{ formTitle }}</span>
 </nav>
 
+{% if isEdit %}
+    <div class="adm-ap-header">
+        <p class="adm-ap-header__intro">
+            Informations principales de la fiche. Le texte de présentation et ses images
+            (ce que le partenaire lit en descendant) se gèrent dans la page « Présentation ».
+        </p>
+        <a href="{{ path('app_admin_asso_project_presentation', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost">
+            Présentation ({{ project.blocks|length }} bloc{{ project.blocks|length > 1 ? 's' }})
+        </a>
+    </div>
+{% endif %}
+
 {#
     enctype="multipart/form-data" : obligatoire pour envoyer un fichier (le visuel).
     L'action est l'URL courante (création ou édition).
