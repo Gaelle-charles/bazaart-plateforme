@@ -1,0 +1,151 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/association_projects/presentation.html.twig : blocs de présentation d'une fiche (ADR-0039).
+ #
+ # Variables (AdminAssociationProjectBlockController::renderPresentation) :
+ #   - project    : AssociationProject
+ #   - blocks     : blocs du projet, dans l'ordre d'affichage
+ #   - blockForms : [id du bloc => AssociationProjectBlockData] valeurs affichées dans chaque formulaire
+ #   - newData    : AssociationProjectBlockData du formulaire « Ajouter un bloc »
+ #
+ # Chaque bloc a des formulaires INDÉPENDANTS, côte à côte (jamais imbriqués) :
+ # enregistrer, monter, descendre, supprimer. Pas de JavaScript nécessaire, sauf
+ # la confirmation avant suppression.
+ #}
+
+{% block title %}Présentation · {{ project.title }} · Admin BazaArt{% endblock %}
+{% block page_title %}Présentation de la fiche{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+{{ include('admin/association_projects/_styles.html.twig') }}
+<style>
+.adm-ap-block {
+    border: 1px solid var(--ink);
+    background: var(--bg);
+    padding: 16px;
+    margin-bottom: 18px;
+    scroll-margin-top: 24px; /* l'ancre #bloc-12 ne colle pas le bloc au bord */
+}
+.adm-ap-block:target { outline: 3px solid var(--accent); outline-offset: 2px; }
+.adm-ap-block__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line-soft);
+}
+.adm-ap-block__name {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin: 0;
+}
+.adm-ap-block__tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.adm-ap-block__tools form { margin: 0; }
+.adm-ap-block__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 20px;
+}
+@media (max-width: 960px) { .adm-ap-block__grid { grid-template-columns: 1fr; } }
+.adm-ap-block--new { border-style: dashed; }
+.adm-ap-block .adm-ap-textarea { min-height: 180px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<nav class="adm-ap-breadcrumb" aria-label="Fil d'Ariane">
+    <a href="{{ path('app_admin_asso_project_index') }}">Projets de l'association</a>
+    <span aria-hidden="true">/</span>
+    <a href="{{ path('app_admin_asso_project_edit', {id: project.id}) }}">{{ project.title }}</a>
+    <span aria-hidden="true">/</span>
+    <span>Présentation</span>
+</nav>
+
+<div class="adm-ap-header">
+    <p class="adm-ap-header__intro">
+        Ce que le partenaire lit en descendant sur la fiche, juste après la description.
+        Chaque bloc contient un intertitre facultatif, du texte et, si besoin, une image
+        avec sa légende. Pour plusieurs images, créez plusieurs blocs.
+    </p>
+    <span>
+        <a href="{{ path('app_admin_asso_project_edit', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost">Modifier la fiche</a>
+        <a href="{{ path('app_admin_asso_project_preview', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost" target="_blank" rel="noopener">Aperçu</a>
+    </span>
+</div>
+
+{% if blocks is empty %}
+    <p class="adm-ap-empty">Aucun bloc pour le moment : la fiche n'affichera que ses informations principales.</p>
+{% endif %}
+
+{% for block in blocks %}
+    {% set form = blockForms[block.id] %}
+    {% set token = csrf_token('asso_project_block_' ~ block.id) %}
+    <article class="adm-ap-block" id="bloc-{{ block.id }}" aria-labelledby="bloc-{{ block.id }}-name">
+        <div class="adm-ap-block__bar">
+            <h2 class="adm-ap-block__name" id="bloc-{{ block.id }}-name">Bloc {{ loop.index }}{% if block.heading %} : {{ block.heading }}{% endif %}</h2>
+            <div class="adm-ap-block__tools">
+                {% if not loop.first %}
+                    <form method="post" action="{{ path('app_admin_asso_project_block_move', {blockId: block.id}) }}">
+                        <input type="hidden" name="_token" value="{{ token }}">
+                        <input type="hidden" name="direction" value="up">
+                        <button type="submit" class="adm-ap-btn adm-ap-btn--ghost adm-ap-btn--small">↑ Monter</button>
+                    </form>
+                {% endif %}
+                {% if not loop.last %}
+                    <form method="post" action="{{ path('app_admin_asso_project_block_move', {blockId: block.id}) }}">
+                        <input type="hidden" name="_token" value="{{ token }}">
+                        <input type="hidden" name="direction" value="down">
+                        <button type="submit" class="adm-ap-btn adm-ap-btn--ghost adm-ap-btn--small">↓ Descendre</button>
+                    </form>
+                {% endif %}
+                <form method="post" action="{{ path('app_admin_asso_project_block_delete', {blockId: block.id}) }}"
+                      data-confirm="Supprimer ce bloc{{ block.imagePath ? ' et son image' }} ?">
+                    <input type="hidden" name="_token" value="{{ token }}">
+                    <button type="submit" class="adm-ap-btn adm-ap-btn--danger adm-ap-btn--small">Supprimer</button>
+                </form>
+            </div>
+        </div>
+
+        <form method="post" action="{{ path('app_admin_asso_project_block_update', {blockId: block.id}) }}" enctype="multipart/form-data">
+            <input type="hidden" name="_token" value="{{ token }}">
+            {{ include('admin/association_projects/_block_fields.html.twig', {prefix: 'b' ~ block.id, form: form, block: block}) }}
+            <div class="adm-ap-actions">
+                <button type="submit" class="adm-ap-btn">Enregistrer ce bloc</button>
+            </div>
+        </form>
+    </article>
+{% endfor %}
+
+<section class="adm-ap-block adm-ap-block--new" id="nouveau-bloc" aria-labelledby="nouveau-bloc-titre">
+    <div class="adm-ap-block__bar">
+        <h2 class="adm-ap-block__name" id="nouveau-bloc-titre">Ajouter un bloc</h2>
+    </div>
+    <form method="post" action="{{ path('app_admin_asso_project_block_new', {id: project.id}) }}" enctype="multipart/form-data">
+        <input type="hidden" name="_token" value="{{ csrf_token('asso_project_block_new_' ~ project.id) }}">
+        {{ include('admin/association_projects/_block_fields.html.twig', {prefix: 'new', form: newData, block: null}) }}
+        <div class="adm-ap-actions">
+            <button type="submit" class="adm-ap-btn">Ajouter le bloc</button>
+        </div>
+    </form>
+</section>
+
+<script>
+document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+    form.addEventListener('submit', function (event) {
+        if (!window.confirm(form.dataset.confirm)) {
+            event.preventDefault();
+        }
+    });
+});
+</script>
+
+{% endblock %}

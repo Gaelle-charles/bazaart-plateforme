@@ -30,6 +30,12 @@ parameters:
     # Fuseau horaire de l'équipe pour l'Espace projets (« aujourd'hui », heures affichées).
     # Le conteneur tourne en UTC ; l'association est basée en Guadeloupe.
     env(PROJECT_TIMEZONE): 'America/Guadeloupe'
+    # Page « Projets en cours » de l'association (ADR-0039) : jeton secret de l'adresse
+    # https://app.bazaart.fr/projets/<jeton>. Valeur par défaut VIDE = page éteinte
+    # (404 partout) tant que le jeton n'est pas configuré sur le serveur, dans
+    # app/.env.local (voir app/.env.example et docs/projets-association.md).
+    # Jamais de vraie valeur ici : ce fichier est commité et le dépôt est public.
+    env(PROJETS_PARTENAIRES_TOKEN): ''
 
 services:
     # default configuration for services in *this* file
@@ -155,3 +161,16 @@ services:
             $googleClientId:     '%env(GOOGLE_CLIENT_ID)%'
             $googleClientSecret: '%env(GOOGLE_CLIENT_SECRET)%'
             $expectedAccount:    '%env(PROJECT_DRIVE_ACCOUNT)%'
+
+    # ── Page « Projets en cours » de l'association (ADR-0039) ──────────────────
+    # Images des fiches stockées HORS du dossier public (comme CreatorDocumentStorage) :
+    # seul PHP les envoie, après vérification du jeton secret ou du rôle admin.
+    # Un sous-dossier par environnement (dev, test, prod) : les tests automatiques
+    # n'écrivent jamais dans le dossier utilisé en développement.
+    App\Service\AssociationProject\AssociationProjectImageStorage:
+        arguments:
+            $storageDir: '%kernel.project_dir%/var/secure_uploads/association-projects/%kernel.environment%'
+
+    App\Service\AssociationProject\PublicAccessToken:
+        arguments:
+            $token: '%env(PROJETS_PARTENAIRES_TOKEN)%'

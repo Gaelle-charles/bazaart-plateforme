@@ -611,6 +611,21 @@
             </a>
 
             {#
+                Projets de l'association : fiches de la page « Projets en cours »
+                envoyée aux partenaires (ADR-0039). Actif pour toutes les routes
+                "app_admin_asso_project_*" (liste, fiche, présentation).
+            #}
+            <a href="{{ path('app_admin_asso_project_index') }}"
+               class="sd-link {{ app.request.attributes.get('_route') starts with 'app_admin_asso_project' ? 'sd-link--active' : '' }}">
+                {# Icône cartes superposées (évoque le carrousel des projets) #}
+                <svg class="sd-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="7" y="4" width="10" height="16"/>
+                    <path d="M4 7v10M20 7v10"/>
+                </svg>
+                Projets de l'association
+            </a>
+
+            {#
                 Formations — module Formation V1.
                 Actif pour toutes les routes "app_admin_course_*".
             #}

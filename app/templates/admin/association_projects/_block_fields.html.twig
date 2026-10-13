@@ -1,0 +1,55 @@
+{#
+ # admin/association_projects/_block_fields.html.twig : champs d'un bloc de présentation.
+ #
+ # Utilisé pour chaque bloc existant ET pour le formulaire « Ajouter un bloc ».
+ # Variables :
+ #   - prefix : préfixe des id HTML (ex. « b12 » ou « new »), pour que chaque
+ #              <label for> pointe vers le bon champ quand plusieurs blocs sont sur la page
+ #   - form   : AssociationProjectBlockData (valeurs affichées)
+ #   - block  : AssociationProjectBlock|null (null = nouveau bloc)
+ #}
+<div class="adm-ap-block__grid">
+    <div>
+        <div class="adm-ap-group">
+            <label class="adm-ap-label" for="{{ prefix }}-heading">Intertitre (facultatif)</label>
+            <input type="text" id="{{ prefix }}-heading" name="heading" class="adm-ap-input" maxlength="150"
+                   value="{{ form.heading }}">
+        </div>
+        <div class="adm-ap-group">
+            <label class="adm-ap-label" for="{{ prefix }}-body">Texte</label>
+            <span class="adm-ap-hint" id="{{ prefix }}-body-hint">Texte simple : les retours à la ligne sont conservés. Une ligne vide sépare deux paragraphes.</span>
+            <textarea id="{{ prefix }}-body" name="body" class="adm-ap-textarea" maxlength="10000"
+                      aria-describedby="{{ prefix }}-body-hint">{{ form.body }}</textarea>
+        </div>
+    </div>
+    <div>
+        {% if block and block.imagePath %}
+            <img src="{{ path('app_admin_asso_project_block_image', {blockId: block.id, v: block.updatedAt|date('U')}) }}"
+                 alt="Image actuelle du bloc"
+                 class="adm-ap-preview"
+                 {% if block.imageWidth %}width="{{ block.imageWidth }}" height="{{ block.imageHeight }}"{% endif %}>
+            <div class="adm-ap-group">
+                <label class="adm-ap-check">
+                    <input type="checkbox" name="removeImage" value="1">
+                    Retirer l'image
+                </label>
+            </div>
+        {% endif %}
+        <div class="adm-ap-group">
+            <label class="adm-ap-label" for="{{ prefix }}-image">{{ block and block.imagePath ? "Remplacer l'image" : 'Image (facultative)' }}</label>
+            <input type="file" id="{{ prefix }}-image" name="image" accept="image/jpeg,image/png,image/webp">
+            <span class="adm-ap-hint">JPEG, PNG ou WebP, 5 Mo maximum.</span>
+        </div>
+        <div class="adm-ap-group">
+            <label class="adm-ap-label" for="{{ prefix }}-alt">Texte alternatif</label>
+            <input type="text" id="{{ prefix }}-alt" name="imageAlt" class="adm-ap-input" maxlength="200"
+                   value="{{ form.imageAlt }}">
+            <span class="adm-ap-hint">Décrit l'image pour les personnes qui ne la voient pas.</span>
+        </div>
+        <div class="adm-ap-group">
+            <label class="adm-ap-label" for="{{ prefix }}-caption">Légende (facultative)</label>
+            <input type="text" id="{{ prefix }}-caption" name="imageCaption" class="adm-ap-input" maxlength="255"
+                   value="{{ form.imageCaption }}">
+        </div>
+    </div>
+</div>

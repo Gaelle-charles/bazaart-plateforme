@@ -185,6 +185,15 @@ security:
         # Objectif : un visiteur non connecté peut parcourir l'offre de formations
         # (donner envie + indexation SEO) avant de créer un compte.
         - { path: ^/formations, roles: PUBLIC_ACCESS }
+        # ── Page « Projets en cours » de l'association : PUBLIQUE (ADR-0039) ──
+        # Envoyée aux partenaires (structures, financeurs) qui n'ont pas de compte :
+        # aucune connexion demandée. La protection est le JETON SECRET dans l'adresse
+        # (/projets/<jeton>), vérifié par AssociationProjectPublicController : sans
+        # le bon jeton, réponse 404. Sans cette règle, la règle finale ci-dessous
+        # renverrait le visiteur vers /login.
+        # ⚠️ Tout ce qui commence par /projets/ est public : n'y placer que des routes
+        # protégées par le jeton. (Ne concerne pas /admin/projets, qui commence par /admin.)
+        - { path: ^/projets/, roles: PUBLIC_ACCESS }
         # Tout le reste : authentification requise
         - { path: ^/, roles: ROLE_USER }
 

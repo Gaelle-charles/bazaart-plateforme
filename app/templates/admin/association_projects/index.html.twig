@@ -1,0 +1,175 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/association_projects/index.html.twig : liste des fiches « Projets en cours » (ADR-0039).
+ #
+ # Variables (AdminAssociationProjectController::index) :
+ #   - projects      : list<AssociationProject>, toutes les fiches (publiées ou non), dans l'ordre.
+ #   - shareUrl      : adresse secrète de la page partenaires, ou null si le jeton
+ #                     PROJETS_PARTENAIRES_TOKEN n'est pas configuré (page éteinte).
+ #   - tokenTooShort : vrai si le jeton configuré fait moins de 32 caractères.
+ #
+ # RÉORDONNANCEMENT : un champ « ordre » par ligne et UN bouton « Enregistrer l'ordre ».
+ # Le formulaire d'ordre entoure le tableau. Les boutons « Supprimer » ont chacun leur
+ # propre formulaire, placé HORS du tableau (un formulaire ne peut pas en contenir un
+ # autre en HTML) : le bouton y est relié par l'attribut form="…".
+ #}
+
+{% block title %}Projets de l'association · Admin BazaArt{% endblock %}
+{% block page_title %}Projets de l'association{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+{{ include('admin/association_projects/_styles.html.twig') }}
+{% endblock %}
+
+{% block content %}
+
+<div class="adm-ap-header">
+    <p class="adm-ap-header__intro">
+        Fiches affichées sur la page « Projets en cours » envoyée aux partenaires.
+        Seules les fiches publiées y apparaissent. L'ordre va du plus petit au plus grand
+        (de gauche à droite dans le carrousel).
+    </p>
+    <a href="{{ path('app_admin_asso_project_new') }}" class="adm-ap-btn">+ Nouvelle fiche</a>
+</div>
+
+{#
+    Lien à partager avec les partenaires. Il contient le jeton secret : quiconque
+    l'a peut voir la page (sans compte). À envoyer seulement aux bonnes personnes.
+#}
+<section class="adm-ap-panel adm-ap-share" aria-labelledby="adm-ap-share-title">
+    <h2 class="adm-ap-panel__title" id="adm-ap-share-title">Lien à partager</h2>
+    {% if shareUrl %}
+        <div class="adm-ap-share__row">
+            <label class="visually-hidden" for="adm-ap-share-url">Adresse de la page partenaires</label>
+            <input type="text" id="adm-ap-share-url" class="adm-ap-input" value="{{ shareUrl }}" readonly>
+            <button type="button" class="adm-ap-btn" data-copy="adm-ap-share-url">Copier</button>
+            <a href="{{ shareUrl }}" class="adm-ap-btn adm-ap-btn--ghost" target="_blank" rel="noopener noreferrer">Ouvrir</a>
+        </div>
+        <p class="adm-ap-hint">
+            Sans compte ni mot de passe : toute personne qui a ce lien voit les fiches publiées.
+            Ne l'envoyez qu'aux partenaires concernés.
+        </p>
+        {% if tokenTooShort %}
+            <p class="adm-ap-hint adm-ap-warning">
+                Attention : le jeton secret est court, donc plus facile à deviner. Demandez à
+                la personne qui gère le serveur d'en générer un de 64 caractères.
+            </p>
+        {% endif %}
+    {% else %}
+        <p class="adm-ap-hint">
+            Lien désactivé : la variable PROJETS_PARTENAIRES_TOKEN n'est pas configurée sur
+            le serveur. Tant qu'elle est vide, la page partenaires répond « page introuvable ».
+        </p>
+    {% endif %}
+</section>
+
+{% if projects is empty %}
+    <p class="adm-ap-empty">Aucune fiche pour le moment.</p>
+{% else %}
+    <form id="adm-ap-reorder" method="post" action="{{ path('app_admin_asso_project_reorder') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('asso_project_reorder') }}">
+
+        <div class="adm-ap-table-wrap">
+            <table class="adm-ap-table">
+                <thead>
+                    <tr>
+                        <th scope="col" class="adm-ap-table__order">Ordre</th>
+                        <th scope="col">Titre</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">État</th>
+                        <th scope="col">Visibilité</th>
+                        <th scope="col">Mise à jour</th>
+                        <th scope="col" class="adm-ap-table__actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for project in projects %}
+                        <tr>
+                            <td>
+                                <label class="visually-hidden" for="ap-order-{{ project.id }}">Ordre de « {{ project.title }} »</label>
+                                <input type="number"
+                                       id="ap-order-{{ project.id }}"
+                                       name="positions[{{ project.id }}]"
+                                       value="{{ project.position }}"
+                                       step="1"
+                                       class="adm-ap-input adm-ap-order-input">
+                            </td>
+                            <td><a href="{{ path('app_admin_asso_project_edit', {id: project.id}) }}">{{ project.title }}</a></td>
+                            <td>{{ project.type.label }}</td>
+                            <td>{{ project.state.label }}</td>
+                            <td>
+                                {% if project.published %}
+                                    <span class="adm-ap-badge adm-ap-badge--published">Publié</span>
+                                {% else %}
+                                    <span class="adm-ap-badge adm-ap-badge--draft">Brouillon</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ project.updatedAt|date('d/m/Y H:i') }}</td>
+                            <td class="adm-ap-table__actions">
+                                <a href="{{ path('app_admin_asso_project_edit', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost adm-ap-btn--small">Modifier</a>
+                                <a href="{{ path('app_admin_asso_project_presentation', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost adm-ap-btn--small">Présentation ({{ project.blocks|length }})</a>
+                                <a href="{{ path('app_admin_asso_project_preview', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost adm-ap-btn--small" target="_blank" rel="noopener">Aperçu</a>
+                                <button type="submit"
+                                        form="adm-ap-delete-{{ project.id }}"
+                                        class="adm-ap-btn adm-ap-btn--danger adm-ap-btn--small">Supprimer</button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="adm-ap-list-actions">
+            <button type="submit" class="adm-ap-btn">Enregistrer l'ordre</button>
+        </div>
+    </form>
+
+    {# Formulaires de suppression, hors du tableau (voir l'en-tête de ce fichier). #}
+    {% for project in projects %}
+        <form id="adm-ap-delete-{{ project.id }}"
+              method="post"
+              action="{{ path('app_admin_asso_project_delete', {id: project.id}) }}"
+              data-confirm="Supprimer définitivement la fiche « {{ project.title }} », sa présentation et ses images ?">
+            <input type="hidden" name="_token" value="{{ csrf_token('asso_project_delete_' ~ project.id) }}">
+        </form>
+    {% endfor %}
+{% endif %}
+
+{#
+    Demande de confirmation avant suppression. Le message est lu dans l'attribut
+    data-confirm (échappé par Twig) plutôt qu'écrit dans du JavaScript : un titre
+    contenant une apostrophe ne peut donc pas casser le script.
+#}
+<script>
+// Bouton « Copier » : copie le lien secret dans le presse-papiers.
+document.querySelectorAll('[data-copy]').forEach(function (button) {
+    button.addEventListener('click', function () {
+        var field = document.getElementById(button.dataset.copy);
+        if (!field) { return; }
+        var done = function () {
+            button.textContent = 'Copié';
+            setTimeout(function () { button.textContent = 'Copier'; }, 2000);
+        };
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(field.value).then(done);
+        } else {
+            // Repli (page en http, ancien navigateur) : sélection + commande copier.
+            field.select();
+            document.execCommand('copy');
+            done();
+        }
+    });
+});
+
+document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+    form.addEventListener('submit', function (event) {
+        if (!window.confirm(form.dataset.confirm)) {
+            event.preventDefault();
+        }
+    });
+});
+</script>
+
+{% endblock %}

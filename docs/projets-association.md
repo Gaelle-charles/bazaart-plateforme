@@ -1,0 +1,202 @@
+# Page « Projets en cours » de l'association
+
+Page privée qui présente les projets en cours de l'association à ses partenaires
+(structures, financeurs), **sans compte ni mot de passe**, à l'adresse secrète :
+
+```
+https://app.bazaart.fr/projets/<jeton>
+```
+
+Décision d'architecture : ADR-0039. Back-office : **`/admin/fiches-projets`**
+(menu admin, section Contenu, « Projets de l'association »).
+
+---
+
+## 1. Mise en service (à faire une fois, après le déploiement)
+
+### 1.1 Déployer
+
+Après validation, fusionner la branche dans `main`, puis lancer `./deploy.sh` depuis le Mac,
+comme d'habitude. Le script applique les deux migrations du module :
+
+- `Version20261013015217` : crée les tables `association_projects` et `association_project_blocks` ;
+- `Version20261013020000` : crée les 9 fiches de départ, **toutes non publiées**.
+
+Tant que le jeton n'est pas configuré (étape suivante), la page répond « page introuvable »
+(404) : rien n'est visible.
+
+### 1.2 Créer le jeton secret
+
+Le jeton est le « mot de passe » contenu dans l'adresse. Il doit être long et aléatoire.
+
+1. Se connecter au serveur : `ssh root@206.189.3.112`
+2. Générer un jeton de 64 caractères :
+   ```bash
+   docker exec bazaart_platform_app php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
+   ```
+   Copier la ligne affichée (64 caractères, chiffres et lettres de a à f).
+
+### 1.3 Enregistrer le jeton sur le serveur
+
+Le jeton va dans **`/root/bazaart-plateforme/app/.env.local`** (le fichier du dossier `app`,
+celui que lit Symfony), **pas** dans `/root/bazaart-plateforme/.env.local` à la racine.
+Le fichier de la racine sert à Docker Compose : seules les variables listées sous
+`environment:` dans `docker-compose.prod.yml` (APP_SECRET, la base de données, MAILER_DSN)
+passent de ce fichier à l'application. Une variable nouvelle comme celle-ci n'y est pas :
+elle doit donc aller dans `app/.env.local`.
+
+1. Vérifier que c'est bien le fichier où vivent déjà les clés de l'application
+   (la commande affiche un nombre, jamais la clé elle-même) :
+   ```bash
+   grep -c STRIPE_SECRET_KEY /root/bazaart-plateforme/app/.env.local
+   ```
+   Résultat attendu : `1`. Si le résultat est `0` ou « No such file », s'arrêter et
+   vérifier où sont rangées les clés (`app/.env`) avant d'aller plus loin.
+2. Ajouter la ligne (remplacer `COLLER_LE_JETON_ICI` par le jeton de l'étape 1.2).
+   Le `\n` du début garantit que la ligne ne se colle pas à la dernière ligne du fichier :
+   ```bash
+   printf '\nPROJETS_PARTENAIRES_TOKEN=%s\n' 'COLLER_LE_JETON_ICI' >> /root/bazaart-plateforme/app/.env.local
+   ```
+   Contrôle (affiche le début des 3 dernières lignes, sans révéler les secrets) :
+   ```bash
+   tail -n 3 /root/bazaart-plateforme/app/.env.local | cut -c1-30
+   ```
+   La dernière ligne doit commencer par `PROJETS_PARTENAIRES_TOKEN=`, et la ligne d'avant
+   doit être intacte.
+3. Vider le cache :
+   ```bash
+   cd /root/bazaart-plateforme && docker compose --env-file .env.local -f docker-compose.prod.yml exec -T platform_app php bin/console cache:clear --env=prod
+   ```
+
+### 1.4 Vérifier
+
+```bash
+# Avec le bon jeton : 200
+curl -s -o /dev/null -w "%{http_code}\n" https://app.bazaart.fr/projets/COLLER_LE_JETON_ICI
+# Avec un faux jeton : 404
+curl -s -o /dev/null -w "%{http_code}\n" https://app.bazaart.fr/projets/faux
+# En-têtes de confidentialité : doivent afficher X-Robots-Tag et Referrer-Policy
+curl -sI https://app.bazaart.fr/projets/COLLER_LE_JETON_ICI | grep -iE "x-robots-tag|referrer-policy"
+```
+
+Le lien complet s'affiche aussi dans le back-office, en haut de `/admin/fiches-projets`
+(encadré « Lien à partager », bouton « Copier »). S'il indique « Lien désactivé », le jeton
+n'est pas lu : revoir l'étape 1.3.
+
+### 1.5 Donner l'accès au back-office aux membres de l'équipe
+
+Le back-office des fiches est réservé au rôle **ROLE_ADMIN**. Pour chaque membre :
+
+```bash
+cd /root/bazaart-plateforme && docker compose --env-file .env.local -f docker-compose.prod.yml exec -T platform_app php bin/console app:promote-admin adresse@exemple.fr
+```
+
+La personne doit ensuite **se déconnecter puis se reconnecter**. Attention : ROLE_ADMIN
+donne accès à **tout** le back-office (utilisateurs, versements, réglages).
+
+---
+
+## 2. Utilisation (pour l'équipe)
+
+### 2.1 Les fiches
+
+`/admin/fiches-projets` : liste de toutes les fiches, publiées ou non.
+
+| Action | Où |
+|---|---|
+| Créer une fiche | bouton « + Nouvelle fiche » |
+| Modifier les informations | bouton « Modifier » |
+| Écrire la présentation (texte et images) | bouton « Présentation » |
+| Voir la fiche comme un partenaire, même non publiée | bouton « Aperçu » |
+| Changer l'ordre | modifier les nombres de la colonne « Ordre », puis « Enregistrer l'ordre » (plus petit = plus à gauche) |
+| Publier | case « Publié » dans la fiche |
+| Supprimer | bouton « Supprimer » (efface aussi la présentation et les images) |
+
+- **Rien n'est visible des partenaires tant que la case « Publié » n'est pas cochée.**
+- La **description** fait 600 caractères au maximum (compteur sous le champ).
+- **Référente** : prénom et nom seulement, sans adresse e-mail. Le contact affiché aux
+  partenaires est toujours bonjourbazaart@gmail.com.
+- L'**adresse de la fiche** (ex. `…/an-ba-lanme-chapitre-2`) est fixée à la création :
+  elle ne change pas si le titre change, pour que les liens déjà envoyés restent valables.
+
+### 2.2 La présentation (ce que le partenaire lit en descendant)
+
+Page « Présentation » de chaque fiche : une suite de **blocs**. Un bloc contient un
+intertitre (facultatif), du texte et, si besoin, **une** image avec un texte alternatif et
+une légende. Pour plusieurs images, créer plusieurs blocs. Boutons « Monter » et
+« Descendre » pour changer l'ordre.
+
+Dans le texte, une **ligne vide** crée un nouveau paragraphe. Pas de mise en forme (gras,
+liens) : c'est voulu, pour qu'aucun code ne puisse être glissé dans la page.
+
+### 2.3 Les images
+
+- JPEG, PNG ou WebP, **5 Mo maximum**, 8 000 px de côté maximum.
+- Les images ne sont **pas réduites** automatiquement : préférer des images d'environ
+  **1 600 px de large** (moins de 1 Mo), sinon la page sera lente sur mobile.
+- Les photos de téléphone peuvent contenir le lieu où elles ont été prises (données
+  « EXIF ») : elles sont envoyées telles quelles. Exporter la photo (ou la faire passer
+  par un outil de retouche) avant de l'envoyer si c'est un problème.
+- **Texte alternatif** : une courte description de l'image pour les personnes qui ne la
+  voient pas (lecteurs d'écran). Sans texte saisi : pour le visuel principal, le titre du
+  projet est utilisé ; pour une image de bloc, la légende, sinon l'intertitre, sinon le
+  mot « Image » (peu utile : mieux vaut toujours remplir ce champ).
+
+### 2.4 Partager le lien
+
+Copier le lien depuis l'encadré « Lien à partager » et l'envoyer **uniquement** aux
+partenaires concernés : toute personne qui a ce lien voit toutes les fiches publiées.
+
+---
+
+## 3. Changer le jeton (lien compromis, fin d'un partenariat…)
+
+1. Générer un nouveau jeton (étape 1.2).
+2. Dans `/root/bazaart-plateforme/app/.env.local`, remplacer la valeur de la ligne
+   `PROJETS_PARTENAIRES_TOKEN=` (par exemple avec `nano`).
+3. Vider le cache (étape 1.3, point 3).
+4. L'ancien lien répond aussitôt « page introuvable » (404). Envoyer le nouveau lien aux
+   partenaires qui doivent garder l'accès.
+
+Pour **éteindre** la page : vider la valeur (`PROJETS_PARTENAIRES_TOKEN=`) puis vider le cache.
+
+---
+
+## 4. Ce qu'il faut savoir (limites)
+
+- **Un seul lien pour tous les partenaires** : changer le jeton coupe l'accès de tout le monde.
+- **Le jeton apparaît dans le journal d'accès du serveur web** (Nginx, partagé avec la
+  vitrine) et dans l'historique du navigateur des partenaires. Le masquer dans le journal
+  demande une ligne dans `docker/nginx/app.bazaart.fr.conf` et un redémarrage de
+  `bazaart_nginx` (coupure de quelques secondes des deux sites) : non fait pour l'instant.
+- La page n'est **pas indexée** (en-tête `X-Robots-Tag` et balise `robots`), n'apparaît ni
+  dans le menu ni dans un plan de site, et n'envoie aucune donnée à un service tiers
+  (pas de Google Analytics, pas de bandeau cookies, aucun cookie).
+- Quand un partenaire clique un lien externe, l'adresse de la page (avec le jeton) n'est
+  pas transmise (`Referrer-Policy: no-referrer`).
+
+---
+
+## 5. Pour les développeurs
+
+| Élément | Fichier |
+|---|---|
+| Entités | `app/src/Entity/AssociationProject.php`, `AssociationProjectBlock.php` |
+| Jeton, images, slug, présentation des données | `app/src/Service/AssociationProject/` |
+| Pages publiques + API | `app/src/Controller/AssociationProjectPublicController.php` |
+| Back-office | `app/src/Controller/AdminAssociationProject*.php`, `app/templates/admin/association_projects/` |
+| Gabarits publics | `app/templates/association_projects/` (gabarit autonome `_layout.html.twig`) |
+| Carrousel | `app/public/js/association-projects.js`, `app/public/css/association-projects.css` |
+| Accès public | `app/config/packages/security.yaml`, règle `^/projets/` |
+| Tests | `app/tests/E2E/AssociationProjectsTest.php`, `app/tests/Unit/Service/AssociationProject/` |
+
+Routes publiques (toutes exigent le jeton) : `/projets/{jeton}`, `/projets/{jeton}/api`,
+`/projets/{jeton}/{slug}`, `/projets/{jeton}/{slug}/visuel`,
+`/projets/{jeton}/{slug}/image/{bloc}`.
+
+- **Ne placer sous `/projets/` que des routes protégées par le jeton** : tout ce préfixe est
+  public dans `security.yaml` (un test le vérifie).
+- Après une modification de `association-projects.css` ou `association-projects.js`,
+  incrémenter `assets.version` dans `app/config/packages/framework.yaml`, sinon les
+  navigateurs gardent l'ancienne version en cache.
+- Tests : `docker compose exec app php bin/phpunit tests/E2E/AssociationProjectsTest.php tests/Unit/Service/AssociationProject`
