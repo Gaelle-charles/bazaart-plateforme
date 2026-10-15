@@ -11,15 +11,22 @@
  #
  # ORDRE DE LA FICHE (validé avec l'association) :
  #   en-tête (visuel, titre, type, état, dates) → description → présentation
- #   (blocs de texte et d'images) → artistes concernés → dates et lieux →
- #   partenaires confirmés et pressentis → financeurs sollicités → bloc mis en
- #   valeur « Ce qu'un partenaire peut apporter » → contact.
+ #   (blocs de texte et d'images) → « En pratique » : artistes concernés, dates et
+ #   lieux, partenaires confirmés et pressentis, financeurs sollicités, budget,
+ #   documents PDF → « Le projet en détail » (texte enrichi) → bloc mis en valeur
+ #   « Ce qu'un partenaire peut apporter » → contact.
  #   Une rubrique vide n'est pas affichée.
  #
  # SÉCURITÉ : tous les textes viennent de la base. Ils sont affichés avec
  # {{ … }} (échappement automatique) et le filtre nl2br, qui échappe AVANT
  # d'ajouter les <br> : un « <script> » saisi s'affiche comme du texte.
  # Ne jamais utiliser |raw sur ces champs.
+ #
+ # SEULE EXCEPTION : project.details (« Le projet en détail »), affiché avec |raw
+ # parce que c'est du HTML mis en forme. Il a été nettoyé par liste blanche à
+ # l'enregistrement PUIS de nouveau juste avant l'affichage
+ # (AssociationProjectPresenter → AssociationProjectRichText::render).
+ # Ne jamais ajouter |raw sur un autre champ.
  #}
 
 {% set isPreview = preview is defined and preview %}
@@ -114,7 +121,8 @@
 
         {# ── Informations pratiques ──────────────────────────────────────── #}
         {% set hasFacts = project.artists or project.period or project.places
-            or project.confirmedPartners or project.prospectivePartners or project.solicitedFunders %}
+            or project.confirmedPartners or project.prospectivePartners or project.solicitedFunders
+            or project.budget or project.documents is not empty %}
         {% if hasFacts %}
             <section class="ap-facts" aria-labelledby="ap-facts-title">
                 <h2 class="ap-section-title" id="ap-facts-title">En pratique</h2>
@@ -153,7 +161,39 @@
                             <dd>{{ project.solicitedFunders|nl2br }}</dd>
                         </div>
                     {% endif %}
+                    {% if project.budget %}
+                        <div class="ap-facts__item">
+                            <dt>Budget</dt>
+                            <dd>{{ project.budget }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if project.documents is not empty %}
+                        <div class="ap-facts__item">
+                            <dt>Documents</dt>
+                            <dd>
+                                <ul class="ap-docs">
+                                    {% for document in project.documents %}
+                                        <li>
+                                            <a class="ap-docs__link" href="{{ document.url }}" target="_blank" rel="noopener">
+                                                <span class="ap-docs__icon" aria-hidden="true">PDF</span>
+                                                <span class="ap-docs__label">{{ document.label }}</span>
+                                            </a>
+                                            <span class="ap-docs__size">({{ document.sizeLabel }})</span>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </dd>
+                        </div>
+                    {% endif %}
                 </dl>
+            </section>
+        {% endif %}
+
+        {# ── Le projet en détail : texte enrichi (HTML nettoyé, voir en-tête) ── #}
+        {% if project.details %}
+            <section class="ap-details" aria-labelledby="ap-details-title">
+                <h2 class="ap-section-title" id="ap-details-title">Le projet en détail</h2>
+                <div class="ap-article">{{ project.details|raw }}</div>
             </section>
         {% endif %}
 

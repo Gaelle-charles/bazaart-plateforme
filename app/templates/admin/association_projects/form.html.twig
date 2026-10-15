@@ -8,9 +8,15 @@
  #   - data           : AssociationProjectData (valeurs du formulaire, re-affichées après une erreur)
  #   - types / states : listes des enums pour les menus déroulants
  #   - descriptionMax : 600 (limite de la description)
+ #   - detailsHtml    : « Le projet en détail », HTML NETTOYÉ (AssociationProjectRichText),
+ #                      avec l'adresse admin de chaque image ; null si vide
+ #   - detailsMax     : limite du texte visible de « Le projet en détail »
+ #   - textImageCsrf  : identifiant du jeton CSRF de l'envoi d'images de l'éditeur
  #
  # Tout le texte saisi est affiché avec l'échappement automatique de Twig ({{ … }}) :
- # aucun HTML saisi n'est jamais interprété.
+ # aucun HTML saisi n'est jamais interprété. « Le projet en détail » aussi : son HTML
+ # (déjà nettoyé) est placé, échappé, dans un <textarea> ; c'est l'éditeur
+ # (js/association-projects-editor.js) qui le met en forme dans la page.
  #}
 
 {% set isEdit = project is not null %}
@@ -22,6 +28,7 @@
 {% block stylesheets %}
 {{ parent() }}
 {{ include('admin/association_projects/_styles.html.twig') }}
+{{ include('admin/association_projects/_editor_styles.html.twig') }}
 {% endblock %}
 
 {% block content %}
@@ -35,12 +42,16 @@
 {% if isEdit %}
     <div class="adm-ap-header">
         <p class="adm-ap-header__intro">
-            Informations principales de la fiche. Le texte de présentation et ses images
-            (ce que le partenaire lit en descendant) se gèrent dans la page « Présentation ».
+            Informations principales de la fiche. Les blocs de la page « Présentation »
+            s'affichent juste après la description ; « Le projet en détail » (plus bas)
+            s'affiche après « En pratique ». Les PDF se gèrent dans « Documents PDF ».
         </p>
         <span>
             <a href="{{ path('app_admin_asso_project_presentation', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost">
                 Présentation ({{ project.blocks|length }} bloc{{ project.blocks|length > 1 ? 's' }})
+            </a>
+            <a href="{{ path('app_admin_asso_project_documents', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost">
+                Documents PDF ({{ project.documents|length }})
             </a>
             <a href="{{ path('app_admin_asso_project_preview', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost" target="_blank" rel="noopener">Aperçu</a>
         </span>
@@ -114,7 +125,7 @@
                 <label class="adm-ap-label" for="ap-description">Description</label>
                 <span class="adm-ap-hint" id="ap-description-hint">
                     Résumé du projet, {{ descriptionMax }} caractères maximum. Le texte plus long
-                    (et les images) se met dans la page « Présentation » de la fiche.
+                    (et les images) se met dans « Le projet en détail », plus bas.
                 </span>
                 <textarea id="ap-description" name="description" class="adm-ap-textarea"
                           maxlength="{{ descriptionMax }}"
@@ -137,6 +148,35 @@
             <div class="adm-ap-group">
                 <label class="adm-ap-label" for="ap-funders">Financeurs sollicités</label>
                 <textarea id="ap-funders" name="solicitedFunders" class="adm-ap-textarea">{{ data.solicitedFunders }}</textarea>
+            </div>
+
+            <div class="adm-ap-group">
+                <label class="adm-ap-label" for="ap-budget">Budget</label>
+                <input type="text" id="ap-budget" name="budget" class="adm-ap-input" maxlength="255"
+                       value="{{ data.budget }}" placeholder="ex. 45 000 € (dont 20 000 € acquis)">
+                <span class="adm-ap-hint">Texte libre, affiché tel quel dans « En pratique ».</span>
+            </div>
+
+            <div class="adm-ap-group">
+                <label class="adm-ap-label" id="ap-details-label" for="ap-details">Le projet en détail</label>
+                <span class="adm-ap-hint" id="ap-details-hint">
+                    Texte long, mis en page comme un article, affiché après « En pratique ».
+                    Intertitres, gras, italique, listes, citations, liens et images.
+                    {% if not isEdit %}Pour ajouter des images, créez d'abord la fiche.{% endif %}
+                </span>
+                {#
+                    Sans JavaScript, ce champ reste un simple champ de texte (le HTML y est
+                    modifiable, et nettoyé à l'enregistrement). Avec JavaScript, l'éditeur
+                    le cache et le remplit au moment d'enregistrer.
+                #}
+                <textarea id="ap-details" name="details" class="adm-ap-textarea adm-ap-textarea--tall"
+                          aria-describedby="ap-details-hint"
+                          data-rich-editor
+                          data-max="{{ detailsMax }}"
+                          {% if isEdit %}
+                              data-upload-url="{{ path('app_admin_asso_project_text_image_upload', {id: project.id}) }}"
+                              data-upload-token="{{ csrf_token(textImageCsrf) }}"
+                          {% endif %}>{{ detailsHtml }}</textarea>
             </div>
 
             <div class="adm-ap-group adm-ap-highlight">
@@ -211,6 +251,7 @@
     value.length compte un retour à la ligne pour 1 caractère, comme le serveur
     (qui convertit « \r\n » en « \n » avant de compter) : les deux sont d'accord.
 #}
+<script src="{{ asset('js/association-projects-editor.js') }}" defer></script>
 <script>
 document.querySelectorAll('textarea[data-counter]').forEach(function (field) {
     var counter = document.getElementById(field.dataset.counter);

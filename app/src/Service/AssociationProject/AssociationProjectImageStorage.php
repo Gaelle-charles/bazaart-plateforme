@@ -70,8 +70,12 @@ final class AssociationProjectImageStorage
      * Contrat de retour :
      *   - StoredImage → image enregistrée (nom de fichier + dimensions) ;
      *   - string      → message d'erreur en français, à afficher à l'utilisateur.
+     *
+     * $subdirectory : sous-dossier du dossier privé (ex. « texte/12 » pour les images
+     * du texte « Le projet en détail » de la fiche n° 12). Le chemin renvoyé
+     * l'inclut alors (« texte/12/<nom>.jpg »).
      */
-    public function store(UploadedFile $file): StoredImage|string
+    public function store(UploadedFile $file, string $subdirectory = ''): StoredImage|string
     {
         // ── 1. Le téléversement s'est-il bien passé ? ────────────────────────
         // isValid() est faux si PHP a refusé le fichier (trop gros pour php.ini,
@@ -112,7 +116,11 @@ final class AssociationProjectImageStorage
         }
 
         // ── 5. Dossier de destination ─────────────────────────────────────────
-        if (!is_dir($this->storageDir) && !mkdir($this->storageDir, 0775, true) && !is_dir($this->storageDir)) {
+        if (preg_match('#^([a-z0-9-]+/)*[a-z0-9-]*$#D', $subdirectory) !== 1) {
+            return "Impossible d'enregistrer l'image (dossier de stockage invalide).";
+        }
+        $directory = $subdirectory === '' ? $this->storageDir : $this->storageDir . DIRECTORY_SEPARATOR . $subdirectory;
+        if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
             return "Impossible d'enregistrer l'image (dossier de stockage inaccessible).";
         }
 
@@ -122,12 +130,14 @@ final class AssociationProjectImageStorage
         $filename = bin2hex(random_bytes(16)) . '.' . self::ALLOWED_MIME_TYPES[$mimeType];
 
         try {
-            $file->move($this->storageDir, $filename);
+            $file->move($directory, $filename);
         } catch (FileException) {
             return "Impossible d'enregistrer l'image. Merci de réessayer.";
         }
 
-        return new StoredImage($filename, $width, $height);
+        $path = $subdirectory === '' ? $filename : $subdirectory . '/' . $filename;
+
+        return new StoredImage($path, $width, $height);
     }
 
     /**
@@ -156,6 +166,30 @@ final class AssociationProjectImageStorage
         }
 
         return $fileReal;
+    }
+
+    /**
+     * Chemin ABSOLU d'un sous-dossier du dossier privé (ex. « texte/12 »), ou null
+     * s'il n'existe pas. Même garde-fou que absolutePath().
+     */
+    public function absoluteDirectory(string $subdirectory): ?string
+    {
+        if ($subdirectory === '') {
+            return null;
+        }
+
+        $baseReal = realpath($this->storageDir);
+        $dirReal = realpath($this->storageDir . DIRECTORY_SEPARATOR . $subdirectory);
+
+        if ($baseReal === false || $dirReal === false || !is_dir($dirReal)) {
+            return null;
+        }
+
+        if (!str_starts_with($dirReal, $baseReal . DIRECTORY_SEPARATOR)) {
+            return null;
+        }
+
+        return $dirReal;
     }
 
     /** Supprime une image du disque (rien ne se passe si elle n'existe plus). */

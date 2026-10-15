@@ -106,14 +106,18 @@ donne accès à **tout** le back-office (utilisateurs, versements, réglages).
 |---|---|
 | Créer une fiche | bouton « + Nouvelle fiche » |
 | Modifier les informations | bouton « Modifier » |
-| Écrire la présentation (texte et images) | bouton « Présentation » |
+| Écrire la présentation (blocs de texte et d'images, après la description) | bouton « Présentation » |
+| Écrire « Le projet en détail » (texte mis en forme, après « En pratique ») | champ du même nom dans « Modifier » |
+| Joindre des documents PDF (affichés dans « En pratique ») | bouton « Documents PDF » dans « Modifier » |
 | Voir la fiche comme un partenaire, même non publiée | bouton « Aperçu » |
 | Changer l'ordre | modifier les nombres de la colonne « Ordre », puis « Enregistrer l'ordre » (plus petit = plus à gauche) |
 | Publier | case « Publié » dans la fiche |
-| Supprimer | bouton « Supprimer » (efface aussi la présentation et les images) |
+| Supprimer | bouton « Supprimer » (efface aussi la présentation, les images et les documents PDF) |
 
 - **Rien n'est visible des partenaires tant que la case « Publié » n'est pas cochée.**
 - La **description** fait 600 caractères au maximum (compteur sous le champ).
+- **Budget** : texte libre (ex. « 45 000 € (dont 20 000 € acquis) »), affiché dans
+  « En pratique » juste après « Financeurs sollicités ».
 - **Référente** : prénom et nom seulement, sans adresse e-mail. Le contact affiché aux
   partenaires est toujours bonjourbazaart@gmail.com.
 - L'**adresse de la fiche** (ex. `…/an-ba-lanme-chapitre-2`) est fixée à la création :
@@ -127,9 +131,55 @@ une légende. Pour plusieurs images, créer plusieurs blocs. Boutons « Monter �
 « Descendre » pour changer l'ordre.
 
 Dans le texte, une **ligne vide** crée un nouveau paragraphe. Pas de mise en forme (gras,
-liens) : c'est voulu, pour qu'aucun code ne puisse être glissé dans la page.
+liens) dans les blocs : pour un texte mis en forme, utiliser « Le projet en détail » (2.3).
 
-### 2.3 Les images
+### 2.3 Le projet en détail (texte mis en forme)
+
+Champ « Le projet en détail » de la page « Modifier » : un texte long, mis en page comme
+un article, affiché sur la fiche **après « En pratique » et avant le bloc jaune** « Ce
+qu'un partenaire peut apporter ». Sous le titre de section « Le projet en détail ».
+
+Barre d'outils : Paragraphe, Intertitre, Sous-titre, Gras, Italique, liste à puces, liste
+numérotée, Citation, Lien, Retirer le lien, Image, Annuler, Rétablir. Les raccourcis
+habituels marchent (Ctrl+B, Ctrl+I, Ctrl+Z).
+
+- **Coller depuis Word ou Google Docs** : la mise en forme utile (intertitres, gras,
+  italique, listes, liens) est gardée, le reste (polices, couleurs, tailles) est retiré.
+- **Images** : bouton « Image », glisser-déposer, ou capture d'écran collée. Mêmes règles
+  que les autres images (2.5). À l'insertion, une fenêtre demande une description de
+  l'image (texte alternatif) : la remplir. Double-cliquer sur une image pour modifier sa
+  description ; cliquer dessus puis Suppr pour la retirer.
+- Les images ne sont possibles qu'**après la création** de la fiche (il faut qu'elle
+  existe pour ranger ses images).
+- **Rien n'est visible des partenaires avant « Enregistrer »**, même une image déjà
+  envoyée.
+- ⚠️ Une image retirée du texte est **effacée du serveur à l'enregistrement** : pour la
+  remettre, il faudra l'envoyer à nouveau.
+- 50 000 caractères maximum (compteur sous le champ).
+- Liens : adresses web (`https://…`) ou e-mail seulement.
+
+Sécurité : le texte est filtré à l'enregistrement **et** à l'affichage. Seules les mises
+en forme listées ci-dessus passent ; tout le reste (scripts, styles, vidéos intégrées,
+formulaires, images venant d'autres sites) est retiré.
+
+### 2.4 Documents PDF
+
+Bouton « Documents PDF » dans la page « Modifier » d'une fiche. Chaque document apparaît
+dans « En pratique », ligne « Documents », avec son intitulé et sa taille.
+
+- **PDF uniquement, 9,9 Mo maximum** (un peu moins de 10 Mo : c'est la limite d'envoi du
+  serveur, moins une petite marge). Le vrai type du fichier est contrôlé (un fichier
+  renommé en `.pdf` est refusé).
+- **Intitulé** : ce que lit le partenaire (ex. « Dossier de présentation »). Vide = le nom
+  du fichier. Modifiable ensuite (« Enregistrer l'intitulé »).
+- Boutons « Monter » / « Descendre » pour l'ordre, « Supprimer » (efface aussi le fichier),
+  lien « Ouvrir » pour vérifier le document.
+- Visibles seulement si la fiche est publiée, par le même lien secret que la page :
+  **toute personne qui a le lien peut télécharger les documents**. Ne pas y mettre de
+  données personnelles (RIB, adresses, numéros de téléphone…). Un PDF garde aussi ses
+  propriétés (auteur, logiciel) : les vérifier avant l'envoi si besoin.
+
+### 2.5 Les images
 
 - JPEG, PNG ou WebP, **5 Mo maximum**, 8 000 px de côté maximum.
 - Les images ne sont **pas réduites** automatiquement : préférer des images d'environ
@@ -140,9 +190,10 @@ liens) : c'est voulu, pour qu'aucun code ne puisse être glissé dans la page.
 - **Texte alternatif** : une courte description de l'image pour les personnes qui ne la
   voient pas (lecteurs d'écran). Sans texte saisi : pour le visuel principal, le titre du
   projet est utilisé ; pour une image de bloc, la légende, sinon l'intertitre, sinon le
-  mot « Image » (peu utile : mieux vaut toujours remplir ce champ).
+  mot « Image » (peu utile : mieux vaut toujours remplir ce champ) ; pour une image de
+  « Le projet en détail », aucune description (à éviter).
 
-### 2.4 Partager le lien
+### 2.6 Partager le lien
 
 Copier le lien depuis l'encadré « Lien à partager » et l'envoyer **uniquement** aux
 partenaires concernés : toute personne qui a ce lien voit toutes les fiches publiées.
@@ -277,7 +328,9 @@ avant de la restaurer (une restauration remplace toute la base, pas seulement le
 
 | Élément | Fichier |
 |---|---|
-| Entités | `app/src/Entity/AssociationProject.php`, `AssociationProjectBlock.php` |
+| Entités | `app/src/Entity/AssociationProject.php`, `AssociationProjectBlock.php`, `AssociationProjectDocument.php` |
+| Texte enrichi (liste blanche), images du texte, PDF | `AssociationProjectRichText.php`, `AssociationProjectTextImages.php`, `AssociationProjectDocumentStorage.php` (dans `app/src/Service/AssociationProject/`) |
+| Éditeur du back-office | `app/public/js/association-projects-editor.js`, `app/templates/admin/association_projects/_editor_styles.html.twig` |
 | Jeton, images, slug, présentation des données | `app/src/Service/AssociationProject/` |
 | Pages publiques + API | `app/src/Controller/AssociationProjectPublicController.php` |
 | Back-office | `app/src/Controller/AdminAssociationProject*.php`, `app/templates/admin/association_projects/` |
@@ -285,15 +338,26 @@ avant de la restaurer (une restauration remplace toute la base, pas seulement le
 | Carrousel | `app/public/js/association-projects.js`, `app/public/css/association-projects.css` |
 | Accès public | `app/config/packages/security.yaml`, règle `^/projets/` |
 | Import des fiches | `app/src/Command/ImportAssociationProjectsCommand.php`, `app/src/Service/AssociationProject/AssociationProjectImporter.php` |
-| Tests | `app/tests/E2E/AssociationProjectsTest.php`, `app/tests/E2E/AssociationProjectImportTest.php`, `app/tests/Unit/Service/AssociationProject/` |
+| Tests | `app/tests/E2E/AssociationProjectsTest.php`, `AssociationProjectDetailsTest.php`, `AssociationProjectImportTest.php` (dans `app/tests/E2E/`), `app/tests/Unit/Service/AssociationProject/` |
 
 Routes publiques (toutes exigent le jeton) : `/projets/{jeton}`, `/projets/{jeton}/api`,
 `/projets/{jeton}/{slug}`, `/projets/{jeton}/{slug}/visuel`,
-`/projets/{jeton}/{slug}/image/{bloc}`.
+`/projets/{jeton}/{slug}/image/{bloc}`, `/projets/{jeton}/{slug}/texte/{nom}` (image de
+« Le projet en détail », servie seulement si elle est citée dans le texte enregistré),
+`/projets/{jeton}/{slug}/document/{document}`.
+
+Stockage privé (`var/secure_uploads/association-projects/<env>/`) : visuels et images des
+blocs à la racine, images du texte dans `texte/<id de la fiche>/`, PDF dans `documents/`.
+Pas d'extension dans les adresses d'images : le Nginx de production sert lui-même les
+adresses finissant par `.jpg` ou `.png` et ne trouverait pas ces fichiers.
+
+- **`project.details` est le seul champ affiché avec `|raw`** (show.html.twig) : il est
+  nettoyé par `AssociationProjectRichText` à l'enregistrement et de nouveau à l'affichage
+  (presenter). Ne jamais ajouter `|raw` ailleurs.
 
 - **Ne placer sous `/projets/` que des routes protégées par le jeton** : tout ce préfixe est
   public dans `security.yaml` (un test le vérifie).
 - Après une modification de `association-projects.css` ou `association-projects.js`,
   incrémenter `assets.version` dans `app/config/packages/framework.yaml`, sinon les
   navigateurs gardent l'ancienne version en cache.
-- Tests : `docker compose exec app php bin/phpunit tests/E2E/AssociationProjectsTest.php tests/E2E/AssociationProjectImportTest.php tests/Unit/Service/AssociationProject`
+- Tests : `docker compose exec app php bin/phpunit tests/E2E/AssociationProjectsTest.php tests/E2E/AssociationProjectDetailsTest.php tests/E2E/AssociationProjectImportTest.php tests/Unit/Service/AssociationProject`

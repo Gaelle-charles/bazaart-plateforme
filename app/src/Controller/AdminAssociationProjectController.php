@@ -11,11 +11,14 @@ use App\Enum\AssociationProjectType;
 use App\Repository\AssociationProjectRepository;
 use App\Service\AssociationProject\AssociationProjectImageStorage;
 use App\Service\AssociationProject\AssociationProjectPresenter;
+use App\Service\AssociationProject\AssociationProjectRichText;
 use App\Service\AssociationProject\AssociationProjectService;
+use App\Service\AssociationProject\AssociationProjectTextImages;
 use App\Service\AssociationProject\PublicAccessToken;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
@@ -47,6 +50,7 @@ class AdminAssociationProjectController extends AbstractController
     private const CSRF_FORM = 'asso_project_form';
     private const CSRF_REORDER = 'asso_project_reorder';
     private const CSRF_DELETE_PREFIX = 'asso_project_delete_';
+    private const CSRF_TEXT_IMAGE = 'asso_project_text_image';
 
     public function __construct(
         private readonly AssociationProjectRepository $repository,
@@ -54,6 +58,8 @@ class AdminAssociationProjectController extends AbstractController
         private readonly AssociationProjectImageStorage $imageStorage,
         private readonly PublicAccessToken $accessToken,
         private readonly AssociationProjectPresenter $presenter,
+        private readonly AssociationProjectRichText $richText,
+        private readonly AssociationProjectTextImages $textImages,
     ) {
     }
 
@@ -227,14 +233,86 @@ class AdminAssociationProjectController extends AbstractController
         return $response;
     }
 
+    /**
+     * POST /admin/fiches-projets/{id}/texte/image : image insérée dans « Le projet en
+     * détail », envoyée par l'éditeur sans recharger la page.
+     *
+     * Réponse JSON : {name, url, width, height} ou {error}. L'image est rangée dans le
+     * dossier de la fiche ; elle n'apparaît aux partenaires qu'une fois la fiche
+     * enregistrée avec l'image dans son texte.
+     */
+    #[Route('/{id}/texte/image', name: 'text_image_upload', requirements: ['id' => '\d+'], methods: ['POST'])]
+    public function uploadTextImage(AssociationProject $project, Request $request): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid(self::CSRF_TEXT_IMAGE, (string) $request->request->get('_token'))) {
+            return $this->json(['error' => 'Jeton de sécurité expiré : enregistrez la fiche puis rechargez la page.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $file = $request->files->get('image');
+        if (!$file instanceof UploadedFile) {
+            return $this->json(['error' => "Aucune image reçue (fichier trop lourd ?). L'image doit faire moins de 5 Mo."], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $stored = $this->service->storeTextImage($project, $file);
+        if (is_string($stored)) {
+            return $this->json(['error' => $stored], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        return $this->json([
+            'name'   => $stored->path,
+            'url'    => $this->textImageUrl($project, $stored->path),
+            'width'  => $stored->width,
+            'height' => $stored->height,
+        ], Response::HTTP_CREATED);
+    }
+
+    /**
+     * GET /admin/fiches-projets/{id}/texte/{hash} : une image du texte, dans l'éditeur
+     * et dans l'aperçu. Pas d'extension dans l'adresse (voir AssociationProjectTextImages::findByHash).
+     */
+    #[Route('/{id}/texte/{hash}', name: 'text_image', requirements: ['id' => '\d+', 'hash' => '[a-f0-9]{32}'], methods: ['GET'])]
+    public function textImage(AssociationProject $project, string $hash): Response
+    {
+        $name = $this->textImages->findByHash($project, $hash);
+        $path = $name !== null ? $this->textImages->absolutePath($project, $name) : null;
+        if ($path === null) {
+            throw $this->createNotFoundException();
+        }
+
+        $response = new BinaryFileResponse($path);
+        $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_INLINE);
+        // Le nom du fichier change avec l'image : le navigateur peut la garder.
+        $response->setPrivate();
+        $response->setMaxAge(86400);
+
+        return $response;
+    }
+
     private function renderProjectForm(?AssociationProject $project, AssociationProjectData $data): Response
     {
+        // Texte de l'éditeur : TOUJOURS nettoyé (même après une erreur, quand il vient
+        // du formulaire envoyé), avec l'adresse admin de chaque image.
+        $detailsHtml = $project !== null
+            ? $this->richText->render($data->details, fn (string $name): string => $this->textImageUrl($project, $name))
+            : $this->richText->filterImages($this->richText->sanitize($data->details), static fn (string $name): bool => false);
+
         return $this->render('admin/association_projects/form.html.twig', [
             'project' => $project,
             'data'    => $data,
             'types'   => AssociationProjectType::cases(),
             'states'  => AssociationProjectState::cases(),
             'descriptionMax' => AssociationProject::DESCRIPTION_MAX_LENGTH,
+            'detailsHtml'    => $detailsHtml,
+            'detailsMax'     => AssociationProjectRichText::TEXT_MAX_LENGTH,
+            'textImageCsrf'  => self::CSRF_TEXT_IMAGE,
+        ]);
+    }
+
+    private function textImageUrl(AssociationProject $project, string $name): string
+    {
+        return $this->generateUrl('app_admin_asso_project_text_image', [
+            'id'   => $project->getId(),
+            'hash' => substr($name, 0, 32),
         ]);
     }
 

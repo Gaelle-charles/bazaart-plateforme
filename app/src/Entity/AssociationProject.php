@@ -32,7 +32,15 @@ use Doctrine\ORM\Mapping as ORM;
  *   - Les images sont stockées HORS du dossier public (cf. AssociationProjectImageStorage) :
  *     on ne garde ici que le chemin relatif + les dimensions (pour les attributs
  *     width/height des <img>, qui évitent que la page « saute » au chargement).
- *   - Aucun champ budget, volontairement (demande de l'association).
+ *   - Budget : texte libre et facultatif (ex. « 45 000 € dont 20 000 € acquis »).
+ *     Ajouté en octobre 2026 à la demande de l'association, qui l'avait d'abord
+ *     écarté : il est visible de TOUS les partenaires qui ont le lien commun.
+ *   - « Le projet en détail » ($details) : texte enrichi (intertitres, listes,
+ *     liens, images). Stocké en HTML DÉJÀ NETTOYÉ par AssociationProjectRichText,
+ *     et nettoyé une seconde fois à l'affichage. Les images n'y sont jamais
+ *     désignées par une adresse, seulement par leur nom de fichier
+ *     (data-ap-image) : l'adresse protégée est recalculée à chaque affichage.
+ *   - Documents PDF : entité AssociationProjectDocument (stockage privé).
  */
 #[ORM\Entity(repositoryClass: AssociationProjectRepository::class)]
 #[ORM\Table(name: 'association_projects')]
@@ -92,6 +100,17 @@ class AssociationProject
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $partnerContribution = null;
 
+    /** Budget en texte libre, visible des partenaires (ligne masquée si vide). */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $budget = null;
+
+    /**
+     * « Le projet en détail » : HTML NETTOYÉ (liste blanche de AssociationProjectRichText).
+     * Ne jamais y écrire de HTML qui n'est pas passé par ce nettoyage.
+     */
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $details = null;
+
     /** Référente dans l'équipe : prénom et nom seulement (jamais d'e-mail personnel). */
     #[ORM\Column(type: 'string', length: 120, nullable: true)]
     private ?string $leadName = null;
@@ -139,9 +158,21 @@ class AssociationProject
     #[ORM\OrderBy(['position' => 'ASC', 'id' => 'ASC'])]
     private Collection $blocks;
 
+    /**
+     * Documents PDF affichés dans « En pratique », dans l'ordre d'ajout.
+     * Comme pour les blocs : suppression des lignes par la BDD (ON DELETE CASCADE),
+     * suppression des fichiers par AssociationProjectService.
+     *
+     * @var Collection<int, AssociationProjectDocument>
+     */
+    #[ORM\OneToMany(targetEntity: AssociationProjectDocument::class, mappedBy: 'project', fetch: 'EXTRA_LAZY')]
+    #[ORM\OrderBy(['position' => 'ASC', 'id' => 'ASC'])]
+    private Collection $documents;
+
     public function __construct()
     {
         $this->blocks    = new ArrayCollection();
+        $this->documents = new ArrayCollection();
         $this->createdAt = new \DateTimeImmutable();
         $this->updatedAt = $this->createdAt;
     }
@@ -304,6 +335,31 @@ class AssociationProject
         return $this;
     }
 
+    public function getBudget(): ?string
+    {
+        return $this->budget;
+    }
+
+    public function setBudget(?string $budget): static
+    {
+        $this->budget = $budget;
+
+        return $this;
+    }
+
+    public function getDetails(): ?string
+    {
+        return $this->details;
+    }
+
+    /** À n'appeler qu'avec du HTML passé par AssociationProjectRichText::sanitize(). */
+    public function setDetails(?string $details): static
+    {
+        $this->details = $details;
+
+        return $this;
+    }
+
     public function getLeadName(): ?string
     {
         return $this->leadName;
@@ -397,5 +453,11 @@ class AssociationProject
     public function getBlocks(): Collection
     {
         return $this->blocks;
+    }
+
+    /** @return Collection<int, AssociationProjectDocument> */
+    public function getDocuments(): Collection
+    {
+        return $this->documents;
     }
 }

@@ -7,6 +7,7 @@ namespace App\DTO\AssociationProject;
 use App\Entity\AssociationProject;
 use App\Enum\AssociationProjectState;
 use App\Enum\AssociationProjectType;
+use App\Service\AssociationProject\AssociationProjectRichText;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -33,6 +34,7 @@ final class AssociationProjectData
     public const ARTISTS_MAX = 255;
     public const LEAD_MAX = 120;
     public const ALT_MAX = 200;
+    public const BUDGET_MAX = 255;
     /** Champs « texte » longs : limite de confort (pas de limite en BDD). */
     public const LONG_TEXT_MAX = 5000;
 
@@ -46,6 +48,13 @@ final class AssociationProjectData
     public ?string $confirmedPartners = null;
     public ?string $prospectivePartners = null;
     public ?string $solicitedFunders = null;
+    public ?string $budget = null;
+    /**
+     * « Le projet en détail » : HTML TEL QU'ENVOYÉ par l'éditeur, pas encore nettoyé.
+     * Le nettoyage (liste blanche) est fait par AssociationProjectService avant
+     * l'enregistrement ; il n'est jamais affiché tel quel.
+     */
+    public ?string $details = null;
     public ?string $partnerContribution = null;
     public ?string $leadName = null;
     public ?string $imageAlt = null;
@@ -72,6 +81,8 @@ final class AssociationProjectData
         $data->confirmedPartners   = $project->getConfirmedPartners();
         $data->prospectivePartners = $project->getProspectivePartners();
         $data->solicitedFunders    = $project->getSolicitedFunders();
+        $data->budget              = $project->getBudget();
+        $data->details             = $project->getDetails();
         $data->partnerContribution = $project->getPartnerContribution();
         $data->leadName            = $project->getLeadName();
         $data->imageAlt            = $project->getImageAlt();
@@ -96,6 +107,8 @@ final class AssociationProjectData
         $data->confirmedPartners   = self::nullable(self::text($post->get('confirmedPartners')));
         $data->prospectivePartners = self::nullable(self::text($post->get('prospectivePartners')));
         $data->solicitedFunders    = self::nullable(self::text($post->get('solicitedFunders')));
+        $data->budget              = self::nullable(self::line($post->get('budget')));
+        $data->details             = self::nullable(self::text($post->get('details')));
         $data->partnerContribution = self::nullable(self::text($post->get('partnerContribution')));
         $data->leadName            = self::nullable(self::line($post->get('leadName')));
         $data->imageAlt            = self::nullable(self::line($post->get('imageAlt')));
@@ -149,11 +162,29 @@ final class AssociationProjectData
             'partenaires confirmés'          => [$this->confirmedPartners, self::LONG_TEXT_MAX],
             'partenaires pressentis'         => [$this->prospectivePartners, self::LONG_TEXT_MAX],
             'financeurs sollicités'          => [$this->solicitedFunders, self::LONG_TEXT_MAX],
+            'budget'                         => [$this->budget, self::BUDGET_MAX],
             "ce qu'un partenaire peut apporter" => [$this->partnerContribution, self::LONG_TEXT_MAX],
         ];
         foreach ($limits as $label => [$value, $max]) {
             if ($value !== null && mb_strlen($value) > $max) {
                 $errors[] = sprintf('Le champ « %s » ne peut pas dépasser %d caractères.', $label, $max);
+            }
+        }
+
+        // « Le projet en détail » : on mesure le texte VISIBLE (sans les balises),
+        // comme le compteur de l'éditeur. Le plafond du HTML brut protège l'analyse.
+        if ($this->details !== null) {
+            if (mb_strlen($this->details) > AssociationProjectRichText::INPUT_MAX_LENGTH) {
+                $errors[] = 'Le texte « Le projet en détail » est trop long (mise en forme comprise). Raccourcissez-le ou retirez la mise en forme collée.';
+            } else {
+                $detailsLength = (new AssociationProjectRichText())->textLength($this->details);
+                if ($detailsLength > AssociationProjectRichText::TEXT_MAX_LENGTH) {
+                    $errors[] = sprintf(
+                        'Le texte « Le projet en détail » fait %d caractères : %d maximum.',
+                        $detailsLength,
+                        AssociationProjectRichText::TEXT_MAX_LENGTH,
+                    );
+                }
             }
         }
 
