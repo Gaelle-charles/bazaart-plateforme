@@ -116,3 +116,48 @@ le fichier étant copié par `scp` dans `app/var/import/` (ignoré par git).
   champs). D'où la consigne : aucun formulaire ouvert pendant l'import.
 
 Procédure : `docs/projets-association.md`, section 5.
+
+## Complément : budget, « Le projet en détail » et documents PDF (octobre 2026)
+
+Demande de l'association : une ligne **Budget** dans « En pratique », un **texte long mis
+en forme** (avec images) entre « En pratique » et le bloc « Ce qu'un partenaire peut
+apporter », et des **liens vers des documents PDF** dans « En pratique ».
+
+- **Budget** : colonne texte libre (255 caractères), affichée après « Financeurs sollicités ».
+- **Éditeur maison, sans dépendance** (choix de l'association) : zone `contenteditable` et
+  `document.execCommand` (`public/js/association-projects-editor.js`). Écartée : une
+  bibliothèque d'édition (type TinyMCE, Quill ou Trix), nouvelle dépendance à faire
+  valider, à maintenir et à charger. Risque accepté : `execCommand` est marqué
+  obsolète, mais reste pris en charge par tous les navigateurs et sans remplaçant natif.
+- **Sécurité par liste blanche côté serveur** (`AssociationProjectRichText`, DOMDocument,
+  comme `HtmlSanitizerService` qu'on ne modifie pas car il sert à une autre page) :
+  p, br, strong, em, h2, h3, ul, ol, li, blockquote, a (http, https, mailto), img. Le
+  texte est nettoyé à l'enregistrement **et** à l'affichage ; c'est le seul champ affiché
+  avec `|raw`. Le nettoyage côté navigateur n'est qu'un confort.
+- **Images du texte** : stockées dans le dossier de leur fiche (`texte/<id>/`) et citées par
+  leur seul nom de fichier (`data-ap-image`), sans adresse. L'adresse est ajoutée à
+  l'affichage (route à jeton ou route admin). Côté partenaires, une image n'est servie que
+  si elle est citée dans le texte **enregistré** d'une fiche **publiée** et présente dans
+  le dossier de cette fiche. Une image collée depuis une autre fiche est retirée. Les
+  images que le texte ne cite plus sont effacées à l'enregistrement (immédiatement si
+  elles étaient dans l'ancien texte, après 24 h pour un envoi jamais enregistré).
+- **Documents PDF** : table `association_project_documents` (intitulé, nom de fichier
+  aléatoire, taille, ordre), fichiers dans `documents/`, PDF seulement (type lu par finfo
+  et signature `%PDF-`), 10 Mo (limite Nginx). Page de back-office **séparée** du
+  formulaire de la fiche, comme « Présentation » : un PDF refusé ou trop lourd ne fait
+  jamais perdre ce qui a été saisi dans la fiche. Servis en `inline`, cache privé
+  revalidé à chaque fois, document cherché dans la fiche publiée (jamais par son seul
+  numéro).
+- **Pas d'extension dans les adresses** d'images : le Nginx de production sert lui-même
+  les adresses en `.jpg`/`.png`.
+
+Conséquences :
+
+- Deux endroits pour du texte long : les blocs de « Présentation » (texte brut, après la
+  description) et « Le projet en détail » (mis en forme, après « En pratique »). À
+  terme, l'association pourra choisir d'en garder un seul.
+- Toute personne qui a le lien secret peut télécharger les PDF : ne pas y mettre de
+  données personnelles (rappelé dans la documentation).
+- Migration `Version20261015013105` non destructive (deux colonnes facultatives, une table).
+
+Documentation : `docs/projets-association.md`, sections 2.3 et 2.4.
