@@ -179,6 +179,11 @@ services:
         arguments:
             $storageDir: '%association_projects.storage_dir%'
 
+    # Documents PDF joints aux fiches (« En pratique ») : même dossier privé, sous-dossier documents/.
+    App\Service\AssociationProject\AssociationProjectDocumentStorage:
+        arguments:
+            $storageDir: '%association_projects.storage_dir%/documents'
+
     # Import des fiches depuis projets.json + images/ (commande app:import-association-projects).
     App\Service\AssociationProject\AssociationProjectImporter:
         arguments:
