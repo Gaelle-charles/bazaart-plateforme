@@ -45,7 +45,9 @@ class AdminAssociationProjectDocumentController extends AbstractController
         return $this->render('admin/association_projects/documents.html.twig', [
             'project'   => $project,
             'documents' => $project->getDocuments(),
-            'maxMb'     => intdiv(AssociationProjectDocumentStorage::MAX_SIZE_BYTES, 1024 * 1024),
+            // Affiché arrondi (« 10 Mo ») ; le contrôle avant envoi utilise la valeur exacte.
+            'maxMb'     => (int) round(AssociationProjectDocumentStorage::MAX_SIZE_BYTES / (1024 * 1024)),
+            'maxBytes'  => AssociationProjectDocumentStorage::MAX_SIZE_BYTES,
             'labelMax'  => AssociationProjectDocument::LABEL_MAX_LENGTH,
         ]);
     }
@@ -54,14 +56,6 @@ class AdminAssociationProjectDocumentController extends AbstractController
     #[Route('/{id}/documents', name: 'document_new', requirements: ['id' => '\d+'], methods: ['POST'])]
     public function newDocument(AssociationProject $project, Request $request): Response
     {
-        // Un envoi plus lourd que la limite du serveur (post_max_size) arrive VIDE :
-        // ni fichier, ni jeton. On le dit clairement plutôt que « jeton expiré ».
-        if ($request->request->count() === 0 && $request->files->count() === 0 && (int) $request->server->get('CONTENT_LENGTH') > 0) {
-            $this->addFlash('error', sprintf('Le document est trop lourd : %d Mo maximum.', intdiv(AssociationProjectDocumentStorage::MAX_SIZE_BYTES, 1024 * 1024)));
-
-            return $this->redirectToDocuments($project);
-        }
-
         if (!$this->isCsrfTokenValid('asso_project_document_new_' . $project->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('error', 'Jeton de sécurité expiré : recharge la page puis réessaie.');
 

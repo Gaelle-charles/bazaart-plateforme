@@ -33,6 +33,8 @@
     };
     var BLOCKS = { P: 1, H2: 1, H3: 1, UL: 1, OL: 1, LI: 1, BLOCKQUOTE: 1, DIV: 1, H1: 1, H4: 1, H5: 1, H6: 1 };
     var IMAGE_NAME = /^[a-f0-9]{32}\.(jpg|png|webp)$/;
+    /** Adresse d'une image de cet éditeur (route du back-office), absolue ou relative. */
+    var ADMIN_IMAGE_SRC = /^\/admin\/fiches-projets\/\d+\/texte\/[a-f0-9]{32}$/;
     var ACCEPTED_IMAGES = ['image/jpeg', 'image/png', 'image/webp'];
 
     var BUTTONS = [
@@ -81,9 +83,12 @@
                 image.setAttribute(dimension, value);
             }
         });
-        // Adresse : seulement une adresse de ce back-office (jamais une image externe).
+        // Adresse : seulement celle d'une image de ce back-office (jamais une image externe).
         var src = source.getAttribute('src') || '';
-        if (src.indexOf('/admin/fiches-projets/') === 0 || src.indexOf(window.location.origin + '/admin/fiches-projets/') === 0) {
+        if (src.indexOf(window.location.origin + '/') === 0) {
+            src = src.slice(window.location.origin.length);
+        }
+        if (ADMIN_IMAGE_SRC.test(src)) {
             image.setAttribute('src', src);
         }
         return image;
@@ -138,6 +143,12 @@
             var name = RENAMED[tag] || tag;
             if (!KEPT[name]) {
                 cleanInto(child, target);
+                // Tableau collé : un espace entre deux cellules, un retour à la ligne entre deux lignes.
+                if (tag === 'TD' || tag === 'TH') {
+                    target.appendChild(document.createTextNode(' '));
+                } else if (tag === 'TR') {
+                    target.appendChild(document.createElement('br'));
+                }
                 return;
             }
             if (name === 'IMG') {
@@ -332,7 +343,9 @@
 
         function addLink() {
             var selection = window.getSelection();
-            var text = selection ? selection.toString() : '';
+            // « Rien de sélectionné » = curseur seul. Une image sélectionnée n'a pas de
+            // texte mais n'est pas « rien » : elle doit devenir un lien, pas être remplacée.
+            var nothingSelected = !selection || selection.rangeCount === 0 || selection.isCollapsed;
             var answer = window.prompt('Adresse du lien (https://… ou adresse e-mail) :', 'https://');
             if (answer === null) { return; }
             answer = answer.trim();
@@ -342,11 +355,21 @@
             } else if (!/^(https?:\/\/|mailto:)/i.test(answer)) {
                 answer = 'https://' + answer.replace(/^\/+/, '');
             }
-            if (text.trim() === '') {
+            if (nothingSelected) {
                 var link = document.createElement('a');
                 link.href = answer;
                 link.textContent = answer.replace(/^mailto:/i, '');
                 document.execCommand('insertHTML', false, link.outerHTML);
+            } else if (selection.toString().trim() === '') {
+                // Image sélectionnée : execCommand('createLink') ne l'entoure pas (Chrome),
+                // on pose donc le lien nous-mêmes autour de la sélection.
+                var anchor = document.createElement('a');
+                anchor.href = answer;
+                try {
+                    selection.getRangeAt(0).surroundContents(anchor);
+                } catch (ignored) {
+                    say('Sélectionnez un texte ou une seule image pour ajouter un lien.', true);
+                }
             } else {
                 document.execCommand('createLink', false, answer);
             }
@@ -430,13 +453,27 @@
                 return ACCEPTED_IMAGES.indexOf(file.type) !== -1;
             });
             var html = clipboard.getData('text/html');
-            if (files.length > 0 && !html) {
+            var cleaned = html ? cleanHtml(html) : '';
+            var probe = document.createElement('div');
+            probe.innerHTML = cleaned;
+            // Image copiée depuis un site ou une capture d'écran : le presse-papiers contient
+            // souvent le fichier ET un HTML « <img src=…> » que le nettoyage retire. On envoie
+            // alors le fichier, comme une image ajoutée avec le bouton.
+            if (files.length > 0 && isEmpty(probe)) {
                 saveSelection();
                 uploadAndInsert(files[0]);
                 return;
             }
             if (html) {
-                document.execCommand('insertHTML', false, cleanHtml(html));
+                if (isEmpty(probe) && /<img/i.test(html)) {
+                    say("Les images copiées depuis un site ne sont pas reprises : enregistrez l'image sur l'ordinateur puis utilisez le bouton « Image ».", true);
+                    return;
+                }
+                if (isEmpty(probe)) {
+                    document.execCommand('insertText', false, clipboard.getData('text/plain'));
+                } else {
+                    document.execCommand('insertHTML', false, cleaned);
+                }
             } else {
                 document.execCommand('insertText', false, clipboard.getData('text/plain'));
             }

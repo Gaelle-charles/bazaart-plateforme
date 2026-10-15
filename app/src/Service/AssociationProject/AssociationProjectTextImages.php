@@ -63,7 +63,7 @@ final class AssociationProjectTextImages
      */
     public function findByHash(AssociationProject $project, string $hash): ?string
     {
-        if (preg_match('/^[a-f0-9]{32}$/', $hash) !== 1) {
+        if (preg_match('/^[a-f0-9]{32}$/D', $hash) !== 1) {
             return null;
         }
         foreach (['jpg', 'png', 'webp'] as $extension) {
@@ -112,15 +112,27 @@ final class AssociationProjectTextImages
     /** Efface toutes les images du texte de la fiche, et son dossier (suppression de la fiche). */
     public function deleteAll(AssociationProject $project): void
     {
-        if ($project->getId() === null) {
-            return;
+        $id = $project->getId();
+        if ($id !== null) {
+            $this->deleteAllForProjectId($id);
         }
-        $directory = $this->imageStorage->absoluteDirectory($this->directory($project));
+    }
+
+    /**
+     * Même chose à partir du seul numéro de la fiche : après sa suppression en base,
+     * Doctrine efface le numéro de l'objet, il faut donc le noter avant.
+     */
+    public function deleteAllForProjectId(int $projectId): void
+    {
+        $directory = $this->imageStorage->absoluteDirectory('texte/' . $projectId);
         if ($directory === null) {
             return;
         }
         foreach (scandir($directory) ?: [] as $entry) {
-            $absolute = $this->absolutePath($project, $entry);
+            if (preg_match(AssociationProjectRichText::IMAGE_NAME_PATTERN, $entry) !== 1) {
+                continue;
+            }
+            $absolute = $this->imageStorage->absolutePath('texte/' . $projectId . '/' . $entry);
             if ($absolute !== null) {
                 unlink($absolute);
             }

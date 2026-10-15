@@ -111,17 +111,31 @@ final class AssociationProjectService
      */
     public function delete(AssociationProject $project): void
     {
-        $this->imageStorage->delete($project->getImagePath());
+        // On note d'abord tout ce qu'il faudra effacer : les fichiers ne partent
+        // qu'APRÈS la suppression en base. Si celle-ci échoue, la fiche reste
+        // complète (sinon : fiche encore en ligne, avec des images et des PDF perdus).
+        $projectId = $project->getId();
+        $images = [$project->getImagePath()];
         foreach ($project->getBlocks() as $block) {
-            $this->imageStorage->delete($block->getImagePath());
+            $images[] = $block->getImagePath();
         }
+        $documents = [];
         foreach ($project->getDocuments() as $document) {
-            $this->documentStorage->delete($document->getPath());
+            $documents[] = $document->getPath();
         }
-        $this->textImages->deleteAll($project);
 
         $this->em->remove($project);
         $this->em->flush();
+
+        foreach ($images as $path) {
+            $this->imageStorage->delete($path);
+        }
+        foreach ($documents as $path) {
+            $this->documentStorage->delete($path);
+        }
+        if ($projectId !== null) {
+            $this->textImages->deleteAllForProjectId($projectId);
+        }
     }
 
     /**

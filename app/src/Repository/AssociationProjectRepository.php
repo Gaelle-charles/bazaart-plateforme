@@ -64,6 +64,10 @@ class AssociationProjectRepository extends ServiceEntityRepository
         /** @var list<AssociationProject> $result */
         $result = $qb->getQuery()->getResult();
 
+        if ($withBlocks) {
+            $this->loadDocuments($result);
+        }
+
         return $result;
     }
 
@@ -82,7 +86,34 @@ class AssociationProjectRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult();
 
+        if ($project !== null) {
+            $this->loadDocuments([$project]);
+        }
+
         return $project;
+    }
+
+    /**
+     * Charge les documents PDF de ces fiches en UNE requête (au lieu d'une par fiche).
+     *
+     * Pas dans la requête des blocs : deux jointures sur deux listes multiplieraient
+     * les lignes (blocs × documents). Ici, une seconde requête « fiches + documents »
+     * remplit la liste des documents des fiches déjà chargées.
+     *
+     * @param list<AssociationProject> $projects
+     */
+    private function loadDocuments(array $projects): void
+    {
+        if ($projects === []) {
+            return;
+        }
+
+        $this->createQueryBuilder('p')
+            ->leftJoin('p.documents', 'd')->addSelect('d')
+            ->andWhere('p IN (:projects)')
+            ->setParameter('projects', $projects)
+            ->getQuery()
+            ->getResult();
     }
 
     /** Un slug est-il déjà pris ? (sert à générer un slug unique : « formations-2 »…) */

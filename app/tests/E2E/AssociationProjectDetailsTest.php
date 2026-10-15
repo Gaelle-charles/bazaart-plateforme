@@ -8,6 +8,9 @@ use App\Entity\AssociationProject;
 use App\Entity\AssociationProjectDocument;
 use App\Enum\AssociationProjectState;
 use App\Enum\AssociationProjectType;
+use App\Repository\AssociationProjectRepository;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\PersistentCollection;
 use App\Service\AssociationProject\AssociationProjectDocumentStorage;
 use App\Service\AssociationProject\AssociationProjectTextImages;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -307,6 +310,44 @@ class AssociationProjectDetailsTest extends AbstractE2ETestCase
         self::assertStringStartsWith('/admin/fiches-projets/documents/', $href);
         $this->client->request('GET', $href);
         self::assertResponseIsSuccessful();
+    }
+
+    public function testDocumentActionsRequireCsrfToken(): void
+    {
+        $this->loginAs($this->createAdminUser());
+        $this->addDocument($this->published, 'dossier.pdf', self::MINIMAL_PDF, 'Dossier');
+        $this->addDocument($this->published, 'budget.pdf', self::MINIMAL_PDF, 'Budget');
+        $id = $this->firstDocument($this->published)->getId();
+
+        foreach ([
+            ['/admin/fiches-projets/documents/' . $id, ['label' => 'Piraté', '_token' => 'faux']],
+            ['/admin/fiches-projets/documents/' . $id . '/deplacer', ['direction' => 'down', '_token' => 'faux']],
+            ['/admin/fiches-projets/documents/' . $id . '/supprimer', ['_token' => 'faux']],
+            ['/admin/fiches-projets/' . $this->published->getId() . '/documents', ['label' => 'Piraté', '_token' => 'faux']],
+        ] as [$url, $post]) {
+            $this->client->request('POST', $url, $post);
+            self::assertResponseRedirects();
+        }
+
+        self::assertSame(['Dossier', 'Budget'], $this->documentLabels($this->published), 'rien ne doit avoir changé');
+    }
+
+    public function testPublicPagesLoadDocumentsWithoutOneQueryPerFiche(): void
+    {
+        $this->loginAs($this->createAdminUser());
+        $this->addDocument($this->published, 'dossier.pdf', self::MINIMAL_PDF, 'Dossier');
+
+        // Mémoire de Doctrine vidée (celle du conteneur, utilisée par le dépôt) :
+        // on part d'une lecture en base, comme une vraie requête.
+        static::getContainer()->get(EntityManagerInterface::class)->clear();
+        $repository = static::getContainer()->get(AssociationProjectRepository::class);
+        foreach ([...$repository->findPublishedOrdered(withBlocks: true), $repository->findPublishedBySlug($this->published->getSlug())] as $project) {
+            self::assertNotNull($project);
+            $documents = $project->getDocuments();
+            self::assertInstanceOf(PersistentCollection::class, $documents);
+            self::assertTrue($documents->isInitialized(), 'documents déjà chargés, sans requête supplémentaire');
+            self::assertCount(1, $documents);
+        }
     }
 
     public function testDeletingFicheRemovesItsFiles(): void

@@ -6,7 +6,8 @@
  # Variables (AdminAssociationProjectDocumentController::documents) :
  #   - project   : AssociationProject
  #   - documents : documents de la fiche, dans l'ordre d'affichage
- #   - maxMb     : taille maximale d'un PDF, en Mo
+ #   - maxMb     : taille maximale d'un PDF, en Mo (arrondie, pour l'affichage)
+ #   - maxBytes  : taille maximale exacte, en octets (contrôle avant l'envoi)
  #   - labelMax  : longueur maximale d'un intitulé
  #
  # Chaque document a ses propres petits formulaires (intitulé, monter, descendre,
@@ -119,7 +120,7 @@
         <div class="adm-ap-group">
             <label class="adm-ap-label adm-ap-label--required" for="doc-file">Fichier PDF</label>
             <input type="file" id="doc-file" name="document" accept="application/pdf,.pdf" required
-                   data-max-bytes="{{ maxMb * 1024 * 1024 }}" aria-describedby="doc-file-hint">
+                   data-max-bytes="{{ maxBytes }}" aria-describedby="doc-file-hint">
             <span class="adm-ap-hint" id="doc-file-hint">PDF uniquement, {{ maxMb }} Mo maximum.</span>
         </div>
         <div class="adm-ap-group">

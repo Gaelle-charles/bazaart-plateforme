@@ -53,6 +53,17 @@ class AssociationProjectRichTextTest extends TestCase
         yield 'rien de visible → null' => ['<p> </p><script>x</script>', null];
         yield 'vide → null' => ['', null];
         yield 'texte échappé' => ['<p>1 &lt; 2 &amp; &lt;script&gt;</p>', '<p>1 &lt; 2 &amp; &lt;script&gt;</p>'];
+        // Google Docs met parfois un simple espace en italique ou en gras entre deux mots.
+        yield 'espace en italique gardé' => ['<p>un<em> </em>deux</p>', '<p>un deux</p>'];
+        yield 'espace insécable en gras gardé' => ['<p>un<strong>&nbsp;</strong>deux</p>', "<p>un\u{A0}deux</p>"];
+        yield 'retour à la ligne en gras gardé' => ['<p>a<strong><br></strong>b</p>', '<p>a<br>b</p>'];
+        yield 'lien vide déplié' => ['<p>a<a href="https://x.fr"> </a>b</p>', '<p>a b</p>'];
+        yield '</div> de trop : la suite est gardée' => ['avant</div>après', '<p>avant</p><p>après</p>'];
+        yield '</div> de trop puis script' => ['<p>a</p></div><script>alert(1)</script><p onclick="x()">b</p>', '<p>a</p><p>b</p>'];
+        yield 'tableau collé : cellules séparées' => [
+            '<table><tr><td>un</td><td>deux</td></tr><tr><td>trois</td></tr></table>',
+            '<p>un deux <br>trois <br></p>',
+        ];
     }
 
     #[DataProvider('cleanings')]
@@ -116,6 +127,12 @@ class AssociationProjectRichTextTest extends TestCase
         $html = '<p><img data-ap-image="' . self::IMAGE . '" alt=""></p>';
 
         self::assertSame($html, $this->richText->sanitize($html));
+    }
+
+    public function testImageNameWithTrailingNewlineIsRefused(): void
+    {
+        self::assertSame(0, preg_match(AssociationProjectRichText::IMAGE_NAME_PATTERN, self::IMAGE . "\n"));
+        self::assertSame('<p>Texte</p>', $this->richText->sanitize('<p>Texte<img data-ap-image="' . self::IMAGE . "\n" . '"></p>'));
     }
 
     public function testBadDimensionsDropped(): void

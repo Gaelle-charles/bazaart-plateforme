@@ -116,7 +116,7 @@ final class AssociationProjectImageStorage
         }
 
         // ── 5. Dossier de destination ─────────────────────────────────────────
-        if (preg_match('#^([a-z0-9-]+/)*[a-z0-9-]*$#', $subdirectory) !== 1) {
+        if (preg_match('#^([a-z0-9-]+/)*[a-z0-9-]*$#D', $subdirectory) !== 1) {
             return "Impossible d'enregistrer l'image (dossier de stockage invalide).";
         }
         $directory = $subdirectory === '' ? $this->storageDir : $this->storageDir . DIRECTORY_SEPARATOR . $subdirectory;

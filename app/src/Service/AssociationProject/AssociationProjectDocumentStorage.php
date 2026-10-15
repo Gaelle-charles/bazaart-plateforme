@@ -18,11 +18,13 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  *
  * POURQUOI 10 Mo (et pas 5 comme les images) ?
  *   Un dossier de présentation avec photos dépasse vite 5 Mo. 10 Mo est la limite
- *   d'envoi déjà réglée sur le serveur de production (upload_max_filesize).
+ *   d'envoi déjà réglée sur le serveur (Nginx : client_max_body_size 10M ; PHP :
+ *   upload_max_filesize 10M). L'envoi contient aussi le jeton et l'intitulé : on
+ *   garde une marge de 64 Ko pour que Nginx ne coupe jamais un fichier accepté ici.
  */
 final class AssociationProjectDocumentStorage
 {
-    public const MAX_SIZE_BYTES = 10 * 1024 * 1024;
+    public const MAX_SIZE_BYTES = 10 * 1024 * 1024 - 64 * 1024;
 
     public function __construct(
         /**

@@ -42,7 +42,7 @@ final class AssociationProjectRichText
     public const INPUT_MAX_LENGTH = 300000;
 
     /** Nom de fichier d'une image du texte : celui produit par AssociationProjectImageStorage. */
-    public const IMAGE_NAME_PATTERN = '/^[a-f0-9]{32}\.(jpg|png|webp)$/';
+    public const IMAGE_NAME_PATTERN = '/^[a-f0-9]{32}\.(jpg|png|webp)$/D';
 
     /** Longueur maximale du texte alternatif d'une image (comme celui du visuel). */
     public const ALT_MAX_LENGTH = 200;
@@ -70,7 +70,14 @@ final class AssociationProjectRichText
     private const BLOCK_TAGS = ['p', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote'];
 
     /** Blocs retirés quand ils sont vides (paragraphes vides laissés par l'éditeur). */
-    private const REMOVED_WHEN_EMPTY = ['p', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote', 'strong', 'em', 'a'];
+    private const REMOVED_WHEN_EMPTY = ['p', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote'];
+
+    /**
+     * Balises en ligne « dépliées » quand elles sont vides : la balise part, son
+     * contenu reste. Google Docs met souvent un simple espace en gras ou en italique
+     * entre deux mots ; supprimer la balise collerait les deux mots.
+     */
+    private const UNWRAPPED_WHEN_EMPTY = ['strong', 'em', 'a'];
 
     /**
      * Nettoie le HTML envoyé par le formulaire. Renvoie null si, une fois nettoyé,
@@ -218,6 +225,13 @@ final class AssociationProjectRichText
             return null;
         }
 
+        // Un « </div> » de trop dans le texte ferme le conteneur technique : ce qui suit
+        // se retrouve APRÈS lui. On le rapatrie (il est ensuite nettoyé comme le reste)
+        // au lieu de le perdre sans prévenir.
+        while ($root->nextSibling !== null) {
+            $root->appendChild($root->nextSibling);
+        }
+
         $this->cleanChildren($root);
         $this->wrapLooseInline($root);
         $this->removeEmptyBlocks($root);
@@ -268,6 +282,14 @@ final class AssociationProjectRichText
             if (!in_array($tag, self::KEPT_TAGS, true)) {
                 // Balise inconnue mais inoffensive : on la retire en gardant son contenu.
                 $this->cleanChildren($child);
+                // Tableau collé : un espace entre deux cellules, un retour à la ligne
+                // entre deux lignes, pour que les mots ne se collent pas.
+                $document = $child->ownerDocument;
+                if ($document !== null && ($tag === 'td' || $tag === 'th')) {
+                    $child->appendChild($document->createTextNode(' '));
+                } elseif ($document !== null && $tag === 'tr') {
+                    $child->appendChild($document->createElement('br'));
+                }
                 $this->unwrap($child);
                 continue;
             }
@@ -346,11 +368,14 @@ final class AssociationProjectRichText
             $this->removeEmptyBlocks($child);
 
             $tag = strtolower($child->tagName);
-            if (!in_array($tag, self::REMOVED_WHEN_EMPTY, true)) {
+            $isEmpty = $child->getElementsByTagName('img')->length === 0 && self::isBlank($child->textContent);
+            if (!$isEmpty) {
                 continue;
             }
-            if ($child->getElementsByTagName('img')->length === 0 && self::isBlank($child->textContent)) {
+            if (in_array($tag, self::REMOVED_WHEN_EMPTY, true)) {
                 $node->removeChild($child);
+            } elseif (in_array($tag, self::UNWRAPPED_WHEN_EMPTY, true)) {
+                $this->unwrap($child);
             }
         }
     }
