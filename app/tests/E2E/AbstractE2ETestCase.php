@@ -95,8 +95,10 @@ abstract class AbstractE2ETestCase extends WebTestCase
 
         // Tronque les tables dans l'ordre inverse des dépendances.
         // ⚠️ Mettre à jour cette liste si de nouvelles tables sont créées.
-        //    Dernière mise à jour : page « Projets en cours » ADR-0039 (association_project_blocks, association_projects).
+        //    Dernière mise à jour : page « Projets en cours » ADR-0039 (association_project_documents,
+        //    association_project_blocks, association_projects).
         $conn->executeStatement('TRUNCATE TABLE
+            association_project_documents,
             association_project_blocks,
             association_projects,
             project_opportunity_reviews,
