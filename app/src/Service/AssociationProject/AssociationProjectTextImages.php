@@ -55,22 +55,55 @@ final class AssociationProjectTextImages
         return $this->imageStorage->absolutePath($this->directory($project) . '/' . $name);
     }
 
-    public function exists(AssociationProject $project, string $name): bool
+    /**
+     * Nom complet (avec extension) d'une image du dossier de la fiche, à partir des
+     * 32 caractères de son nom. Les adresses n'ont pas d'extension : le Nginx de
+     * production sert lui-même toute adresse finissant par .jpg ou .png, et ne
+     * trouverait pas ce fichier rangé hors du dossier public.
+     */
+    public function findByHash(AssociationProject $project, string $hash): ?string
     {
-        return $this->absolutePath($project, $name) !== null;
+        if (preg_match('/^[a-f0-9]{32}$/', $hash) !== 1) {
+            return null;
+        }
+        foreach (['jpg', 'png', 'webp'] as $extension) {
+            if ($this->absolutePath($project, $hash . '.' . $extension) !== null) {
+                return $hash . '.' . $extension;
+            }
+        }
+
+        return null;
     }
 
     /**
-     * Efface du disque les images qui étaient dans l'ancien texte et n'y sont plus.
+     * Après l'enregistrement du texte, efface du disque les images qu'il ne cite plus :
+     *   - celles qui étaient dans l'ancien texte et n'y sont plus : tout de suite ;
+     *   - celles envoyées puis jamais enregistrées (fiche quittée sans enregistrer) :
+     *     après 24 h seulement, pour ne pas effacer l'image qu'une autre personne
+     *     vient d'insérer dans un onglet encore ouvert.
      *
-     * @param list<string> $before noms présents avant l'enregistrement
-     * @param list<string> $after  noms présents après
+     * @param list<string> $before noms cités avant l'enregistrement
+     * @param list<string> $after  noms cités après
      */
-    public function deleteRemoved(AssociationProject $project, array $before, array $after): void
+    public function deleteUnused(AssociationProject $project, array $before, array $after): void
     {
-        foreach (array_diff($before, $after) as $name) {
-            $absolute = $this->absolutePath($project, $name);
-            if ($absolute !== null) {
+        if ($project->getId() === null) {
+            return;
+        }
+        $directory = $this->imageStorage->absoluteDirectory($this->directory($project));
+        if ($directory === null) {
+            return;
+        }
+        $limit = time() - 86400;
+        foreach (scandir($directory) ?: [] as $entry) {
+            if (in_array($entry, $after, true)) {
+                continue;
+            }
+            $absolute = $this->absolutePath($project, $entry);
+            if ($absolute === null) {
+                continue;
+            }
+            if (in_array($entry, $before, true) || (int) filemtime($absolute) < $limit) {
                 unlink($absolute);
             }
         }

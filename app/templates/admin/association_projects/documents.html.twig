@@ -1,0 +1,146 @@
+{% extends 'base_admin.html.twig' %}
+
+{#
+ # admin/association_projects/documents.html.twig : documents PDF d'une fiche (ADR-0039).
+ #
+ # Variables (AdminAssociationProjectDocumentController::documents) :
+ #   - project   : AssociationProject
+ #   - documents : documents de la fiche, dans l'ordre d'affichage
+ #   - maxMb     : taille maximale d'un PDF, en Mo
+ #   - labelMax  : longueur maximale d'un intitulé
+ #
+ # Chaque document a ses propres petits formulaires (intitulé, monter, descendre,
+ # supprimer), jamais imbriqués : aucun JavaScript nécessaire, sauf la
+ # confirmation avant suppression.
+ #}
+
+{% block title %}Documents · {{ project.title }} · Admin BazaArt{% endblock %}
+{% block page_title %}Documents de la fiche{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+{{ include('admin/association_projects/_styles.html.twig') }}
+<style>
+.adm-ap-docs { list-style: none; margin: 0 0 24px; padding: 0; border: 1px solid var(--ink); background: var(--bg); }
+.adm-ap-doc {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px 16px;
+    align-items: center;
+    padding: 14px 16px;
+    border-top: 1px solid var(--line-soft);
+}
+.adm-ap-doc:first-child { border-top: 0; }
+.adm-ap-doc__rename { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0; }
+.adm-ap-doc__rename .adm-ap-input { flex: 1 1 260px; }
+.adm-ap-doc__meta { font-family: var(--mono); font-size: 11px; color: var(--ink-mute); margin-top: 6px; }
+.adm-ap-doc__meta a { color: var(--ink); }
+.adm-ap-doc__tools { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.adm-ap-doc__tools form { margin: 0; }
+@media (max-width: 720px) { .adm-ap-doc { grid-template-columns: 1fr; } .adm-ap-doc__tools { justify-content: flex-start; } }
+.adm-ap-doc-new { border: 1px dashed var(--ink); background: var(--bg); padding: 16px; max-width: 720px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<nav class="adm-ap-breadcrumb" aria-label="Fil d'Ariane">
+    <a href="{{ path('app_admin_asso_project_index') }}">Projets de l'association</a>
+    <span aria-hidden="true">/</span>
+    <a href="{{ path('app_admin_asso_project_edit', {id: project.id}) }}">{{ project.title }}</a>
+    <span aria-hidden="true">/</span>
+    <span>Documents</span>
+</nav>
+
+<div class="adm-ap-header">
+    <p class="adm-ap-header__intro">
+        Documents PDF proposés aux partenaires dans « En pratique » (dossier de présentation,
+        budget prévisionnel…). Ils ne sont visibles que si la fiche est publiée, par le même
+        lien secret que la page.
+    </p>
+    <span>
+        <a href="{{ path('app_admin_asso_project_edit', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost">Modifier la fiche</a>
+        <a href="{{ path('app_admin_asso_project_preview', {id: project.id}) }}" class="adm-ap-btn adm-ap-btn--ghost" target="_blank" rel="noopener">Aperçu</a>
+    </span>
+</div>
+
+{% if documents is empty %}
+    <p class="adm-ap-empty">Aucun document pour le moment.</p>
+{% else %}
+    <ol class="adm-ap-docs">
+        {% for document in documents %}
+            {% set token = csrf_token('asso_project_document_' ~ document.id) %}
+            <li class="adm-ap-doc" id="document-{{ document.id }}">
+                <div>
+                    <form method="post" action="{{ path('app_admin_asso_project_document_update', {documentId: document.id}) }}" class="adm-ap-doc__rename">
+                        <input type="hidden" name="_token" value="{{ token }}">
+                        <label class="visually-hidden" for="doc-label-{{ document.id }}">Intitulé du document {{ loop.index }}</label>
+                        <input type="text" id="doc-label-{{ document.id }}" name="label" class="adm-ap-input"
+                               required maxlength="{{ labelMax }}" value="{{ document.label }}">
+                        <button type="submit" class="adm-ap-btn adm-ap-btn--ghost adm-ap-btn--small">Enregistrer l'intitulé</button>
+                    </form>
+                    <p class="adm-ap-doc__meta">
+                        {% set kb = document.sizeBytes / 1024 %}
+                        PDF, {{ kb < 1000 ? (kb|round(0, 'ceil') ~ ' Ko') : ((kb / 1024)|number_format(1, ',', ' ') ~ ' Mo') }} ·
+                        ajouté le {{ document.createdAt|date('d/m/Y') }} ·
+                        <a href="{{ path('app_admin_asso_project_document_file', {documentId: document.id}) }}" target="_blank" rel="noopener">Ouvrir</a>
+                    </p>
+                </div>
+                <div class="adm-ap-doc__tools">
+                    {% if not loop.first %}
+                        <form method="post" action="{{ path('app_admin_asso_project_document_move', {documentId: document.id}) }}">
+                            <input type="hidden" name="_token" value="{{ token }}">
+                            <input type="hidden" name="direction" value="up">
+                            <button type="submit" class="adm-ap-btn adm-ap-btn--ghost adm-ap-btn--small">↑ Monter</button>
+                        </form>
+                    {% endif %}
+                    {% if not loop.last %}
+                        <form method="post" action="{{ path('app_admin_asso_project_document_move', {documentId: document.id}) }}">
+                            <input type="hidden" name="_token" value="{{ token }}">
+                            <input type="hidden" name="direction" value="down">
+                            <button type="submit" class="adm-ap-btn adm-ap-btn--ghost adm-ap-btn--small">↓ Descendre</button>
+                        </form>
+                    {% endif %}
+                    <form method="post" action="{{ path('app_admin_asso_project_document_delete', {documentId: document.id}) }}"
+                          data-confirm="Supprimer le document « {{ document.label }} » ?">
+                        <input type="hidden" name="_token" value="{{ token }}">
+                        <button type="submit" class="adm-ap-btn adm-ap-btn--danger adm-ap-btn--small">Supprimer</button>
+                    </form>
+                </div>
+            </li>
+        {% endfor %}
+    </ol>
+{% endif %}
+
+<section class="adm-ap-doc-new" aria-labelledby="nouveau-document-titre">
+    <h2 class="adm-ap-panel__title" id="nouveau-document-titre">Ajouter un document</h2>
+    <form method="post" action="{{ path('app_admin_asso_project_document_new', {id: project.id}) }}" enctype="multipart/form-data">
+        <input type="hidden" name="_token" value="{{ csrf_token('asso_project_document_new_' ~ project.id) }}">
+        <div class="adm-ap-group">
+            <label class="adm-ap-label adm-ap-label--required" for="doc-file">Fichier PDF</label>
+            <input type="file" id="doc-file" name="document" accept="application/pdf,.pdf" required>
+            <span class="adm-ap-hint">PDF uniquement, {{ maxMb }} Mo maximum.</span>
+        </div>
+        <div class="adm-ap-group">
+            <label class="adm-ap-label" for="doc-label">Intitulé du lien</label>
+            <input type="text" id="doc-label" name="label" class="adm-ap-input" maxlength="{{ labelMax }}"
+                   placeholder="ex. Dossier de présentation">
+            <span class="adm-ap-hint">Ce que lit le partenaire. Vide = le nom du fichier.</span>
+        </div>
+        <div class="adm-ap-actions">
+            <button type="submit" class="adm-ap-btn">Ajouter le document</button>
+        </div>
+    </form>
+</section>
+
+<script>
+document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+    form.addEventListener('submit', function (event) {
+        if (!window.confirm(form.dataset.confirm)) {
+            event.preventDefault();
+        }
+    });
+});
+</script>
+
+{% endblock %}
