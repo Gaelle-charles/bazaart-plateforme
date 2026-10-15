@@ -26,6 +26,18 @@ final class AssociationProjectDocumentStorage
 {
     public const MAX_SIZE_BYTES = 10 * 1024 * 1024 - 64 * 1024;
 
+    /**
+     * Limite telle qu'on l'annonce : arrondie VERS LE BAS au dixième (« 9,9 Mo »).
+     * Arrondie à « 10 Mo », un fichier de 9,95 Mo serait refusé par un message
+     * disant qu'il ne doit pas dépasser 10 Mo.
+     */
+    public static function maxSizeLabel(): string
+    {
+        $tenths = intdiv(self::MAX_SIZE_BYTES * 10, 1024 * 1024);
+
+        return number_format($tenths / 10, 1, ',', ' ') . ' Mo';
+    }
+
     public function __construct(
         /**
          * Dossier privé, injecté par services.yaml :
@@ -45,12 +57,12 @@ final class AssociationProjectDocumentStorage
     public function store(UploadedFile $file): StoredDocument|string
     {
         if (!$file->isValid()) {
-            return "Le document n'a pas pu être envoyé (fichier trop lourd ou envoi interrompu). Il doit faire moins de 10 Mo.";
+            return sprintf("Le document n'a pas pu être envoyé (fichier trop lourd ou envoi interrompu). Il ne doit pas dépasser %s.", self::maxSizeLabel());
         }
 
         $size = $file->getSize();
         if ($size > self::MAX_SIZE_BYTES) {
-            return 'Le document ne doit pas dépasser 10 Mo.';
+            return sprintf('Le document ne doit pas dépasser %s.', self::maxSizeLabel());
         }
         if ($size < 5) {
             return 'Ce fichier est vide.';

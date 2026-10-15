@@ -33,8 +33,6 @@
     };
     var BLOCKS = { P: 1, H2: 1, H3: 1, UL: 1, OL: 1, LI: 1, BLOCKQUOTE: 1, DIV: 1, H1: 1, H4: 1, H5: 1, H6: 1 };
     var IMAGE_NAME = /^[a-f0-9]{32}\.(jpg|png|webp)$/;
-    /** Adresse d'une image de cet éditeur (route du back-office), absolue ou relative. */
-    var ADMIN_IMAGE_SRC = /^\/admin\/fiches-projets\/\d+\/texte\/[a-f0-9]{32}$/;
     var ACCEPTED_IMAGES = ['image/jpeg', 'image/png', 'image/webp'];
 
     var BUTTONS = [
@@ -68,10 +66,20 @@
         return /^(https?:\/\/|mailto:)/i.test(href) ? href : null;
     }
 
-    /** Image gardée seulement si elle vient de cet éditeur (nom de fichier connu). */
-    function keptImage(source) {
+    /**
+     * Image gardée seulement si c'est une image de CETTE fiche : nom de fichier connu
+     * ET adresse du back-office de cette fiche (context.imageBase). Une image venue
+     * d'une autre fiche ou de la page partenaires serait retirée par le serveur à
+     * l'enregistrement : on la retire dès maintenant, et on le dit (context.dropped).
+     */
+    function keptImage(source, context) {
         var name = source.getAttribute('data-ap-image') || '';
-        if (!IMAGE_NAME.test(name)) {
+        var src = source.getAttribute('src') || '';
+        if (src.indexOf(window.location.origin + '/') === 0) {
+            src = src.slice(window.location.origin.length);
+        }
+        if (!IMAGE_NAME.test(name) || !context.imageBase || src !== context.imageBase + name.slice(0, 32)) {
+            context.dropped++;
             return null;
         }
         var image = document.createElement('img');
@@ -83,14 +91,7 @@
                 image.setAttribute(dimension, value);
             }
         });
-        // Adresse : seulement celle d'une image de ce back-office (jamais une image externe).
-        var src = source.getAttribute('src') || '';
-        if (src.indexOf(window.location.origin + '/') === 0) {
-            src = src.slice(window.location.origin.length);
-        }
-        if (ADMIN_IMAGE_SRC.test(src)) {
-            image.setAttribute('src', src);
-        }
+        image.setAttribute('src', src);
         return image;
     }
 
@@ -103,7 +104,7 @@
         return false;
     }
 
-    function cleanInto(source, target) {
+    function cleanInto(source, target, context) {
         Array.prototype.forEach.call(source.childNodes, function (child) {
             if (child.nodeType === Node.TEXT_NODE) {
                 target.appendChild(document.createTextNode(child.nodeValue));
@@ -120,7 +121,7 @@
 
             // Google Docs entoure tout le texte copié d'un <b style="font-weight:normal">.
             if (tag === 'B' && /font-weight:\s*(normal|400)/.test(style)) {
-                cleanInto(child, target);
+                cleanInto(child, target, context);
                 return;
             }
             // Google Docs et Word marquent le gras et l'italique par des styles sur des <span>.
@@ -132,17 +133,17 @@
                 if (/font-style:\s*italic/.test(style)) {
                     holder = holder.appendChild(document.createElement('em'));
                 }
-                cleanInto(child, holder);
+                cleanInto(child, holder, context);
                 return;
             }
             if (tag === 'DIV' && hasBlockChild(child)) {
-                cleanInto(child, target);
+                cleanInto(child, target, context);
                 return;
             }
 
             var name = RENAMED[tag] || tag;
             if (!KEPT[name]) {
-                cleanInto(child, target);
+                cleanInto(child, target, context);
                 // Tableau collé : un espace entre deux cellules, un retour à la ligne entre deux lignes.
                 if (tag === 'TD' || tag === 'TH') {
                     target.appendChild(document.createTextNode(' '));
@@ -152,7 +153,7 @@
                 return;
             }
             if (name === 'IMG') {
-                var image = keptImage(child);
+                var image = keptImage(child, context);
                 if (image) {
                     target.appendChild(image);
                 }
@@ -162,25 +163,29 @@
             if (name === 'A') {
                 var href = safeHref(child.getAttribute('href'));
                 if (!href) {
-                    cleanInto(child, target);
+                    cleanInto(child, target, context);
                     return;
                 }
                 element.setAttribute('href', href);
             }
             if (name !== 'BR') {
-                cleanInto(child, element);
+                cleanInto(child, element, context);
             }
             target.appendChild(element);
         });
     }
 
-    /** HTML nettoyé à partir d'un HTML quelconque (collé, ou contenu de l'éditeur). */
-    function cleanHtml(html) {
+    /**
+     * HTML nettoyé à partir d'un HTML quelconque (collé, ou contenu de l'éditeur).
+     * context : {imageBase: adresse des images de la fiche ou null, dropped: compteur
+     * des images retirées}.
+     */
+    function cleanHtml(html, context) {
         // DOMParser crée un document INERTE : aucun script n'y tourne, aucune image
         // n'y est chargée. On n'en recopie ensuite que ce qui est autorisé.
         var parsed = new DOMParser().parseFromString(html, 'text/html');
         var container = document.createElement('div');
-        cleanInto(parsed.body, container);
+        cleanInto(parsed.body, container, context);
         return container.innerHTML;
     }
 
@@ -197,6 +202,13 @@
         var max = parseInt(textarea.dataset.max || '0', 10);
         var labelId = textarea.id + '-label';
         var savedRange = null;
+        // Adresse des images de CETTE fiche (…/fiches-projets/12/texte/), tirée de
+        // l'adresse d'envoi ; null pour une fiche pas encore créée (pas d'images).
+        var imageBase = uploadUrl ? uploadUrl.replace(/image$/, '') : null;
+
+        function context() {
+            return { imageBase: imageBase, dropped: 0 };
+        }
 
         var wrapper = document.createElement('div');
         wrapper.className = 'adm-ap-editor';
@@ -265,7 +277,7 @@
             toolbar.appendChild(button);
         });
 
-        editor.innerHTML = textarea.value.trim() !== '' ? cleanHtml(textarea.value) : '';
+        editor.innerHTML = textarea.value.trim() !== '' ? cleanHtml(textarea.value, context()) : '';
         if (isEmpty(editor)) {
             editor.innerHTML = '<p><br></p>';
         }
@@ -360,19 +372,42 @@
                 link.href = answer;
                 link.textContent = answer.replace(/^mailto:/i, '');
                 document.execCommand('insertHTML', false, link.outerHTML);
-            } else if (selection.toString().trim() === '') {
-                // Image sélectionnée : execCommand('createLink') ne l'entoure pas (Chrome),
-                // on pose donc le lien nous-mêmes autour de la sélection.
-                var anchor = document.createElement('a');
-                anchor.href = answer;
-                try {
-                    selection.getRangeAt(0).surroundContents(anchor);
-                } catch (ignored) {
-                    say('Sélectionnez un texte ou une seule image pour ajouter un lien.', true);
-                }
             } else {
-                document.execCommand('createLink', false, answer);
+                linkSelection(selection.getRangeAt(0), answer);
             }
+        }
+
+        /**
+         * Lien sur une sélection. execCommand('createLink') laisse les images (affichées
+         * en bloc) hors du lien et coupe le lien en deux : si la sélection contient une
+         * image, on pose le lien nous-mêmes.
+         */
+        function linkSelection(range, href) {
+            var images = Array.prototype.filter.call(editor.querySelectorAll('img'), function (image) {
+                return range.intersectsNode(image);
+            });
+            if (images.length === 0) {
+                document.execCommand('createLink', false, href);
+                return;
+            }
+            var anchor = document.createElement('a');
+            anchor.href = href;
+            try {
+                // Sélection dans un même paragraphe : un seul lien autour de tout.
+                range.surroundContents(anchor);
+                return;
+            } catch (ignored) {
+                // Sélection sur plusieurs paragraphes : lien sur le texte, puis sur chaque image.
+            }
+            document.execCommand('createLink', false, href);
+            images.forEach(function (image) {
+                if (!image.closest('a')) {
+                    var wrapper = document.createElement('a');
+                    wrapper.href = href;
+                    image.parentNode.insertBefore(wrapper, image);
+                    wrapper.appendChild(image);
+                }
+            });
         }
 
         function refreshButtons() {
@@ -453,7 +488,8 @@
                 return ACCEPTED_IMAGES.indexOf(file.type) !== -1;
             });
             var html = clipboard.getData('text/html');
-            var cleaned = html ? cleanHtml(html) : '';
+            var pasteContext = context();
+            var cleaned = html ? cleanHtml(html, pasteContext) : '';
             var probe = document.createElement('div');
             probe.innerHTML = cleaned;
             // Image copiée depuis un site ou une capture d'écran : le presse-papiers contient
@@ -465,14 +501,15 @@
                 return;
             }
             if (html) {
-                if (isEmpty(probe) && /<img/i.test(html)) {
-                    say("Les images copiées depuis un site ne sont pas reprises : enregistrez l'image sur l'ordinateur puis utilisez le bouton « Image ».", true);
-                    return;
-                }
-                if (isEmpty(probe)) {
-                    document.execCommand('insertText', false, clipboard.getData('text/plain'));
-                } else {
+                if (!isEmpty(probe)) {
                     document.execCommand('insertHTML', false, cleaned);
+                } else if (pasteContext.dropped === 0) {
+                    document.execCommand('insertText', false, clipboard.getData('text/plain'));
+                }
+                if (pasteContext.dropped > 0) {
+                    // Image d'un site, d'une autre fiche ou de la page partenaires : elle
+                    // serait retirée à l'enregistrement. On le dit tout de suite.
+                    say("Image non reprise : seules les images envoyées dans cette fiche sont acceptées. Enregistrez l'image sur l'ordinateur puis utilisez le bouton « Image ».", true);
                 }
             } else {
                 document.execCommand('insertText', false, clipboard.getData('text/plain'));
@@ -522,7 +559,7 @@
         var form = textarea.form;
         if (form) {
             form.addEventListener('submit', function () {
-                textarea.value = isEmpty(editor) ? '' : cleanHtml(editor.innerHTML);
+                textarea.value = isEmpty(editor) ? '' : cleanHtml(editor.innerHTML, context());
             });
         }
 

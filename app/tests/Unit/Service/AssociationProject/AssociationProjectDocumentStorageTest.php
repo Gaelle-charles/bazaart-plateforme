@@ -68,7 +68,8 @@ class AssociationProjectDocumentStorageTest extends TestCase
     {
         $result = $this->storage->store($this->upload('%PDF-1.4' . str_repeat('A', AssociationProjectDocumentStorage::MAX_SIZE_BYTES), 'gros.pdf'));
 
-        self::assertSame('Le document ne doit pas dépasser 10 Mo.', $result);
+        self::assertSame('Le document ne doit pas dépasser 9,9 Mo.', $result);
+        self::assertSame('9,9 Mo', AssociationProjectDocumentStorage::maxSizeLabel());
     }
 
     public function testAbsolutePathRefusesTraversal(): void

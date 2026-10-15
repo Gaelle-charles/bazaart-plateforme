@@ -45,8 +45,7 @@ class AdminAssociationProjectDocumentController extends AbstractController
         return $this->render('admin/association_projects/documents.html.twig', [
             'project'   => $project,
             'documents' => $project->getDocuments(),
-            // Affiché arrondi (« 10 Mo ») ; le contrôle avant envoi utilise la valeur exacte.
-            'maxMb'     => (int) round(AssociationProjectDocumentStorage::MAX_SIZE_BYTES / (1024 * 1024)),
+            'maxLabel'  => AssociationProjectDocumentStorage::maxSizeLabel(),
             'maxBytes'  => AssociationProjectDocumentStorage::MAX_SIZE_BYTES,
             'labelMax'  => AssociationProjectDocument::LABEL_MAX_LENGTH,
         ]);

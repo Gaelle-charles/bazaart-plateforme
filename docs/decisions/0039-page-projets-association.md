@@ -143,7 +143,8 @@ apporter », et des **liens vers des documents PDF** dans « En pratique ».
   elles étaient dans l'ancien texte, après 24 h pour un envoi jamais enregistré).
 - **Documents PDF** : table `association_project_documents` (intitulé, nom de fichier
   aléatoire, taille, ordre), fichiers dans `documents/`, PDF seulement (type lu par finfo
-  et signature `%PDF-`), 10 Mo (limite Nginx). Page de back-office **séparée** du
+  et signature `%PDF-`), 9,9 Mo (limite Nginx de 10 Mo moins 64 Ko pour le reste de
+  l'envoi : un fichier accepté par PHP n'est jamais coupé par Nginx). Page de back-office **séparée** du
   formulaire de la fiche, comme « Présentation » : un PDF refusé ou trop lourd ne fait
   jamais perdre ce qui a été saisi dans la fiche. Servis en `inline`, cache privé
   revalidé à chaque fois, document cherché dans la fiche publiée (jamais par son seul

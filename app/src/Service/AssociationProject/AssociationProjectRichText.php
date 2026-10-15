@@ -294,7 +294,8 @@ final class AssociationProjectRichText
                 continue;
             }
 
-            if (!$this->cleanAttributes($child, $tag)) {
+            $attributes = $this->keptAttributes($child, $tag);
+            if ($attributes === null) {
                 // Lien sans adresse acceptable : on garde son texte, pas le lien.
                 // Image sans nom de fichier valable : retirée.
                 if ($tag === 'a') {
@@ -305,6 +306,7 @@ final class AssociationProjectRichText
                 }
                 continue;
             }
+            $child = $this->rebuild($child, $tag, $attributes);
 
             if ($tag === 'img' || $tag === 'br') {
                 // Balises vides : rien à l'intérieur.
@@ -319,24 +321,27 @@ final class AssociationProjectRichText
     }
 
     /**
-     * Ne garde que les attributs prévus. Renvoie false si la balise doit
-     * disparaître faute d'attribut valable (lien sans adresse sûre, image sans nom).
+     * Attributs à garder sur la balise (les seuls prévus, valeurs vérifiées).
+     * Renvoie null si la balise doit disparaître faute d'attribut valable (lien sans
+     * adresse sûre, image sans nom de fichier).
+     *
+     * @return array<string, string>|null
      */
-    private function cleanAttributes(\DOMElement $element, string $tag): bool
+    private function keptAttributes(\DOMElement $element, string $tag): ?array
     {
         $kept = [];
         if ($tag === 'a') {
             $href = trim($element->getAttribute('href'));
             // Liens web et e-mail seulement : ni javascript:, ni data:, ni adresse relative.
             if ($href === '' || preg_match('#^(https?://|mailto:)#i', $href) !== 1) {
-                return false;
+                return null;
             }
             $kept['href'] = $href;
         }
         if ($tag === 'img') {
             $name = $element->getAttribute('data-ap-image');
             if (preg_match(self::IMAGE_NAME_PATTERN, $name) !== 1) {
-                return false;
+                return null;
             }
             $kept['data-ap-image'] = $name;
             $kept['alt'] = mb_substr(trim(preg_replace('/\s+/u', ' ', $element->getAttribute('alt')) ?? ''), 0, self::ALT_MAX_LENGTH);
@@ -348,14 +353,35 @@ final class AssociationProjectRichText
             }
         }
 
-        foreach (iterator_to_array($element->attributes) as $attribute) {
-            $element->removeAttribute($attribute->nodeName);
-        }
-        foreach ($kept as $name => $value) {
-            $element->setAttribute($name, $value);
-        }
+        return $kept;
+    }
 
-        return true;
+    /**
+     * Remplace la balise par une balise NEUVE, qui ne porte que les attributs gardés.
+     *
+     * Retirer les autres attributs un par un ne suffit pas : libxml garde certains
+     * attributs à préfixe (xml:base, xml:onclick, xmlns…) que removeAttribute() ne
+     * trouve pas par leur nom. Une balise neuve n'a, par construction, rien d'autre.
+     *
+     * @param array<string, string> $attributes
+     */
+    private function rebuild(\DOMElement $element, string $tag, array $attributes): \DOMElement
+    {
+        $document = $element->ownerDocument;
+        $parent = $element->parentNode;
+        if ($document === null || $parent === null) {
+            return $element;
+        }
+        $fresh = $document->createElement($tag);
+        foreach ($attributes as $name => $value) {
+            $fresh->setAttribute($name, $value);
+        }
+        while ($element->firstChild !== null) {
+            $fresh->appendChild($element->firstChild);
+        }
+        $parent->replaceChild($fresh, $element);
+
+        return $fresh;
     }
 
     /** Retire les blocs vides (sans texte ni image), en partant des plus profonds. */

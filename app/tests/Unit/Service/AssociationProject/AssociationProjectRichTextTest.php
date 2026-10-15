@@ -46,6 +46,10 @@ class AssociationProjectRichTextTest extends TestCase
         yield 'script supprimé avec son contenu' => ['<p>Avant</p><script>alert(1)</script><p>Après</p>', '<p>Avant</p><p>Après</p>'];
         yield 'iframe et style supprimés' => ['<iframe src="https://x"></iframe><style>p{}</style><p>Ok</p>', '<p>Ok</p>'];
         yield 'gestionnaire onclick retiré' => ['<p onclick="alert(1)">Clic</p>', '<p>Clic</p>'];
+        yield 'attributs à préfixe retirés' => [
+            '<p xml:onclick="x()" xml:base="https://evil.example" xmlns="http://www.w3.org/1999/xhtml" xmlns:x="urn:x" xml:lang="fr">Texte <a href="https://bazaart.fr" xml:base="javascript:alert(1)//">lien</a></p>',
+            '<p>Texte <a href="https://bazaart.fr">lien</a></p>',
+        ];
         yield 'commentaire retiré' => ['<p>A<!-- secret --></p>', '<p>A</p>'];
         yield 'paragraphes vides retirés' => ['<p>A</p><p><br></p><p>&nbsp;</p><p>B</p>', '<p>A</p><p>B</p>'];
         yield 'texte seul → paragraphe' => ['Juste du texte', '<p>Juste du texte</p>'];

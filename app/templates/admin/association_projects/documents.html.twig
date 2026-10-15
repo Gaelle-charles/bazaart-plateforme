@@ -6,7 +6,7 @@
  # Variables (AdminAssociationProjectDocumentController::documents) :
  #   - project   : AssociationProject
  #   - documents : documents de la fiche, dans l'ordre d'affichage
- #   - maxMb     : taille maximale d'un PDF, en Mo (arrondie, pour l'affichage)
+ #   - maxLabel  : taille maximale d'un PDF, telle qu'on l'annonce (« 9,9 Mo »)
  #   - maxBytes  : taille maximale exacte, en octets (contrôle avant l'envoi)
  #   - labelMax  : longueur maximale d'un intitulé
  #
@@ -121,7 +121,7 @@
             <label class="adm-ap-label adm-ap-label--required" for="doc-file">Fichier PDF</label>
             <input type="file" id="doc-file" name="document" accept="application/pdf,.pdf" required
                    data-max-bytes="{{ maxBytes }}" aria-describedby="doc-file-hint">
-            <span class="adm-ap-hint" id="doc-file-hint">PDF uniquement, {{ maxMb }} Mo maximum.</span>
+            <span class="adm-ap-hint" id="doc-file-hint">PDF uniquement, {{ maxLabel }} maximum.</span>
         </div>
         <div class="adm-ap-group">
             <label class="adm-ap-label" for="doc-label">Intitulé du lien</label>
@@ -139,6 +139,8 @@
 /*
  * Taille vérifiée AVANT l'envoi : au-delà de 10 Mo, le serveur web (Nginx) coupe
  * l'envoi avec une page d'erreur brute, avant même que PHP puisse afficher un message.
+ * Taille du fichier arrondie VERS LE HAUT, limite vers le bas : le message ne dit
+ * jamais d'un fichier refusé qu'il est sous la limite.
  */
 (function () {
     var input = document.getElementById('doc-file');
@@ -147,7 +149,8 @@
     input.addEventListener('change', function () {
         var file = input.files && input.files[0];
         if (file && max && file.size > max) {
-            window.alert('Ce fichier fait ' + (file.size / 1048576).toFixed(1).replace('.', ',') + ' Mo : {{ maxMb }} Mo maximum. Compressez le PDF (par exemple avec « Exporter en PDF » en qualité réduite) puis réessayez.');
+            var size = (Math.ceil(file.size * 10 / 1048576) / 10).toFixed(1).replace('.', ',');
+            window.alert('Ce fichier fait ' + size + ' Mo : {{ maxLabel }} maximum. Compressez le PDF (par exemple avec « Exporter en PDF » en qualité réduite) puis réessayez.');
             input.value = '';
         }
     });

@@ -167,7 +167,8 @@ formulaires, images venant d'autres sites) est retiré.
 Bouton « Documents PDF » dans la page « Modifier » d'une fiche. Chaque document apparaît
 dans « En pratique », ligne « Documents », avec son intitulé et sa taille.
 
-- **PDF uniquement, 10 Mo maximum.** Le vrai type du fichier est contrôlé (un fichier
+- **PDF uniquement, 9,9 Mo maximum** (un peu moins de 10 Mo : c'est la limite d'envoi du
+  serveur, moins une petite marge). Le vrai type du fichier est contrôlé (un fichier
   renommé en `.pdf` est refusé).
 - **Intitulé** : ce que lit le partenaire (ex. « Dossier de présentation »). Vide = le nom
   du fichier. Modifiable ensuite (« Enregistrer l'intitulé »).
