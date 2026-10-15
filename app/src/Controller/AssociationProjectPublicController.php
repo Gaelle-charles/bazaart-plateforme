@@ -6,9 +6,14 @@ namespace App\Controller;
 
 use App\Entity\AssociationProject;
 use App\Repository\AssociationProjectBlockRepository;
+use App\Repository\AssociationProjectDocumentRepository;
 use App\Repository\AssociationProjectRepository;
+use App\Service\AssociationProject\AssociationProjectDocumentStorage;
 use App\Service\AssociationProject\AssociationProjectImageStorage;
 use App\Service\AssociationProject\AssociationProjectPresenter;
+use App\Service\AssociationProject\AssociationProjectRichText;
+use App\Service\AssociationProject\AssociationProjectTextImages;
+use App\Service\AssociationProject\SlugGenerator;
 use App\Service\AssociationProject\PublicAccessToken;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -55,6 +60,10 @@ class AssociationProjectPublicController extends AbstractController
         private readonly AssociationProjectBlockRepository $blockRepository,
         private readonly AssociationProjectPresenter $presenter,
         private readonly AssociationProjectImageStorage $imageStorage,
+        private readonly AssociationProjectDocumentRepository $documentRepository,
+        private readonly AssociationProjectDocumentStorage $documentStorage,
+        private readonly AssociationProjectRichText $richText,
+        private readonly AssociationProjectTextImages $textImages,
     ) {
     }
 
@@ -156,6 +165,75 @@ class AssociationProjectPublicController extends AbstractController
     }
 
     /**
+     * GET /projets/{token}/{slug}/texte/{hash} : une image du texte « Le projet en détail ».
+     *
+     * SÉCURITÉ : l'image doit être CITÉE dans le texte enregistré de la fiche publiée
+     * ET rangée dans le dossier de cette fiche. Une image envoyée dans l'éditeur mais
+     * pas encore enregistrée, ou celle d'une autre fiche, répond 404.
+     * Pas d'extension dans l'adresse (voir image() ci-dessus).
+     */
+    #[Route('/projets/{token}/{slug}/texte/{hash}', name: 'app_asso_projects_text_image', requirements: ['slug' => self::SLUG_REQUIREMENT, 'hash' => '[a-f0-9]{32}'], methods: ['GET'])]
+    public function textImage(string $token, string $slug, string $hash): Response
+    {
+        $this->denyUnlessValidToken($token);
+
+        $project = $this->repository->findPublishedBySlug($slug)
+            ?? throw $this->createNotFoundException();
+
+        foreach ($this->richText->imageNames($project->getDetails()) as $name) {
+            if (str_starts_with($name, $hash . '.')) {
+                $path = $this->textImages->absolutePath($project, $name);
+                if ($path !== null) {
+                    return $this->fileResponse($path);
+                }
+            }
+        }
+
+        throw $this->createNotFoundException();
+    }
+
+    /**
+     * GET /projets/{token}/{slug}/document/{documentId} : un document PDF de la fiche.
+     *
+     * SÉCURITÉ : comme pour les images des blocs, le document est cherché DANS la
+     * fiche publiée désignée par le slug, jamais par son seul numéro.
+     */
+    #[Route('/projets/{token}/{slug}/document/{documentId}', name: 'app_asso_projects_document', requirements: ['slug' => self::SLUG_REQUIREMENT, 'documentId' => '\d+'], methods: ['GET'])]
+    public function document(string $token, string $slug, int $documentId): Response
+    {
+        $this->denyUnlessValidToken($token);
+
+        $project = $this->repository->findPublishedBySlug($slug)
+            ?? throw $this->createNotFoundException();
+        $document = $this->documentRepository->findOneForProject($documentId, $project)
+            ?? throw $this->createNotFoundException();
+        $path = $this->documentStorage->absolutePath($document->getPath())
+            ?? throw $this->createNotFoundException();
+
+        return $this->privateHeaders(self::pdfResponse($path, $document->getLabel()));
+    }
+
+    /**
+     * Réponse « PDF » commune à la page partenaires et au back-office : affiché dans
+     * le navigateur, sous un nom lisible tiré de l'intitulé (« budget-previsionnel.pdf »).
+     *
+     * Cache privé à revalider à chaque fois : un document retiré par l'équipe
+     * (ou une fiche dépubliée) ne reste pas disponible dans un cache.
+     */
+    public static function pdfResponse(string $absolutePath, string $label): BinaryFileResponse
+    {
+        $response = new BinaryFileResponse($absolutePath);
+        $response->headers->set('Content-Type', 'application/pdf');
+        $filename = SlugGenerator::slugify($label) . '.pdf';
+        $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_INLINE, $filename, $filename);
+        $response->setPrivate();
+        $response->headers->addCacheControlDirective('no-cache');
+        $response->setAutoLastModified();
+
+        return $response;
+    }
+
+    /**
      * 404 si le jeton n'est pas le bon. Aucun message dans l'exception : le jeton
      * (ou ce qui a été tapé à sa place) ne doit pas finir dans les journaux.
      */
@@ -173,6 +251,11 @@ class AssociationProjectPublicController extends AbstractController
             throw $this->createNotFoundException();
         }
 
+        return $this->fileResponse($path);
+    }
+
+    private function fileResponse(string $path): Response
+    {
         $response = new BinaryFileResponse($path);
         $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_INLINE);
         // Cache PRIVÉ (navigateur du partenaire uniquement, jamais un cache partagé)

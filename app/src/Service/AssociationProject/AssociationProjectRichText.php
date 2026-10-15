@@ -90,13 +90,27 @@ final class AssociationProjectRichText
      * HTML prêt à afficher : nettoyé une seconde fois, adresse de chaque image
      * fournie par $imageUrl (nom de fichier → adresse), liens externes en nouvel onglet.
      *
+     * $shiftHeadings : sur la fiche, le texte est sous le titre de section « Le projet
+     * en détail » (un <h2>) ; ses intertitres deviennent donc <h3> et <h4>, pour que
+     * les lecteurs d'écran retrouvent une hiérarchie de titres cohérente.
+     *
      * @param callable(string): string $imageUrl
      */
-    public function render(?string $html, callable $imageUrl): ?string
+    public function render(?string $html, callable $imageUrl, bool $shiftHeadings = false): ?string
     {
         $root = $this->sanitizedTree($html);
         if ($root === null) {
             return null;
+        }
+
+        if ($shiftHeadings) {
+            // h3 d'abord, sinon les h2 devenus h3 seraient décalés deux fois.
+            foreach ($this->elements($root, 'h3') as $heading) {
+                $this->rename($heading, 'h4');
+            }
+            foreach ($this->elements($root, 'h2') as $heading) {
+                $this->rename($heading, 'h3');
+            }
         }
 
         foreach ($this->elements($root, 'img') as $img) {

@@ -348,7 +348,8 @@ class AssociationProjectsTest extends AbstractE2ETestCase
             );
             self::assertStringStartsWith('/projets/{token}', $route->getPath(), $name . ' doit exiger le jeton');
         }
-        self::assertSame(5, $publicRoutes);
+        // page, api, fiche, visuel, image de bloc, image du texte, document PDF
+        self::assertSame(7, $publicRoutes);
     }
 
     /** La page n'est liée nulle part ailleurs dans le site (navigation, pied de page…). */

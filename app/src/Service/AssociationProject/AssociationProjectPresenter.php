@@ -6,6 +6,7 @@ namespace App\Service\AssociationProject;
 
 use App\Entity\AssociationProject;
 use App\Entity\AssociationProjectBlock;
+use App\Entity\AssociationProjectDocument;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
@@ -24,6 +25,10 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
  * quand l'équipe remplace une image, l'URL change, donc aucun navigateur ne garde
  * l'ancienne image en cache.
  *
+ * « LE PROJET EN DÉTAIL » (details) : seul champ en HTML. Il sort d'ici NETTOYÉ une
+ * seconde fois (AssociationProjectRichText::render, liste blanche), avec l'adresse
+ * protégée de chaque image. C'est ce qui permet au gabarit de l'afficher avec |raw.
+ *
  * APERÇU ADMIN : avec $adminPreview = true, les URL pointent vers les routes du
  * back-office (réservées ROLE_ADMIN, qui servent aussi les fiches non publiées) au
  * lieu des routes à jeton. Le rendu de la fiche est ainsi identique à celui que
@@ -33,6 +38,7 @@ final class AssociationProjectPresenter
 {
     public function __construct(
         private readonly UrlGeneratorInterface $urlGenerator,
+        private readonly AssociationProjectRichText $richText,
     ) {
     }
 
@@ -49,6 +55,9 @@ final class AssociationProjectPresenter
      *     confirmedPartners: string|null,
      *     prospectivePartners: string|null,
      *     solicitedFunders: string|null,
+     *     budget: string|null,
+     *     details: string|null,
+     *     documents: list<array{label: string, url: string, sizeBytes: int, sizeLabel: string}>,
      *     partnerContribution: string|null,
      *     leadName: string|null,
      *     position: int,
@@ -80,6 +89,19 @@ final class AssociationProjectPresenter
             $blocks[] = $this->presentBlock($block, $token, $slug, $adminPreview);
         }
 
+        $details = $this->richText->render(
+            $project->getDetails(),
+            fn (string $name): string => $adminPreview
+                ? $this->urlGenerator->generate('app_admin_asso_project_text_image', ['id' => $project->getId(), 'hash' => substr($name, 0, 32)])
+                : $this->urlGenerator->generate('app_asso_projects_text_image', ['token' => $token, 'slug' => $slug, 'hash' => substr($name, 0, 32)]),
+            shiftHeadings: true,
+        );
+
+        $documents = [];
+        foreach ($project->getDocuments() as $document) {
+            $documents[] = $this->presentDocument($document, $token, $slug, $adminPreview);
+        }
+
         return [
             'slug'                => $slug,
             'title'               => $project->getTitle(),
@@ -92,6 +114,9 @@ final class AssociationProjectPresenter
             'confirmedPartners'   => $project->getConfirmedPartners(),
             'prospectivePartners' => $project->getProspectivePartners(),
             'solicitedFunders'    => $project->getSolicitedFunders(),
+            'budget'              => $project->getBudget(),
+            'details'             => $details,
+            'documents'           => $documents,
             'partnerContribution' => $project->getPartnerContribution(),
             'leadName'            => $project->getLeadName(),
             'position'            => $project->getPosition(),
@@ -129,6 +154,32 @@ final class AssociationProjectPresenter
             'body'    => $block->getBody(),
             'image'   => $image,
         ];
+    }
+
+    /**
+     * @return array{label: string, url: string, sizeBytes: int, sizeLabel: string}
+     */
+    private function presentDocument(AssociationProjectDocument $document, ?string $token, string $slug, bool $adminPreview): array
+    {
+        return [
+            'label'     => $document->getLabel(),
+            'url'       => $adminPreview
+                ? $this->urlGenerator->generate('app_admin_asso_project_document_file', ['documentId' => $document->getId()])
+                : $this->urlGenerator->generate('app_asso_projects_document', ['token' => $token, 'slug' => $slug, 'documentId' => $document->getId()]),
+            'sizeBytes' => $document->getSizeBytes(),
+            'sizeLabel' => self::sizeLabel($document->getSizeBytes()),
+        ];
+    }
+
+    /** Taille lisible, à la française : « 850 Ko », « 2,3 Mo ». */
+    public static function sizeLabel(int $bytes): string
+    {
+        $kilobytes = $bytes / 1024;
+        if ($kilobytes < 1000) {
+            return max(1, (int) ceil($kilobytes)) . ' Ko';
+        }
+
+        return number_format($kilobytes / 1024, 1, ',', ' ') . ' Mo';
     }
 
     /** Numéro de version court, qui change quand le fichier image change. */

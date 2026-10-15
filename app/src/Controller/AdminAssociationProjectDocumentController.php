@@ -8,14 +8,11 @@ use App\Entity\AssociationProject;
 use App\Entity\AssociationProjectDocument;
 use App\Service\AssociationProject\AssociationProjectDocumentStorage;
 use App\Service\AssociationProject\AssociationProjectService;
-use App\Service\AssociationProject\SlugGenerator;
 use Symfony\Bridge\Doctrine\Attribute\MapEntity;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -137,23 +134,7 @@ class AdminAssociationProjectDocumentController extends AbstractController
             throw $this->createNotFoundException();
         }
 
-        return self::pdfResponse($path, $document->getLabel());
-    }
-
-    /**
-     * Réponse « PDF » commune au back-office et à la page partenaires : affiché dans
-     * le navigateur (inline), sous un nom lisible tiré de l'intitulé.
-     */
-    public static function pdfResponse(string $absolutePath, string $label): BinaryFileResponse
-    {
-        $response = new BinaryFileResponse($absolutePath);
-        $response->headers->set('Content-Type', 'application/pdf');
-        $filename = SlugGenerator::slugify($label) . '.pdf';
-        $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_INLINE, $filename, $filename);
-        $response->setPrivate();
-        $response->headers->addCacheControlDirective('no-cache');
-
-        return $response;
+        return AssociationProjectPublicController::pdfResponse($path, $document->getLabel());
     }
 
     private function isDocumentTokenValid(AssociationProjectDocument $document, Request $request): bool

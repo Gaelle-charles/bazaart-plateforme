@@ -139,6 +139,14 @@ class AssociationProjectRichTextTest extends TestCase
         );
     }
 
+    public function testRenderCanShiftHeadings(): void
+    {
+        self::assertSame(
+            '<h3>Intertitre</h3><h4>Sous-titre</h4><p>Texte</p>',
+            $this->richText->render('<h2>Intertitre</h2><h3>Sous-titre</h3><p>Texte</p>', static fn (string $n): string => $n, shiftHeadings: true),
+        );
+    }
+
     public function testRenderCleansAgain(): void
     {
         // Même si la base contenait du HTML dangereux, l'affichage le retire.
