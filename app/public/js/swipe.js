@@ -11,6 +11,7 @@
  *     - Navigation entre cartes sans rechargement
  *     - Swipe tactile (glisser) et souris (drag)
  *     - Animations de transition (glissement à gauche/droite)
+ *     - Indicateurs « Intéressé(e) » / « Passer » pendant le glissement
  *     - Appel AJAX pour le toggle favori (swipe droite)
  *     - Compteur mis à jour dynamiquement
  *     - Formulaire alerte en AJAX
@@ -222,22 +223,41 @@
                 if (i === index) {
                     // Carte active : visible, en premier plan
                     card.classList.add('swipe-card--active');
-                    card.classList.remove('swipe-card--hidden');
+                    card.classList.remove('swipe-card--hidden', 'swipe-card--next');
                     card.removeAttribute('aria-hidden');
                     card.setAttribute('tabindex', '0');
                 } else if (i === index + 1) {
                     // Carte suivante : visible en arrière-plan (effet "pile")
+                    card.classList.add('swipe-card--next');
                     card.classList.remove('swipe-card--active', 'swipe-card--hidden');
                     card.setAttribute('aria-hidden', 'true');
                     card.setAttribute('tabindex', '-1');
                 } else {
                     // Autres cartes : complètement cachées
                     card.classList.add('swipe-card--hidden');
-                    card.classList.remove('swipe-card--active');
+                    card.classList.remove('swipe-card--active', 'swipe-card--next');
                     card.setAttribute('aria-hidden', 'true');
                     card.setAttribute('tabindex', '-1');
                 }
             });
+        }
+
+        /**
+         * Règle la visibilité des indicateurs « Intéressé(e) » / « Passer »
+         * d'une carte selon le déplacement horizontal (en px).
+         * deltaX > 0 → indicateur « Intéressé(e) », deltaX < 0 → « Passer ».
+         * deltaX = 0 → les deux sont masqués.
+         *
+         * @param {Element} card
+         * @param {number}  deltaX
+         */
+        function setStamps(card, deltaX) {
+            const like = card.querySelector('.swipe-card__stamp--like');
+            const nope = card.querySelector('.swipe-card__stamp--nope');
+            // Pleinement visible au seuil de validation du swipe
+            const ratio = Math.min(Math.abs(deltaX) / SWIPE_THRESHOLD_PX, 1);
+            if (like) { like.style.opacity = deltaX > 0 ? String(ratio) : '0'; }
+            if (nope) { nope.style.opacity = deltaX < 0 ? String(ratio) : '0'; }
         }
 
         /**
@@ -265,6 +285,9 @@
 
             const translateX = direction === 'left' ? '-120%' : '120%';
 
+            // Affiche l'indicateur de la direction choisie (bouton, clavier ou glisser)
+            setStamps(card, direction === 'left' ? -SWIPE_THRESHOLD_PX : SWIPE_THRESHOLD_PX);
+
             if (ANIM_DURATION_MS > 0) {
                 // Animation CSS via transition inline
                 card.style.transition = `transform ${ANIM_DURATION_MS}ms ease, opacity ${ANIM_DURATION_MS}ms ease`;
@@ -276,11 +299,13 @@
                     card.style.transition = '';
                     card.style.transform  = '';
                     card.style.opacity    = '';
+                    setStamps(card, 0);
                     advance();
                     if (onComplete) { onComplete(); }
                 }, ANIM_DURATION_MS);
             } else {
                 // prefers-reduced-motion : pas d'animation, changement instantané
+                setStamps(card, 0);
                 advance();
                 if (onComplete) { onComplete(); }
             }
@@ -334,11 +359,13 @@
             // Cache la pile
             deck.style.display = 'none';
 
-            // Cache les boutons d'action
+            // Cache les boutons d'action et l'aide au glissement
             const actionsBar = section.querySelector('.swipe-actions');
             if (actionsBar) { actionsBar.style.display = 'none'; }
+            const hint = section.querySelector('.swipe-hint');
+            if (hint) { hint.style.display = 'none'; }
 
-            // Affiche le message de fin
+            // Affiche le message de fin (avec le bouton vers la page Opportunités)
             if (emptyMsg) {
                 emptyMsg.classList.remove('swipe-empty--hidden');
                 emptyMsg.removeAttribute('aria-hidden');
@@ -633,6 +660,8 @@
                 // Légère réduction d'opacité si déplacement important
                 const absRatio  = Math.min(Math.abs(deltaX) / 200, 1);
                 activeCard.style.opacity = String(1 - absRatio * 0.4);
+                // Indique en direct le sens : « Intéressé(e) » à droite, « Passer » à gauche
+                setStamps(activeCard, deltaX);
             });
 
             deck.addEventListener('pointerup', function (e) {
@@ -659,6 +688,7 @@
                     activeCard.style.transition = `transform ${ANIM_DURATION_MS}ms ease, opacity ${ANIM_DURATION_MS}ms ease`;
                     activeCard.style.transform  = '';
                     activeCard.style.opacity    = '';
+                    setStamps(activeCard, 0);
 
                     // Nettoie la transition après le retour
                     setTimeout(() => {
@@ -678,6 +708,7 @@
                     activeCard.style.transition = '';
                     activeCard.style.transform  = '';
                     activeCard.style.opacity    = '';
+                    setStamps(activeCard, 0);
                     activeCard = null;
                 }
             });

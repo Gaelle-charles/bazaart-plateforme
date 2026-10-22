@@ -60,7 +60,9 @@ final class MatchResult
      *   "deadline": "2026-09-30",
      *   "city": "Paris",
      *   "country": "France",
-     *   "logo_url": "https://..."
+     *   "logo_url": "https://...",
+     *   "external_url": "https://...",
+     *   "summary": "Résidence de deux mois pour…"
      * }
      *
      * @return array<string, mixed>
@@ -90,6 +92,37 @@ final class MatchResult
             'logo_url'      => $this->resource->getLogoUrl(),
             // URL externe normalisée pour le bouton "Voir" sur les cartes de swipe (Lot C)
             'external_url'  => $this->resource->getExternalUrlNormalized(),
+            // Petit résumé texte affiché sur la carte de swipe
+            'summary'       => $this->buildSummary(),
         ];
+    }
+
+    /**
+     * Résumé court de la description pour la carte de swipe.
+     * La description peut contenir du HTML (Mistral) : on garde le texte brut,
+     * espaces normalisés, tronqué proprement sur un mot.
+     */
+    private function buildSummary(int $maxLength = 220): ?string
+    {
+        // Espace devant chaque balise : évite de coller « fin.</p><li>Début »
+        $html = str_replace('<', ' <', $this->resource->getDescription());
+        $text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = trim((string) preg_replace('/\s+/u', ' ', $text));
+
+        if ($text === '') {
+            return null;
+        }
+
+        if (mb_strlen($text) <= $maxLength) {
+            return $text;
+        }
+
+        $cut       = mb_substr($text, 0, $maxLength);
+        $lastSpace = mb_strrpos($cut, ' ');
+        if ($lastSpace !== false && $lastSpace > $maxLength * 0.6) {
+            $cut = mb_substr($cut, 0, $lastSpace);
+        }
+
+        return rtrim($cut, " ,;:.-") . '…';
     }
 }
