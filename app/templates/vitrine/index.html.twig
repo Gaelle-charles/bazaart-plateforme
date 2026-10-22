@@ -1775,8 +1775,9 @@ body.page-home .lp-footer { margin-top: 0; }
 .swipe-deck {
     position:   relative;
     /* min-height : assure que la zone de swipe a une hauteur même vide.
-       La valeur est calculée pour correspondre à la hauteur d'une carte. */
-    min-height: 420px;
+       La valeur est calculée pour correspondre à la hauteur d'une carte
+       (relevée pour laisser la place au petit résumé). */
+    min-height: 480px;
     /* user-select:none : empêche la sélection de texte pendant le drag */
     user-select: none;
     touch-action: pan-y; /* laisse le scroll vertical fonctionner */
@@ -1814,8 +1815,11 @@ body.page-home .lp-footer { margin-top: 0; }
     z-index:        2;
 }
 
-/* Carte suivante : visible en arrière-plan avec décalage subtil ("effet pile") */
-.swipe-card:nth-child(2) {
+/* Carte suivante : visible en arrière-plan avec décalage subtil ("effet pile").
+   Classe posée par swipe.js sur la carte qui suit l'active. On n'utilise plus
+   :nth-child(2) : ce sélecteur visait toujours la 2e carte du DOM, qui restait
+   donc semi-transparente (effet « flou ») une fois devenue la carte active. */
+.swipe-card--next {
     opacity:        0.6;
     pointer-events: none;
     z-index:        1;
@@ -1945,12 +1949,58 @@ body.page-home .lp-footer { margin-top: 0; }
     letter-spacing: -.01em;
     margin:         0;
     color:          var(--ink);
-    /* Troncature à 4 lignes maximum */
+    /* Troncature à 3 lignes maximum (le résumé prend le relais en dessous) */
     display:             -webkit-box;
-    -webkit-line-clamp:  4;
-    line-clamp:          4;
+    -webkit-line-clamp:  3;
+    line-clamp:          3;
     -webkit-box-orient:  vertical;
     overflow:            hidden;
+}
+
+/* ── PETIT RÉSUMÉ ──────────────────────────────────────────────────────── */
+.swipe-card__summary {
+    font-size:   14px;
+    line-height: 1.5;
+    color:       var(--ink-mute);
+    margin:      0;
+    display:             -webkit-box;
+    -webkit-line-clamp:  3;
+    line-clamp:          3;
+    -webkit-box-orient:  vertical;
+    overflow:            hidden;
+}
+
+/* ── INDICATEURS DE DIRECTION PENDANT LE GLISSEMENT ───────────────────────
+   Deux tampons superposés à la carte : « Intéressé(e) » (glisser à droite)
+   et « Passer » (glisser à gauche). Invisibles au repos, leur opacité est
+   pilotée par swipe.js selon la distance parcourue. */
+.swipe-card__stamp {
+    position:       absolute;
+    top:            86px;
+    z-index:        4;
+    padding:        6px 12px;
+    border:         3px solid currentColor;
+    border-radius:  6px;
+    background:     var(--bg);
+    font-family:    var(--display);
+    font-size:      22px;
+    line-height:    1;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    opacity:        0;
+    pointer-events: none;
+}
+.swipe-card__stamp--like {
+    left:      18px;
+    color:     var(--ink);
+    background: var(--accent);
+    border-color: var(--ink);
+    transform: rotate(-12deg);
+}
+.swipe-card__stamp--nope {
+    right:     18px;
+    color:     var(--accent-2);
+    transform: rotate(12deg);
 }
 
 /* ── MÉTADONNÉES (lieu + deadline) ────────────────────────────────────── */
@@ -2073,6 +2123,26 @@ body.page-home .lp-footer { margin-top: 0; }
     box-shadow: var(--sh-hover, 0 30px 60px -26px rgba(14, 13, 11, .5));
 }
 
+/* Bouton rond + libellé visible en dessous : on dit clairement quel côté
+   correspond à quoi (le seul pictogramme ne suffisait pas). */
+.swipe-action {
+    display:        flex;
+    flex-direction: column;
+    align-items:    center;
+    gap:            8px;
+}
+.swipe-action__label {
+    font-family:    var(--mono);
+    font-size:      10px;
+    font-weight:    700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color:          var(--ink);
+}
+.swipe-action__label--nope {
+    color: var(--accent-2);
+}
+
 /* Variante "Passer" : contour rouge (--accent-2), plein rouge au survol */
 .swbtn--nope {
     color:        var(--accent-2);
@@ -2156,7 +2226,7 @@ body.page-home .lp-footer { margin-top: 0; }
     letter-spacing: .06em;
     color:          var(--ink-mute);
     text-align:     center;
-    margin:         0;
+    margin:         14px 0 0;
     /* Masqué sans JS (inutile si les boutons ne fonctionnent pas) */
     display:        none;
 }
@@ -2252,8 +2322,9 @@ body.page-home .lp-footer { margin-top: 0; }
 }
 
 /* ── ÉTAT VIDE (toutes les cartes vues) ──────────────────────────────── */
+/* Affiché à la place de la pile, dans la colonne gauche. */
 .swipe-empty {
-    margin-top: 32px;
+    margin-top: 0;
     text-align: center;
     padding:    48px 24px;
     border:     1px solid var(--line-soft);
@@ -2520,7 +2591,7 @@ body.page-home .lp-footer { margin-top: 0; }
 
     /* Sur mobile, la pile de cartes a une hauteur auto (pas de position absolu) */
     .swipe-deck {
-        min-height: 360px;
+        min-height: 440px;
     }
 
     /* Boutons en ligne sur mobile */
@@ -3471,6 +3542,10 @@ body.page-home .lp-section-header { padding-block: 44px; }
                                     bloc plein fond encre / texte jaune doré, à bord perdu (pas
                                     de padding de carte autour). Le type (chip) reste à droite.
                                 #}
+                                {# Indicateurs de direction affichés pendant le glissement (swipe.js) #}
+                                <span class="swipe-card__stamp swipe-card__stamp--like" aria-hidden="true">Int&eacute;ress&eacute;(e)</span>
+                                <span class="swipe-card__stamp swipe-card__stamp--nope" aria-hidden="true">Passer</span>
+
                                 <div class="swipe-card__header">
                                     <div class="swipe-card__score" aria-label="Score de matching : {{ match.score }} sur 100">
                                         <span class="swipe-card__score-number">{{ match.score }}%</span>
@@ -3509,6 +3584,11 @@ body.page-home .lp-section-header { padding-block: 44px; }
 
                                 {# ── Titre de l'opportunite ──────────────────────────── #}
                                 <h3 class="swipe-card__title">{{ match.title }}</h3>
+
+                                {# ── Petit résumé (texte brut tronqué, cf. MatchResult::buildSummary) ── #}
+                                {%- if match.summary -%}
+                                    <p class="swipe-card__summary">{{ match.summary }}</p>
+                                {%- endif -%}
 
                                 {# ── Metadonnees (lieu + deadline) ───────────────────── #}
                                 <div class="swipe-card__metas">
@@ -3619,36 +3699,64 @@ body.page-home .lp-section-header { padding-block: 44px; }
                             #}
                             <div class="swipe-actions deck-controls" role="group" aria-label="Actions de swipe">
                                 {# Bouton "Passer" = swipe gauche = ignorer #}
-                                <button
-                                    type="button"
-                                    class="swipe-btn-pass swbtn swbtn--nope"
-                                    aria-label="Passer cette opportunite"
-                                    title="Passer (fleche gauche)"
-                                >
-                                    {# Icone fleche gauche en SVG #}
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M19 12H5M12 19l-7-7 7-7"/>
-                                    </svg>
-                                </button>
+                                <div class="swipe-action">
+                                    <button
+                                        type="button"
+                                        class="swipe-btn-pass swbtn swbtn--nope"
+                                        aria-label="Passer cette opportunite"
+                                        title="Passer (fleche gauche)"
+                                    >
+                                        {# Icone fleche gauche en SVG #}
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                                        </svg>
+                                    </button>
+                                    <span class="swipe-action__label swipe-action__label--nope" aria-hidden="true">&larr; Passer</span>
+                                </div>
 
                                 {# Bouton "Interesse(e)" = swipe droite = ajouter en favori #}
-                                <button
-                                    type="button"
-                                    class="swipe-btn-fav swbtn swbtn--like"
-                                    aria-label="Ajouter en favori"
-                                    title="Interessé(e) (fleche droite)"
-                                >
-                                    {# Icone coeur en SVG #}
-                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                                    </svg>
-                                </button>
+                                <div class="swipe-action">
+                                    <button
+                                        type="button"
+                                        class="swipe-btn-fav swbtn swbtn--like"
+                                        aria-label="Ajouter en favori"
+                                        title="Interessé(e) (fleche droite)"
+                                    >
+                                        {# Icone coeur en SVG #}
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                        </svg>
+                                    </button>
+                                    <span class="swipe-action__label" aria-hidden="true">Int&eacute;ress&eacute;(e) &rarr;</span>
+                                </div>
                             </div>
 
                             {# ── Raccourcis clavier (info discrete) — esprit .deck-hint du prototype ── #}
                             <p class="swipe-hint deck-hint" aria-hidden="true">
-                                Glisse &rarr; Int&eacute;ress&eacute;(e) &middot; &larr; Passer &middot; Clavier &larr;/&rarr;
+                                Glisse la carte &agrave; droite si elle t'int&eacute;resse, &agrave; gauche pour passer &middot; Clavier &larr;/&rarr;
                             </p>
+
+                            {# ── Etat vide : affiché à la place de la pile quand toutes les cartes ont ete vues ── #}
+                            {# Initialement cache (aria-hidden + classe) ; revele par swipe.js #}
+                            <div class="swipe-empty swipe-empty--hidden" aria-hidden="true" role="status">
+                                <div class="swipe-empty__inner">
+                                    <span class="swipe-empty__icon" aria-hidden="true">
+                                        {# Icone check SVG #}
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+                                        </svg>
+                                    </span>
+                                    <p class="swipe-empty__msg">
+                                        Tu as vu toutes tes opportunit&eacute;s de matching pour le moment.
+                                    </p>
+                                    <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--accent">
+                                        Voir toutes les opportunit&eacute;s
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                                        </svg>
+                                    </a>
+                                </div>
+                            </div>
 
                         </div>{# /.swipe-main #}
 
@@ -3731,25 +3839,6 @@ body.page-home .lp-section-header { padding-block: 44px; }
                         </div>{# /.swipe-panel #}
 
                     </div>{# /.swipe-layout #}
-
-                    {# ── Etat vide : affiché quand toutes les cartes ont ete vues ──── #}
-                    {# Initialement cache (aria-hidden + classe) ; revele par swipe.js #}
-                    <div class="swipe-empty swipe-empty--hidden" aria-hidden="true" role="status">
-                        <div class="swipe-empty__inner">
-                            <span class="swipe-empty__icon" aria-hidden="true">
-                                {# Icone check SVG #}
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-                                </svg>
-                            </span>
-                            <p class="swipe-empty__msg">
-                                Tu as vu toutes tes opportunites pour le moment.
-                            </p>
-                            <a href="{{ path('app_resource_index') }}" class="lp-btn lp-btn--outline" style="font-size:11px;padding:7px 11px;">
-                                Explorer tout le catalogue
-                            </a>
-                        </div>
-                    </div>
 
                 {% else %}
                     {# Aucun match positif meme si le profil est complet #}
